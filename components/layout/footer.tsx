@@ -83,7 +83,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-border-muted pt-8 flex flex-col md:flex-row items-center justify-between text-text-secondary text-xs">
-          <p>© 2024 evnx. Built by developers, for developers.</p>
+          <p>© 2026 evnx. Built by developers, for developers.</p>
           <div className="flex items-center gap-4 mt-4 md:mt-0">
             <a
               href="https://github.com/urwithajit9/evnx"
