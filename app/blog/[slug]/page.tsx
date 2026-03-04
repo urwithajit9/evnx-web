@@ -39,7 +39,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   "deep-dive": "Deep Dive",
   opinion: "Opinion",
   "case-study": "Case Study",
+  "knowledge": "Knowledge",
 };
+
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {

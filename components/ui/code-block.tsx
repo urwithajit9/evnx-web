@@ -1,75 +1,100 @@
-'use client';
+'use client'
+/**
+ * CodeBlock — used directly on landing page and other client pages.
+ * NOT used inside MDX (that's handled by FencedCodeBlock in mdx-components.tsx).
+ *
+ * Location: components/ui/code-block.tsx
+ * 'use client' is fine here because this is imported by client pages directly,
+ * not by MDXRemote on the server.
+ */
 
-import { Copy, Check } from 'lucide-react';
-import { useState } from 'react';
+import { useState } from 'react'
 
-interface CodeBlockProps {
-  children: string;
-  language?: string;
-  filename?: string;
-  showLineNumbers?: boolean;
-  highlightLines?: number[];
+const LANG_LABELS: Record<string, string> = {
+  bash: 'Bash', shell: 'Shell', sh: 'Shell',
+  powershell: 'PowerShell',
+  yaml: 'YAML', yml: 'YAML',
+  json: 'JSON', toml: 'TOML',
+  typescript: 'TypeScript', ts: 'TypeScript',
+  javascript: 'JavaScript', js: 'JavaScript',
+  python: 'Python', py: 'Python',
+  rust: 'Rust', rs: 'Rust',
+  go: 'Go', dockerfile: 'Dockerfile',
+  diff: 'Diff', sql: 'SQL',
+  ini: '.env', env: '.env',
+  plaintext: 'Text',
 }
 
-export function CodeBlock({
-  children,
-  language = 'bash',
-  filename,
-  showLineNumbers = true,
-  highlightLines = [],
-}: CodeBlockProps) {
-  const [copied, setCopied] = useState(false);
+function getLineClass(line: string): string {
+  if (/^\[ERROR\]|^\[CRITICAL\]/.test(line))                       return 'text-danger'
+  if (/^\[WARNING\]/.test(line))                                    return 'text-warning'
+  if (/^\[OK\]|^\[SUCCESS\]|^\[CONVERT\]/.test(line))              return 'text-success'
+  if (/^\[INFO\]|^\[SCAN\]|^\[VALIDATE\]|^\[DOCTOR\]/.test(line)) return 'text-info'
+  if (/^\[TIP\]/.test(line))                                        return 'text-brand-300'
+  if (/^#/.test(line))                                              return 'text-text-muted'
+  if (/^(evnx |curl |cargo |git )/.test(line.trimStart()))         return 'text-brand-400'
+  return 'text-terminal-text'
+}
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(children);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+type Props = {
+  children: string
+  language?: string
+  filename?: string
+  showLineNumbers?: boolean  // accepted for API compat, not yet implemented
+  className?: string
+}
 
-  const lines = children.trim().split('\n');
-  const shouldShowNumbers = showLineNumbers && lines.length > 1;
+export function CodeBlock({ children, language = 'bash', filename, className }: Props) {
+  const [copied, setCopied] = useState(false)
+
+  const lang    = language.startsWith('language-') ? language.slice('language-'.length) : language
+  const label   = LANG_LABELS[lang] ?? lang
+  const rawCode = (children ?? '').toString().replace(/\n$/, '')
+  const lines   = rawCode.split('\n')
+
+  function handleCopy() {
+    navigator.clipboard.writeText(rawCode).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   return (
-    <div className="bg-terminal-bg border border-border-muted rounded-lg overflow-hidden">
-      {filename && (
-        <div className="bg-bg-surface px-4 py-2 text-xs text-text-secondary border-b border-border-muted font-mono">
-          {filename}
+    <div className={`rounded-xl overflow-hidden border border-border-muted ${className ?? ''}`}>
+      <div className="flex items-center justify-between bg-bg-overlay px-4 py-2.5 border-b border-border-subtle">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs text-text-muted">{label}</span>
+          {filename && (
+            <>
+              <span className="text-border-default select-none">·</span>
+              <span className="font-mono text-xs text-text-muted">{filename}</span>
+            </>
+          )}
         </div>
-      )}
-      <div className="relative">
         <button
           onClick={handleCopy}
-          className="absolute top-3 right-3 p-2 bg-bg-surface hover:bg-border-muted rounded transition-colors z-10"
-          title="Copy code"
+          aria-label="Copy code"
+          className={`font-mono text-xs px-2 py-0.5 rounded border transition-all ${
+            copied
+              ? 'border-success/50 text-success bg-success/10'
+              : 'border-border-subtle text-text-muted hover:text-text-primary hover:border-border-muted'
+          }`}
         >
-          {copied ? (
-            <Check className="w-4 h-4 text-success" />
-          ) : (
-            <Copy className="w-4 h-4 text-text-secondary hover:text-text-primary" />
-          )}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
-        <pre className="p-4 overflow-auto max-h-96">
-          <code className={`language-${language} text-sm text-terminal-text`}>
-            {lines.map((line, idx) => (
-              <div
-                key={idx}
-                className={`${
-                  highlightLines.includes(idx + 1)
-                    ? 'bg-bg-surface bg-opacity-50'
-                    : ''
-                } flex gap-4`}
-              >
-                {shouldShowNumbers && (
-                  <span className="text-text-muted select-none min-w-8 text-right">
-                    {idx + 1}
-                  </span>
-                )}
-                <span>{line}</span>
-              </div>
-            ))}
-          </code>
+      </div>
+
+      <div className="overflow-x-auto bg-terminal-bg">
+        <pre className="p-4 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
+          {lines.map((line, i) => (
+            <span key={i} className={`block ${getLineClass(line)}`}>
+              {line || '\u00A0'}
+            </span>
+          ))}
         </pre>
       </div>
     </div>
-  );
+  )
 }
+
+export default CodeBlock

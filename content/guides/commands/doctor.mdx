@@ -1,0 +1,550 @@
+---
+title: "evnx doctor"
+slug: doctor
+section: commands
+order: 3
+publishedAt: "2024-03-15"
+excerpt: "Diagnose environment setup issues including .env configuration, Git tracking, project structure, and security best practices. Supports JSON output for CI/CD and auto-fix for common issues."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx doctor` validates your project's environment configuration in seconds. It checks `.env` files, Git setup, project structure, and security practices — then suggests fixes. Perfect for onboarding, pre-deploy checks, and CI/CD validation.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx doctor [OPTIONS] [PATH]
+```
+
+**Arguments:**
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `PATH` | `string` | `.` | Project directory to analyze |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--verbose`, `-v` | `bool` | `false` | Show detailed diagnostic output |
+| `--help`, `-h` | `bool` | `false` | Display help information |
+
+**Environment Variables:**
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `EVNX_OUTPUT_JSON` | `1`, `true`, `json` | `false` | Output results as JSON (for CI/CD) |
+| `EVNX_AUTO_FIX` | `1`, `true` | `false` | Attempt to auto-fix detected issues |
+
+---
+
+## What evnx doctor checks
+
+### 🔐 .env file validation
+
+| Check | Description | Severity if Failed |
+|-------|-------------|-------------------|
+| File exists | Verifies `.env` is present in project | ⚠️ Warning |
+| Git ignored | Ensures `.env` is in `.gitignore` | 🚨 **Error** |
+| Secure permissions | Checks for `600`/`400` on Unix | ⚠️ Warning |
+| Valid syntax | Validates `KEY=VALUE` format | ⚠️ Warning |
+
+<Callout type="danger" title="Security critical">
+A `.env` file committed to Git can expose API keys, database credentials, and other secrets. The "NOT in .gitignore" check fails with **Error** severity because this is a critical security risk.
+</Callout>
+
+### 📋 .env.example validation
+
+| Check | Description | Severity if Failed |
+|-------|-------------|-------------------|
+| File exists | Template for team onboarding | ⚠️ Warning |
+| Git tracked | Ensures template is versioned | ⚠️ Warning |
+
+Having a `.env.example` helps teammates and CI systems know which environment variables are required — without exposing real values.
+
+### 🗂️ Project structure detection
+
+evnx doctor recognizes multiple project types and validates relevant dependencies:
+
+```
+Python (requirements.txt)  → checks for python-dotenv
+Python (pyproject.toml)    → checks for python-dotenv, pydantic-settings
+Python (Poetry)            → checks poetry.lock + pyproject.toml
+Python (Pipenv)            → checks Pipfile
+Node.js                    → checks package.json for dotenv
+Rust                       → checks Cargo.toml for dotenvy
+Go                         → detects go.mod (info only)
+PHP                        → detects composer.json (info only)
+```
+
+<Callout type="info" title="Why dependency checks matter">
+Using a library like `python-dotenv` or `dotenvy` ensures your app actually loads environment variables at runtime. Doctor warns if your project type suggests you should have one but doesn't.
+</Callout>
+
+### 🐳 Docker configuration detection
+
+Doctor detects Docker setup files for informational purposes:
+
+```
+✓ docker-compose.yml
+✓ docker-compose.yaml  
+✓ Dockerfile
+✓ Containerfile
+✓ .dockerignore
+```
+
+No severity — just helps confirm your deployment configuration is present.
+
+---
+
+## Output formats
+
+### Text (default)
+
+Human-readable, color-coded output for terminal use:
+
+```bash
+evnx doctor
+```
+
+```
+┌─ evnx doctor ─────────────────────────────────────┐
+│ Diagnosing environment setup                      │
+└───────────────────────────────────────────────────┘
+
+Checking .env file...
+  ✓ File exists at .env
+  ✗ File is NOT in .gitignore (security risk)
+  ✓ .env syntax is valid
+
+Checking .env.example...
+  ✓ File exists
+  ✓ File is tracked in Git
+
+Checking project structure...
+  ✓ Detected Python project (requirements.txt)
+  ⚠️ python-dotenv not in requirements.txt
+
+Summary:
+  🚨 1 critical issue
+  ⚠️  1 warning
+
+Overall health: ⚠️ Needs attention
+
+Recommendations:
+  Run with EVNX_AUTO_FIX=1 to auto-correct issues
+  Or manually address the following:
+    • env_file (Validate .env file existence, security, and syntax)
+```
+
+### Verbose mode
+
+Add `--verbose` or `-v` for detailed diagnostics:
+
+```bash
+evnx doctor --verbose
+```
+
+```
+│ Project path: /home/user/my-app
+
+Checking .env file...
+  ✓ File exists at .env
+  ⚠️ File has 644 permissions (recommended: 600)
+  ✓ File is properly ignored by git
+  ✓ .env syntax is valid
+
+Checking .env.example...
+  ✓ File exists
+  ✓ File is tracked in Git
+  ✓ File is tracked in Git
+
+[... more details ...]
+```
+
+### JSON (for CI/CD)
+
+Machine-readable output for automation and reporting:
+
+```bash
+EVNX_OUTPUT_JSON=1 evnx doctor
+```
+
+```json
+{
+  "project_path": "./my-app",
+  "timestamp": "2024-03-15T10:30:00Z",
+  "summary": {
+    "total": 5,
+    "errors": 1,
+    "warnings": 2,
+    "passed": 2,
+    "info": 0,
+    "fixable": 1
+  },
+  "checks": [
+    {
+      "name": "env_file",
+      "description": "Validate .env file existence, security, and syntax",
+      "severity": "error",
+      "details": "❌ .env is NOT in .gitignore (security risk)",
+      "fixable": true,
+      "fixed": false
+    }
+  ]
+}
+```
+
+Useful with `jq`:
+
+```bash
+# Count critical errors
+EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
+
+# List only failed checks
+EVNX_OUTPUT_JSON=1 evnx doctor | jq '[.checks[] | select(.severity == "error") | .name]'
+
+# Check if auto-fix resolved issues
+EVNX_OUTPUT_JSON=1 evnx doctor | jq '.checks[] | select(.fixable) | {name, fixed}'
+```
+
+---
+
+## Auto-fix mode
+
+Enable automatic remediation for common issues:
+
+```bash
+EVNX_AUTO_FIX=1 evnx doctor --verbose
+```
+
+### What gets auto-fixed
+
+| Issue | Fix Applied | Platform |
+|-------|------------|----------|
+| `.env` not in `.gitignore` | Appends `.env` to `.gitignore` | All |
+| `.env` has insecure permissions | Sets mode to `600` | Unix only |
+| `.env.example` not Git-tracked | Reports manual command | All |
+
+<Callout type="warning" title="Git operations require confirmation">
+Auto-fix cannot run `git add` or `git commit` automatically for security reasons. When doctor detects an untracked `.env.example`, it prints the exact command to run manually.
+</Callout>
+
+### Example: Auto-fix in action
+
+```bash
+$ EVNX_AUTO_FIX=1 evnx doctor --verbose
+
+┌─ evnx doctor ─────────────────────────────────────┐
+│ Diagnosing environment setup                      │
+└───────────────────────────────────────────────────┘
+
+Checking .env file...
+  ✓ File exists at .env
+  ✓ Added .env to .gitignore
+  ✓ Fixed permissions: 644 → 600
+  ✓ .env syntax is valid
+
+[... other checks ...]
+
+Summary:
+  ✓ 0 issues found
+
+Overall health: ✓ Excellent
+```
+
+---
+
+## CI/CD usage
+
+### GitHub Actions — block on critical issues
+
+```yaml
+# .github/workflows/env-health.yml
+name: Environment Health Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install evnx
+        run: cargo install evnx
+        
+      - name: Run diagnostics
+        run: |
+          EVNX_OUTPUT_JSON=1 evnx doctor > report.json
+          
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: doctor-report
+          path: report.json
+          
+      - name: Fail on critical issues
+        run: |
+          ERRORS=$(jq '.summary.errors' report.json)
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "🚨 $ERRORS critical issues found"
+            exit 1
+          fi
+```
+
+### GitLab CI — collect diagnostics
+
+```yaml
+# .gitlab-ci.yml
+env-doctor:
+  stage: test
+  script:
+    - cargo install evnx
+    - EVNX_OUTPUT_JSON=1 evnx doctor --path ./service > doctor-report.json
+  artifacts:
+    paths: [doctor-report.json]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+### Advisory mode — report without blocking
+
+Use `|| true` to collect diagnostics without failing the pipeline:
+
+```bash
+# Continue even if doctor finds issues
+evnx doctor || true
+
+# Or filter output for logging
+evnx doctor 2>&1 | grep -E "✗|⚠️|🚨" >> deploy-log.txt
+```
+
+---
+
+## Exit codes
+
+| Code | Meaning | Use Case |
+|------|---------|----------|
+| `0` | ✅ All checks passed or only warnings | Success in CI |
+| `1` | 🚨 One or more critical errors | Fail pipeline on security issues |
+| `2+` | ⚠️ Runtime errors (IO, Git failures) | Debug tooling issues |
+
+<Callout type="tip" title="Testing exit codes locally">
+```bash
+evnx doctor
+echo $?  # Should be 0 if no critical issues
+
+# Force an error to test
+echo "BADLINE" > .env
+evnx doctor
+echo $?  # Should be 1
+rm .env
+```
+</Callout>
+
+---
+
+## Project-type examples
+
+### Python (requirements.txt)
+
+```bash
+# Setup
+echo "FLASK_APP=app.py" > .env
+echo "FLASK_APP=" > .env.example
+echo ".env" >> .gitignore
+git add .env.example
+
+# Check
+evnx doctor
+# ✓ All Python-specific checks pass
+```
+
+### Python (Poetry)
+
+```bash
+# Poetry projects use pyproject.toml
+evnx doctor --verbose
+# ✓ Detects Poetry config
+# ℹ️ Suggests pydantic-settings if dotenv not found
+```
+
+### Node.js
+
+```bash
+# Ensure dotenv is in dependencies
+npm install dotenv --save
+
+# Check
+evnx doctor --verbose
+# ✓ Detects package.json
+# ℹ️ Confirms 'dotenv' package presence
+```
+
+### Rust
+
+```bash
+# Add dotenvy to Cargo.toml
+# [dependencies]
+# dotenvy = "0.15"
+
+evnx doctor
+# ✓ Detects Cargo.toml
+# ℹ️ Validates dotenvy/dotenv crate
+```
+
+### Multi-service repository
+
+```bash
+# Check each service independently
+for dir in services/*/; do
+  echo "Checking $dir..."
+  evnx doctor --path "$dir" || echo "❌ Issues in $dir"
+done
+```
+
+---
+
+## Troubleshooting
+
+### ❌ "File is NOT in .gitignore" but it is
+
+```bash
+# Check for exact match (no trailing spaces)
+cat .gitignore | grep -n "^\.env$"
+
+# Fix: Ensure no leading/trailing whitespace
+echo ".env" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' >> .gitignore
+```
+
+### ❌ Permission check fails on Windows
+
+```bash
+# Expected: Permission checks are skipped on Windows
+# If you see an error, ensure you're on latest evnx version
+
+# Workaround: Manually verify file properties
+# Right-click .env → Properties → Security tab
+```
+
+### ❌ Git commands fail ("not a git repository")
+
+```bash
+# Doctor gracefully degrades when Git is unavailable
+# To suppress Git-related warnings:
+git init  # Initialize repo if needed
+
+# Or check outside Git:
+evnx doctor --verbose 2>&1 | grep -v "git"
+```
+
+### ❌ JSON output is malformed
+
+```bash
+# Ensure no other output interferes
+EVNX_OUTPUT_JSON=1 evnx doctor 2>/dev/null | jq .
+
+# Avoid --verbose when parsing JSON in scripts
+```
+
+### ❌ Auto-fix doesn't apply all changes
+
+```bash
+# Auto-fix limitations:
+# • Git operations require manual confirmation (security)
+# • Windows permission fixes not supported
+
+# Manual follow-up:
+git add .env.example && git commit -m "chore: add env template"
+```
+
+---
+
+## Best practices
+
+### ✅ For development
+
+```bash
+# Run doctor after cloning a repo
+git clone my-project && cd my-project
+evnx doctor
+
+# Add to pre-commit hooks (optional)
+# .pre-commit-config.yaml
+- repo: local
+  hooks:
+    - id: env-doctor
+      name: Environment Health Check
+      entry: evnx doctor
+      language: system
+      pass_filenames: false
+```
+
+### ✅ For production deployments
+
+```bash
+# Validate environment before deploy
+if ! EVNX_OUTPUT_JSON=1 evnx doctor | jq -e '.summary.errors == 0'; then
+  echo "🚨 Environment issues detected - aborting deploy"
+  exit 1
+fi
+
+# Log report for audit
+EVNX_OUTPUT_JSON=1 evnx doctor >> deploy-log.json
+```
+
+### ✅ For team onboarding
+
+```bash
+# Include in README
+## Setup
+1. Clone repo
+2. Run `evnx doctor` to validate environment
+3. Fix any reported issues
+4. Run `evnx init` if .env.example exists
+
+# Share baseline report
+evnx doctor --verbose > .evnx-baseline.txt
+# Commit baseline for reference (not .env!)
+```
+
+### ✅ Security checklist
+
+- [ ] `.env` is in `.gitignore` (🚨 critical)
+- [ ] `.env` permissions are `600` (Unix)
+- [ ] `.env.example` contains no real secrets
+- [ ] `.env.example` is tracked in Git
+- [ ] No hardcoded secrets in source code
+
+---
+
+## Related commands
+
+- **[evnx init](/guides/commands/init)** — create `.env.example` and project scaffolding
+- **[evnx validate](/guides/commands/validate)** — check variable types, required fields, and value strength
+- **[evnx scan](/guides/commands/scan)** — detect secrets and high-entropy strings in `.env` files
+- **[evnx migrate](/guides/commands/migrate)** — move detected secrets to cloud secret managers
+
+<Callout type="tip" title="Workflow recommendation">
+Use `evnx doctor` early and often:
+1. After cloning: `evnx doctor` to validate setup
+2. Before committing: `evnx doctor` to catch config issues
+3. In CI: `EVNX_OUTPUT_JSON=1 evnx doctor` for automated health checks
+4. Before deploy: `EVNX_AUTO_FIX=1 evnx doctor --verbose` to auto-remediate
+</Callout>
