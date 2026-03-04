@@ -58,23 +58,51 @@ export default function GuidesPage() {
         <div className="container-base">
           <h2 className="text-3xl font-serif font-bold mb-12">Start Here</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-            {featured.map((guide, idx) => (
-              <Link key={idx} href="#" className="group">
-                <div className="bg-bg-surface border border-border-muted rounded-lg p-6 hover:border-border-default hover:bg-bg-overlay transition-all">
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className="p-2 bg-brand-500 bg-opacity-10 rounded">
-                      <guide.icon className="w-5 h-5 text-brand-500" />
-                    </div>
-                    <span className="text-xs font-mono text-text-muted uppercase tracking-wide">
-                      {guide.section}
-                    </span>
+            <Link href="/guides/getting-started/installation" className="group">
+              <div className="bg-bg-surface border border-border-muted rounded-lg p-6 hover:border-border-default hover:bg-bg-overlay transition-all cursor-pointer">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="p-2 bg-brand-500 bg-opacity-10 rounded">
+                    <BookOpen className="w-5 h-5 text-brand-500" />
                   </div>
-                  <h3 className="font-serif text-lg font-bold group-hover:text-brand-400">
-                    {guide.title}
-                  </h3>
+                  <span className="text-xs font-mono text-text-muted uppercase tracking-wide">
+                    Getting Started
+                  </span>
                 </div>
-              </Link>
-            ))}
+                <h3 className="font-serif text-lg font-bold group-hover:text-brand-400">
+                  Installation Guide
+                </h3>
+              </div>
+            </Link>
+            <Link href="/guides/getting-started/quick-start" className="group">
+              <div className="bg-bg-surface border border-border-muted rounded-lg p-6 hover:border-border-default hover:bg-bg-overlay transition-all cursor-pointer">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="p-2 bg-brand-500 bg-opacity-10 rounded">
+                    <Zap className="w-5 h-5 text-brand-500" />
+                  </div>
+                  <span className="text-xs font-mono text-text-muted uppercase tracking-wide">
+                    Getting Started
+                  </span>
+                </div>
+                <h3 className="font-serif text-lg font-bold group-hover:text-brand-400">
+                  Quick Start
+                </h3>
+              </div>
+            </Link>
+            <Link href="/guides/commands/scan" className="group">
+              <div className="bg-bg-surface border border-border-muted rounded-lg p-6 hover:border-border-default hover:bg-bg-overlay transition-all cursor-pointer">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="p-2 bg-brand-500 bg-opacity-10 rounded">
+                    <BookOpen className="w-5 h-5 text-brand-500" />
+                  </div>
+                  <span className="text-xs font-mono text-text-muted uppercase tracking-wide">
+                    Commands
+                  </span>
+                </div>
+                <h3 className="font-serif text-lg font-bold group-hover:text-brand-400">
+                  Secret Scanning
+                </h3>
+              </div>
+            </Link>
           </div>
 
           <h2 className="text-3xl font-serif font-bold mb-12">Browse by Topic</h2>
