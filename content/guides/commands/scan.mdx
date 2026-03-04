@@ -1,0 +1,312 @@
+---
+title: "evnx scan"
+slug: scan
+section: commands
+order: 1
+publishedAt: "2024-03-15"
+excerpt: "Scan .env files for secrets, high-entropy strings, and known credential patterns. Supports JSON, SARIF, and GitHub Actions annotation output."
+difficulty: beginner
+timeToComplete: "10 minutes"
+tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx scan` detects secrets and sensitive data in your `.env` files before they leave your machine. It runs in under 200ms and integrates directly into pre-commit hooks and CI/CD pipelines.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx scan [OPTIONS] [PATH]
+```
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--path` | `string` | `.` | Directory or file to scan |
+| `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format |
+| `--exit-zero` | `bool` | `false` | Always exit 0 (advisory mode) |
+| `--severity` | `high\|medium\|low\|all` | `all` | Minimum severity to report |
+| `--ignore` | `string[]` | `[]` | Patterns or keys to ignore |
+| `--include-example` | `bool` | `false` | Also scan `.env.example` files |
+
+---
+
+## What evnx scans for
+
+### Known credential patterns
+
+evnx ships with built-in patterns for the most common credentials:
+
+```
+AWS_ACCESS_KEY_ID     — /AKIA[0-9A-Z]{16}/
+AWS_SECRET_ACCESS_KEY — high entropy, 40 chars
+STRIPE_SECRET_KEY     — /sk_(live|test)_[a-zA-Z0-9]{24}/
+STRIPE_PUBLIC_KEY     — /pk_(live|test)_[a-zA-Z0-9]{24}/
+GITHUB_TOKEN          — /ghp_[a-zA-Z0-9]{36}/
+OPENAI_API_KEY        — /sk-[a-zA-Z0-9]{48}/
+SENDGRID_API_KEY      — /SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}/
+TWILIO_AUTH_TOKEN     — /[0-9a-f]{32}/
+```
+
+### High-entropy detection
+
+Beyond known patterns, `evnx scan` flags any value with Shannon entropy above a configurable threshold. This catches:
+
+- Custom API keys that don't match a known format
+- Base64-encoded secrets embedded in `.env`
+- JWTs (which contain base64-encoded payloads)
+- Private keys accidentally pasted as values
+
+<Callout type="info" title="Why entropy matters">
+A string like `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` scores high on Shannon entropy because its characters are distributed almost uniformly — a property of cryptographically random strings. Human-readable values like `my-app-name` score low.
+</Callout>
+
+---
+
+## Output formats
+
+### Pretty (default)
+
+Human-readable, color-coded output for terminal use:
+
+```bash
+evnx scan
+```
+
+```
+[SCAN] Scanning .env...
+
+[ERROR] AWS_SECRET_ACCESS_KEY
+        Pattern: aws_secret_access_key (confidence: high)
+        Line 8
+        Recommendation: Use `evnx migrate --to aws-secrets-manager`
+
+[WARNING] STRIPE_SECRET_KEY
+          Pattern: stripe_live_key (confidence: medium)
+          Value appears to be a placeholder — verify before deploying
+
+[SUMMARY] 1 error, 1 warning — run `evnx migrate` to move secrets to a manager
+```
+
+### JSON
+
+For programmatic processing, piping to `jq`, or custom reporting:
+
+```bash
+evnx scan --format json
+```
+
+```json
+{
+  "scan_time": "2024-03-15T10:23:41Z",
+  "file": ".env",
+  "findings": [
+    {
+      "key": "AWS_SECRET_ACCESS_KEY",
+      "severity": "high",
+      "pattern": "aws_secret_access_key",
+      "confidence": "high",
+      "line": 8,
+      "message": "AWS secret access key detected"
+    },
+    {
+      "key": "STRIPE_SECRET_KEY",
+      "severity": "medium",
+      "pattern": "stripe_live_key",
+      "confidence": "medium",
+      "line": 12,
+      "message": "Stripe live key detected — may be placeholder"
+    }
+  ],
+  "summary": {
+    "errors": 1,
+    "warnings": 1,
+    "total_scanned": 15
+  }
+}
+```
+
+Useful with `jq`:
+
+```bash
+# List only high-severity findings
+evnx scan --format json | jq '[.findings[] | select(.severity == "high") | .key]'
+
+# Count total findings
+evnx scan --format json | jq '.summary.errors + .summary.warnings'
+
+# Exit non-zero if any high-severity
+evnx scan --format json | jq -e '.summary.errors == 0'
+```
+
+### SARIF (GitHub Security tab)
+
+SARIF (Static Analysis Results Interchange Format) is the standard format for security tools integrating with GitHub's Security tab:
+
+```bash
+evnx scan --format sarif --output results.sarif
+```
+
+In GitHub Actions, upload as a security artifact:
+
+```yaml
+- name: Scan for secrets
+  run: evnx scan --format sarif --output results.sarif
+
+- name: Upload SARIF results
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+  if: always()   # Upload even if scan finds issues
+```
+
+Findings appear in the **Security → Code scanning alerts** tab of your repository.
+
+### GitHub Actions annotations
+
+Inline annotations appear directly on pull request diffs:
+
+```bash
+evnx scan --format github
+```
+
+```
+::error file=.env,line=8,title=Secret detected::AWS_SECRET_ACCESS_KEY matches aws_secret pattern
+::warning file=.env,line=12,title=Possible secret::STRIPE_SECRET_KEY may be a live key
+```
+
+---
+
+## CI/CD usage
+
+### Block commits with pre-commit
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: evnx-scan
+        name: evnx — scan for secrets
+        entry: evnx scan --exit-code --severity high
+        language: system
+        files: '\.env'
+        pass_filenames: false
+```
+
+`--severity high` means only high-severity findings block the commit. Medium findings are reported but don't fail.
+
+### GitHub Actions — block PRs
+
+```yaml
+# .github/workflows/security.yml
+name: Security scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Scan .env files
+        run: evnx scan --exit-code --format github
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+        if: always()
+```
+
+---
+
+## Ignoring false positives
+
+Some values look like secrets but aren't (e.g. example values in `.env.example`, test fixtures).
+
+### Inline ignore comment
+
+```bash
+# .env
+TEST_API_KEY=AKIAIOSFODNN7EXAMPLE  # evnx-ignore: test fixture
+```
+
+### Ignore specific keys in config
+
+```toml
+# .evnx.toml
+[scan]
+ignore_keys = [
+  "TEST_API_KEY",
+  "EXAMPLE_SECRET",
+  "DUMMY_*",          # glob patterns supported
+]
+```
+
+### Ignore a specific file
+
+```toml
+# .evnx.toml
+[scan]
+ignore_files = [
+  ".env.test",
+  ".env.example",
+]
+```
+
+---
+
+## Scanning a whole project
+
+By default, `evnx scan` looks for `.env` files in the current directory. Scan recursively:
+
+```bash
+# Scan all .env files in all subdirectories
+evnx scan --path . --recursive
+
+# Scan a specific file
+evnx scan --path ./config/.env.production
+
+# Scan multiple files
+evnx scan --path .env --path config/.env
+```
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | No findings (or `--exit-zero` set) |
+| `1` | High-severity findings detected |
+| `2` | Scan error (file not found, permission denied, etc.) |
+
+<Callout type="tip" title="Advisory mode">
+Use `--exit-zero` in environments where you want to report findings without blocking the pipeline. Good for first-pass onboarding when a codebase has known issues you're working through.
+</Callout>
+
+---
+
+## Related commands
+
+- **[evnx validate](/guides/commands/validate)** — catch misconfiguration (wrong types, weak secrets, placeholders)
+- **[evnx migrate](/guides/commands/migrate)** — move detected secrets to a cloud secret manager
+- **[evnx doctor](/guides/commands/doctor)** — full environment health check including gitignore

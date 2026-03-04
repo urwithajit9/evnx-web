@@ -1,323 +1,280 @@
-import { Badge } from '@/components/ui/badge-status';
-import { CodeBlock } from '@/components/ui/code-block';
-import { Clock, Zap, BookOpen } from 'lucide-react';
-import Link from 'next/link';
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { MDXRemote } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
+import rehypeAutolinkHeadings from "rehype-autolink-headings";
+import {
+  getAllGuides,
+  getGuide,
+  getGuidesBySection,
+  getAdjacentGuides,
+  GUIDE_SECTIONS,
+} from "@/lib/content";
+import { mdxComponents } from "@/components/mdx/mdx-components";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: 'Guide',
-  description: 'Learn how to use evnx.',
+type Props = {
+  params: { slug: string[] };
 };
 
-interface GuidePageProps {
-  params: {
-    slug: string[];
+export async function generateStaticParams() {
+  return getAllGuides().map((guide) => ({
+    slug: guide.slug.split("/"),
+  }));
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const guide = getGuide(params.slug);
+  if (!guide) return {};
+  return {
+    title: guide.title,
+    description: guide.excerpt,
   };
 }
 
-const guides: Record<string, any> = {
-  'getting-started/installation': {
-    title: 'Installation Guide',
-    section: 'Getting Started',
-    difficulty: 'beginner',
-    time: '5 minutes',
-    excerpt: 'Install evnx on macOS, Linux, or Windows and verify the installation.',
-    content: `
-# Installation Guide
-
-Get evnx up and running on your system in just a few minutes.
-
-## Prerequisites
-
-- macOS, Linux, or Windows
-- For Cargo install: Rust 1.70+ (install from rustup.rs)
-
-## Installation Methods
-
-### macOS & Linux (Recommended)
-
-Use our automated installation script:
-
-\`\`\`bash
-curl -fsSL https://dotenv.space/install.sh | bash
-\`\`\`
-
-### Windows
-
-Using Windows Package Manager:
-
-\`\`\`powershell
-winget install evnx
-\`\`\`
-
-Or use Cargo (see below).
-
-### All Platforms with Cargo
-
-If you have Rust installed, use Cargo:
-
-\`\`\`bash
-cargo install evnx
-\`\`\`
-
-For additional features:
-
-\`\`\`bash
-cargo install evnx --features full
-\`\`\`
-
-## Verify Installation
-
-Check that evnx is installed correctly:
-
-\`\`\`bash
-evnx --version
-# Output: evnx 0.2.0
-
-evnx --help
-# Output: Usage: evnx [COMMAND]
-\`\`\`
-
-## What's Next?
-
-- Read the Quick Start guide
-- Learn about the scan command
-- Explore integration options
-    `,
-  },
-  'getting-started/quick-start': {
-    title: 'Quick Start',
-    section: 'Getting Started',
-    difficulty: 'beginner',
-    time: '5 minutes',
-    excerpt: 'Get started with evnx in just 5 minutes. Learn the essential commands.',
-    content: `
-# Quick Start
-
-Let's scan your first .env file and understand what evnx can do.
-
-## Initialize a Project
-
-Create a basic setup:
-
-\`\`\`bash
-evnx init --project my-app
-\`\`\`
-
-This creates a .evnx.toml configuration file.
-
-## Scan for Secrets
-
-Run the scanner on your .env file:
-
-\`\`\`bash
-evnx scan
-\`\`\`
-
-Output example:
-
-\`\`\`
-[SCAN] Scanning .env files...
-[ERROR] AWS_SECRET_ACCESS_KEY detected (high entropy)
-[WARNING] DATABASE_URL contains localhost in production
-[INFO] Scan complete: 1 error, 1 warning
-\`\`\`
-
-## Validate Your Configuration
-
-Check for common mistakes:
-
-\`\`\`bash
-evnx validate --strict
-\`\`\`
-
-## Convert to Another Format
-
-Export to Kubernetes:
-
-\`\`\`bash
-evnx convert --from .env --to kubernetes
-\`\`\`
-
-## Learn More
-
-- Explore the scan command guide
-- Learn about validation rules
-- Check out CI/CD integration examples
-    `,
-  },
-  'commands/scan': {
-    title: 'Scan Command',
-    section: 'Commands',
-    difficulty: 'beginner',
-    time: '10 minutes',
-    excerpt: 'Deep dive into the evnx scan command. Detect secrets and sensitive data.',
-    content: `
-# Scan Command
-
-The scan command detects secrets and sensitive data in your environment files.
-
-## Basic Usage
-
-\`\`\`bash
-evnx scan
-\`\`\`
-
-This scans the current directory for .env files.
-
-## Scan Specific Path
-
-\`\`\`bash
-evnx scan --path ./config
-\`\`\`
-
-## Output Formats
-
-### Pretty (Default)
-
-\`\`\`bash
-evnx scan --format pretty
-\`\`\`
-
-### JSON
-
-\`\`\`bash
-evnx scan --format json
-\`\`\`
-
-### SARIF (for GitHub)
-
-\`\`\`bash
-evnx scan --format sarif > results.sarif
-\`\`\`
-
-## Common Detections
-
-evnx detects:
-
-- AWS Keys (AKIA...)
-- Stripe Secrets (sk_live_...)
-- GitHub Tokens
-- OpenAI Keys
-- High-entropy strings
-- Hardcoded URLs
-- Test credentials
-
-## Exit Codes
-
-Use --exit-code to fail CI/CD on findings:
-
-\`\`\`bash
-evnx scan --exit-code
-# Exit 0 = no secrets
-# Exit 1 = secrets found
-\`\`\`
-
-## Integration with CI/CD
-
-See the CI/CD integration guide for GitHub Actions, GitLab CI, and more.
-    `,
-  },
+const DIFFICULTY_COLORS = {
+  beginner: "text-success border-success/30 bg-success/5",
+  intermediate: "text-warning border-warning/30 bg-warning/5",
+  advanced: "text-danger border-danger/30 bg-danger/5",
 };
 
-export default function GuidePage({ params }: GuidePageProps) {
-  const slug = params.slug.join('/');
-  const guide = guides[slug] || {
-    title: 'Guide Not Found',
-    section: 'Guides',
-    difficulty: 'beginner',
-    time: '5 minutes',
-    excerpt: 'This guide is coming soon.',
-    content: 'Content for this guide is coming soon.',
-  };
+export default function GuidePage({ params }: Props) {
+  const guide = getGuide(params.slug);
+  if (!guide) notFound();
 
-  const sections = [
-    { id: 'getting-started', name: 'Getting Started', guides: ['installation', 'quick-start'] },
-    { id: 'commands', name: 'Commands', guides: ['scan', 'validate', 'convert', 'add'] },
-    { id: 'integrations', name: 'Integrations', guides: ['github-actions', 'gitlab-ci'] },
-  ];
+  const bySection = getGuidesBySection();
+  const { prev, next } = getAdjacentGuides(guide);
 
-  const currentSection = sections.find(s => s.id === guide.section.toLowerCase().replace(' ', '-'));
+  const currentSection = GUIDE_SECTIONS.find((s) => s.key === guide.section);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      <aside className="lg:col-span-1">
-        <div className="sticky top-24 bg-bg-surface border border-border-muted rounded-lg p-6">
-          <h3 className="font-mono text-xs font-semibold text-text-muted uppercase mb-4">
-            Navigation
-          </h3>
-          <nav className="space-y-6">
-            {sections.map((section) => (
-              <div key={section.id}>
-                <h4 className="font-serif font-bold text-sm mb-2">{section.name}</h4>
+    <div className="min-h-screen">
+      {/* Breadcrumb */}
+      <div className="border-b border-border-subtle">
+        <div className="container-base py-3">
+          <nav className="flex items-center gap-2 text-xs font-mono text-text-muted">
+            <Link
+              href="/"
+              className="hover:text-text-primary transition-colors"
+            >
+              evnx
+            </Link>
+            <span>/</span>
+            <Link
+              href="/guides"
+              className="hover:text-text-primary transition-colors"
+            >
+              guides
+            </Link>
+            <span>/</span>
+            <span className="text-text-secondary">{guide.section}</span>
+            <span>/</span>
+            <span className="text-text-primary truncate max-w-[200px]">
+              {guide.slug.split("/").pop()}
+            </span>
+          </nav>
+        </div>
+      </div>
+
+      <div className="container-base py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12">
+          {/* Left sidebar — section nav */}
+          <aside className="lg:col-span-1 hidden lg:block">
+            <nav className="sticky top-8 space-y-6">
+              {GUIDE_SECTIONS.map((section) => {
+                const sectionGuides = bySection[section.key] ?? [];
+                if (sectionGuides.length === 0) return null;
+                return (
+                  <div key={section.key}>
+                    <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-2">
+                      {section.label}
+                    </p>
+                    <ul className="space-y-1">
+                      {sectionGuides.map((g) => {
+                        const isActive = g.slug === guide.slug;
+                        return (
+                          <li key={g.slug}>
+                            <Link
+                              href={`/guides/${g.slug}`}
+                              className={`block font-mono text-xs py-1.5 px-2 rounded transition-colors border-l-2 ${
+                                isActive
+                                  ? "border-brand-500 text-brand-400 bg-brand-500/5"
+                                  : "border-transparent text-text-secondary hover:text-text-primary hover:border-border-muted"
+                              }`}
+                            >
+                              {g.title}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+
+              <div className="pt-4 border-t border-border-subtle">
+                <p className="font-mono text-xs text-text-muted">
+                  evnx v{guide.evnxVersion}+
+                </p>
+              </div>
+            </nav>
+          </aside>
+
+          {/* Main content */}
+          <article className="lg:col-span-3">
+            {/* Meta badges */}
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <span
+                className={`font-mono text-xs px-2 py-1 rounded border ${DIFFICULTY_COLORS[guide.difficulty]}`}
+              >
+                {guide.difficulty}
+              </span>
+              <span className="font-mono text-xs text-text-muted">
+                ⏱ {guide.timeToComplete}
+              </span>
+              {guide.evnxVersion && (
+                <span className="font-mono text-xs text-text-muted">
+                  evnx v{guide.evnxVersion}+
+                </span>
+              )}
+            </div>
+
+            {/* Title */}
+            <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4 leading-tight">
+              {guide.title}
+            </h1>
+            <p className="text-xl text-text-secondary mb-8 leading-relaxed">
+              {guide.excerpt}
+            </p>
+
+            {/* Prerequisites */}
+            {guide.prerequisites && guide.prerequisites.length > 0 && (
+              <div className="bg-info/5 border border-info/20 rounded-lg p-4 mb-8">
+                <p className="font-mono text-xs text-info uppercase tracking-widest mb-3">
+                  Prerequisites
+                </p>
                 <ul className="space-y-1">
-                  {section.guides.map((g) => (
-                    <li key={g}>
+                  {guide.prerequisites.map((slug) => (
+                    <li key={slug}>
                       <Link
-                        href={`/guides/${section.id}/${g}`}
-                        className="text-text-secondary hover:text-brand-500 text-sm transition-colors"
+                        href={`/guides/${slug}`}
+                        className="font-mono text-sm text-info hover:text-blue-300 transition-colors"
                       >
-                        {g.replace(/-/g, ' ')}
+                        → {slug.split("/").pop()?.replace(/-/g, " ")}
                       </Link>
                     </li>
                   ))}
                 </ul>
               </div>
-            ))}
-          </nav>
-        </div>
-      </aside>
+            )}
 
-      <main className="lg:col-span-3">
-        <article>
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant="info">{guide.section}</Badge>
+            {/* MDX body */}
+            <div className="prose-evnx">
+              <MDXRemote
+                source={guide.content}
+                components={mdxComponents}
+                options={{
+                  mdxOptions: {
+                    remarkPlugins: [remarkGfm],
+                    rehypePlugins: [
+                      rehypeSlug,
+                      [rehypeAutolinkHeadings, { behavior: "wrap" }],
+                    ],
+                  },
+                }}
+              />
             </div>
-            <h1 className="text-5xl font-serif font-bold mb-4">{guide.title}</h1>
-            <p className="text-xl text-text-secondary">{guide.excerpt}</p>
-          </div>
 
-          <div className="flex flex-wrap gap-6 mb-12 pb-12 border-b border-border-subtle">
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Zap className="w-4 h-4" />
-              <span className="capitalize">{guide.difficulty}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Clock className="w-4 h-4" />
-              <span>{guide.time}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <BookOpen className="w-4 h-4" />
-              <span>evnx v0.2.0+</span>
-            </div>
-          </div>
-
-          <div className="prose prose-invert max-w-none space-y-6 mb-12">
-            <div className="text-text-primary whitespace-pre-wrap leading-relaxed">
-              {guide.content}
-            </div>
-          </div>
-
-          <div className="border-t border-border-subtle pt-12">
-            <div className="flex gap-4">
-              <Link
-                href="/guides"
-                className="text-text-secondary hover:text-brand-500 text-sm"
-              >
-                ← Back to guides
-              </Link>
+            {/* Feedback */}
+            <div className="mt-12 pt-8 border-t border-border-subtle flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <p className="font-mono text-sm text-text-muted">
+                  Was this helpful?
+                </p>
+                <button className="font-mono text-xs px-3 py-1 border border-border-muted rounded hover:border-success hover:text-success transition-colors">
+                  👍 Yes
+                </button>
+                <button className="font-mono text-xs px-3 py-1 border border-border-muted rounded hover:border-danger hover:text-danger transition-colors">
+                  👎 No
+                </button>
+              </div>
               <a
-                href={`https://github.com/urwithajit9/evnx/edit/main/docs/${slug}.md`}
+                href={`https://github.com/urwithajit9/evnx/blob/main/content/guides/${guide.slug}.mdx`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-text-secondary hover:text-brand-500 text-sm ml-auto"
+                className="font-mono text-xs text-text-muted hover:text-text-primary transition-colors"
               >
                 Edit on GitHub →
               </a>
             </div>
-          </div>
-        </article>
-      </main>
+
+            {/* Prev / Next */}
+            <div className="mt-8 grid grid-cols-2 gap-4">
+              {prev ? (
+                <Link href={`/guides/${prev.slug}`}>
+                  <div className="group bg-bg-surface border border-border-muted rounded-lg p-4 hover:border-border-default transition-all">
+                    <p className="font-mono text-xs text-text-muted mb-1">
+                      ← Previous
+                    </p>
+                    <p className="font-serif text-sm font-bold group-hover:text-brand-400 transition-colors">
+                      {prev.title}
+                    </p>
+                  </div>
+                </Link>
+              ) : (
+                <div />
+              )}
+
+              {next ? (
+                <Link href={`/guides/${next.slug}`}>
+                  <div className="group bg-bg-surface border border-border-muted rounded-lg p-4 hover:border-border-default transition-all text-right">
+                    <p className="font-mono text-xs text-text-muted mb-1">
+                      Next →
+                    </p>
+                    <p className="font-serif text-sm font-bold group-hover:text-brand-400 transition-colors">
+                      {next.title}
+                    </p>
+                  </div>
+                </Link>
+              ) : (
+                <div />
+              )}
+            </div>
+          </article>
+
+          {/* Right sidebar — TOC placeholder */}
+          <aside className="lg:col-span-1 hidden lg:block">
+            <div className="sticky top-8 space-y-6">
+              <div className="bg-bg-surface border border-border-muted rounded-lg p-4">
+                <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-3">
+                  On this page
+                </p>
+                <p className="font-mono text-xs text-text-muted italic">
+                  {/* Auto-TOC from headings — add rehype-toc for full implementation */}
+                  Scroll to navigate
+                </p>
+              </div>
+
+              <div className="bg-brand-500/5 border border-brand-500/20 rounded-lg p-4">
+                <p className="font-mono text-xs text-brand-400 mb-3">
+                  Quick install
+                </p>
+                <div className="bg-terminal-bg rounded p-2 font-mono text-xs text-terminal-text mb-3">
+                  <span className="text-brand-500">$ </span>
+                  evnx doctor
+                </div>
+                <Link
+                  href="/install"
+                  className="font-mono text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                >
+                  Full install guide →
+                </Link>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }

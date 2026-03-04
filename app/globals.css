@@ -2,74 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
-
-:root {
-  /* Backgrounds */
-  --bg-void: #080B0F;
-  --bg-base: #0D1117;
-  --bg-surface: #161B22;
-  --bg-overlay: #1C2128;
-
-  /* Borders */
-  --border-subtle: #21262D;
-  --border-muted: #30363D;
-  --border-default: #484F58;
-
-  /* Text */
-  --text-primary: #E6EDF3;
-  --text-secondary: #8B949E;
-  --text-muted: #484F58;
-
-  /* Brand — Rust Orange */
-  --brand-500: #E8652A;
-  --brand-400: #F07840;
-  --brand-300: #F8A07A;
-  --brand-glow: rgba(232, 101, 42, 0.15);
-
-  /* Semantic */
-  --success: #3FB950;
-  --warning: #D29922;
-  --danger: #F85149;
-  --info: #388BFD;
-
-  /* Terminal */
-  --terminal-bg: #010409;
-  --terminal-text: #C9D1D9;
-  --terminal-prompt: #E8652A;
-  --terminal-cursor: #E8652A;
-}
-
+/* ─── Design System Variables ───────────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-  }
+    /* Backgrounds */
+    --bg-void:       #080B0F;
+    --bg-base:       #0D1117;
+    --bg-surface:    #161B22;
+    --bg-overlay:    #1C2128;
 
-  :root {
+    /* Borders */
+    --border-subtle:  #21262D;
+    --border-muted:   #30363D;
+    --border-default: #484F58;
+
+    /* Text */
+    --text-primary:   #E6EDF3;
+    --text-secondary: #8B949E;
+    --text-muted:     #484F58;
+
+    /* Brand — Rust Orange */
+    --brand-500: #E8652A;
+    --brand-400: #F07840;
+    --brand-300: #F8A07A;
+    --brand-glow: rgba(232, 101, 42, 0.15);
+
+    /* Semantic */
+    --success: #3FB950;
+    --warning: #D29922;
+    --danger:  #F85149;
+    --info:    #388BFD;
+
+    /* Terminal */
+    --terminal-bg:     #010409;
+    --terminal-text:   #C9D1D9;
+    --terminal-prompt: #E8652A;
+    --terminal-cursor: #E8652A;
+
+    /* shadcn compatibility */
     --background: var(--bg-base);
     --foreground: var(--text-primary);
     --card: var(--bg-surface);
@@ -77,22 +47,23 @@
     --popover: var(--bg-overlay);
     --popover-foreground: var(--text-primary);
     --primary: var(--brand-500);
-    --primary-foreground: var(--text-primary);
+    --primary-foreground: #000000;
     --secondary: var(--bg-surface);
     --secondary-foreground: var(--text-primary);
-    --muted: var(--border-muted);
-    --muted-foreground: var(--text-secondary);
-    --accent: var(--brand-500);
-    --accent-foreground: #000;
+    --muted: var(--bg-surface);
+    --muted-foreground: var(--text-muted);
+    --accent: var(--bg-overlay);
+    --accent-foreground: var(--text-primary);
     --destructive: var(--danger);
     --destructive-foreground: var(--text-primary);
     --border: var(--border-muted);
-    --input: var(--bg-surface);
+    --input: var(--border-muted);
     --ring: var(--brand-500);
-    --radius: 0.375rem;
+    --radius: 0.5rem;
   }
 }
 
+/* ─── Base Styles ────────────────────────────────────────────────────────────── */
 @layer base {
   * {
     @apply border-border;
@@ -103,57 +74,139 @@
   }
 
   body {
-    @apply bg-background text-foreground font-mono;
     background-color: var(--bg-base);
     color: var(--text-primary);
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Serif headings */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Instrument Serif', serif;
-    @apply font-bold;
+    font-family: 'Fraunces', 'Georgia', serif;
   }
 
-  h1 {
-    @apply text-4xl md:text-5xl lg:text-6xl;
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-base);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-muted);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-default);
   }
 
-  h2 {
-    @apply text-3xl md:text-4xl;
-  }
-
-  h3 {
-    @apply text-2xl md:text-3xl;
-  }
-
-  a {
-    @apply text-brand-500 hover:text-brand-400 transition-colors;
-  }
-
-  code {
-    font-family: 'IBM Plex Mono', monospace;
-  }
-
+  /* Selection */
   ::selection {
-    background-color: var(--brand-500);
-    color: #000;
+    background: rgba(232, 101, 42, 0.25);
+    color: var(--text-primary);
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
   }
 }
 
-@layer components {
-  .prose {
-    @apply max-w-none;
+/* ─── Layout Utilities ───────────────────────────────────────────────────────── */
+@layer utilities {
+  .container-base {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
   }
 
   .section-padding {
-    @apply py-24 md:py-32;
+    @apply py-16 md:py-24;
   }
 
-  .container-base {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  .prose-width {
+    max-width: 72ch;
   }
 
   .glow-brand {
     box-shadow: 0 0 20px var(--brand-glow);
+  }
+}
+
+/* ─── Prose Styles (for MDX content) ────────────────────────────────────────── */
+@layer components {
+  .prose-evnx {
+    /* Shiki code block overrides */
+    pre.shiki {
+      @apply rounded-lg overflow-x-auto my-6 p-4;
+      background-color: var(--terminal-bg) !important;
+      border: 1px solid var(--border-muted);
+      font-size: 0.875rem;
+      line-height: 1.7;
+    }
+
+    pre.shiki code {
+      background: none !important;
+      font-family: 'JetBrains Mono', 'Geist Mono', 'Fira Code', monospace;
+    }
+
+    /* Line numbers */
+    pre.shiki.has-line-numbers {
+      padding-left: 3.5rem;
+    }
+
+    /* Headings - handled by mdx-components.tsx */
+
+    /* Tables */
+    table {
+      @apply w-full border-collapse my-6 text-sm;
+    }
+    th {
+      @apply text-left py-2 px-4 font-mono text-xs uppercase tracking-wide text-text-muted border-b border-border-muted;
+    }
+    td {
+      @apply py-2 px-4 text-text-secondary border-b border-border-subtle;
+    }
+    tr:hover td {
+      background-color: var(--bg-surface);
+    }
+  }
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-blink,
+  .animate-fade-in,
+  .animate-slide-in {
+    animation: none;
   }
 }

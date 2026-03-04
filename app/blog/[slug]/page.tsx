@@ -1,191 +1,278 @@
-import { Badge } from '@/components/ui/badge-status';
-import { Calendar, Clock, User } from 'lucide-react';
-import Link from 'next/link';
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { MDXRemote } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
+import rehypeAutolinkHeadings from "rehype-autolink-headings";
+import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/content";
+import { mdxComponents } from "@/components/mdx/mdx-components";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: 'Blog Post',
-  description: 'Read the latest articles about evnx.',
+type Props = {
+  params: { slug: string };
 };
 
-interface BlogPostProps {
-  params: {
-    slug: string;
+export async function generateStaticParams() {
+  return getAllBlogPosts().map((post) => ({ slug: post.slug }));
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const post = getBlogPost(params.slug);
+  if (!post) return {};
+  return {
+    title: post.title,
+    description: post.excerpt,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      type: "article",
+      publishedTime: post.publishedAt,
+      authors: [post.author.name],
+      tags: post.tags,
+    },
   };
 }
 
-export default function BlogPostPage({ params }: BlogPostProps) {
-  const post = {
-    title: 'Why I Built evnx',
-    slug: params.slug,
-    excerpt: 'The story of accidentally pushing AWS credentials to GitHub — and the tool I built to prevent it from ever happening again.',
-    author: {
-      name: 'Ajit Kumar',
-      role: 'Creator, evnx',
-      avatar: 'https://avatars.githubusercontent.com/u/12345?v=4',
-    },
-    date: '2026-02-15',
-    readTime: 8,
-    category: 'Opinion',
-    tags: ['security', 'story', 'rust'],
-    content: `
-# Why I Built evnx
+const CATEGORY_LABELS: Record<string, string> = {
+  tutorial: "Tutorial",
+  release: "Release",
+  "deep-dive": "Deep Dive",
+  opinion: "Opinion",
+  "case-study": "Case Study",
+};
 
-Three years ago, I made a mistake that changed everything. I accidentally committed AWS credentials to a public GitHub repository.
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
-## The Incident
+export default function BlogPostPage({ params }: Props) {
+  const post = getBlogPost(params.slug);
+  if (!post) notFound();
 
-The key was revoked in minutes. Three services went down. I had to explain the incident to my development lead. That conversation was more painful than any billing alert.
-
-It wasn't malicious. It wasn't negligence. It was a mistake anyone could make.
-
-But here's what bothered me: there was no tool preventing this. No safety net. No way to say "evnx, check this before I push."
-
-## The Solution
-
-I spent the next few months building evnx. A CLI tool that does one thing exceptionally well: keeps your secrets safe.
-
-evnx handles:
-- **Secret Scanning** — Detects AWS keys, Stripe secrets, GitHub tokens
-- **Validation** — Catches placeholders and weak values
-- **Format Conversion** — Works with 14+ targets
-- **Cloud Migration** — Syncs to AWS Secrets Manager, Doppler, Infisical
-- **Encrypted Backups** — AES-256-GCM protection
-
-## Why This Matters
-
-Secret management is often an afterthought. Developers are shipping code, not thinking about .env files.
-
-evnx changes that. It's fast. It's reliable. It runs in your CI/CD pipeline and catches problems before they become incidents.
-
-## Today
-
-Three years and zero incidents later, evnx is used by hundreds of developers. It's open source. It's free. It's MIT licensed.
-
-If you've been there—if you've made that mistake—evnx is the tool I wish I'd had.
-
-## What's Next
-
-evnx is just getting started. Cloud sync, team collaboration, and web dashboards are coming.
-
-But the core mission remains: stop leaking secrets.
-
----
-
-*Have you had a secret incident? Share your story in the comments below.*
-    `,
-  };
+  const related = getRelatedPosts(post);
 
   return (
-    <div>
-      <article className="max-w-4xl mx-auto">
-        <div className="container-base section-padding pb-12">
-          <Link href="/blog" className="text-text-secondary hover:text-text-primary text-sm mb-8 inline-block">
-            ← Back to blog
-          </Link>
-
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant="brand">{post.category}</Badge>
-            </div>
-            <h1 className="text-5xl md:text-6xl font-serif font-bold mb-4">{post.title}</h1>
-            <p className="text-xl text-text-secondary">{post.excerpt}</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-6 text-sm text-text-secondary mb-12 pb-12 border-b border-border-subtle">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              <span>{post.author.name}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>{post.date}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span>{post.readTime} min read</span>
-            </div>
-          </div>
+    <div className="min-h-screen">
+      {/* Breadcrumb */}
+      <div className="border-b border-border-subtle">
+        <div className="container-base py-3">
+          <nav className="flex items-center gap-2 text-xs font-mono text-text-muted">
+            <Link
+              href="/"
+              className="hover:text-text-primary transition-colors"
+            >
+              evnx
+            </Link>
+            <span>/</span>
+            <Link
+              href="/blog"
+              className="hover:text-text-primary transition-colors"
+            >
+              blog
+            </Link>
+            <span>/</span>
+            <span className="text-text-secondary truncate max-w-[200px]">
+              {post.slug}
+            </span>
+          </nav>
         </div>
+      </div>
 
-        <div className="container-base max-w-3xl">
-          <div className="prose prose-invert max-w-none mb-16">
-            <div className="text-text-primary leading-relaxed space-y-6 whitespace-pre-line">
-              {post.content}
-            </div>
-          </div>
-
-          <div className="border-t border-border-subtle pt-12 mb-16">
-            <div className="flex flex-wrap gap-2 mb-8">
+      <div className="container-base py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
+          {/* Main content */}
+          <article className="lg:col-span-3">
+            {/* Meta */}
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <span className="font-mono text-xs px-2 py-1 rounded border bg-brand-500/10 text-brand-400 border-brand-500/20">
+                {CATEGORY_LABELS[post.category]}
+              </span>
               {post.tags.map((tag) => (
-                <Badge key={tag} variant="neutral">
-                  {tag}
-                </Badge>
+                <span key={tag} className="font-mono text-xs text-text-muted">
+                  #{tag}
+                </span>
               ))}
             </div>
 
-            <div className="bg-bg-surface border border-border-muted rounded-lg p-8">
-              <div className="flex gap-6 items-start">
-                <img
-                  src={post.author.avatar}
-                  alt={post.author.name}
-                  className="w-16 h-16 rounded-full"
-                />
-                <div className="flex-1">
-                  <h3 className="font-serif text-xl font-bold mb-1">{post.author.name}</h3>
-                  <p className="text-text-secondary text-sm mb-4">{post.author.role}</p>
-                  <p className="text-text-secondary">
-                    Creator of evnx. Rust enthusiast. Previously at AWS and Google. When not coding, you'll find me hiking or traveling.
+            {/* Title */}
+            <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6 leading-tight">
+              {post.title}
+            </h1>
+
+            {/* Excerpt */}
+            <p className="text-xl text-text-secondary mb-8 leading-relaxed">
+              {post.excerpt}
+            </p>
+
+            {/* Author row */}
+            <div className="flex items-center gap-4 pb-8 mb-8 border-b border-border-subtle">
+              <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-mono font-bold">
+                {post.author.name[0]}
+              </div>
+              <div>
+                <p className="font-mono text-sm font-semibold text-text-primary">
+                  {post.author.name}
+                </p>
+                <p className="font-mono text-xs text-text-muted">
+                  {post.author.role}
+                </p>
+              </div>
+              <div className="ml-auto flex items-center gap-4 text-xs font-mono text-text-muted">
+                <time dateTime={post.publishedAt}>
+                  {formatDate(post.publishedAt)}
+                </time>
+                <span>·</span>
+                <span>{post.readTime} min read</span>
+              </div>
+            </div>
+
+            {/* MDX body */}
+            <div className="prose-evnx">
+              <MDXRemote
+                source={post.content}
+                components={mdxComponents}
+                options={{
+                  mdxOptions: {
+                    remarkPlugins: [remarkGfm],
+                    rehypePlugins: [
+                      rehypeSlug,
+                      [rehypeAutolinkHeadings, { behavior: "wrap" }],
+                    ],
+                  },
+                }}
+              />
+            </div>
+
+            {/* Tags footer */}
+            <div className="mt-12 pt-8 border-t border-border-subtle flex flex-wrap gap-2">
+              {post.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="font-mono text-xs px-3 py-1 bg-bg-surface border border-border-subtle rounded-full text-text-secondary"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+
+            {/* Author card */}
+            <div className="mt-12 bg-bg-surface border border-border-muted rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-mono font-bold text-xl flex-shrink-0">
+                  {post.author.name[0]}
+                </div>
+                <div>
+                  <p className="font-mono font-bold text-text-primary mb-1">
+                    {post.author.name}
                   </p>
+                  <p className="font-mono text-xs text-text-muted mb-3">
+                    {post.author.role}
+                  </p>
+                  <p className="text-sm text-text-secondary leading-relaxed">
+                    {post.author.bio}
+                  </p>
+                  <div className="flex gap-4 mt-4">
+                    {post.author.github && (
+                      <a
+                        href={`https://github.com/${post.author.github}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                      >
+                        GitHub →
+                      </a>
+                    )}
+                    {post.author.twitter && (
+                      <a
+                        href={`https://twitter.com/${post.author.twitter}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                      >
+                        Twitter →
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="border-t border-border-subtle pt-12">
-            <h3 className="font-serif text-2xl font-bold mb-6">More from the blog</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Link href="#" className="group">
-                <div className="bg-bg-surface border border-border-muted rounded-lg p-6 hover:border-border-default transition-colors">
-                  <Badge variant="brand" className="mb-3">
-                    Tutorial
-                  </Badge>
-                  <h4 className="font-serif text-lg font-bold group-hover:text-brand-400 mb-2">
-                    Getting Started with evnx
-                  </h4>
-                  <p className="text-text-secondary text-sm">
-                    A complete walkthrough of installing and running evnx for the first time.
-                  </p>
+            {/* Related posts */}
+            {related.length > 0 && (
+              <div className="mt-12">
+                <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-6">
+                  Related Posts
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {related.map((p) => (
+                    <Link key={p.slug} href={`/blog/${p.slug}`}>
+                      <div className="group bg-bg-surface border border-border-muted rounded-lg p-5 hover:border-border-default hover:bg-bg-overlay transition-all h-full">
+                        <h4 className="font-serif font-bold mb-2 group-hover:text-brand-400 transition-colors">
+                          {p.title}
+                        </h4>
+                        <p className="text-sm text-text-muted">
+                          {p.readTime} min read
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-              </Link>
-              <Link href="#" className="group">
-                <div className="bg-bg-surface border border-border-muted rounded-lg p-6 hover:border-border-default transition-colors">
-                  <Badge variant="info" className="mb-3">
-                    Release
-                  </Badge>
-                  <h4 className="font-serif text-lg font-bold group-hover:text-brand-400 mb-2">
-                    evnx v0.2.0 Released
-                  </h4>
-                  <p className="text-text-secondary text-sm">
-                    New features include the add command for CLI variable management.
-                  </p>
+              </div>
+            )}
+          </article>
+
+          {/* Sidebar */}
+          <aside className="lg:col-span-1">
+            <div className="sticky top-8 space-y-6">
+              {/* Share */}
+              <div className="bg-bg-surface border border-border-muted rounded-lg p-5">
+                <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">
+                  Share
+                </p>
+                <div className="space-y-2">
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(`https://evnx.dev/blog/${post.slug}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block font-mono text-xs text-text-secondary hover:text-brand-400 transition-colors py-1"
+                  >
+                    Share on Twitter →
+                  </a>
+                  <a
+                    href={`https://news.ycombinator.com/submitlink?u=https://evnx.dev/blog/${post.slug}&t=${encodeURIComponent(post.title)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block font-mono text-xs text-text-secondary hover:text-brand-400 transition-colors py-1"
+                  >
+                    Submit to HN →
+                  </a>
                 </div>
-              </Link>
+              </div>
+
+              {/* CTA */}
+              <div className="bg-brand-500/5 border border-brand-500/20 rounded-lg p-5">
+                <p className="font-mono text-xs text-brand-400 uppercase tracking-widest mb-3">
+                  Try evnx
+                </p>
+                <div className="bg-terminal-bg rounded p-3 font-mono text-xs text-terminal-text mb-4">
+                  <span className="text-brand-500">$ </span>
+                  evnx doctor
+                </div>
+                <Link
+                  href="/install"
+                  className="block text-center text-xs font-mono bg-brand-500 text-black py-2 rounded hover:bg-brand-400 transition-colors"
+                >
+                  Install evnx →
+                </Link>
+              </div>
             </div>
-          </div>
+          </aside>
         </div>
-      </article>
-
-      <section className="section-padding bg-bg-surface border-t border-border-muted mt-24">
-        <div className="container-base text-center">
-          <h3 className="text-3xl font-serif font-bold mb-4">Ready to secure your .env?</h3>
-          <p className="text-text-secondary mb-6 max-w-xl mx-auto">
-            Start using evnx today to prevent secrets from being leaked.
-          </p>
-          <Link href="/install" className="inline-block bg-brand-500 text-black px-6 py-3 rounded font-mono font-semibold hover:bg-brand-400 transition-colors">
-            Install evnx
-          </Link>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

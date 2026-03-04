@@ -1,0 +1,235 @@
+---
+title: "Quick Start"
+slug: quick-start
+section: getting-started
+order: 2
+publishedAt: "2024-03-15"
+excerpt: "Five minutes to your first evnx workflow — scan, validate, and convert a real .env file."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["getting-started", "scan", "validate", "convert"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+By the end of this guide you'll have run your first scan, caught a validation warning, and converted your `.env` to a Kubernetes Secret — all in under five minutes.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx first</Prerequisite>
+</Prerequisites>
+
+---
+
+## Step 1 — Create a sample .env
+
+If you don't have a project handy, create a test file:
+
+```bash
+mkdir evnx-demo && cd evnx-demo
+
+cat > .env << 'EOF'
+# App config
+APP_NAME=my-app
+APP_ENV=production
+DEBUG=true
+
+# Database
+DATABASE_URL=postgres://admin:password123@localhost:5432/mydb
+
+# AWS (intentionally insecure for demo)
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+# Stripe
+STRIPE_SECRET_KEY=sk_live_your-stripe-key-here
+
+# Placeholder values (validation should catch these)
+SENDGRID_API_KEY=your-sendgrid-key
+JWT_SECRET=secret
+EOF
+```
+
+<Callout type="warning" title="Demo file only">
+This `.env` contains intentionally bad values to demonstrate what evnx catches. Never use these patterns in a real project.
+</Callout>
+
+---
+
+## Step 2 — Run a health check
+
+Before scanning, run `doctor` to check the environment setup:
+
+```bash
+evnx doctor
+```
+
+```
+[DOCTOR] Running environment health check...
+[WARNING] .env is not listed in .gitignore
+[WARNING] No .env.example found
+[OK] File permissions look good (600)
+[INFO] 2 warnings, 0 errors
+[TIP] Run `evnx doctor --fix` to auto-fix gitignore issues
+```
+
+Fix the gitignore automatically:
+
+```bash
+evnx doctor --fix
+# [FIX] Added .env to .gitignore
+```
+
+---
+
+## Step 3 — Scan for secrets
+
+```bash
+evnx scan
+```
+
+```
+[SCAN] Scanning .env...
+
+[ERROR] AWS_ACCESS_KEY_ID — matches pattern: aws_access_key_id
+        Value: AKIAIOSFODNN7EXAMPLE
+        Risk: HIGH — AWS access keys can be used to access your AWS account
+
+[ERROR] AWS_SECRET_ACCESS_KEY — high entropy string detected
+        Value: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+        Risk: HIGH
+
+[WARNING] STRIPE_SECRET_KEY — matches pattern: stripe_live_key
+          Value: sk_live_your-stripe-key-here
+          Risk: MEDIUM — live Stripe key detected (but looks like a placeholder)
+
+[SUMMARY] 2 errors, 1 warning
+          Recommendation: Move secrets to a secret manager with `evnx migrate`
+```
+
+<Callout type="tip" title="Exit codes">
+`evnx scan` exits with code `1` if errors are found — perfect for blocking CI/CD pipelines. Use `--exit-zero` to always exit `0` (for advisory-only checks).
+</Callout>
+
+Use JSON output for programmatic use:
+
+```bash
+evnx scan --format json | jq '.findings[].key'
+```
+
+---
+
+## Step 4 — Validate your configuration
+
+Scanning finds secrets. Validation finds *misconfiguration* — wrong types, placeholders, bad values:
+
+```bash
+evnx validate --strict
+```
+
+```
+[VALIDATE] Checking .env...
+
+[WARNING] DEBUG=true — boolean string trap
+          Python and some frameworks read this as the string "true", not bool True
+          Tip: Use DEBUG=1 or DEBUG=True depending on your framework
+
+[WARNING] JWT_SECRET=secret — weak secret detected
+          Value is too short (6 chars). Secrets should be at least 32 chars.
+
+[WARNING] SENDGRID_API_KEY=your-sendgrid-key — placeholder value detected
+          This looks like a template placeholder, not a real value
+
+[WARNING] DATABASE_URL contains localhost — production environment detected but
+          localhost database URL found
+
+[SUMMARY] 0 errors, 4 warnings
+```
+
+<Callout type="info">
+`--strict` promotes warnings to errors. Without it, warnings are advisory only.
+</Callout>
+
+---
+
+## Step 5 — Convert to another format
+
+Convert your `.env` to a Kubernetes Secret manifest:
+
+```bash
+evnx convert --to kubernetes --output secret.yaml
+```
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-app-secrets
+type: Opaque
+data:
+  APP_NAME: bXktYXBw
+  APP_ENV: cHJvZHVjdGlvbg==
+  DATABASE_URL: cG9zdGdyZXM6Ly9hZG1pbjpwYXNzd29yZDEyM0Bsb2NhbGhvc3Q6NTQzMi9teWRi
+```
+
+All values are base64-encoded automatically. Try other targets:
+
+```bash
+evnx convert --to json        # flat JSON object
+evnx convert --to github      # GitHub Actions secrets format
+evnx convert --to doppler     # Doppler import format
+evnx convert --to terraform   # Terraform variables file
+```
+
+---
+
+## Step 6 — Keep .env and .env.example in sync
+
+```bash
+# Generate .env.example from your .env (values redacted)
+evnx sync --generate-example
+
+cat .env.example
+# APP_NAME=
+# APP_ENV=
+# DEBUG=
+# DATABASE_URL=
+# AWS_ACCESS_KEY_ID=
+# AWS_SECRET_ACCESS_KEY=
+# STRIPE_SECRET_KEY=
+# SENDGRID_API_KEY=
+# JWT_SECRET=
+```
+
+Now commit `.env.example` to your repo — it tells teammates what variables are needed without exposing values.
+
+Check if they drift:
+
+```bash
+evnx diff .env .env.example
+# [DIFF] .env has 2 variables not in .env.example:
+# + NEW_FEATURE_FLAG (in .env only)
+# + REDIS_URL (in .env only)
+```
+
+---
+
+## What you just did
+
+In five minutes you:
+- Ran a health check and fixed a gitignore issue
+- Found two real secret patterns (AWS key, high-entropy string)
+- Caught four validation problems (weak secret, placeholder, boolean trap, localhost)
+- Converted to Kubernetes format
+- Generated a safe `.env.example`
+
+This is the core evnx workflow. Everything else builds on these primitives.
+
+---
+
+## Next steps
+
+- **[evnx scan deep dive](/guides/commands/scan)** — output formats, SARIF for GitHub, custom patterns
+- **[Prevent secret leaks](/guides/use-cases/prevent-secret-leaks)** — set up the pre-commit hook properly
+- **[GitHub Actions integration](/guides/integrations/github-actions)** — run evnx in CI/CD

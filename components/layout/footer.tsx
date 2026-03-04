@@ -1,95 +1,98 @@
-import Link from 'next/link';
-import { Github, ExternalLink } from 'lucide-react';
+import Link from "next/link";
+import { Github } from "lucide-react";
+import { EVNX_VERSION, GITHUB_URL, CRATES_IO_URL } from "@/lib/config";
+
+const LINKS = {
+  Learn: [
+    { href: "/guides", label: "Guides" },
+    { href: "/guides/getting-started/installation", label: "Install Guide" },
+    { href: "/guides/getting-started/quick-start", label: "Quick Start" },
+    { href: "/blog", label: "Blog" },
+    { href: "/changelog", label: "Changelog" },
+  ],
+  Project: [
+    { href: GITHUB_URL, label: "GitHub", external: true },
+    { href: CRATES_IO_URL, label: "Crates.io", external: true },
+    { href: "/pricing", label: "Pricing" },
+    { href: "/install", label: "Install" },
+  ],
+};
 
 export function Footer() {
   return (
-    <footer className="bg-bg-surface border-t border-border-muted mt-24">
-      <div className="container-base section-padding">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+    <footer className="border-t border-border-subtle bg-bg-surface mt-auto">
+      <div className="container-base py-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
+          {/* Brand */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center font-bold text-black text-sm">
-                e
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-7 h-7 bg-brand-500 rounded flex items-center justify-center">
+                <span className="font-mono font-bold text-black text-xs">
+                  ev
+                </span>
               </div>
-              <span className="font-serif text-lg font-bold">evnx</span>
+              <span className="font-mono font-bold text-text-primary">
+                evnx
+              </span>
             </div>
-            <p className="text-text-secondary text-sm">
+            <p className="text-sm text-text-secondary leading-relaxed mb-4">
               The .env tool for developers who've been there.
             </p>
+            <div className="bg-terminal-bg border border-border-subtle rounded p-3 font-mono text-xs text-terminal-text">
+              <span className="text-brand-500">$ </span>
+              curl -fsSL https://dotenv.space/install.sh | bash
+            </div>
           </div>
 
-          <div>
-            <h3 className="font-mono font-semibold text-sm mb-4 text-text-primary">Resources</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <Link href="/guides" className="text-text-secondary hover:text-brand-500 transition-colors">
-                  Guides
-                </Link>
-              </li>
-              <li>
-                <Link href="/blog" className="text-text-secondary hover:text-brand-500 transition-colors">
-                  Blog
-                </Link>
-              </li>
-              <li>
-                <Link href="/changelog" className="text-text-secondary hover:text-brand-500 transition-colors">
-                  Changelog
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-mono font-semibold text-sm mb-4 text-text-primary">Community</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a
-                  href="https://github.com/urwithajit9/evnx"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-text-secondary hover:text-brand-500 transition-colors flex items-center gap-2"
-                >
-                  GitHub <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://crates.io/crates/evnx"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-text-secondary hover:text-brand-500 transition-colors flex items-center gap-2"
-                >
-                  Crates.io <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-mono font-semibold text-sm mb-4 text-text-primary">Legal</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <span className="text-text-secondary inline-flex items-center gap-2">
-                  MIT License
-                </span>
-              </li>
-              <li>
-                <span className="text-text-secondary text-xs">
-                  Made with Rust
-                </span>
-              </li>
-            </ul>
-          </div>
+          {/* Links */}
+          {Object.entries(LINKS).map(([section, links]) => (
+            <div key={section}>
+              <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">
+                {section}
+              </p>
+              <ul className="space-y-2">
+                {links.map(({ href, label, external }) => (
+                  <li key={href}>
+                    {external ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-sm text-text-secondary hover:text-text-primary transition-colors"
+                      >
+                        {label} ↗
+                      </a>
+                    ) : (
+                      <Link
+                        href={href}
+                        className="font-mono text-sm text-text-secondary hover:text-text-primary transition-colors"
+                      >
+                        {label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        <div className="border-t border-border-muted pt-8 flex flex-col md:flex-row items-center justify-between text-text-secondary text-xs">
-          <p>© 2026 evnx. Built by developers, for developers.</p>
-          <div className="flex items-center gap-4 mt-4 md:mt-0">
+        {/* Bottom bar */}
+        <div className="border-t border-border-subtle pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4 text-xs font-mono text-text-muted">
+            <span>Made with 🦀 Rust</span>
+            <span>·</span>
+            <span>MIT License</span>
+            <span>·</span>
+            <span>v{EVNX_VERSION}</span>
+          </div>
+          <div className="flex items-center gap-4">
             <a
-              href="https://github.com/urwithajit9/evnx"
+              href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-brand-500 transition-colors"
+              className="text-text-muted hover:text-text-primary transition-colors"
+              aria-label="GitHub"
             >
               <Github className="w-4 h-4" />
             </a>

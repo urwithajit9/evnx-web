@@ -1,0 +1,203 @@
+---
+title: "Installing evnx"
+slug: installation
+section: getting-started
+order: 1
+publishedAt: "2024-03-15"
+excerpt: "Get evnx running on macOS, Linux, or Windows in under two minutes. Includes pre-commit hook setup."
+difficulty: beginner
+timeToComplete: "2 minutes"
+tags: ["install", "getting-started", "pre-commit"]
+evnxVersion: "0.2.0"
+draft: false
+---
+
+evnx is a single static binary with no runtime dependencies. Pick your platform and you'll be running in under two minutes.
+
+## Prerequisites
+
+- **macOS / Linux**: curl, bash
+- **Windows**: winget (Windows Package Manager) or Rust toolchain
+- **Cargo (all platforms)**: Rust toolchain via [rustup.rs](https://rustup.rs)
+
+---
+
+## macOS & Linux
+
+The fastest way is the install script:
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+The script:
+1. Detects your OS and architecture (x86_64 / arm64)
+2. Downloads the correct binary from GitHub Releases
+3. Installs to `~/.local/bin` (added to PATH automatically)
+4. Verifies the checksum
+
+Verify the installation:
+
+```bash
+evnx --version
+# evnx 0.2.0
+```
+
+### Homebrew (coming soon)
+
+```bash
+# brew install evnx  ← not yet available, coming in v0.3.0
+```
+
+---
+
+## Windows
+
+### Via winget
+
+```powershell
+winget install evnx
+```
+
+### Via Cargo (fallback)
+
+```powershell
+cargo install evnx
+```
+
+---
+
+## Cargo (All Platforms)
+
+Install the stable release from [crates.io](https://crates.io/crates/evnx):
+
+```bash
+cargo install evnx
+```
+
+Install with all optional features (cloud sync, extra format targets):
+
+```bash
+cargo install evnx --features full
+```
+
+<Callout type="info" title="Compile times">
+Cargo builds from source, so the first install takes 60–90 seconds. Subsequent installs are faster because Cargo caches dependencies.
+</Callout>
+
+---
+
+## Verify Your Installation
+
+```bash
+evnx --version
+# evnx 0.2.0
+
+evnx --help
+# Usage: evnx [COMMAND]
+# Commands:
+#   init      Initialize a new .env file from a template
+#   validate  Validate your .env against rules
+#   scan      Scan for secrets and sensitive data
+#   diff      Show differences between .env files
+#   convert   Convert .env to another format
+#   sync      Sync .env and .env.example
+#   add       Add or update a variable
+#   migrate   Push secrets to a cloud secret manager
+#   doctor    Run environment health diagnostics
+#   template  Generate config from a template file
+#   backup    Create an encrypted backup of .env
+#   restore   Restore from an encrypted backup
+```
+
+---
+
+## Run Your First Scan
+
+Before setting anything up, try this in any project directory:
+
+```bash
+cd your-project
+evnx doctor
+```
+
+The `doctor` command checks:
+- Whether `.env` is tracked by git
+- Whether `.gitignore` covers `.env` in all subdirectories
+- Whether `.env.example` exists and is in sync
+- File permissions on `.env`
+
+This alone catches most common configuration issues.
+
+---
+
+## Install the Pre-commit Hook (Recommended)
+
+This is the most important step. The pre-commit hook runs `evnx scan` automatically before every `git commit`, blocking commits that contain secrets.
+
+### Using pre-commit
+
+Add to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: evnx-scan
+        name: evnx secret scan
+        entry: evnx scan --exit-code
+        language: system
+        files: '\.env'
+        pass_filenames: false
+```
+
+Then install:
+
+```bash
+pre-commit install
+```
+
+### Manual git hook
+
+```bash
+# Create the hook file
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+evnx scan --exit-code
+if [ $? -ne 0 ]; then
+  echo "evnx: secrets detected. Commit blocked."
+  exit 1
+fi
+EOF
+
+chmod +x .git/hooks/pre-commit
+```
+
+<Callout type="warning" title="Team setup">
+The `.pre-commit-config.yaml` approach is better for teams — it's committed to the repo, so every developer gets the hook automatically when they run `pre-commit install`.
+</Callout>
+
+---
+
+## Updating evnx
+
+```bash
+# If installed via install script
+curl -fsSL https://dotenv.space/install.sh | bash
+
+# If installed via cargo
+cargo install evnx --force
+
+# Check for updates
+evnx doctor --check-updates
+```
+
+---
+
+## What's Next
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/quick-start">Quick Start — your first evnx workflow</Prerequisite>
+</Prerequisites>
+
+Now that evnx is installed, run through the [Quick Start](/guides/getting-started/quick-start) to see `scan`, `validate`, and `convert` in action on a real project.
