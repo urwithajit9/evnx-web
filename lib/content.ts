@@ -23,7 +23,8 @@ export type BlogCategory =
   | "release"
   | "deep-dive"
   | "opinion"
-  | "case-study";
+  | "case-study"
+  | "knowledge";
 
 export type BlogPost = {
   slug: string;
