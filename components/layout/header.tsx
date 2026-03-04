@@ -1,88 +1,125 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { Menu, X, Github } from "lucide-react";
+import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
+
+const NAV_LINKS = [
+  { href: "/guides", label: "Guides" },
+  { href: "/blog", label: "Blog" },
+  { href: "/changelog", label: "Changelog" },
+  { href: "/pricing", label: "Pricing" },
+];
 
 export function Header() {
-  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-bg-base bg-opacity-95 backdrop-blur border-b border-border-muted">
-      <nav className="container-base flex items-center justify-between h-16">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center font-bold text-black text-sm">
-            e
-          </div>
-          <span className="font-serif text-xl font-bold">evnx</span>
-        </Link>
+    <header className="sticky top-0 z-50 bg-bg-base/90 backdrop-blur-sm border-b border-border-subtle">
+      <div className="container-base">
+        <div className="flex items-center justify-between h-14">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-7 h-7 bg-brand-500 rounded flex items-center justify-center">
+              <span className="font-mono font-bold text-black text-xs">ev</span>
+            </div>
+            <span className="font-mono font-bold text-text-primary">evnx</span>
+            <span className="hidden sm:block font-mono text-xs text-text-muted border border-border-subtle rounded px-1.5 py-0.5">
+              v{EVNX_VERSION}
+            </span>
+          </Link>
 
-        <div className="hidden md:flex items-center gap-8">
-          <Link href="/guides" className="text-text-secondary hover:text-text-primary transition-colors">
-            Guides
-          </Link>
-          <Link href="/blog" className="text-text-secondary hover:text-text-primary transition-colors">
-            Blog
-          </Link>
-          <Link href="/changelog" className="text-text-secondary hover:text-text-primary transition-colors">
-            Changelog
-          </Link>
-          <a
-            href="https://github.com/urwithajit9/evnx"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-text-secondary hover:text-text-primary transition-colors"
-          >
-            GitHub
-          </a>
-        </div>
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map(({ href, label }) => {
+              const isActive =
+                pathname === href || pathname.startsWith(href + "/");
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`font-mono text-sm px-3 py-1.5 rounded transition-colors ${
+                    isActive
+                      ? "text-brand-400 bg-brand-500/10"
+                      : "text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
 
-        <div className="hidden md:flex items-center gap-3">
-          <Button variant="outline" asChild>
-            <a href="https://crates.io/crates/evnx" target="_blank" rel="noopener noreferrer">
-              Install
+          {/* Right actions */}
+          <div className="flex items-center gap-3">
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors"
+              aria-label="View on GitHub"
+            >
+              <Github className="w-4 h-4" />
             </a>
-          </Button>
+
+            <Link
+              href="/install"
+              className="hidden sm:block font-mono text-xs bg-brand-500 text-black px-3 py-1.5 rounded hover:bg-brand-400 transition-colors font-semibold"
+            >
+              Install
+            </Link>
+
+            {/* Mobile menu toggle */}
+            <button
+              className="md:hidden text-text-secondary hover:text-text-primary transition-colors p-1"
+              onClick={() => setMobileOpen((o) => !o)}
+              aria-label="Toggle menu"
+            >
+              {mobileOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
 
-        <button
-          className="md:hidden p-2"
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="Toggle menu"
-        >
-          {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
-
-        {isOpen && (
-          <div className="absolute top-16 left-0 right-0 bg-bg-surface border-b border-border-muted md:hidden">
-            <div className="flex flex-col p-4 space-y-4">
-              <Link href="/guides" className="text-text-secondary hover:text-text-primary">
-                Guides
+        {/* Mobile nav */}
+        {mobileOpen && (
+          <nav className="md:hidden border-t border-border-subtle py-4 space-y-1">
+            {NAV_LINKS.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className="block font-mono text-sm px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-surface rounded transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                {label}
               </Link>
-              <Link href="/blog" className="text-text-secondary hover:text-text-primary">
-                Blog
-              </Link>
-              <Link href="/changelog" className="text-text-secondary hover:text-text-primary">
-                Changelog
+            ))}
+            <div className="pt-3 mt-3 border-t border-border-subtle px-3 flex gap-3">
+              <Link
+                href="/install"
+                className="font-mono text-xs bg-brand-500 text-black px-4 py-2 rounded hover:bg-brand-400 transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                Install evnx
               </Link>
               <a
-                href="https://github.com/urwithajit9/evnx"
+                href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-text-secondary hover:text-text-primary"
+                className="font-mono text-xs border border-border-muted text-text-secondary px-4 py-2 rounded hover:text-text-primary transition-colors"
               >
                 GitHub
               </a>
-              <Button asChild className="w-full">
-                <a href="https://crates.io/crates/evnx" target="_blank" rel="noopener noreferrer">
-                  Install
-                </a>
-              </Button>
             </div>
-          </div>
+          </nav>
         )}
-      </nav>
+      </div>
     </header>
   );
 }

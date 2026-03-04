@@ -1,38 +1,62 @@
-import './globals.css';
-import type { Metadata } from 'next';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
+import type { Metadata } from "next";
+import { IBM_Plex_Mono, Fraunces } from "next/font/google";
+import "./globals.css";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import {
+  SITE_NAME,
+  SITE_DESCRIPTION,
+  SITE_URL,
+  TWITTER_HANDLE,
+} from "@/lib/config";
+
+// IBM Plex Mono — UI / body font (fully monospace site)
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
+// Fraunces — display / heading font (editorial contrast)
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  axes: ["SOFT", "WONK", "opsz"],
+  variable: "--font-serif",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://evnx.dev'),
+  metadataBase: new URL(SITE_URL),
   title: {
-    template: '%s | evnx',
-    default: 'evnx — .env management CLI',
+    default: `${SITE_NAME} — .env management CLI`,
+    template: `%s | ${SITE_NAME}`,
   },
-  description: 'Rust-powered CLI for validating, scanning, and converting .env files. Stop leaking secrets.',
-  keywords: ['env management', 'secret scanning', 'dotenv', 'cli tool', 'rust', 'devops', 'security'],
+  description: SITE_DESCRIPTION,
   openGraph: {
-    type: 'website',
-    locale: 'en_US',
-    url: 'https://evnx.dev',
-    siteName: 'evnx',
-    title: 'evnx — .env management CLI',
-    description: 'Rust-powered CLI for validating, scanning, and converting .env files.',
-    images: [
-      {
-        url: '/og.png',
-        width: 1200,
-        height: 630,
-        alt: 'evnx',
-      },
-    ],
+    type: "website",
+    siteName: SITE_NAME,
+    images: [{ url: "/og.png", width: 1200, height: 630 }],
   },
   twitter: {
-    card: 'summary_large_image',
-    creator: '@urwithajit9',
-    title: 'evnx — .env management CLI',
-    description: 'Rust-powered CLI for validating, scanning, and converting .env files.',
-    images: ['/og.png'],
+    card: "summary_large_image",
+    creator: TWITTER_HANDLE,
+    site: TWITTER_HANDLE,
+  },
+  keywords: [
+    "env management",
+    "secret scanning",
+    "dotenv",
+    "cli tool",
+    "rust",
+    "devops",
+    "kubernetes secrets",
+    "env validation",
+  ],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
   },
 };
 
@@ -42,10 +66,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
+    <html
+      lang="en"
+      className={`${ibmPlexMono.variable} ${fraunces.variable} dark`}
+    >
+      <body className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] font-mono antialiased">
         <Header />
-        <main>{children}</main>
+        <main className="flex-1">{children}</main>
         <Footer />
       </body>
     </html>

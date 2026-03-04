@@ -1,0 +1,290 @@
+---
+title: ".evnx.toml Configuration"
+slug: configuration-file
+section: reference
+order: 1
+publishedAt: "2024-03-15"
+excerpt: "Complete reference for .evnx.toml — the optional project-level config file for evnx. Covers scan rules, validation settings, output formats, and ignore patterns."
+difficulty: intermediate
+timeToComplete: "10 minutes"
+tags: ["configuration", "toml", "reference", "scan", "validate"]
+evnxVersion: "0.2.0"
+draft: false
+---
+
+evnx works out of the box with zero configuration. `.evnx.toml` is an optional project-level config file for teams that need custom rules, ignore patterns, or non-default behavior.
+
+Place `.evnx.toml` in your project root (next to `.env`). It's committed to the repo so everyone on the team gets the same behavior.
+
+---
+
+## File discovery
+
+evnx looks for `.evnx.toml` by walking up the directory tree from the current working directory, stopping at the first match or the filesystem root. This means a monorepo can have one root `.evnx.toml` covering all packages, with optional per-package overrides.
+
+```
+my-monorepo/
+├── .evnx.toml          ← root config, applies everywhere
+├── packages/
+│   ├── api/
+│   │   ├── .evnx.toml  ← overrides root config for packages/api only
+│   │   └── .env
+│   └── web/
+│       └── .env        ← uses root config
+```
+
+---
+
+## Full reference
+
+```toml
+# .evnx.toml
+# All fields are optional. Omit any section you don't need.
+
+# ─── Project metadata ────────────────────────────────────────────────────────
+
+[project]
+name    = "my-app"          # Used in output headers and report filenames
+version = "1.0.0"           # Your project version (not evnx version)
+
+# ─── Scan configuration ──────────────────────────────────────────────────────
+
+[scan]
+
+# Files to scan (glob patterns, relative to config file location)
+# Default: all .env files in the current directory
+include = [
+  ".env",
+  ".env.*",
+  "config/.env",
+]
+
+# Files to always skip
+ignore_files = [
+  ".env.example",
+  ".env.test",
+  ".env.ci",
+  "fixtures/**/.env",
+]
+
+# Specific variable keys to never flag
+ignore_keys = [
+  "EXAMPLE_*",
+  "TEST_API_KEY",
+  "DUMMY_SECRET",
+]
+
+# Minimum Shannon entropy to flag as high-entropy secret
+# Default: 4.5 (scale 0–8). Lower = more sensitive, more false positives
+entropy_threshold = 4.5
+
+# Minimum severity to include in output
+# Options: "high" | "medium" | "low" | "all"
+# Default: "all"
+min_severity = "all"
+
+# Also scan .env.example files
+# Default: false (example files are usually safe to scan but excluded by default)
+include_example_files = false
+
+# Scan recursively through subdirectories
+# Default: false
+recursive = true
+
+# ─── Validate configuration ──────────────────────────────────────────────────
+
+[validate]
+
+# Promote all warnings to errors (same as --strict flag)
+# Default: false
+strict = false
+
+# Variables that MUST be present (validation fails if missing)
+required = [
+  "DATABASE_URL",
+  "APP_SECRET_KEY",
+  "APP_ENV",
+]
+
+# Expected environment value (used to validate localhost-in-prod rules)
+# Options: "development" | "staging" | "production" | "test"
+# Default: auto-detected from APP_ENV or NODE_ENV if present
+environment = "production"
+
+# Minimum length for values flagged as "secret" or "key" in their name
+# Default: 32
+min_secret_length = 32
+
+# Flag boolean strings that might cause issues
+# e.g. DEBUG=true in Python reads as str "true", not bool True
+# Default: true
+check_boolean_traps = true
+
+# ─── Output configuration ────────────────────────────────────────────────────
+
+[output]
+
+# Default output format
+# Options: "pretty" | "json" | "sarif" | "github"
+# Default: "pretty"
+format = "pretty"
+
+# Default output file (omit to write to stdout)
+# file = "evnx-report.json"
+
+# Show line numbers in pretty output
+# Default: true
+show_line_numbers = true
+
+# Include remediation suggestions in output
+# Default: true
+show_suggestions = true
+
+# ─── Convert configuration ───────────────────────────────────────────────────
+
+[convert]
+
+# Default output format for `evnx convert`
+# Options: json, yaml, kubernetes, terraform, github-actions, doppler,
+#          infisical, heroku, vercel, netlify, railway, fly, render, chamber
+default_target = "kubernetes"
+
+# Kubernetes secret name used in convert --to kubernetes
+# Default: project.name or "app-secrets"
+kubernetes_secret_name = "my-app-secrets"
+
+# Kubernetes namespace
+# Default: "default"
+kubernetes_namespace = "production"
+
+# Variable name transformation for Kubernetes
+# Options: "preserve" | "lowercase" | "uppercase"
+kubernetes_key_transform = "preserve"
+
+# ─── Backup configuration ────────────────────────────────────────────────────
+
+[backup]
+
+# Where to store backups
+# Default: ~/.evnx/backups
+directory = ".evnx-backups"
+
+# Maximum number of backups to retain per file
+# Default: 10
+max_backups = 10
+
+# Encryption: evnx always uses AES-256-GCM + Argon2
+# Set a default key derivation cost (higher = slower but more secure)
+# Options: "interactive" | "moderate" | "sensitive"
+# Default: "interactive" (fast, suitable for developer machines)
+argon2_preset = "interactive"
+
+# ─── Doctor configuration ────────────────────────────────────────────────────
+
+[doctor]
+
+# Additional checks to run
+check_gitignore     = true   # Is .env in .gitignore?
+check_permissions   = true   # Is .env readable only by owner (600)?
+check_example_sync  = true   # Is .env.example in sync with .env?
+check_updates       = false  # Check for evnx updates (makes a network request)
+
+# ─── Custom secret patterns ──────────────────────────────────────────────────
+# Add your own patterns for internal credentials, custom API key formats, etc.
+
+[[scan.custom_patterns]]
+name        = "internal-api-key"
+pattern     = "INT-[A-Z0-9]{32}"
+severity    = "high"
+description = "Internal API key format"
+keys        = ["INTERNAL_*", "INT_API_*"]   # Only check these key names
+
+[[scan.custom_patterns]]
+name        = "legacy-token"
+pattern     = "tok_[a-f0-9]{40}"
+severity    = "medium"
+description = "Legacy authentication token"
+```
+
+---
+
+## Common configurations
+
+### Minimal config for a solo project
+
+```toml
+# .evnx.toml
+[scan]
+ignore_files = [".env.example", ".env.test"]
+recursive    = true
+
+[validate]
+required = ["DATABASE_URL", "APP_SECRET_KEY"]
+```
+
+### Team config with strict validation
+
+```toml
+# .evnx.toml
+[project]
+name = "my-saas-app"
+
+[scan]
+ignore_files      = [".env.example", ".env.*.local", "**/*.test.env"]
+entropy_threshold = 4.0
+recursive         = true
+
+[validate]
+strict          = true
+environment     = "production"
+min_secret_length = 32
+required = [
+  "DATABASE_URL",
+  "REDIS_URL",
+  "APP_SECRET_KEY",
+  "STRIPE_SECRET_KEY",
+]
+
+[output]
+format           = "pretty"
+show_suggestions = true
+
+[doctor]
+check_updates = true
+```
+
+### CI-only config (override via environment variable)
+
+You can override `.evnx.toml` settings with environment variables in CI:
+
+```bash
+# In GitHub Actions
+EVNX_SCAN_MIN_SEVERITY=high evnx scan --exit-code
+EVNX_VALIDATE_STRICT=true evnx validate
+EVNX_OUTPUT_FORMAT=sarif evnx scan --output results.sarif
+```
+
+Environment variable names follow the pattern `EVNX_<SECTION>_<KEY>` in uppercase.
+
+---
+
+## Schema validation
+
+evnx validates `.evnx.toml` on load and reports errors clearly:
+
+```bash
+evnx doctor --check-config
+
+# [CONFIG] Validating .evnx.toml...
+# [ERROR] scan.entropy_threshold must be between 0.0 and 8.0, got: 10.0
+# [ERROR] validate.environment must be one of: development, staging, production, test
+# [OK] All other fields valid
+```
+
+---
+
+## Related
+
+- **[evnx scan reference](/guides/commands/scan)** — scan flags and output formats
+- **[evnx validate reference](/guides/commands/validate)** — validation rules
+- **[evnx doctor reference](/guides/commands/doctor)** — health check details

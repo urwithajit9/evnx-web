@@ -1,0 +1,137 @@
+---
+title: "Why I Built evnx: The AWS Incident I Can't Forget"
+slug: why-i-built-evnx
+publishedAt: "2024-03-15"
+excerpt: "I pushed AWS credentials to a public GitHub repo. Three services went down. Here's the full story — and what I built so you never have to explain that incident to your lead."
+author: ajit
+tags: ["security", "origin-story", "rust", "devops"]
+category: opinion
+featured: true
+draft: false
+---
+
+It was 11:47 PM on a Thursday.
+
+I was pushing a hotfix to a side project — the kind of push you make when you're tired and just want the thing to work. I typed `git add .`, wrote a commit message like "fix: finally works," and hit enter.
+
+I didn't notice `.env` was tracked.
+
+---
+
+## The Next Eight Minutes
+
+**11:48 PM** — GitHub email: "AWS key detected in your repository."
+
+I didn't read it. I was already asleep.
+
+**12:03 AM** — Three Slack messages from our on-call system: services down.
+
+**12:04 AM** — My phone rings. My development lead. At midnight.
+
+**12:09 AM** — I find the email. The `.env` file had been public for exactly 22 minutes. In those 22 minutes, an automated scanner had found the `AWS_SECRET_ACCESS_KEY`, spun up EC2 instances in three regions, and started mining cryptocurrency.
+
+The key had been automatically revoked by AWS. Which is why our three services were down.
+
+---
+
+## The Conversation I Don't Recommend Having
+
+The next morning I had to explain what happened. Not just *what* — the technical part is easy: I committed a file I shouldn't have. The hard part is explaining *why*.
+
+Why didn't I have `.env` in `.gitignore`? (I did. In the root. The project had a monorepo structure I hadn't updated correctly.)
+
+Why didn't I check before pushing? (I was tired. It was a hotfix. I was careless.)
+
+Why didn't I use a secret manager? (I meant to set it up. Never got around to it.)
+
+That conversation was more uncomfortable than the $847 AWS bill.
+
+---
+
+## What Existed. What Was Missing.
+
+I looked for a tool that could:
+
+- **Scan** `.env` files for leaked secrets before they left my machine
+- **Validate** common mistakes like `localhost` in a production value, `true` instead of `True` for Python booleans, placeholder values like `your-api-key-here`
+- **Convert** `.env` files to Kubernetes secrets, Doppler configs, GitHub Actions secrets without copying and pasting by hand
+- **Enforce** that `.env.example` stayed in sync with `.env` (the real file)
+- **Run** in CI/CD as a gate, not just a suggestion
+
+Some of these tools existed separately. None did all of them. None were fast enough to run as a pre-commit hook without annoying developers into disabling it.
+
+So I started writing one. In Rust.
+
+---
+
+## Three Years Later
+
+<Callout type="tip" title="Current version">
+evnx v0.2.0 is live. It handles everything below, plus cloud migration, encrypted backups, and a new `add` command for managing variables without touching the file directly.
+</Callout>
+
+Here's what evnx catches now that would have saved me that incident:
+
+```bash
+# Would have stopped me before the push
+evnx scan
+
+# [SCAN] Scanning .env files...
+# [ERROR] AWS_SECRET_ACCESS_KEY matches high-entropy pattern (256-bit key)
+# [ERROR] Pattern: aws_secret (confidence: high)
+# [INFO] 1 secret detected. Commit blocked.
+# [TIP] Use `evnx migrate --to aws-secrets-manager` to move this to a secret manager.
+```
+
+The pre-commit hook takes 180ms on a cold start. Nobody disables it.
+
+```bash
+# Would have caught the gitignore misconfiguration
+evnx doctor
+
+# [DOCTOR] Running environment health check...
+# [WARNING] .env is tracked by git in packages/api/
+# [WARNING] .gitignore at root does not cover packages/api/.env
+# [OK] .env.example is present and up to date
+# [INFO] 1 warning, 0 errors
+```
+
+The `doctor` command is what I actually needed most. Not the scanner — I knew the key was sensitive. I didn't know my `.gitignore` wasn't covering that directory.
+
+---
+
+## The Pattern I See Everywhere
+
+Since publishing evnx, I've talked to dozens of developers who've had similar incidents. The pattern is always the same:
+
+1. Developer knows secrets shouldn't be committed
+2. Developer has some protection in place (`.gitignore`, code review)
+3. Developer hits an edge case that slips through the protection
+4. Incident happens
+
+The protection fails at the edges — monorepo structures, new team members, new service directories, rushed hotfixes at midnight.
+
+evnx is designed to catch the edges. It's opinionated about what "safe" looks like, and it fails loudly when something doesn't match.
+
+---
+
+## What's Next
+
+The CLI is open source and free forever. But the incident I described wasn't just a solo developer problem — it was a team problem. My `.env.example` wasn't updated. No one else on the team knew the new service had its own `.env`.
+
+The next version of evnx is about teams: shared secret management, audit logs, role-based access, and sync across machines. A web dashboard for the things that don't belong in a CLI.
+
+If you've been in a similar situation — or you're building a system where you'd rather not be — [try evnx today](/install). The pre-commit hook alone is worth the five minutes.
+
+<Callout type="danger" title="Never again">
+Install the pre-commit hook. Even if you're careful. Especially if you're tired.
+</Callout>
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+evnx doctor  # Start here
+```
+
+---
+
+*Three years and zero incidents later — evnx is the safety net I wish I'd had.*

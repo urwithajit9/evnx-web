@@ -1,0 +1,269 @@
+---
+title: "GitHub Actions"
+slug: github-actions
+section: integrations
+order: 1
+publishedAt: "2024-03-15"
+excerpt: "Run evnx scan and validate in your GitHub Actions CI pipeline. Block PRs on secret detection, upload SARIF to the Security tab, and annotate pull request diffs."
+difficulty: beginner
+timeToComplete: "15 minutes"
+tags: ["github-actions", "ci-cd", "sarif", "security", "pull-requests"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+  - commands/scan
+draft: false
+---
+
+Integrating evnx into GitHub Actions lets you automatically scan every pull request and push for secrets and misconfigurations — blocking merges before issues reach `main`.
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/scan">Understand evnx scan output formats</Prerequisite>
+</Prerequisites>
+
+---
+
+## What you'll set up
+
+By the end of this guide your repository will have:
+
+1. A workflow that blocks PRs containing secrets (exit code `1`)
+2. SARIF results uploaded to the **Security → Code scanning** tab
+3. Inline annotations on PR diffs highlighting the exact line with a finding
+4. A separate validation workflow checking for misconfiguration
+
+---
+
+## Basic scan workflow
+
+Create `.github/workflows/evnx-security.yml`:
+
+```yaml
+name: evnx security scan
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # Required to upload SARIF
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Scan .env files
+        run: |
+          evnx scan \
+            --format github \
+            --severity high \
+            --exit-code
+
+      - name: Generate SARIF report
+        if: always()   # Run even when scan finds issues
+        run: |
+          evnx scan \
+            --format sarif \
+            --output evnx-results.sarif
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: evnx-results.sarif
+          category: evnx-secret-scan
+```
+
+<Callout type="info" title="permissions: security-events: write">
+The `security-events: write` permission is required to upload SARIF files. Without it the upload step will fail with a 403 error.
+</Callout>
+
+---
+
+## Validate workflow
+
+Run `evnx validate` separately — validation checks for misconfiguration (placeholders, weak secrets, type issues) and doesn't need to block merges in the same way scanning does:
+
+```yaml
+name: evnx validate
+
+on:
+  pull_request:
+    paths:
+      - '**.env*'       # Only run when .env files change
+      - '.evnx.toml'
+
+jobs:
+  validate:
+    name: Validate .env configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Validate environment files
+        run: evnx validate --strict
+        # Exits 1 if strict warnings are found
+        # Remove --strict for advisory-only validation
+```
+
+---
+
+## Caching evnx binary
+
+If you run evnx across many workflows, cache the binary to avoid re-downloading:
+
+```yaml
+- name: Cache evnx binary
+  uses: actions/cache@v4
+  id: cache-evnx
+  with:
+    path: ~/.local/bin/evnx
+    key: evnx-${{ runner.os }}-0.2.0
+
+- name: Install evnx (if not cached)
+  if: steps.cache-evnx.outputs.cache-hit != 'true'
+  run: curl -fsSL https://dotenv.space/install.sh | bash
+
+- name: Add to PATH
+  run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+```
+
+---
+
+## Install via Cargo (slower but version-pinned)
+
+For reproducible builds where you need to pin an exact version:
+
+```yaml
+- name: Install Rust toolchain
+  uses: dtolnay/rust-toolchain@stable
+
+- name: Install evnx
+  run: cargo install evnx --version 0.2.0 --locked
+```
+
+<Callout type="warning" title="Compile time">
+`cargo install` compiles from source — adds ~90 seconds to your workflow on first run. Use the install script or binary cache for faster CI.
+</Callout>
+
+---
+
+## PR annotations in action
+
+When `--format github` is used, findings appear as inline annotations on pull request file diffs:
+
+```
+evnx scan --format github
+```
+
+Outputs:
+
+```
+::error file=.env,line=8,title=Secret detected (high)::AWS_SECRET_ACCESS_KEY matches pattern aws_secret_access_key
+::warning file=config/.env.staging,line=3,title=Possible secret::STRIPE_SECRET_KEY may be a live Stripe key
+```
+
+GitHub Actions renders these as annotations directly on the PR diff — reviewers see the exact line flagged without reading the workflow log.
+
+---
+
+## Full production workflow
+
+This combines everything above into one robust workflow:
+
+```yaml
+name: evnx — security & validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache evnx
+        uses: actions/cache@v4
+        id: cache-evnx
+        with:
+          path: ~/.local/bin/evnx
+          key: evnx-${{ runner.os }}-0.2.0
+
+      - name: Install evnx
+        if: steps.cache-evnx.outputs.cache-hit != 'true'
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Scan (PR annotations)
+        run: evnx scan --format github --exit-code
+
+      - name: Scan (SARIF report)
+        if: always()
+        run: evnx scan --format sarif --output evnx.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: evnx.sarif
+
+      - name: Validate configuration
+        run: evnx validate --strict
+```
+
+---
+
+## Ignoring known false positives
+
+If your repo contains `.env.example` or test fixtures that look like secrets, tell evnx to ignore them in `.evnx.toml`:
+
+```toml
+# .evnx.toml
+[scan]
+ignore_files = [
+  ".env.example",
+  ".env.test",
+  "fixtures/**/.env",
+]
+
+ignore_keys = [
+  "EXAMPLE_API_KEY",
+  "TEST_*",
+]
+```
+
+Commit `.evnx.toml` to your repo so CI picks it up automatically.
+
+---
+
+## Related
+
+- **[evnx scan reference](/guides/commands/scan)** — all flags, output formats, exit codes
+- **[pre-commit hook setup](/guides/integrations/pre-commit)** — catch issues before they reach CI
+- **[GitLab CI integration](/guides/integrations/gitlab-ci)** — same concepts for GitLab
