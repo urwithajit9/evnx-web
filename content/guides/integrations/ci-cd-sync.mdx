@@ -1,0 +1,428 @@
+---
+slug: "integrations-ci-cd-sync"
+section: "integrations"
+order: 3
+title: "CI/CD Integration for Sync Validation"
+publishedAt: "2026-03-06"
+updatedAt: "2026-03-06"
+excerpt: "Automate evnx sync validation in GitHub Actions, GitLab CI, and pre-commit hooks."
+difficulty: "intermediate"
+timeToComplete: "20 minutes"
+tags: ["sync", "ci-cd", "github-actions", "gitlab", "automation", "validation"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - commands/sync
+  - getting-started/sync-basics
+draft: false
+---
+
+# CI/CD Integration for Sync Validation
+
+<Callout type="tip" title="Why automate sync checks?">
+Automating `evnx sync` in CI/CD ensures:
+- `.env.example` stays up to date with code changes
+- No secrets accidentally committed to templates
+- Naming conventions enforced across the team
+- New team members can onboard reliably
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/sync">Review sync command reference</Prerequisite>
+  <Prerequisite href="/guides/getting-started/sync-basics">Understand sync basics</Prerequisite>
+</Prerequisites>
+
+---
+
+## Core CI flags for automation
+
+When using `evnx sync` in CI/CD, always include these flags:
+
+| Flag | Purpose | Example |
+|------|---------|---------|
+| `--force` | Skip interactive prompts | `--force` |
+| `--dry-run` | Don't modify files in CI | `--dry-run` |
+| `--naming-policy error` | Fail on non-standard names | `--naming-policy error` |
+| `--template-config` | Use team placeholder config | `--template-config .evnx/placeholders.json` |
+
+**Base command for CI:**
+
+```bash
+evnx sync --direction forward --force --dry-run --naming-policy error
+```
+
+---
+
+## GitHub Actions
+
+### Basic sync validation
+
+```yaml
+# .github/workflows/env-sync.yml
+name: Environment Sync Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: cargo install evnx
+
+      - name: Check .env.example is up to date
+        run: |
+          evnx sync \
+            --direction forward \
+            --force \
+            --dry-run \
+            --naming-policy error \
+            --template-config .evnx/placeholders.json
+
+          if ! git diff --quiet .env.example; then
+            echo "::error ::.env.example needs updates!"
+            echo "Run 'evnx sync --direction forward' locally and commit."
+            exit 1
+          fi
+```
+
+### Block secrets in .env.example
+
+```yaml
+      - name: Check for secrets in template
+        run: |
+          if grep -iE "(sk_live|sk_test|password|secret|token)" .env.example | \
+             grep -v "YOUR_\|placeholder\|demo\|sk_demo_"; then
+            echo "::error ::Potential secrets found in .env.example!"
+            echo "Use placeholders like YOUR_KEY_HERE instead."
+            exit 1
+          fi
+```
+
+### Upload diagnostic report
+
+```yaml
+      - name: Generate sync report
+        if: failure()
+        run: |
+          evnx sync --direction forward --verbose --dry-run > sync-report.txt
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-diagnostics
+          path: sync-report.txt
+```
+
+---
+
+## GitLab CI
+
+### Basic pipeline
+
+```yaml
+# .gitlab-ci.yml
+env-sync:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo install evnx
+    - evnx sync \
+        --direction forward \
+        --force \
+        --dry-run \
+        --naming-policy error \
+        --template-config .evnx/placeholders.json
+    - git diff --quiet .env.example || (echo ".env.example out of sync!" && exit 1)
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+```
+
+### Collect diagnostics on failure
+
+```yaml
+env-sync-report:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo install evnx
+    - evnx sync --direction forward --verbose --dry-run > sync-report.txt 2>&1 || true
+  artifacts:
+    paths: [sync-report.txt]
+    when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+---
+
+## Pre-commit hooks
+
+### Local hook (per-developer)
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit
+
+if git diff --cached --name-only | grep -qE "^(\.env|\.env\.example)"; then
+
+  if git diff --cached --name-only | grep -q "^\.env$"; then
+    echo "🚫 .env should not be committed!"
+    echo "Add it to .gitignore or remove from staging:"
+    echo "  git reset .env"
+    exit 1
+  fi
+
+  if git diff --cached --name-only | grep -q "^\.env\.example$"; then
+    echo "🔍 Validating .env.example changes..."
+
+    if ! evnx sync --direction forward --dry-run --force 2>/dev/null; then
+      echo "⚠️  Sync validation failed. Run:"
+      echo "  evnx sync --direction forward"
+      exit 1
+    fi
+  fi
+fi
+
+exit 0
+```
+
+### Shared hook via pre-commit framework
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: env-sync-check
+        name: Environment Sync Validation
+        entry: bash -c 'evnx sync --direction forward --dry-run --force --naming-policy error'
+        language: system
+        pass_filenames: false
+        files: '^(\.env\.example|\.evnx/placeholders\.json)$'
+```
+
+---
+
+## JSON output for advanced parsing
+
+Use `EVNX_OUTPUT_JSON=1` for machine-readable results:
+
+```bash
+EVNX_OUTPUT_JSON=1 evnx sync --direction forward --dry-run --force
+```
+
+**Example output:**
+
+```json
+{
+  "direction": "forward",
+  "dry_run": true,
+  "changes": [
+    {
+      "file": ".env.example",
+      "action": "add",
+      "variables": [
+        {"key": "NEW_API_KEY", "placeholder": "YOUR_KEY_HERE"}
+      ]
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
+```
+
+### Parse with jq in CI
+
+```bash
+# Count pending changes
+CHANGES=$(EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq '.changes | length')
+
+if [ "$CHANGES" -gt 0 ]; then
+  echo "⚠️  $CHANGES pending sync changes"
+  EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq -r '.changes[].variables[].key'
+  exit 1
+fi
+
+# Check for warnings
+WARNINGS=$(EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq '.warnings | length')
+if [ "$WARNINGS" -gt 0 ]; then
+  echo "⚠️  $WARNINGS warnings (non-blocking)"
+  EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq -r '.warnings[]'
+fi
+```
+
+---
+
+## Advisory vs blocking modes
+
+### Blocking mode (fail pipeline on issues)
+
+```bash
+evnx sync --force --dry-run --naming-policy error
+```
+
+Pipeline fails if `.env.example` is out of sync.
+
+### Advisory mode (report but don't fail)
+
+```bash
+evnx sync --force --dry-run --naming-policy error || true
+```
+
+Or filter output for logging only:
+
+```bash
+evnx sync --force --dry-run 2>&1 | grep -E "✗|⚠️" >> deploy-log.txt
+```
+
+<Callout type="tip" title="When to use advisory mode">
+Use advisory mode for:
+- Initial rollout of sync checks
+- Legacy projects with many violations
+- Debugging why a pipeline is failing
+
+Switch to blocking mode once the team is comfortable with the workflow.
+</Callout>
+
+---
+
+## Multi-service repositories
+
+For monorepos with multiple services:
+
+```bash
+for dir in services/*/; do
+  echo "🔍 Checking $dir..."
+  (cd "$dir" && evnx sync --direction forward --dry-run --force) || \
+    echo "❌ Issues in $dir" >> sync-errors.txt
+done
+
+if [ -s sync-errors.txt ]; then
+  echo "🚫 Sync validation failed for some services:"
+  cat sync-errors.txt
+  exit 1
+fi
+```
+
+**GitHub Actions example:**
+
+```yaml
+      - name: Check all services
+        run: |
+          ERRORS=0
+          for dir in services/*/; do
+            echo "Checking $dir..."
+            (cd "$dir" && evnx sync --direction forward --dry-run --force) || ERRORS=$((ERRORS+1))
+          done
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error ::$ERRORS service(s) failed sync validation"
+            exit 1
+          fi
+```
+
+---
+
+## Troubleshooting CI failures
+
+### Command not found: evnx
+
+**Fix:** Ensure evnx is installed in the CI environment:
+
+```yaml
+- name: Install evnx
+  run: cargo install evnx
+```
+
+Or use a pre-built binary:
+
+```yaml
+- name: Install evnx
+  run: |
+    curl -L https://github.com/your-org/evnx/releases/latest/download/evnx-x86_64-unknown-linux-gnu.tar.gz | tar xz
+    sudo mv evnx /usr/local/bin/
+```
+
+### File not found: .env.example
+
+**Fix:** Ensure the file exists in the repo:
+
+```yaml
+- name: Verify template exists
+  run: |
+    if [ ! -f .env.example ]; then
+      echo "::error ::.env.example not found!"
+      echo "Create it with: evnx init or evnx add custom"
+      exit 1
+    fi
+```
+
+### JSON parsing errors
+
+**Fix:** Suppress stderr when parsing JSON:
+
+```bash
+# Wrong (stderr interferes with JSON)
+EVNX_OUTPUT_JSON=1 evnx sync | jq .
+
+# Correct (redirect stderr)
+EVNX_OUTPUT_JSON=1 evnx sync 2>/dev/null | jq .
+```
+
+### Permission denied on .env
+
+**Fix:** CI shouldn't need .env — ensure it's gitignored:
+
+```yaml
+- name: Verify .env is ignored
+  run: |
+    if git check-ignore .env | grep -q "^\.env$"; then
+      echo "✓ .env is properly ignored"
+    else
+      echo "::warning ::.env should be in .gitignore"
+    fi
+```
+
+---
+
+## Best practices checklist
+
+### For CI configuration
+- [ ] Use `--force --dry-run` to skip prompts and avoid file writes
+- [ ] Set `--naming-policy error` to enforce conventions
+- [ ] Include `--template-config` if using custom placeholders
+- [ ] Upload diagnostics as artifacts on failure
+- [ ] Test the workflow locally before committing
+
+### For team adoption
+- [ ] Start with advisory mode (`|| true`) for first week
+- [ ] Document the CI check in CONTRIBUTING.md
+- [ ] Add a "Why did my PR fail?" section to docs
+- [ ] Provide a local command to reproduce CI checks
+
+### For security
+- [ ] Never log `.env` contents in CI output
+- [ ] Scan `.env.example` for accidental secrets
+- [ ] Use custom placeholders that look fake (`sk_demo_XXX`)
+- [ ] Rotate any test credentials used in examples
+
+---
+
+## Related guides
+
+- [Team Collaboration](/guides/use-cases/team-collaboration) — Human workflows
+- [Command Reference](/guides/commands/sync) — All sync options
+- [Configuration Reference](/guides/reference/sync-configuration) — JSON schema details
+
+<Callout type="success" title="Automate with confidence">
+With these CI/CD patterns, your team can ship faster knowing environment variables are always in sync — without manual checks or security risks.
+</Callout>
+---
+

@@ -1,25 +1,26 @@
 ---
-title: "evnx sync"
-slug: sync
-section: commands
+slug: "commands-sync"
+section: "commands"
 order: 2
-publishedAt: "2026-03-06"
-excerpt: "Keep .env and .env.example in perfect synchronization. Bidirectional sync with smart placeholders, security guards, and CI/CD support."
-difficulty: beginner
-timeToComplete: "10 minutes"
-tags: ["sync", "env", "template", "collaboration", "ci-cd", "security"]
-evnxVersion: "0.2.0"
+title: "evnx sync"
+publishedAt: "2024-03-15"
+updatedAt: "2024-03-20"
+excerpt: "Reference documentation for the evnx sync command: options, exit codes, and basic usage."
+difficulty: "beginner"
+timeToComplete: "5 minutes"
+tags: ["sync", "reference", "cli", "env"]
+evnxVersion: "0.2.1"
 prerequisites:
   - getting-started/installation
-  - commands/add
 draft: false
 ---
 
-`evnx sync` maintains consistency between your local environment file (`.env`) and your team template file (`.env.example`). It supports bidirectional synchronization with intelligent placeholder generation, security guards, and automation-friendly flags.
+# evnx sync — Command Reference
+
+Keep `.env` and `.env.example` in perfect synchronization with bidirectional sync, smart placeholders, and security guards.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/commands/add">Add environment variables</Prerequisite>
 </Prerequisites>
 
 ---
@@ -30,7 +31,7 @@ draft: false
 evnx sync [OPTIONS]
 ```
 
-**Options:**
+### Options reference
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
@@ -43,7 +44,68 @@ evnx sync [OPTIONS]
 | `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
 | `--help`, `-h` | `bool` | `false` | Display help information |
 
-**Environment Variables:**
+### Direction values
+
+| Value | Flow | Use case |
+|-------|------|----------|
+| `forward` | `.env` → `.env.example` | Update team template with your new variables |
+| `reverse` | `.env.example` → `.env` | Pull team changes to your local `.env` |
+
+### Naming policy values
+
+| Policy | Behavior | Best for |
+|--------|----------|----------|
+| `warn` | Shows warning, continues | Local development (default) |
+| `error` | Fails on non-standard names | CI/CD validation |
+| `ignore` | No validation | Legacy projects |
+
+---
+
+## Exit codes
+
+| Code | Meaning | Use case |
+|------|---------|----------|
+| `0` | ✅ Sync completed successfully | Success in scripts/CI |
+| `1` | 🚨 Sync failed (missing files, validation errors) | Fail pipeline on issues |
+| `2+` | ⚠️ Runtime errors (IO, parsing failures) | Debug tooling issues |
+
+---
+
+## Basic usage examples
+
+### Forward sync (default)
+```bash
+# Update .env.example with new variables from .env
+evnx sync
+```
+
+### Reverse sync
+```bash
+# Pull new variables from .env.example to .env
+evnx sync --direction reverse
+```
+
+### Preview without changes
+```bash
+# See what would change before applying
+evnx sync --dry-run
+```
+
+### CI/CD mode
+```bash
+# Skip prompts, use placeholders, fail on naming issues
+evnx sync --force --dry-run --naming-policy error
+```
+
+### Custom placeholder config
+```bash
+# Use team-specific placeholder patterns
+evnx sync --template-config .evnx/placeholders.json
+```
+
+---
+
+## Environment variables
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
@@ -52,840 +114,10 @@ evnx sync [OPTIONS]
 
 ---
 
-## Sync directions
-
-### Forward sync (`.env` → `.env.example`)
-
-**Purpose:** Update the team template with new variables from your local environment.
-
-```bash
-evnx sync --direction forward
-# or simply:
-evnx sync  # forward is default
-```
-
-<Callout type="info" title="When to use forward sync">
-Use forward sync when you've added new environment variables to your local `.env` file and want to share them with your team by updating `.env.example`.
-</Callout>
-
-**Flow:**
-```
-1. Parse .env and .env.example
-2. Find variables in .env missing from .env.example  
-3. For each missing variable:
-   • Generate smart placeholder (based on name patterns)
-   • OR use actual value (with explicit confirmation)
-4. Append to .env.example with sync comment
-5. Optionally add description comment
-```
-
-**Interactive options:**
-```
-? Add these to .env.example?
-❯ Yes, add with placeholder values (recommended)
-  Yes, add with actual values ⚠️ SECURITY RISK
-  Let me choose individually
-  No, skip
-```
-
-<Callout type="danger" title="Security warning">
-Selecting "add with actual values" can expose secrets if `.env.example` is committed to version control. This option requires **double confirmation** and logs an audit message in verbose mode.
-</Callout>
-
----
-
-### Reverse sync (`.env.example` → `.env`)
-
-**Purpose:** Update your local environment with new variables from the team template.
-
-```bash
-evnx sync --direction reverse
-```
-
-<Callout type="info" title="When to use reverse sync">
-Use reverse sync when your team has updated `.env.example` with new required variables, and you need to add them to your local `.env` file.
-</Callout>
-
-**Flow:**
-```
-1. Parse .env.example and .env
-2. Find variables in .env.example missing from .env
-3. For each missing variable:
-   • Add with placeholder value, OR
-   • Prompt for real value interactively
-4. Append to .env with sync comment
-5. Remind to replace placeholders with real credentials
-```
-
-**Interactive options:**
-```
-? Add to .env?
-❯ Yes, with placeholder values
-  Yes, prompt me for real values
-  Let me choose individually
-  No, skip
-```
-
----
-
-## Smart placeholder generation
-
-evnx automatically generates safe placeholder values based on variable name patterns.
-
-### Built-in rules
-
-| Variable name contains | Generated placeholder |
-|----------------------|---------------------|
-| `SECRET`, `KEY`, `TOKEN` | `YOUR_KEY_HERE` |
-| `PASSWORD`, `PASS` | `YOUR_PASSWORD_HERE` |
-| `URL` (postgresql://) | `postgresql://user:password@localhost:5432/dbname` |
-| `URL` (redis://) | `redis://localhost:6379/0` |
-| `URL` (http/https) | `https://your-api-url-here.com` |
-| `PORT` | `8000` |
-| `DEBUG` | `true` |
-| `HOST`, `SERVER` | `localhost` |
-| Default | `YOUR_VALUE_HERE` |
-
-### Custom placeholder configuration
-
-Create `.evnx/placeholders.json` for team-specific patterns:
-
-```json
-{
-  "$schema": "https://evnx.dev/schemas/placeholders.v1.json",
-  "description": "Team placeholder conventions",
-  "patterns": {
-    ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
-    ".*_SECRET$": "demo_secret_placeholder",
-    "DATABASE_URL": "postgresql://demo:demo@localhost:5432/demo_db",
-    "REDIS_URL": "redis://localhost:6379/0",
-    ".*_PORT$": "8080",
-    ".*_HOST$": "localhost",
-    "DEBUG": "true",
-    "ENVIRONMENT": "development"
-  },
-  "default": "REPLACE_IN_PRODUCTION",
-  "allow_actual": ["APP_NAME", "APP_VERSION", "ENVIRONMENT"]
-}
-```
-
-**Usage:**
-```bash
-evnx sync --template-config .evnx/placeholders.json
-```
-
-<Callout type="tip" title="Pattern matching">
-Patterns use **regex** with case-insensitive matching. `.*_API_KEY$` matches `STRIPE_API_KEY`, `AWS_API_KEY`, etc.
-</Callout>
-
----
-
-## Output formats
-
-### Text (default)
-
-Human-readable, color-coded output for terminal use:
-
-```bash
-evnx sync
-```
-
-```
-┌─ Sync .env ↔ .env.example ─────────────────────┐
-│ Direction: forward                              │
-└────────────────────────────────────────────────┘
-
-┌─ Variables to Add ─────────────────────────────┐
-│ Found 2 variable(s) in .env missing from        │
-│ .env.example:                                   │
-│   • STRIPE_API_KEY                              │
-│   • WEBHOOK_URL                                 │
-└────────────────────────────────────────────────┘
-
-? Add these to .env.example?
-❯ Yes, add with placeholder values (recommended)
-
-? Add a comment explaining these variables? (Y/n)
-? Comment: Payment integration variables
-
-✓ Updated .env.example (+2 variables)
-
-Next steps:
-  1. Review .env.example to ensure no secrets were added
-  2. Commit .env.example to Git (never commit .env)
-  3. Share changes with your team
-```
-
-### Preview mode (`--dry-run`)
-
-See what would change without modifying files:
-
-```bash
-evnx sync --dry-run
-```
-
-```
-┌─ Sync .env ↔ .env.example ─────────────────────┐
-│ Direction: forward                              │
-└────────────────────────────────────────────────┘
-
-📋 Preview:
-Target: .env.example (action: Add)
-  🔒 STRIPE_API_KEY = YOUR_KEY_HERE
-  🔒 WEBHOOK_URL = YOUR_URL_HERE
-
-(dry-run: no files were modified)
-```
-
-<Callout type="tip" title="Use --dry-run first">
-Always preview changes with `--dry-run` before applying them, especially when working with sensitive environment variables.
-</Callout>
-
-### Verbose mode (`--verbose`)
-
-Detailed diagnostics for debugging:
-
-```bash
-evnx sync --direction forward --verbose
-```
-
-```
-Running sync in verbose mode [direction=forward, dry_run=false, force=false]
-┌─ Sync .env ↔ .env.example ─────────────────────┐
-│ Direction: forward                              │
-└────────────────────────────────────────────────┘
-
-[DEBUG] Parsing .env: found 12 variables
-[DEBUG] Parsing .env.example: found 10 variables
-[DEBUG] Missing keys: ["STRIPE_API_KEY", "WEBHOOK_URL"]
-[DEBUG] Validating naming: STRIPE_API_KEY ✓, WEBHOOK_URL ✓
-
-[... interactive prompts ...]
-
-[AUDIT] Added 2 variables to .env.example with placeholders
-✓ Updated .env.example (+2 variables)
-```
-
----
-
-## Workflows
-
-### Workflow 1: New project without `init`
-
-Start fresh by adding variables manually, then sync to create `.env`.
-
-```bash
-# Step 1: Add custom variables (creates .env.example)
-evnx add custom
-
-Variable name: DATABASE_URL
-Example/placeholder: postgresql://localhost:5432/mydb
-Add another? yes
-
-Variable name: API_KEY  
-Example/placeholder: YOUR_KEY_HERE
-Add another? no
-
-✓ Added 2 custom variables
-
-# Step 2: Create .env from template
-evnx sync --direction reverse
-
-ℹ️  .env not found, creating from .env.example
-✓ Created .env
-⚠️  Replace placeholder values with real credentials!
-
-# Step 3: Edit .env with real values
-nano .env
-
-# Step 4: Secure permissions
-chmod 600 .env
-
-# Step 5: Validate
-evnx validate
-✓ All variables present and valid
-```
-
-<Callout type="tip" title="No init required">
-You don't need to run `evnx init` to use sync. The `add` command creates `.env.example` automatically, and `sync reverse` creates `.env`.
-</Callout>
-
----
-
-### Workflow 2: Developer adds variable
-
-You added a new variable locally and want to update the team template.
-
-```bash
-# Add variable to .env manually or via evnx add
-echo "ANALYTICS_KEY=ua-12345" >> .env
-
-# Sync forward to update team template
-evnx sync
-
-? Add these to .env.example?
-❯ Yes, add with placeholder values (recommended)
-
-✓ Updated .env.example (+1 variables)
-
-# Commit the template change
-git add .env.example
-git commit -m "Add ANALYTICS_KEY to template"
-git push
-```
-
-**Result in `.env.example`:**
-```env
-# Existing variables...
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-
-# Synced from .env
-# Payment integration variables
-ANALYTICS_KEY=YOUR_KEY_HERE
-```
-
----
-
-### Workflow 3: Team collaboration
-
-Multiple developers keeping environments in sync.
-
-```bash
-# Developer A: Adds variable and updates template
-evnx sync --direction forward
-git add .env.example
-git commit -m "Add NEW_SERVICE_URL"
-git push
-
-# Developer B: Pulls and syncs to local .env
-git pull
-evnx sync --direction reverse
-
-? Add to .env?
-❯ Yes, prompt me for real values
-
-? Value for NEW_SERVICE_URL [https://api.example.com]: 
-https://api.production.example.com
-
-✓ Added 1 variables to .env
-```
-
----
-
-### Workflow 4: CI/CD validation
-
-Automated checks to ensure `.env.example` stays up to date.
-
-```yaml
-# .github/workflows/env-sync-check.yml
-name: Env Sync Check
-on: [push, pull_request]
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install evnx
-        run: cargo install evnx
-        
-      - name: Check sync state
-        run: |
-          evnx sync \
-            --direction forward \
-            --dry-run \
-            --force \
-            --naming-policy error \
-            --template-config .evnx/placeholders.json
-          
-          if ! git diff --quiet .env.example; then
-            echo "::error ::.env.example is out of sync!"
-            echo "Run 'evnx sync --direction forward' locally and commit."
-            exit 1
-          fi
-          
-      - name: Check for secrets
-        run: |
-          if grep -iE "(sk_live|password|secret)" .env.example | \
-             grep -v "YOUR_\|placeholder\|demo"; then
-            echo "::error ::Potential secrets in .env.example!"
-            exit 1
-          fi
-```
-
-<Callout type="warning" title="Never commit .env">
-Always ensure `.env` is in `.gitignore`. The sync command will warn if permissions are too permissive, but Git won't block you from accidentally committing secrets.
-</Callout>
-
----
-
-## Naming convention validation
-
-Enforce consistent environment variable naming across your team.
-
-### Policy options
-
-| Policy | Behavior | Best for |
-|--------|----------|----------|
-| `warn` | Shows warning, continues | Local development (default) |
-| `error` | Fails on non-standard names | CI/CD validation |
-| `ignore` | No validation | Legacy projects |
-
-### Standard convention: `SCREAMING_SNAKE_CASE`
-
-```
-✅ DATABASE_URL, API_SECRET_KEY, DEBUG_MODE, MY_APP_PREFIX_VAR
-❌ databaseUrl, apiKey, debug-mode, myAppVar
-```
-
-**Examples:**
-```bash
-# Warn but continue (default)
-evnx sync --naming-policy warn
-⚠️  Variable 'myVar' doesn't follow convention (UPPERCASE_WITH_UNDERSCORES)
-
-# Fail in CI on non-standard names
-evnx sync --naming-policy error --force
-✗ Non-standard variable name 'myVar'
-# Exit code: 1
-
-# Ignore conventions for legacy projects
-evnx sync --naming-policy ignore
-# No warnings, proceeds silently
-```
-
----
-
-## Security features
-
-### Protection layers
-
-| Layer | Description |
-|-------|-------------|
-| Default to placeholders | Never actual values unless explicitly chosen |
-| Double confirmation | Two prompts before adding actual values to templates |
-| Audit logging | Verbose mode logs sensitive operations |
-| Permission checks | Warns and auto-sets `0o600` on `.env` (Unix) |
-| Atomic writes | Prevents file corruption using temp files + rename |
-| Dry-run mode | Preview before applying changes |
-
-### Actual values warning flow
-
-When selecting "add with actual values":
-
-```
-┌─ ⚠️  SECURITY WARNING ─────────────────────────┐
-│ Adding actual values to .env.example may       │
-│ expose secrets if this file is committed to    │
-│ version control.                                │
-│                                                 │
-│ Only proceed if you are certain .env.example   │
-│ is:                                             │
-│ • Gitignored, OR                               │
-│ • Contains no sensitive data                   │
-└────────────────────────────────────────────────┘
-
-? Are you absolutely sure you want to add ACTUAL VALUES? (y/N)
-❯ n
-
-ℹ️  Aborted: values not added
-```
-
-### File permissions
-
-```bash
-# Check current permissions
-ls -la .env
--rw------- 1 user user 256 Mar 3 10:00 .env  # ✓ Correct (600)
--rw-r--r-- 1 user user 256 Mar 3 10:00 .env  # ⚠️ Too permissive (644)
-
-# Set correct permissions
-chmod 600 .env
-
-# evnx sync auto-sets on write (Unix)
-evnx sync --direction reverse
-✓ Created .env (permissions: 600)
-```
-
----
-
-## Exit codes
-
-| Code | Meaning | Use Case |
-|------|---------|----------|
-| `0` | ✅ Sync completed successfully | Success in scripts/CI |
-| `1` | 🚨 Sync failed (missing files, validation errors) | Fail pipeline on issues |
-| `2+` | ⚠️ Runtime errors (IO, parsing failures) | Debug tooling issues |
-
-<Callout type="tip" title="Testing exit codes">
-```bash
-# Test success case
-evnx sync --dry-run
-echo $?  # Should be 0
-
-# Test failure case (missing .env)
-rm .env
-evnx sync
-echo $?  # Should be 1
-```
-</Callout>
-
----
-
-## Project-type examples
-
-### Starting fresh (no init)
-
-```bash
-# Add custom variables
-evnx add custom
-# Add: DATABASE_URL, API_KEY, DEBUG
-
-# Create .env from template
-evnx sync --direction reverse
-✓ Created .env
-
-# Edit with real values
-nano .env
-
-# Secure permissions
-chmod 600 .env
-```
-
-### Python project
-
-```bash
-# Add Django variables
-evnx add service
-❯ PostgreSQL
-
-# Sync to create .env
-evnx sync --direction reverse
-
-# Validate Django dotenv setup
-evnx validate
-# ℹ️ Suggests: pip install python-dotenv
-```
-
-### Node.js project
-
-```bash
-# Add Express variables
-evnx add blueprint
-❯ Node.js (Express)
-
-# Sync forward after adding local vars
-echo "STRIPE_KEY=sk_test_123" >> .env
-evnx sync --direction forward --dry-run
-
-📋 Preview:
-Target: .env.example (action: Add)
-  🔒 STRIPE_KEY = YOUR_KEY_HERE
-```
-
-### Rust project
-
-```bash
-# Ensure dotenvy is in Cargo.toml
-# [dependencies]
-# dotenvy = "0.15"
-
-# Sync with custom placeholders
-evnx sync --template-config .evnx/placeholders.json
-```
-
-### Multi-service repository
-
-```bash
-# Check each service independently
-for dir in services/*/; do
-  echo "Checking $dir..."
-  (cd "$dir" && evnx sync --dry-run) || echo "❌ Issues in $dir"
-done
-```
-
----
-
-## Troubleshooting
-
-### ❌ "File not found: .env"
-
-```
-✗ File not found: .env
-
-┌─ 💡 Getting Started ─────────────────────────┐
-│ It looks like this project hasn't been       │
-│ initialized yet.                              │
-│                                               │
-│ To create .env and .env.example files, run:  │
-│                                               │
-│ $ evnx init                                   │
-│                                               │
-│ Or if you have an existing .env file, place  │
-│ it in this directory and try again.           │
-└──────────────────────────────────────────────┘
-```
-
-**Solutions:**
-1. Run `evnx init` to generate files from a blueprint
-2. Copy your existing `.env` to the project directory
-3. Use `evnx add custom` to create variables manually, then `sync reverse`
-
----
-
-### ❌ "File not found: .env.example"
-
-```
-✗ File not found: .env.example
-
-┌─ 💡 Getting Started ─────────────────────────┐
-│ The template file .env.example is missing.   │
-│                                               │
-│ To create it, either:                        │
-│                                               │
-│ 1. Run 'evnx init' to generate from template │
-│ 2. Create .env.example manually              │
-└──────────────────────────────────────────────┘
-```
-
-**Solutions:**
-1. Run `evnx init --framework <your-framework>`
-2. Create `.env.example` manually with variable names
-3. Use `evnx add custom` which auto-creates `.env.example`
-
----
-
-### ❌ Placeholder not matching custom pattern
-
-```bash
-# Verify JSON is valid
-cat .evnx/placeholders.json | jq .
-
-# Test pattern matching
-evnx sync --template-config .evnx/placeholders.json --verbose
-
-# Check regex syntax (patterns are case-insensitive)
-# Pattern: .*_API_KEY$ matches STRIPE_API_KEY, AWS_API_KEY
-```
-
----
-
-### ❌ Sync not detecting changes
-
-```bash
-# Check file contents
-cat .env
-cat .env.example
-
-# Verify parsing with verbose mode
-evnx sync --verbose --dry-run
-
-# Check for hidden characters
-file .env .env.example
-cat -A .env  # Shows hidden characters like ^M (Windows line endings)
-
-# Fix line endings if needed
-dos2unix .env .env.example  # Or: sed -i 's/\r$//' .env
-```
-
----
-
-### ❌ Permission warnings on Windows
-
-```bash
-# Expected: Permission checks are skipped on Windows
-# If you see an error, ensure you're on latest evnx version
-
-# Workaround: Manually verify file properties
-# Right-click .env → Properties → Security tab
-# Ensure only your user account has Read/Write access
-```
-
----
-
-## Best practices
-
-### ✅ For development
-
-```bash
-# Always preview first
-evnx sync --dry-run
-
-# Use placeholder values (default behavior)
-evnx sync  # Option 1: "add with placeholder values"
-
-# Secure .env permissions
-chmod 600 .env
-
-# Verify .env is gitignored
-git check-ignore .env
-.env  # ← Should appear in output
-
-# Review .env.example before committing
-git diff .env.example
-```
-
-### ✅ For team collaboration
-
-```markdown
-## In your PR description:
-
-### Environment Variable Changes
-
-```bash
-# Preview with dry-run:
-$ evnx sync --direction forward --dry-run
-📋 Preview:
-Target: .env.example (action: Add)
-  🔒 NEW_ANALYTICS_KEY = YOUR_KEY_HERE
-```
-
-✅ No secrets exposed in preview  
-✅ Placeholder follows team convention  
-✅ Ready to merge `.env.example` update
-```
-
-### ✅ For CI/CD pipelines
-
-```yaml
-# Always use these flags in automation:
-- --force          # Skip interactive prompts
-- --dry-run        # Don't modify files in CI
-- --naming-policy error  # Fail on convention violations
-- --template-config .evnx/placeholders.json  # Use team config
-```
-
-### ✅ Security checklist
-
-- [ ] `.env` is in `.gitignore` (🚨 critical)
-- [ ] `.env` permissions are `600` (Unix)
-- [ ] `.env.example` contains no real secrets
-- [ ] `.env.example` is tracked in Git
-- [ ] Used `--dry-run` before committing sync changes
-- [ ] Reviewed placeholder values for appropriateness
-
----
-
-## Related commands
-
-- **[evnx add](/guides/commands/add)** — Add environment variables interactively
-- **[evnx init](/guides/commands/init)** — Initialize new project with templates
-- **[evnx validate](/guides/commands/validate)** — Validate environment configuration
-- **[evnx doctor](/guides/commands/doctor)** — Diagnose environment setup issues
-
-<Callout type="tip" title="Workflow recommendation">
-Use `evnx sync` as part of your regular workflow:
-1. After adding new vars: `evnx sync --dry-run` to preview
-2. Before committing: `evnx sync --direction forward` to update template
-3. After pulling: `evnx sync --direction reverse` to get team changes
-4. In CI: `evnx sync --force --dry-run --naming-policy error` for validation
-</Callout>
-
----
-
-## Migration guide (v0.1 → v0.2)
-
-If upgrading from the previous version:
-
-```bash
-# Old command (still works via backward compat)
-evnx sync --direction forward --placeholder
-
-# New recommended command
-evnx sync --direction forward  # placeholder is now default behavior
-
-# Old: no dry-run support
-# New: preview before applying
-evnx sync --dry-run
-
-# Old: no CI mode
-# New: automation-friendly
-evnx sync --force --dry-run
-
-# Old: hardcoded placeholders  
-# New: customizable via JSON
-evnx sync --template-config .evnx/placeholders.json
-```
-
-<Callout type="success" title="Backward compatible">
-All old commands still work. New flags are optional additions that enhance safety and flexibility.
-</Callout>
-
----
-
 ## See also
 
-- [Security Best Practices](/guides/security) — Comprehensive security guide
-- [Team Collaboration Workflows](/guides/workflows/team-collaboration) — Multi-developer patterns
-- [CI/CD Setup Guide](/guides/workflows/ci-cd-setup) — Automation examples
-- [Custom Placeholder Configuration](/guides/configuration/placeholders) — Advanced templating
-```
-
+- [Sync Basics Tutorial](/guides/getting-started/sync-basics) — Learn sync step-by-step
+- [Team Collaboration](/guides/use-cases/team-collaboration) — Multi-developer workflows
+- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automation setup
+- [Configuration Reference](/guides/reference/sync-configuration) — Advanced options
 ---
-
-## 📁 File Placement
-
-Save this file as:
-
-```
-docs/commands/sync.mdx
-```
-
-Ensure your MDX/Next.js configuration supports:
-- Frontmatter parsing (gray-matter or similar)
-- Custom components: `<Prerequisites>`, `<Prerequisite>`, `<Callout>`
-- Syntax highlighting for bash/json code blocks
-
----
-
-## 🔗 Internal Link Updates
-
-After adding this file, update related documentation:
-
-1. **`docs/commands/add.mdx`** — Add link to sync in "Next steps"
-2. **`docs/commands/init.mdx`** — Reference sync for post-init workflow
-3. **`docs/workflows/getting-started.mdx`** — Include sync in beginner tutorial
-4. **`docs/security.mdx`** — Link to sync security features section
-
----
-
-## 🎨 Component Implementation Reference
-
-If your site doesn't have these components yet:
-
-```mdx
-// components/Prerequisites.tsx
-export function Prerequisites({ children }: { children: React.ReactNode }) {
-  return <div className="prerequisites-box">{children}</div>;
-}
-
-export function Prerequisite({ href, children }: { href: string; children: React.ReactNode }) {
-  return <li><a href={href}>{children}</a></li>;
-}
-
-// components/Callout.tsx
-export function Callout({ type, title, children }: { 
-  type: 'info' | 'warning' | 'danger' | 'tip' | 'success';
-  title?: string;
-  children: React.ReactNode;
-}) {
-  const styles = {
-    info: 'border-blue-200 bg-blue-50',
-    warning: 'border-yellow-200 bg-yellow-50', 
-    danger: 'border-red-200 bg-red-50',
-    tip: 'border-green-200 bg-green-50',
-    success: 'border-emerald-200 bg-emerald-50',
-  };
-  
-  return (
-    <div className={`callout border-l-4 p-4 my-4 ${styles[type]}`}>
-      {title && <strong>{title}</strong>}
-      {children}
-    </div>
-  );
-}
-```
-
----
-

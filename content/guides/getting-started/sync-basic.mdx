@@ -1,0 +1,233 @@
+---
+slug: "getting-started-sync-basics"
+section: "getting-started"
+order: 4
+title: "Sync Basics — Keep .env Files in Sync"
+publishedAt: "2024-03-15"
+updatedAt: "2024-03-20"
+excerpt: "Learn how to use evnx sync to keep your .env and .env.example files synchronized. Perfect for beginners."
+difficulty: "beginner"
+timeToComplete: "10 minutes"
+tags: ["sync", "tutorial", "beginner", "env", "template"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - getting-started/your-first-project
+draft: false
+---
+
+# Sync Basics — Keep .env Files in Sync
+
+<Callout type="tip" title="What you'll learn">
+In this tutorial, you'll learn how to use `evnx sync` to:
+- Understand forward vs reverse sync
+- Add new variables safely with placeholders
+- Pull team changes to your local environment
+- Avoid common pitfalls
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/getting-started/your-first-project">Complete your first project</Prerequisite>
+</Prerequisites>
+
+---
+
+## What is sync and why use it?
+
+When working on a project with a team, everyone needs the same environment variables — but not the same values.
+
+- **`.env`**: Your local file with real credentials (never commit this!)
+- **`.env.example`**: Team template with placeholder values (commit this!)
+
+The `sync` command keeps these two files consistent.
+
+<Callout type="danger" title="Security first">
+Never commit `.env` to version control. Always use placeholders in `.env.example`. The sync command helps enforce this.
+</Callout>
+
+---
+
+## Forward vs reverse sync
+
+### Forward sync (`.env` → `.env.example`)
+
+**Use when:** You added a new variable to your local `.env` and want to share it with the team.
+
+```bash
+# You added ANALYTICS_KEY to .env
+evnx sync
+
+? Add these to .env.example?
+❯ Yes, add with placeholder values (recommended)
+
+✓ Updated .env.example (+1 variables)
+```
+
+**Result:**
+```env
+# .env.example now has:
+ANALYTICS_KEY=YOUR_KEY_HERE
+```
+
+### Reverse sync (`.env.example` → `.env`)
+
+**Use when:** Your team added a new variable to `.env.example` and you need it locally.
+
+```bash
+# Team added FEATURE_FLAG to .env.example
+evnx sync --direction reverse
+
+? Add to .env?
+❯ Yes, prompt me for real values
+
+? Value for FEATURE_FLAG [true]: false
+✓ Added 1 variables to .env
+```
+
+**Result:**
+```env
+# Your .env now has:
+FEATURE_FLAG=false
+```
+
+<Callout type="tip" title="Quick decision guide">
+- Added vars to your `.env`? → `evnx sync` (forward)
+- Pulled team changes? → `evnx sync --direction reverse`
+- Not sure? → `evnx sync --dry-run` to preview
+</Callout>
+
+---
+
+## Your first sync: Step-by-step
+
+### Scenario: You're starting fresh (no `init`)
+
+**Step 1: Add custom variables**
+
+```bash
+evnx add custom
+
+Variable name: DATABASE_URL
+Example/placeholder: postgresql://localhost:5432/mydb
+Add another? yes
+
+Variable name: API_KEY
+Example/placeholder: YOUR_KEY_HERE
+Add another? no
+
+✓ Added 2 custom variables
+```
+
+<Callout type="info" title="What just happened?">
+The `add` command created `.env.example` with your variables and placeholder values. Now you need `.env` with real values.
+</Callout>
+
+**Step 2: Create .env from template**
+
+```bash
+evnx sync --direction reverse
+
+ℹ️  .env not found, creating from .env.example
+✓ Created .env
+⚠️  Replace placeholder values with real credentials!
+```
+
+**Step 3: Edit .env with real values**
+
+```bash
+nano .env
+# Change:
+#   DATABASE_URL=postgresql://localhost:5432/mydb
+# To:
+#   DATABASE_URL=postgresql://prod:secret@prod-db:5432/app
+```
+
+**Step 4: Secure permissions (Unix)**
+
+```bash
+chmod 600 .env
+```
+
+**Step 5: Validate setup**
+
+```bash
+evnx validate
+✓ All variables present and valid
+```
+
+✅ **You're done!** Your project is ready.
+
+---
+
+## Preview before applying changes
+
+Always use `--dry-run` to see what would change:
+
+```bash
+evnx sync --dry-run
+
+📋 Preview:
+Target: .env.example (action: Add)
+  🔒 NEW_API_KEY = YOUR_KEY_HERE
+  🔒 FEATURE_BETA = true
+
+(dry-run: no files were modified)
+```
+
+<Callout type="tip" title="Make --dry-run a habit">
+Run `--dry-run` before every sync until you're comfortable with the output. It prevents accidental changes.
+</Callout>
+
+---
+
+## Common pitfalls to avoid
+
+### Adding actual values to .env.example
+
+When you see the security warning, always choose "add with placeholder values" unless you're certain `.env.example` is gitignored.
+
+### Forgetting to commit .env.example
+
+```bash
+# After sync forward:
+git add .env.example
+git commit -m "Add NEW_VAR to template"
+```
+
+### Committing .env by accident
+
+```bash
+# Check .gitignore first:
+cat .gitignore | grep "^\.env$"
+# Should output: .env
+
+# If not, add it:
+echo ".env" >> .gitignore
+```
+
+### Ignoring permission warnings
+
+```bash
+# If you see:
+⚠️  .env has permissive permissions (0o644). Consider: chmod 600 .env
+
+# Fix it:
+chmod 600 .env
+```
+
+---
+
+## Next steps
+
+Now that you understand sync basics:
+
+1. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Learn multi-developer workflows
+2. **[CI/CD Integration](/guides/integrations/ci-cd-sync)** — Automate sync validation
+3. **[Advanced Configuration](/guides/reference/sync-configuration)** — Custom placeholder patterns
+
+<Callout type="success" title="You're ready!">
+You now know how to keep `.env` and `.env.example` in sync. Practice with `--dry-run` and you'll never lose track of environment variables again.
+</Callout>
+---
+

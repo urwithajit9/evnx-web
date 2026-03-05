@@ -8,8 +8,9 @@ import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/content";
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
 
+// ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateStaticParams() {
@@ -17,7 +18,8 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = getBlogPost(params.slug);
+  const { slug } = await params; // ← await
+  const post = getBlogPost(slug);
   if (!post) return {};
   return {
     title: post.title,
@@ -39,9 +41,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   "deep-dive": "Deep Dive",
   opinion: "Opinion",
   "case-study": "Case Study",
-  "knowledge": "Knowledge",
+  knowledge: "Knowledge",
 };
-
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -51,8 +52,10 @@ function formatDate(dateStr: string) {
   });
 }
 
-export default function BlogPostPage({ params }: Props) {
-  const post = getBlogPost(params.slug);
+// ── async so we can await params ──────────────────────────────────────────────
+export default async function BlogPostPage({ params }: Props) {
+  const { slug } = await params; // ← await
+  const post = getBlogPost(slug);
   if (!post) notFound();
 
   const related = getRelatedPosts(post);
@@ -91,7 +94,7 @@ export default function BlogPostPage({ params }: Props) {
             {/* Meta */}
             <div className="flex flex-wrap items-center gap-3 mb-6">
               <span className="font-mono text-xs px-2 py-1 rounded border bg-brand-500/10 text-brand-400 border-brand-500/20">
-                {CATEGORY_LABELS[post.category]}
+                {CATEGORY_LABELS[post.category] ?? post.category}
               </span>
               {post.tags.map((tag) => (
                 <span key={tag} className="font-mono text-xs text-text-muted">
@@ -100,19 +103,17 @@ export default function BlogPostPage({ params }: Props) {
               ))}
             </div>
 
-            {/* Title */}
             <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6 leading-tight">
               {post.title}
             </h1>
 
-            {/* Excerpt */}
             <p className="text-xl text-text-secondary mb-8 leading-relaxed">
               {post.excerpt}
             </p>
 
             {/* Author row */}
             <div className="flex items-center gap-4 pb-8 mb-8 border-b border-border-subtle">
-              <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-mono font-bold">
+              <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-mono font-bold flex-shrink-0">
                 {post.author.name[0]}
               </div>
               <div>
@@ -230,7 +231,6 @@ export default function BlogPostPage({ params }: Props) {
           {/* Sidebar */}
           <aside className="lg:col-span-1">
             <div className="sticky top-8 space-y-6">
-              {/* Share */}
               <div className="bg-bg-surface border border-border-muted rounded-lg p-5">
                 <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">
                   Share
@@ -255,14 +255,12 @@ export default function BlogPostPage({ params }: Props) {
                 </div>
               </div>
 
-              {/* CTA */}
               <div className="bg-brand-500/5 border border-brand-500/20 rounded-lg p-5">
                 <p className="font-mono text-xs text-brand-400 uppercase tracking-widest mb-3">
                   Try evnx
                 </p>
                 <div className="bg-terminal-bg rounded p-3 font-mono text-xs text-terminal-text mb-4">
-                  <span className="text-brand-500">$ </span>
-                  evnx doctor
+                  <span className="text-brand-500">$ </span>evnx doctor
                 </div>
                 <Link
                   href="/install"

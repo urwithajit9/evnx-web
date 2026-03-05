@@ -136,8 +136,47 @@
 
 /* ─── Prose Styles (for MDX content) ────────────────────────────────────────── */
 @layer components {
+
+  /*
+   * .shiki-block — wrapper div rendered by FencedCodeBlock in mdx-components.tsx.
+   *
+   * FencedCodeBlock provides its own container (rounded border, header bar).
+   * Shiki's <pre class="shiki"> must NOT add extra border/radius/margin/padding
+   * on top of that, and its inline style="background-color:..." must be defeated.
+   *
+   * We can't use !important on background here because Shiki's inline style
+   * always wins over class rules. Instead we stripped the inline style in
+   * FencedCodeBlock via a regex replace before dangerouslySetInnerHTML.
+   * These rules handle everything else.
+   */
+  .shiki-block pre.shiki {
+    background: transparent;   /* inline style stripped in component — this is the fallback */
+    margin: 0;
+    padding: 1.25rem;          /* 20px — matches p-5 */
+    border-radius: 0;
+    border: none;
+    font-size: 0.875rem;       /* text-sm */
+    line-height: 1.75;
+    tab-size: 2;
+  }
+
+  .shiki-block pre.shiki code {
+    background: transparent;
+    font-family: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+    font-size: inherit;
+    line-height: inherit;
+    /* Let Shiki token colours show — don't override color here */
+  }
+
+  /* Shiki wraps each line in a <span class="line"> when using transformers.
+     Without transformers it's just inline spans. Both cases look fine as-is. */
+  .shiki-block .line {
+    display: block;
+  }
+
   .prose-evnx {
-    /* Shiki code block overrides */
+    /* Shiki code block overrides — for any <pre class="shiki"> NOT inside
+       .shiki-block (e.g. if Shiki is used directly without our container) */
     pre.shiki {
       @apply rounded-lg overflow-x-auto my-6 p-4;
       background-color: var(--terminal-bg) !important;
@@ -148,7 +187,7 @@
 
     pre.shiki code {
       background: none !important;
-      font-family: 'JetBrains Mono', 'Geist Mono', 'Fira Code', monospace;
+      font-family: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
     }
 
     /* Line numbers */
