@@ -1,0 +1,157 @@
+---
+slug: "commands-add"
+section: "commands"
+order: 2
+title: "evnx add"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-05"
+excerpt: "Reference documentation for the evnx add command: subcommands, options, and incremental environment variable management."
+difficulty: "intermediate"
+timeToComplete: "2 minutes"
+tags: ["add", "reference", "cli", "environment-variables"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+  - commands-init
+draft: false
+---
+
+# evnx add — Command Reference
+
+Append environment variables to existing `.env.example` and `.env` files using predefined services, frameworks, blueprints, or custom interactive input.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/init">Initialize a project</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx add <SUBCOMMAND> [OPTIONS]
+```
+
+### Options reference
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--path`, `-p` | `string` | `.` | Target directory for `.env` files |
+| `--yes`, `-y` | `bool` | `false` | Skip confirmation prompts (non-interactive) |
+| `--verbose`, `-v` | `bool` | `false` | Enable debug output for resolution steps |
+| `--help`, `-h` | `bool` | `false` | Display help information |
+
+### Subcommands (`<target>`)
+
+| Subcommand | Syntax | Description | Conflict Handling |
+|------------|--------|-------------|------------------|
+| `service` | `evnx add service <id>` | Add variables for infrastructure services (postgresql, redis, etc.) | ⚠️ Warns on conflicts |
+| `framework` | `evnx add framework --language <lang> <id>` | Add framework-specific variables (django, nextjs, etc.) | ⚠️ Warns on conflicts |
+| `blueprint` | `evnx add blueprint <id>` | Add pre-combined stack variables (t3_modern, fastapi_full, etc.) | ✅ Auto-skips conflicts |
+| `custom` | `evnx add custom` | Interactive mode for manual variable entry | ⚠️ Warns on conflicts |
+
+---
+
+## Exit codes
+
+| Code | Meaning | Use case |
+|------|---------|----------|
+| `0` | ✅ Variables appended successfully | Success in scripts/CI |
+| `1` | 🚨 Add failed (unknown service, resolution error) | Fail pipeline on invalid input |
+| `2+` | ⚠️ Runtime errors (IO, file permissions, parsing) | Debug tooling or environment issues |
+
+---
+
+## Basic usage examples
+
+### Add a service
+```bash
+# Add PostgreSQL variables with confirmation prompt
+evnx add service postgresql
+
+# Skip prompt for CI/CD
+evnx add service redis --yes
+```
+
+### Add a framework
+```bash
+# Add Django variables (Python language required)
+evnx add framework --language python django
+
+# Add Next.js variables silently
+evnx add framework --language typescript nextjs --yes
+```
+
+### Add a blueprint
+```bash
+# Add T3 stack variables (conflicts auto-skipped)
+evnx add blueprint t3_modern
+
+# Preview without applying (combine with manual abort)
+evnx add blueprint fastapi_full --verbose
+```
+
+### Interactive custom variables
+```bash
+# Launch guided prompt for manual entry
+evnx add custom
+
+# Add custom vars non-interactively (requires pre-seeded input)
+evnx add custom --yes
+```
+
+### Target custom directory
+```bash
+# Add variables to ./backend config
+evnx add service postgresql --path ./backend --yes
+```
+
+---
+
+## File modification behavior
+
+| File | Action | Notes |
+|------|--------|-------|
+| `.env.example` | ✅ Appends new variables | Preserves existing content; adds section header |
+| `.env` | ✅ Appends `# TODO:` placeholders | Only if file exists; never overwrites real values |
+| `.gitignore` | ⚪ No changes | Managed by `evnx init` only |
+
+### Section formatting
+Added variables are grouped with markdown-style headers:
+```env
+# ── Service: postgresql ──
+DATABASE_URL=postgres://localhost/db
+DB_USER=your_username
+```
+
+---
+
+## Conflict handling modes
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| **Warn** | `service`, `framework`, `custom` | Shows conflicting keys + values; user confirms before appending |
+| **Skip** | `blueprint` | Auto-excludes conflicting variables; reports skipped count |
+| **Preserve** | All modes | Existing values in `.env.example` are never overwritten |
+
+> 💡 **Conflict detection**: A variable conflicts only if the key exists *and* the existing value differs from the schema's example placeholder.
+
+---
+
+## Environment variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive defaults |
+
+---
+
+## See also
+
+- [Adding Variables Tutorial](/guides/getting-started/adding-variables) — Walkthrough for common workflows
+- [Service Catalog](/guides/reference/services) — Available infrastructure services
+- [Framework Catalog](/guides/reference/frameworks) — Supported languages and frameworks
+- [Blueprint Catalog](/guides/reference/blueprints) — Pre-combined stack templates
+- [Conflict Resolution Guide](/guides/advanced/conflict-handling) — Managing variable collisions

@@ -7,6 +7,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/content";
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
+import { HelpfulVote } from "@/components/ui/helpful-vote";
 
 // ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
@@ -260,7 +261,7 @@ export default async function BlogPostPage({ params }: Props) {
                   Try evnx
                 </p>
                 <div className="bg-terminal-bg rounded p-3 font-mono text-xs text-terminal-text mb-4">
-                  <span className="text-brand-500">$ </span>evnx doctor
+                  <span className="text-brand-500">$ </span>evnx init
                 </div>
                 <Link
                   href="/install"

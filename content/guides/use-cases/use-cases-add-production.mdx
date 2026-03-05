@@ -1,0 +1,403 @@
+---
+slug: "use-cases-add-production"
+section: "use-cases"
+order: 2
+title: "Production Use Cases — Real-World `evnx add` Workflows"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-05"
+excerpt: "Explore real production scenarios where `evnx add` solves environment variable management challenges — with before/after comparisons showing manual friction vs. evnx efficiency."
+difficulty: "intermediate"
+timeToComplete: "12 minutes"
+tags: ["add", "use-cases", "production", "workflow", "best-practices"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+  - getting-started/add-basics
+  - commands/add
+draft: false
+---
+
+# Production Use Cases — Real-World `evnx add` Workflows
+
+<Callout type="tip" title="What you'll learn">
+This guide shows how `evnx add` solves real production challenges:
+- Adding infrastructure services without breaking existing config
+- Onboarding developers with consistent environment setup
+- Managing third-party integrations safely
+- Handling feature flags and experimental configs
+- Scaling environment management across microservices
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/getting-started/add-basics">Learn add basics</Prerequisite>
+</Prerequisites>
+
+---
+
+## Why this matters
+
+Environment variable management seems simple until you're:
+- 🔄 Adding Redis to a Django app that already has PostgreSQL
+- 👥 Onboarding 5 new developers to a microservice architecture
+- 🔐 Integrating Stripe, Sentry, and Auth0 without leaking secrets
+- 🚦 Rolling out feature flags across staging and production
+- 🧩 Composing variables from multiple frameworks in a monorepo
+
+**Without tooling**, these scenarios involve manual editing, copy-paste errors, inconsistent formatting, and security risks.
+
+**With `evnx add`**, you get schema-validated, conflict-aware, consistently formatted variable injection — every time.
+
+---
+
+## Use Case 1: Adding a New Database to an Existing Project
+
+### 🎯 Scenario
+Your team is adding Redis caching to a production Django app that already uses PostgreSQL.
+
+### ❌ Without `evnx add` (Manual Approach)
+
+```bash
+# 1. Open .env.example in editor
+nano .env.example
+
+# 2. Manually add Redis variables (prone to typos)
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# 3. Remember to add same vars to .env with real values
+# 4. Hope you didn't miss a required variable
+# 5. Hope formatting matches team conventions
+# 6. Hope you didn't accidentally overwrite DATABASE_URL
+```
+
+**Pain points:**
+- 🚫 No validation of variable names or required fields
+- 🚫 Easy to overwrite existing vars by accident
+- 🚫 Inconsistent formatting breaks team conventions
+- 🚫 No documentation for what each variable does
+- 🚫 `.env` updates forgotten → runtime errors in staging
+
+### ✅ With `evnx add`
+
+```bash
+# Add Redis variables with schema validation
+evnx add service redis
+
+📋 Preview:
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=your_password
+REDIS_DB=0
+
+? Add these 3 variables to .env.example?
+❯ Yes
+
+✓ Added 3 variables for Redis
+✓ Updated .env with TODO placeholders
+```
+
+**Benefits:**
+- ✅ Variable names validated against schema
+- ✅ Existing `DATABASE_URL` preserved automatically
+- ✅ Consistent `# ── Service: redis ──` section header
+- ✅ `.env` gets `# TODO:` reminders for real values
+- ✅ Team members see documentation via `evnx validate`
+
+<Callout type="success" title="Time saved: ~15 minutes + zero risk of config drift">
+What used to require manual editing, cross-referencing docs, and peer review now takes one command with built-in safety checks.
+</Callout>
+
+---
+
+## Use Case 2: Onboarding New Developers Consistently
+
+### 🎯 Scenario
+A new developer joins the team. They clone the repo and need to set up their local environment with 20+ variables across PostgreSQL, Stripe, and Auth0.
+
+### ❌ Without `evnx add` (Manual Approach)
+
+```bash
+# New developer workflow:
+git clone repo
+cp .env.example .env  # Hope this file exists and is current
+
+# Now manually:
+# 1. Read .env.example line by line
+# 2. Research what each variable means
+# 3. Find real values from team wiki/Slack/1Password
+# 4. Edit .env carefully (don't break formatting!)
+# 5. Run app → discover missing variable → repeat
+
+# Meanwhile, senior dev spends 30 mins answering:
+# "What's the REDIS_URL for local dev again?"
+# "Do I need STRIPE_WEBHOOK_SECRET for local testing?"
+```
+
+**Pain points:**
+- 🚫 `.env.example` may be outdated or incomplete
+- 🚫 No guidance on which variables are required vs optional
+- 🚫 New hires waste hours on setup instead of coding
+- 🚫 Senior devs distracted by repetitive setup questions
+- 🚫 Inconsistent local environments → "works on my machine" bugs
+
+### ✅ With `evnx add`
+
+```bash
+# Team lead shares a setup script:
+#!/bin/bash
+# setup-env.sh
+
+evnx add blueprint django_stripe_auth --yes
+evnx add service postgresql --yes
+evnx add custom --yes <<EOF
+LOCAL_DEV_MODE=true
+DEBUG_TOOLBAR_ENABLED=true
+EOF
+
+# New developer runs:
+./setup-env.sh
+
+✓ Added 24 variables from blueprint 'Django + Stripe + Auth'
+✓ Added 5 variables for PostgreSQL
+✓ Added 2 custom variables for local dev
+
+# Then they just fill in real values in .env:
+nano .env  # Only edit values, not structure
+
+# Validate setup:
+evnx validate
+✓ All required variables present
+✓ No secrets in .env.example
+```
+
+**Benefits:**
+- ✅ New hires productive in minutes, not hours
+- ✅ `.env.example` always complete and schema-validated
+- ✅ `evnx validate` catches missing vars before runtime
+- ✅ Senior devs focus on code, not environment troubleshooting
+- ✅ Consistent local setups reduce "works on my machine" issues
+
+<Callout type="info" title="Pro tip: Commit your setup script">
+Add `scripts/setup-env.sh` to your repo so onboarding is one command: `./scripts/setup-env.sh`. Document it in `CONTRIBUTING.md`.
+</Callout>
+
+---
+
+## Use Case 3: Adding Third-Party Integrations Safely
+
+### 🎯 Scenario
+Your app needs to integrate Stripe for payments. You must add 8+ Stripe variables without exposing live API keys in version control.
+
+### ❌ Without `evnx add` (Manual Approach)
+
+```bash
+# Developer manually adds to .env.example:
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_PUBLISHABLE_KEY=pk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+# ... 5 more vars
+
+# Risks:
+# 1. Accidentally paste live key (sk_live_*) into .env.example
+# 2. Forget to add variable to .env.example → teammate's PR fails
+# 3. Inconsistent naming (STRIPE_KEY vs STRIPE_SECRET_KEY)
+# 4. No documentation for what each key does
+# 5. Security audit fails: real secrets found in git history
+```
+
+**Pain points:**
+- 🚫 High risk of secret leakage during manual entry
+- 🚫 No schema validation → typos cause runtime errors
+- 🚫 Team debates naming conventions in PR reviews
+- 🚫 Security audits flag manually-managed env files
+
+### ✅ With `evnx add`
+
+```bash
+# Add Stripe variables from schema (test keys only)
+evnx add service stripe
+
+📋 Preview:
+STRIPE_SECRET_KEY=sk_test_YOUR_KEY_HERE
+STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE
+STRIPE_WEBHOOK_SECRET=whsec_YOUR_SECRET_HERE
+# ... 5 more with descriptions
+
+? Add these 8 variables to .env.example?
+❯ Yes
+
+✓ Added 8 variables for Stripe
+✓ Updated .env with TODO placeholders
+
+# Now safely add real values to .env (gitignored):
+nano .env
+# Replace sk_test_YOUR_KEY_HERE with actual test key
+# NEVER commit this file
+
+# Validate no secrets leaked:
+evnx scan
+✓ No secrets detected in .env.example
+```
+
+**Benefits:**
+- ✅ Schema provides safe placeholder values (never real secrets)
+- ✅ Variable names and requirements validated upfront
+- ✅ `evnx scan` audits for accidental secret commits
+- ✅ Descriptions in schema document each variable's purpose
+- ✅ Consistent naming enforced by schema, not human memory
+
+<Callout type="danger" title="Security reminder">
+`evnx add` only adds placeholder values to `.env.example`. Real credentials belong in `.env` (gitignored) or your secrets manager. Never bypass this flow.
+</Callout>
+
+---
+
+## Use Case 4: Managing Feature Flags Across Environments
+
+### 🎯 Scenario
+Your team uses feature flags to roll out experiments. You need to add new flags to `.env.example` without disrupting existing staging/production configs.
+
+### ❌ Without `evnx add` (Manual Approach)
+
+```bash
+# Add new feature flag manually:
+echo "FEATURE_NEW_CHECKOUT=true" >> .env.example
+
+# Problems:
+# 1. No standard format for flag documentation
+# 2. Forgot to add to .env → staging deployment fails
+# 3. Team debates: should default be true or false?
+# 4. No way to track which flags are experimental vs permanent
+# 5. Merge conflicts when multiple devs add flags simultaneously
+```
+
+**Pain points:**
+- 🚫 Inconsistent flag documentation → confusion about purpose
+- 🚫 Missing vars in `.env` cause deployment failures
+- 🚫 No categorization → hard to audit experimental flags
+- 🚫 Git merge conflicts on `.env.example` during parallel work
+
+### ✅ With `evnx add`
+
+```bash
+# Add feature flag with metadata via custom mode
+evnx add custom
+
+Variable name: FEATURE_NEW_CHECKOUT
+Example/placeholder: true
+Add a description? Yes
+Description: Enable new checkout flow for A/B test
+Assign to a category? Yes
+Select category: ▸ Feature Flags
+Is this variable required? No
+
+✓ Added 1 custom variable
+
+# Result in .env.example:
+# ── Custom Variables ──
+# [Feature Flags] Enable new checkout flow for A/B test
+FEATURE_NEW_CHECKOUT=true
+
+# Team can now:
+# - Filter vars by category: evnx validate --category "Feature Flags"
+# - See which flags are optional vs required
+# - Avoid merge conflicts with structured section headers
+```
+
+**Benefits:**
+- ✅ Optional variables clearly marked (`# (optional)` vs `# (required)`)
+- ✅ Category metadata enables filtering and auditing
+- ✅ Descriptions document flag purpose directly in config
+- ✅ Section headers reduce git merge conflicts
+- ✅ `evnx validate --category` checks specific flag groups
+
+<Callout type="tip" title="Feature flag workflow">
+Use `evnx add custom` for experimental flags, then promote to schema-defined services when flags become permanent. This keeps your schema evolving with your product.
+</Callout>
+
+---
+
+## Use Case 5: Scaling to Microservices or Monorepos
+
+### 🎯 Scenario
+Your monorepo has 3 services (API, Worker, Frontend). Each needs its own environment variables, but some (like `DATABASE_URL`) are shared.
+
+### ❌ Without `evnx add` (Manual Approach)
+
+```bash
+# Manually manage env files per service:
+/services/api/.env.example      # 15 vars
+/services/worker/.env.example   # 10 vars (overlap with API)
+/services/frontend/.env.example # 8 vars (different overlap)
+
+# Challenges:
+# 1. Copy-paste shared vars → drift when one updates
+# 2. No way to enforce "if API has X, Worker must have Y"
+# 3. Onboarding requires editing 3+ files per service
+# 4. CI/CD scripts duplicate logic for each service
+```
+
+**Pain points:**
+- 🚫 Configuration drift between services
+- 🚫 No dependency validation between service configs
+- 🚫 Onboarding scales linearly (bad) with service count
+- 🚫 CI/CD scripts become fragile copy-paste templates
+
+### ✅ With `evnx add`
+
+```bash
+# Use path flag to target each service directory
+evnx add service postgresql --path ./services/api --yes
+evnx add service postgresql --path ./services/worker --yes
+evnx add framework --language typescript nextjs --path ./services/frontend --yes
+
+# Add shared config via blueprint (applied to all)
+for dir in ./services/*/; do
+  evnx add blueprint shared_observability --path "$dir" --yes
+done
+
+# Validate all services at once:
+evnx validate --recursive
+✓ services/api: 18 variables valid
+✓ services/worker: 14 variables valid
+✓ services/frontend: 12 variables valid
+```
+
+**Benefits:**
+- ✅ `--path` flag enables precise targeting in monorepos
+- ✅ Blueprints ensure shared config stays synchronized
+- ✅ `--recursive` validation catches issues across all services
+- ✅ Schema-driven approach scales: add service = one command
+- ✅ Conflict detection prevents accidental overwrites across services
+
+<Callout type="success" title="Scale without complexity">
+What required custom scripts and manual coordination now works with composable, schema-driven commands. Add a fourth service? Just run the same `evnx add` commands.
+</Callout>
+
+---
+
+## Summary: When to Reach for `evnx add`
+
+| Scenario | Manual Approach Risk | `evnx add` Solution |
+|----------|---------------------|-------------------|
+| Adding infrastructure | Typos, overwrites, missing docs | Schema-validated, conflict-aware append |
+| Onboarding developers | Incomplete templates, setup friction | Blueprint-driven, one-command setup |
+| Third-party integrations | Secret leakage, naming debates | Safe placeholders, consistent naming |
+| Feature flags | Undocumented, untracked experiments | Categorized, optional/required metadata |
+| Microservices | Config drift, duplicated logic | Path-targeted, recursive validation |
+
+---
+
+## Next steps
+
+Master these workflows to level up your environment management:
+
+1. **[Sync Basics](/guides/getting-started/sync-basics)** — Keep `.env` and `.env.example` aligned
+2. **[Validate Command](/guides/reference/commands-validate)** — Catch issues before deployment
+3. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share templates safely at scale
+4. **[Schema Reference](/guides/reference/schema)** — Extend evnx with your own services and frameworks
+
+<Callout type="success" title="You're production-ready">
+You now know how `evnx add` solves real-world environment challenges. Use these patterns to reduce setup friction, prevent configuration errors, and keep your team moving fast — safely.
+</Callout>

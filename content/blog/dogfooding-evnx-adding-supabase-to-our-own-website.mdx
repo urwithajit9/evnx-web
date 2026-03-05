@@ -1,0 +1,228 @@
+---
+slug: "dogfooding-evnx-adding-supabase-to-our-own-website"
+title: "Drinking Our Own .env: How We Used evnx to Add Supabase to evnx-web"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-05"
+excerpt: "What happens when the team behind evnx—the CLI for environment variable management—uses evnx to build evnx-web, its own website? Spoiler: no .env-y feelings, just clean commits and supa-fast setup. Here's how we dogfooded our tool to add Supabase, with puns intact."
+coverImage: "/images/evnx-dogfooding-supabase.png"
+author: evnx-team
+tags: ["evnx", "Supabase", "Nextjs", "Dogfooding", "DevTools", "Puns"]
+category: "tutorial"
+readTime: 5
+featured: true
+draft: false
+---
+
+# 🐕 Drinking Our Own .env: How We Used evnx to Add Supabase to evnx-web
+
+Let's get meta for a second.
+
+**evnx-web**—the official website for the **evnx** CLI—is built with Next.js, powered by Supabase, and (you guessed it) manages its environment variables using… **evnx**.
+
+That's right. We're not just telling you to use our tool—we're *using it to build itself*. Call it dogfooding, call it "eating our own config," or just call it a very variable commitment to quality. 🦴
+
+In this post, we'll walk through exactly how we added Supabase credentials to `evnx-web` using `evnx`—the same CLI you can install today. Along the way, we'll sprinkle in some tech puns (because why not have a little `fun-ction`?), and show why using your own tool in production isn't just good practice—it's the ultimate source of truth.
+
+> 💡 **Pun Alert**: If your env management feels *dotenv* to the core, maybe it's time to `evnx-pand` your toolkit.
+
+---
+
+## Why Dogfood evnx? (Besides the Obvious)
+
+Before we dive into the terminal, let's talk philosophy:
+
+- **Trust, but verify**: If we wouldn't use `evnx` to manage secrets for our own site, why should you?
+- **Real-world testing**: Every `evnx add` we run on `evnx-web` is a stress test in the wild.
+- **No .env-y feelings**: We hate manual edits, typos, and "works on my machine" bugs. So we built a tool to prevent them—and then used it on ourselves.
+- **Commit-ment to quality**: When your tool helps you avoid committing secrets, you sleep better. (And your CI/CD pipeline thanks you.)
+
+In short: building `evnx-web` with `evnx` wasn't just convenient—it was *variable-ly essential*.
+
+---
+
+## Step 1: Initialize evnx (The "Blank Slate" Special)
+
+We started fresh—because sometimes you just need to `rm -rf` your assumptions and begin anew.
+
+```bash
+$ evnx init
+
+┌─ evnx init ──────────────────────────────────────────────────────────────┐
+│ Set up environment variables for your project                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+How do you want to start?: 📄 Blank (create empty .env files)
+
+┌─ Blank Template ──────────────────────────────────────────┐
+│ Creating minimal .env files                              │
+└──────────────────────────────────────────────────────────┘
+
+✓ Created .env from template
+✓ Created empty .env.example
+ℹ️ Tip: Run 'evnx add' to add variables interactively
+
+Next steps:
+  1. Edit .env and replace placeholder values
+  2. Never commit .env to version control
+  3. Run 'evnx validate' to check configuration
+  4. Use 'evnx add' to add more variables later
+```
+
+> 🎯 **Pro Tip**: Starting blank isn't *null and void*—it's a clean commit to doing things right.
+
+---
+
+## Step 2: Add Supabase Variables (The "Supa" Interactive Way)
+
+Now for the main event: adding `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. With `evnx`, it's less "manual labor" and more "conversational config."
+
+```bash
+$ evnx add custom
+
+┌─ evnx add ──────────────────────────────────────────────────────────────────┐
+│ Add environment variables to existing .env files                           │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ Custom Variables ──────────────────────────────────────────────────────────┐
+│ Add your own environment variables interactively                           │
+└────────────────────────────────────────────────────────────────────────────┘
+
+ℹ️ Enter variables one at a time. Empty name to finish.
+Variable name (or Enter to finish): NEXT_PUBLIC_SUPABASE_URL
+Example/placeholder value: https://xxxx.supabase.co
+Add a description comment? no
+Assign to a category? yes
+Select category: Service
+Is this variable required? yes
+Add another variable? yes
+Variable name (or Enter to finish): NEXT_PUBLIC_SUPABASE_ANON_KEY
+Example/placeholder value: your_value_here
+Add a description comment? no
+Assign to a category? yes
+Select category: Security
+Is this variable required? yes
+Add another variable? no
+
+📋 Preview:
+  • 2 variables to add
+  • Categories: Service, Security
+Append these variables to .env.example? yes
+✓ Added 2 custom variables
+
+Next steps:
+  1. Edit .env and replace placeholder values
+  2. Run 'evnx validate' to check for issues
+  3. Use 'evnx add' again to add more variables
+```
+
+> 🚀 **Pun Break**: That wasn't just `add`-ing variables—that was `add`-ing value. (We'll see ourselves out.)
+
+---
+
+## The Output: Clean, Categorized, and Commit-Ready
+
+### `.env` *(private - gitignored, like your secrets should be)*
+```env
+# TODO: Replace with real values
+# Format: KEY=value
+
+# ── Custom Variables ──
+
+# [Service] NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+  # (required)
+
+# [Security] NEXT_PUBLIC_SUPABASE_ANON_KEY=your_value_here
+  # (required)
+
+# Added by evnx add custom on 2026-03-05 16:16
+```
+
+### `.env.example` *(safe to commit—share the shape, not the secrets)*
+```env
+# Add your environment variables here
+# Format: KEY=value
+
+# ── Custom Variables ──
+
+# [Service] NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+  # (required)
+
+# [Security] NEXT_PUBLIC_SUPABASE_ANON_KEY=your_value_here
+  # (required)
+
+# Added by evnx add custom on 2026-03-05 16:16
+```
+
+> 🔐 **Security Note**: We categorized `ANON_KEY` as `Security`—because even public keys deserve a little respect. (And yes, we still gitignore the real `.env`. No exceptions. No exfil-trations.)
+
+---
+
+## Using the Variables in Next.js (The "Supa" Simple Part)
+
+```typescript
+// lib/supabase/client.ts
+import { createBrowserClient } from '@supabase/ssr'
+
+export const createClient = () =>
+  createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+```
+
+> 💡 **Remember**: `NEXT_PUBLIC_` prefix = safe for browser. No prefix = server-only. Mixing them up is the quickest way to turn your app into a *leak-y* faucet.
+
+---
+
+## Why This Matters: Dogfooding Done Right
+
+Using `evnx` to build `evnx-web` wasn't just a cute meta move—it delivered real benefits:
+
+| Benefit | How evnx Helped |
+|---------|----------------|
+| **Fewer typos** | Interactive prompts > manual editing |
+| **Better organization** | Categories like `Service` and `Security` keep things sorted |
+| **Team onboarding** | New devs run `evnx add` and know exactly what's needed |
+| **Validation ready** | `evnx validate` catches issues before `npm run dev` crashes |
+| **Audit trail** | Timestamped additions mean we always know *who* added *what* and *when* |
+
+In short: we didn't just build a tool. We built a tool we *trust*—and then proved it by using it on our most important project: itself.
+
+> 🧠 **Food for Thought**: If your config management feels like a `git rebase` at 2 AM, maybe it's time to `evnx-periment` with something better.
+
+---
+
+## Try It Yourself (No Puns Required… Okay, Maybe One)
+
+```bash
+# Install evnx (it's quick, we promise)
+cargo install evnx
+# or
+curl -fsSL https://dotenv.space/install.sh | bash
+
+# Coming soon at npm
+npm install -g evnx
+
+# Navigate to your project (or start a new one—live a little)
+cd your-nextjs-app
+
+# Initialize evnx
+evnx init
+
+# Add your Supabase vars (or whatever you need)
+evnx add custom
+
+# Sync your .env to/from .env.example
+evnx sync --direction forward
+
+# Replace placeholders in .env, then validate
+evnx validate
+
+# Ship it. 🚢
+```
+
+> 🎉 **Final Pun**: May your env be ever `.env-y` free, and your commits always `supa` clean.
+
+---
+
+*Questions? Curious how we handle server-side keys? Check out the [evnx docs](https://evnx.dev/guides) or the [Supabase Next.js guide](https://supabase.com/docs/guides/getting-started/quickstarts/nextjs). And if you spot a pun we missed… well, that's a `bug` we'll happily `feature-request`.* 😄

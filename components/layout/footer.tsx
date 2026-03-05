@@ -1,24 +1,74 @@
 import Link from "next/link";
-import { Github } from "lucide-react";
+import { Github, Star } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL, CRATES_IO_URL } from "@/lib/config";
 
-const LINKS = {
+// ── TypeScript fix: every link has `external`, defaulting to false ────────────
+// The previous LINKS object mixed { href, label } and { href, label, external }
+// in the same array. TypeScript infers a union type where `external` only exists
+// on some members — so destructuring `external` from the union is a type error.
+// Solution: give every link the `external` key explicitly.
+
+type NavLink = {
+  href: string;
+  label: string;
+  external: boolean;
+};
+
+const LINKS: Record<string, NavLink[]> = {
   Learn: [
-    { href: "/guides", label: "Guides" },
-    { href: "/guides/getting-started/installation", label: "Install Guide" },
-    { href: "/guides/getting-started/quick-start", label: "Quick Start" },
-    { href: "/blog", label: "Blog" },
-    { href: "/changelog", label: "Changelog" },
+    { href: "/guides", label: "Guides", external: false },
+    {
+      href: "/guides/getting-started/installation",
+      label: "Install Guide",
+      external: false,
+    },
+    {
+      href: "/guides/getting-started/quick-start",
+      label: "Quick Start",
+      external: false,
+    },
+    { href: "/blog", label: "Blog", external: false },
+    { href: "/changelog", label: "Changelog", external: false },
   ],
   Project: [
     { href: GITHUB_URL, label: "GitHub", external: true },
     { href: CRATES_IO_URL, label: "Crates.io", external: true },
-    { href: "/pricing", label: "Pricing" },
-    { href: "/install", label: "Install" },
+    { href: "/pricing", label: "Pricing", external: false },
+    { href: "/install", label: "Install", external: false },
   ],
 };
 
-export function Footer() {
+// ── GitHub stars — fetched server-side at build/revalidate time ───────────────
+async function getGitHubStars(): Promise<number | null> {
+  try {
+    const res = await fetch("https://api.github.com/repos/urwithajit9/evnx", {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(process.env.GITHUB_TOKEN
+          ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+          : {}),
+      },
+      // ISR: revalidate every hour
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.stargazers_count ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function formatStars(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+// ── Footer (async Server Component) ──────────────────────────────────────────
+export async function Footer() {
+  const stars = await getGitHubStars();
+
   return (
     <footer className="border-t border-border-subtle bg-bg-surface mt-auto">
       <div className="container-base py-12">
@@ -44,7 +94,7 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Links */}
+          {/* Link columns */}
           {Object.entries(LINKS).map(([section, links]) => (
             <div key={section}>
               <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">
@@ -86,15 +136,23 @@ export function Footer() {
             <span>·</span>
             <span>v{EVNX_VERSION}</span>
           </div>
+
           <div className="flex items-center gap-4">
+            {/* GitHub link + live star count */}
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-text-muted hover:text-text-primary transition-colors"
+              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors group"
               aria-label="GitHub"
             >
               <Github className="w-4 h-4" />
+              {stars !== null && (
+                <span className="flex items-center gap-1 font-mono text-xs">
+                  <Star className="w-3 h-3 fill-current text-warning group-hover:text-warning" />
+                  {formatStars(stars)}
+                </span>
+              )}
             </a>
           </div>
         </div>

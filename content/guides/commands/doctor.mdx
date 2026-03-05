@@ -2,7 +2,7 @@
 title: "evnx doctor"
 slug: doctor
 section: commands
-order: 3
+order: 4
 publishedAt: "2024-03-15"
 excerpt: "Diagnose environment setup issues including .env configuration, Git tracking, project structure, and security best practices. Supports JSON output for CI/CD and auto-fix for common issues."
 difficulty: beginner
@@ -99,7 +99,7 @@ Doctor detects Docker setup files for informational purposes:
 
 ```
 ✓ docker-compose.yml
-✓ docker-compose.yaml  
+✓ docker-compose.yaml
 ✓ Dockerfile
 ✓ Containerfile
 ✓ .dockerignore
@@ -285,20 +285,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install evnx
         run: cargo install evnx
-        
+
       - name: Run diagnostics
         run: |
           EVNX_OUTPUT_JSON=1 evnx doctor > report.json
-          
+
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
           name: doctor-report
           path: report.json
-          
+
       - name: Fail on critical issues
         run: |
           ERRORS=$(jq '.summary.errors' report.json)

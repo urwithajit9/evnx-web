@@ -1,0 +1,252 @@
+---
+slug: "getting-started-init-basics"
+section: "getting-started"
+order: 3
+title: "Init Basics — Start Your Project Right"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-05"
+excerpt: "Learn how to use evnx init to generate .env.example and .env files. Perfect for beginners setting up a new project."
+difficulty: "beginner"
+timeToComplete: "8 minutes"
+tags: ["init", "tutorial", "beginner", "setup", "env"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# Init Basics — Start Your Project Right
+
+<Callout type="tip" title="What you'll learn">
+In this tutorial, you'll learn how to use `evnx init` to:
+- Choose between Blank, Blueprint, and Architect modes
+- Generate `.env.example` with smart placeholders
+- Auto-configure `.gitignore` for security
+- Set up your project in under 2 minutes
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## What is init and why use it?
+
+Every project needs environment variables — but setting them up manually is error-prone and inconsistent.
+
+- **`.env.example`**: Team template with documented placeholders (commit this!)
+- **`.env`**: Your local secrets file (never commit this!)
+
+The `init` command generates both files automatically, with variables tailored to your stack.
+
+<Callout type="danger" title="Security first">
+`evnx init` automatically adds `.env` patterns to `.gitignore`. Never skip this step — leaking credentials is a critical security risk.
+</Callout>
+
+---
+
+## Three ways to initialize
+
+### Blank Mode — Start from scratch
+
+**Use when:** You want minimal templates or prefer manual configuration.
+
+```bash
+evnx init
+# Select: 📄 Blank (create empty .env files)
+
+✓ Created empty .env.example
+ℹ️  Tip: Run 'evnx add' to add variables interactively
+```
+
+**Result:**
+```env
+# .env.example
+# Add your environment variables here
+# Format: KEY=value
+```
+
+### Blueprint Mode — Pre-configured stacks (default)
+
+**Use when:** You're using a common stack like Next.js, FastAPI, or Rails.
+
+```bash
+evnx init
+# Select: 🔷 Blueprint (use pre-configured stack)
+# Choose: T3 Turbo (Next.js + Clerk + Prisma)
+
+📋 Preview:
+  NEXTAUTH_URL=http://localhost:3000
+  DATABASE_URL=postgresql://localhost:5432/app
+  # ... 12 more variables
+
+✓ Created .env.example with 15 variables
+```
+
+<Callout type="tip" title="Non-interactive default">
+Running `evnx init --yes` skips prompts and uses the first available Blueprint. Perfect for CI/CD or scripting.
+</Callout>
+
+### Architect Mode — Build your custom stack
+
+**Use when:** You need a unique combination of language, framework, and services.
+
+```bash
+evnx init
+# Select: 🏗️  Architect (build custom stack)
+
+? Select your primary language:
+❯ JavaScript / TypeScript
+
+? Select your framework:
+❯ Next.js
+
+? Select services you'll use (Space to toggle):
+❯ [Databases] PostgreSQL
+❯ [Auth] Clerk
+❯ [Storage] AWS S3
+
+? Select deployment/infrastructure (optional):
+❯ [Infra] Vercel
+
+✓ Created .env.example with 18 variables
+```
+
+<Callout type="info" title="Schema-driven">
+All options come from `schema.json`. Add new languages, services, or blueprints without changing code.
+</Callout>
+
+---
+
+## Your first init: Step-by-step
+
+### Scenario: Starting a new Next.js project
+
+**Step 1: Run init interactively**
+
+```bash
+cd my-nextjs-app
+evnx init
+```
+
+**Step 2: Select Blueprint mode**
+
+```
+? How do you want to start?
+❯ 🔷 Blueprint (use pre-configured stack)
+```
+
+**Step 3: Choose your stack**
+
+```
+? Choose a stack blueprint:
+❯ T3 Turbo (Next.js + Clerk + Prisma)
+   The 2026 standard for type-safe fullstack apps.
+```
+
+**Step 4: Preview and confirm**
+
+```
+📋 Preview:
+  NEXTAUTH_URL=http://localhost:3000
+  NEXTAUTH_SECRET=CHANGE_ME
+  DATABASE_URL=postgresql://localhost:5432/app
+  # ... more variables
+
+? Generate .env files with these variables? Yes
+```
+
+**Step 5: Verify generated files**
+
+```bash
+ls -la .env*
+# Output:
+# -rw-r--r--  .env          # Created with TODO placeholders
+# -rw-r--r--  .env.example  # Created with docs + examples
+
+cat .gitignore | grep ".env"
+# Output: .env (auto-added!)
+```
+
+**Step 6: Edit .env with real values**
+
+```bash
+nano .env
+# Replace:
+#   NEXTAUTH_SECRET=CHANGE_ME
+# With:
+#   NEXTAUTH_SECRET=your_generated_secret_here
+```
+
+**Step 7: Validate your setup**
+
+```bash
+evnx validate
+✓ All required variables present
+✓ No placeholder values detected in .env
+```
+
+✅ **You're done!** Your project is ready for development.
+
+---
+
+## Non-interactive usage for automation
+
+Use `--yes` for scripting, Docker builds, or CI/CD:
+
+```bash
+# Quick start with default blueprint
+evnx init --yes
+
+# Custom output path for monorepos
+evnx init --yes --path ./packages/api
+
+# Verbose output for debugging
+evnx init --yes --verbose
+```
+
+<Callout type="tip" title="CI/CD best practice">
+In CI environments, combine `--yes` with `evnx validate` to ensure `.env.example` is complete before deployment.
+</Callout>
+
+---
+
+## Common pitfalls to avoid
+
+### Skipping the preview
+
+Always review the preview before confirming. A missing variable now saves hours of debugging later.
+
+### Overwriting existing .env files
+
+`evnx init` only creates `.env` if it doesn't exist. To update an existing file, use `evnx sync --direction reverse`.
+
+### Ignoring the .gitignore update
+
+If you manually manage `.gitignore`, ensure these patterns are present:
+```gitignore
+.env
+.env.local
+.env.*.local
+```
+
+### Using Blank mode for complex projects
+
+Blank mode creates empty templates. For stacks with 10+ variables, Blueprint or Architect mode saves significant time.
+
+---
+
+## Next steps
+
+Now that you've initialized your project:
+
+1. **[Add Custom Variables](/guides/getting-started/add-variables)** — Extend your template
+2. **[Sync Basics](/guides/getting-started/sync-basics)** — Keep files in sync with your team
+3. **[Blueprint Catalog](/guides/reference/blueprints)** — Explore all pre-configured stacks
+4. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share `.env.example` safely
+
+<Callout type="success" title="You're ready!">
+You now know how to initialize environment files the right way. Run `evnx init` on your next project and start with confidence.
+</Callout>
+---

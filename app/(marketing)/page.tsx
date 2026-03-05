@@ -211,6 +211,12 @@ const features = [
 
 const commands = [
   {
+    name: "init",
+    description: "Initialize .env and .env.example in your project",
+    example: "evnx init",
+    link: "/guides/commands/init",
+  },
+  {
     name: "scan",
     description: "Detect secrets and sensitive data",
     example: "evnx scan --path ./config --format sarif",
@@ -221,6 +227,12 @@ const commands = [
     description: "Catch misconfiguration before deployment",
     example: "evnx validate --strict --exit-code",
     link: "/guides/commands/validate",
+  },
+  {
+    name: "sync",
+    description: "Two way sync .env <-> .env.example",
+    example: "evnx sync --direction forward",
+    link: "/guides/commands/sync",
   },
   {
     name: "convert",
@@ -246,6 +258,12 @@ const commands = [
     description: "Push secrets to a cloud manager",
     example: "evnx migrate --to aws-secrets-manager",
     link: "/guides/commands/migrate",
+  },
+  {
+    name: "diff",
+    description: "Provide diff between .env and .env.example",
+    example: "evnx diff",
+    link: "/guides/commands/diff",
   },
 ];
 
@@ -1009,6 +1027,15 @@ RUN evnx validate --strict \
               </div>
               <div className="text-success pl-4">
                 ✓ evnx {EVNX_VERSION} installed
+              </div>
+              <div>
+                <span className="text-brand-500">$ </span>evnx init
+              </div>
+              <div className="text-success pl-4">
+                ✓ Created.env and .env.example
+              </div>
+              <div className="text-success pl-4">
+                ✓ Added to .gitignore
               </div>
               <div>
                 <span className="text-brand-500">$ </span>evnx doctor
