@@ -1,87 +1,65 @@
-import { createHighlighter, type Highlighter } from "shiki";
-
-// ─── Singleton ────────────────────────────────────────────────────────────────
-// One highlighter instance, created once and reused across all RSC renders.
-
-let highlighterInstance: Highlighter | null = null;
-let initPromise: Promise<Highlighter> | null = null;
-
-export async function getHighlighter(): Promise<Highlighter> {
-  if (highlighterInstance) return highlighterInstance;
-
-  if (!initPromise) {
-    initPromise = createHighlighter({
-      themes: ["github-dark", "github-light"],
-      langs: [
-        "bash",
-        "shell",
-        "powershell",
-        "yaml",
-        "json",
-        "toml",
-        "typescript",
-        "javascript",
-        "python",
-        "rust",
-        "go",
-        "dockerfile",
-        "diff",
-        "sql",
-        "ini", // .env files are close to INI
-        "plaintext",
-      ],
-    });
-  }
-
-  highlighterInstance = await initPromise;
-  return highlighterInstance;
-}
-
-// ─── Highlight helper ─────────────────────────────────────────────────────────
-
-export type HighlightOptions = {
-  lang?: string;
-  theme?: "github-dark" | "github-light";
-  /** Line numbers like [3, 5, 6] to highlight */
-  highlightLines?: number[];
-};
-
-export async function highlight(
-  code: string,
-  options: HighlightOptions = {},
-): Promise<string> {
-  const { lang = "bash", theme = "github-dark" } = options;
-  const hl = await getHighlighter();
-
-  const safeCode = code.trim();
-
-  // Check if the language is loaded; fall back to plaintext
-  const loadedLangs = hl.getLoadedLanguages();
-  const resolvedLang = loadedLangs.includes(lang as never) ? lang : "plaintext";
-
-  return hl.codeToHtml(safeCode, {
-    lang: resolvedLang,
-    theme,
-  });
-}
-
-// ─── Language label map ───────────────────────────────────────────────────────
+/**
+ * lib/shiki.ts
+ *
+ * Uses the `codeToHtml` shorthand — the simplest Shiki API.
+ * Works with Shiki v1, v2, v3, v4 without changes.
+ * Shiki manages its own internal caching when using shorthands.
+ */
+import { codeToHtml } from "shiki";
 
 export const LANG_LABELS: Record<string, string> = {
   bash: "Bash",
   shell: "Shell",
+  sh: "Shell",
   powershell: "PowerShell",
   yaml: "YAML",
+  yml: "YAML",
   json: "JSON",
   toml: "TOML",
   typescript: "TypeScript",
+  ts: "TypeScript",
+  tsx: "TSX",
   javascript: "JavaScript",
+  js: "JavaScript",
+  jsx: "JSX",
   python: "Python",
+  py: "Python",
   rust: "Rust",
+  rs: "Rust",
   go: "Go",
   dockerfile: "Dockerfile",
   diff: "Diff",
   sql: "SQL",
   ini: ".env",
+  env: ".env",
   plaintext: "Text",
+  text: "Text",
 };
+
+// Languages we support — anything outside this list falls back to plaintext
+const SUPPORTED_LANGS = new Set(Object.keys(LANG_LABELS));
+
+export async function highlight(code: string, lang: string): Promise<string> {
+  const safeLang = SUPPORTED_LANGS.has(lang) ? lang : "plaintext";
+
+  try {
+    const html = await codeToHtml(code, {
+      lang: safeLang,
+      theme: "github-dark",
+    });
+
+    // Shiki v1+ emits:
+    //   <pre class="shiki github-dark" style="background-color:#0d1117;color:#e6edf3" tabindex="0">
+    // The inline style wins over every CSS rule including !important.
+    // Strip it so our container's background-color shows through.
+    return html.replace(/(<pre\b[^>]*?)\s+style="[^"]*"/, "$1");
+  } catch (err) {
+    console.error(`[shiki] highlight failed for lang="${safeLang}":`, err);
+    // Fallback: escaped plain text wrapped in a <pre>
+    const escaped = code
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return `<pre class="shiki"><code>${escaped}</code></pre>`;
+  }
+}

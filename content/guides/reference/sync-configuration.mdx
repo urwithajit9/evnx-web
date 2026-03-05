@@ -1,0 +1,406 @@
+---
+slug: "reference-sync-configuration"
+section: "reference"
+order: 5
+title: "Sync Configuration Reference"
+publishedAt: "2026-03-06"
+updatedAt: "2026-03-06"
+excerpt: "Advanced configuration for evnx sync: placeholder JSON schema, pattern matching, and security options."
+difficulty: "advanced"
+timeToComplete: "25 minutes"
+tags: ["sync", "reference", "configuration", "json-schema", "advanced"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - commands/sync
+  - getting-started/sync-basics
+draft: false
+---
+
+# Sync Configuration Reference
+
+<Callout type="tip" title="Who this is for">
+This reference is for advanced users configuring custom placeholder patterns, enforcing naming policies, or integrating sync into complex workflows.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/sync">Review sync command reference</Prerequisite>
+  <Prerequisite href="/guides/getting-started/sync-basics">Understand sync basics</Prerequisite>
+</Prerequisites>
+
+---
+
+## PlaceholderConfig JSON schema
+
+Create `.evnx/placeholders.json` to customize placeholder generation:
+
+```json
+{
+  "$schema": "https://evnx.dev/schemas/placeholders.v1.json",
+  "description": "Team-specific placeholder conventions",
+  "patterns": {
+    ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
+    ".*_SECRET$": "demo_secret_placeholder",
+    "DATABASE_URL": "postgresql://demo:demo@localhost:5432/demo_db",
+    "REDIS_URL": "redis://localhost:6379/0",
+    ".*_PORT$": "8080",
+    ".*_HOST$": "localhost",
+    ".*_URL$": "https://api.demo.example.com",
+    "DEBUG": "true",
+    "ENVIRONMENT": "development",
+    "LOG_LEVEL": "debug"
+  },
+  "default": "REPLACE_IN_PRODUCTION",
+  "allow_actual": [
+    "APP_NAME",
+    "APP_VERSION",
+    "ENVIRONMENT",
+    "LOG_LEVEL"
+  ],
+  "naming_convention": {
+    "style": "SCREAMING_SNAKE_CASE",
+    "allow_prefixes": ["MY_APP_", "SERVICE_"],
+    "warn_on_lowercase": true
+  }
+}
+```
+
+### Schema reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `$schema` | `string` | No | JSON Schema URL for validation |
+| `description` | `string` | No | Human-readable description |
+| `patterns` | `object` | No | Regex pattern to placeholder mappings |
+| `default` | `string` | No | Fallback placeholder for unmatched keys |
+| `allow_actual` | `string[]` | No | Keys permitted to use actual values |
+| `naming_convention` | `object` | No | Naming policy configuration |
+
+---
+
+## Pattern matching syntax
+
+Patterns use **Rust regex** with implicit case-insensitive matching.
+
+### Pattern examples
+
+| Pattern | Matches | Example output |
+|---------|---------|---------------|
+| `.*_API_KEY$` | `STRIPE_API_KEY`, `AWS_API_KEY` | `sk_demo_XXXXXXXXXXXXXXXX` |
+| `^DATABASE_URL$` | Exact match only: `DATABASE_URL` | `postgresql://demo:demo@localhost:5432/demo_db` |
+| `.*_PORT$` | `SERVER_PORT`, `DB_PORT`, `REDIS_PORT` | `8080` |
+| `^DEBUG` | `DEBUG`, `DEBUG_MODE`, `DEBUG_LEVEL` | `true` |
+| `.*(PASSWORD|PASS).*` | `DB_PASSWORD`, `ADMIN_PASS` | `YOUR_PASSWORD_HERE` |
+
+### Regex cheat sheet
+
+```regex
+.*      Match any characters (zero or more)
+.+      Match any characters (one or more)
+^       Start of string
+$       End of string
+|       OR operator
+()      Grouping
+[]      Character class
+?       Zero or one of preceding
+*       Zero or more of preceding
++       One or more of preceding
+```
+
+<Callout type="warning" title="Case sensitivity">
+All patterns are matched case-insensitively. `.*_api_key$` matches `STRIPE_API_KEY`, `stripe_api_key`, and `Stripe_Api_Key`.
+</Callout>
+
+---
+
+## Naming convention configuration
+
+Control how variable names are validated.
+
+### `naming_convention` object
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `style` | `enum` | `SCREAMING_SNAKE_CASE` | Expected naming style |
+| `allow_prefixes` | `string[]` | `[]` | Prefixes exempt from style check |
+| `warn_on_lowercase` | `bool` | `true` | Warn if any lowercase letters found |
+
+### Supported styles
+
+| Style | Pattern | Examples |
+|-------|---------|----------|
+| `SCREAMING_SNAKE_CASE` | `^[A-Z][A-Z0-9_]*$` | `DATABASE_URL`, `API_KEY` |
+| `snake_case` | `^[a-z][a-z0-9_]*$` | `database_url`, `api_key` |
+| `camelCase` | `^[a-z][a-zA-Z0-9]*$` | `databaseUrl`, `apiKey` |
+| `PascalCase` | `^[A-Z][a-zA-Z0-9]*$` | `DatabaseUrl`, `ApiKey` |
+| `kebab-case` | `^[a-z][a-z0-9-]*$` | `database-url`, `api-key` |
+
+### Example: Allow project prefixes
+
+```json
+{
+  "naming_convention": {
+    "style": "SCREAMING_SNAKE_CASE",
+    "allow_prefixes": ["MY_APP_", "SERVICE_", "LEGACY_"],
+    "warn_on_lowercase": true
+  }
+}
+```
+
+**Valid with this config:**
+
+```
+MY_APP_DATABASE_URL=...
+SERVICE_API_KEY=...
+LEGACY_OLD_VAR=...
+DATABASE_URL=...
+```
+
+**Invalid (would warn/error):**
+
+```
+myApp_databaseUrl=...
+```
+
+---
+
+## Environment variables
+
+Control sync behavior via environment variables.
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode |
+| `EVNX_SYNC_DRY_RUN` | `1`, `true` | `false` | Force dry-run mode |
+| `EVNX_SYNC_FORCE` | `1`, `true` | `false` | Force non-interactive mode |
+
+**Usage:**
+
+```bash
+# Disable colors for CI logs
+NO_COLOR=1 evnx sync --verbose
+
+# Force dry-run via env var (overrides CLI)
+EVNX_SYNC_DRY_RUN=1 evnx sync
+```
+
+---
+
+## Atomic write implementation
+
+Sync uses atomic file writes to prevent corruption:
+
+```rust
+fn atomic_write(path: &str, content: &str) -> Result<()> {
+    let temp = NamedTempFile::new_in(parent_dir)?;
+    temp.write_all(content)?;
+    temp.sync_all()?;
+    temp.persist(path)?;
+
+    if path.ends_with(".env") {
+        set_permissions(path, 0o600)?;
+    }
+    Ok(())
+}
+```
+
+**Benefits:**
+
+- No partial writes if process interrupted
+- No race conditions with concurrent access
+- Secure permissions set atomically
+
+---
+
+## Security audit logging
+
+When `--verbose` is enabled, sync logs sensitive operations:
+
+```bash
+evnx sync --direction forward --verbose
+```
+
+**Audit log format:**
+
+```
+[AUDIT] timestamp=2024-03-20T10:30:00Z user=alice action=sync_forward
+  keys_added=["STRIPE_API_KEY"] placeholder=true file=.env.example
+
+[AUDIT] timestamp=2024-03-20T10:31:00Z user=alice action=actual_values_warning
+  keys=["DATABASE_PASSWORD"] confirmed=false
+
+[AUDIT] timestamp=2024-03-20T10:32:00Z user=alice action=actual_values_confirmed
+  keys=["DATABASE_PASSWORD"] file=.env.example
+```
+
+### Log fields
+
+| Field | Description |
+|-------|-------------|
+| `timestamp` | ISO 8601 UTC timestamp |
+| `user` | Current system user (from `whoami`) |
+| `action` | Operation type: `sync_forward`, `actual_values_warning`, etc. |
+| `keys` | Environment variable names affected |
+| `file` | Target file path |
+| `placeholder` | Whether placeholder values were used |
+| `confirmed` | Whether user explicitly confirmed risky action |
+
+<Callout type="tip" title="Parse audit logs">
+Use `grep '^\[AUDIT\]'` to filter audit entries, or pipe to a log aggregator for security monitoring.
+</Callout>
+
+---
+
+## Exit codes and error handling
+
+### Exit code reference
+
+| Code | Meaning | Typical cause |
+|------|---------|--------------|
+| `0` | Success | Sync completed without errors |
+| `1` | Validation error | Missing files, naming policy violation |
+| `2` | IO error | File read/write failure, permission denied |
+| `3` | Parse error | Invalid JSON in config, malformed .env |
+| `4` | Git error | Not a git repo, merge conflict |
+| `126+` | System error | Command not found, signal received |
+
+### Error message format
+
+```
+✗ [error_type] human-readable message
+
+Caused by:
+    0: lower-level context
+    1: root cause (OS error, etc.)
+```
+
+**Example:**
+
+```
+✗ [file_not_found] File not found: .env
+
+Caused by:
+    0: Failed to parse .env
+    1: No such file or directory (os error 2)
+```
+
+---
+
+## Advanced usage patterns
+
+### Conditional sync in scripts
+
+```bash
+#!/bin/bash
+if git diff --quiet HEAD -- .env; then
+  echo "✓ .env unchanged, skipping sync"
+  exit 0
+fi
+
+echo "🔄 .env changed, updating template..."
+evnx sync --direction forward --dry-run --force
+
+if ! git diff --quiet .env.example; then
+  echo "⚠️  .env.example needs updates"
+  echo "Run: evnx sync --direction forward"
+  exit 1
+fi
+```
+
+### Sync with custom error handling
+
+```bash
+output=$(EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force 2>/dev/null)
+errors=$(echo "$output" | jq -r '.errors | length')
+
+if [ "$errors" -gt 0 ]; then
+  echo "🚫 Sync validation failed:"
+  echo "$output" | jq -r '.errors[]'
+  exit 1
+fi
+
+warnings=$(echo "$output" | jq -r '.warnings | length')
+if [ "$warnings" -gt 0 ]; then
+  echo "⚠️  $warnings warnings (non-blocking):"
+  echo "$output" | jq -r '.warnings[]'
+fi
+```
+
+### Multi-environment sync
+
+```bash
+for env in development staging production; do
+  echo "🔄 Syncing $env environment..."
+  evnx sync \
+    --direction forward \
+    --template-config ".evnx/placeholders-$env.json" \
+    --naming-policy error \
+    --dry-run
+done
+```
+
+---
+
+## Troubleshooting advanced issues
+
+### Custom pattern not matching
+
+**Debug steps:**
+
+```bash
+# 1. Validate JSON syntax
+cat .evnx/placeholders.json | jq . || echo "Invalid JSON"
+
+# 2. Test regex pattern manually
+echo "STRIPE_API_KEY" | grep -iE ".*_API_KEY$"
+
+# 3. Run sync with verbose to see pattern evaluation
+evnx sync --template-config .evnx/placeholders.json --verbose 2>&1 | grep -i "pattern|match"
+```
+
+**Common fixes:**
+
+- Escape special regex chars: `.*_API_KEY$` not `.*_API_KEY*`
+- Remember patterns are case-insensitive by default
+- Ensure pattern key exists in `patterns` object
+
+### Naming policy not enforcing
+
+**Check:**
+
+```bash
+evnx sync --naming-policy error --verbose 2>&1 | grep "naming_policy"
+cat .evnx/placeholders.json | jq '.naming_convention'
+```
+
+**Fix:** CLI flags override config file. Use `--naming-policy error` explicitly in CI.
+
+### Atomic write failing on Windows
+
+**Cause:** File rename semantics differ on Windows.
+
+**Workaround:**
+
+```bash
+# Use WSL or Git Bash for sync operations
+# Or ensure no other process has .env open during sync
+evnx sync
+```
+
+---
+
+## Related references
+
+- [JSON Schema for placeholders](https://evnx.dev/schemas/placeholders.v1.json)
+- [Rust regex syntax](https://docs.rs/regex/latest/regex/#syntax)
+- [Atomic file operations](https://stefan-marr.de/2022/03/atomic-file-operations/)
+- [Security audit best practices](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
+
+<Callout type="success" title="Master advanced sync">
+With this reference, you can customize sync for any team workflow, enforce strict policies, and integrate deeply with your toolchain.
+</Callout>
+
+
+---
+
+

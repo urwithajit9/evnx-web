@@ -2,12 +2,8 @@
 const nextConfig = {
   // Enable React strict mode for better development warnings
   reactStrictMode: true,
-
-  // Experimental features for Next.js 15
-  experimental: {
-    // Required for next-mdx-remote/rsc in App Router
-    serverComponentsExternalPackages: ["shiki", "vscode-oniguruma"],
-  },
+  reactCompiler: true,
+  serverExternalPackages: ["shiki", "vscode-oniguruma"],
 
   // Image domains for external avatars (GitHub, etc.)
   images: {

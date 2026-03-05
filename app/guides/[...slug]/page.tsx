@@ -14,8 +14,9 @@ import {
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
 
+// ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
-  params: { slug: string[] };
+  params: Promise<{ slug: string[] }>;
 };
 
 export async function generateStaticParams() {
@@ -25,7 +26,8 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const guide = getGuide(params.slug);
+  const { slug } = await params; // ← await
+  const guide = getGuide(slug);
   if (!guide) return {};
   return {
     title: guide.title,
@@ -39,14 +41,14 @@ const DIFFICULTY_COLORS = {
   advanced: "text-danger border-danger/30 bg-danger/5",
 };
 
-export default function GuidePage({ params }: Props) {
-  const guide = getGuide(params.slug);
+// ── async so we can await params ──────────────────────────────────────────────
+export default async function GuidePage({ params }: Props) {
+  const { slug } = await params; // ← await
+  const guide = getGuide(slug);
   if (!guide) notFound();
 
   const bySection = getGuidesBySection();
   const { prev, next } = getAdjacentGuides(guide);
-
-  const currentSection = GUIDE_SECTIONS.find((s) => s.key === guide.section);
 
   return (
     <div className="min-h-screen">
@@ -140,7 +142,6 @@ export default function GuidePage({ params }: Props) {
               )}
             </div>
 
-            {/* Title */}
             <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4 leading-tight">
               {guide.title}
             </h1>
@@ -155,13 +156,13 @@ export default function GuidePage({ params }: Props) {
                   Prerequisites
                 </p>
                 <ul className="space-y-1">
-                  {guide.prerequisites.map((slug) => (
-                    <li key={slug}>
+                  {guide.prerequisites.map((prereqSlug) => (
+                    <li key={prereqSlug}>
                       <Link
-                        href={`/guides/${slug}`}
+                        href={`/guides/${prereqSlug}`}
                         className="font-mono text-sm text-info hover:text-blue-300 transition-colors"
                       >
-                        → {slug.split("/").pop()?.replace(/-/g, " ")}
+                        → {prereqSlug.split("/").pop()?.replace(/-/g, " ")}
                       </Link>
                     </li>
                   ))}
@@ -200,7 +201,7 @@ export default function GuidePage({ params }: Props) {
                 </button>
               </div>
               <a
-                href={`https://github.com/urwithajit9/evnx/blob/main/content/guides/${guide.slug}.mdx`}
+                href={`https://github.com/urwithajit9/evnx-web/blob/main/content/guides/${guide.slug}.mdx`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono text-xs text-text-muted hover:text-text-primary transition-colors"
@@ -243,7 +244,7 @@ export default function GuidePage({ params }: Props) {
             </div>
           </article>
 
-          {/* Right sidebar — TOC placeholder */}
+          {/* Right sidebar */}
           <aside className="lg:col-span-1 hidden lg:block">
             <div className="sticky top-8 space-y-6">
               <div className="bg-bg-surface border border-border-muted rounded-lg p-4">
@@ -251,7 +252,6 @@ export default function GuidePage({ params }: Props) {
                   On this page
                 </p>
                 <p className="font-mono text-xs text-text-muted italic">
-                  {/* Auto-TOC from headings — add rehype-toc for full implementation */}
                   Scroll to navigate
                 </p>
               </div>
@@ -261,8 +261,7 @@ export default function GuidePage({ params }: Props) {
                   Quick install
                 </p>
                 <div className="bg-terminal-bg rounded p-2 font-mono text-xs text-terminal-text mb-3">
-                  <span className="text-brand-500">$ </span>
-                  evnx doctor
+                  <span className="text-brand-500">$ </span>evnx doctor
                 </div>
                 <Link
                   href="/install"

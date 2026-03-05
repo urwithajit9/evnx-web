@@ -1,0 +1,384 @@
+---
+slug: "use-cases-team-collaboration"
+section: "use-cases"
+order: 1
+title: "Team Collaboration with evnx sync"
+publishedAt: "2026-03-06"
+updatedAt: "2026-03-07"
+excerpt: "Real-world patterns for using evnx sync with multiple developers, onboarding, and merge workflows."
+difficulty: "intermediate"
+timeToComplete: "15 minutes"
+tags: ["sync", "team", "collaboration", "workflow", "onboarding"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/sync-basics
+  - commands/sync
+draft: false
+---
+
+# Team Collaboration with evnx sync
+
+<Callout type="tip" title="Who this is for">
+This guide is for teams of 2+ developers using evnx to manage environment variables. You'll learn patterns for onboarding, daily workflows, and avoiding merge conflicts.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/sync-basics">Complete sync basics</Prerequisite>
+  <Prerequisite href="/guides/commands/sync">Review command reference</Prerequisite>
+</Prerequisites>
+
+---
+
+## The team sync workflow
+
+### Key principles
+
+1. **`.env.example` is the source of truth** for variable names
+2. **`.env` is personal** — never commit, always gitignored
+3. **Sync forward** = share new variables with team
+4. **Sync reverse** = get team's new variables locally
+
+---
+
+## Scenario 1: Adding a new variable
+
+**Context:** Alice needs `STRIPE_WEBHOOK_SECRET` for a new feature.
+
+**Step 1: Alice adds to her .env**
+
+```bash
+echo "STRIPE_WEBHOOK_SECRET=whsec_abc123" >> .env
+```
+
+**Step 2: Alice updates the team template**
+
+```bash
+evnx sync --direction forward --dry-run
+
+📋 Preview:
+Target: .env.example (action: Add)
+  🔒 STRIPE_WEBHOOK_SECRET = YOUR_KEY_HERE
+
+# Apply the change
+evnx sync --direction forward
+
+✓ Updated .env.example (+1 variables)
+```
+
+**Step 3: Commit and push**
+
+```bash
+git add .env.example
+git commit -m "feat: add STRIPE_WEBHOOK_SECRET to template"
+git push
+```
+
+**Result for teammates:**
+
+```env
+# .env.example now has:
+STRIPE_WEBHOOK_SECRET=YOUR_KEY_HERE
+```
+
+<Callout type="warning" title="Don't commit secrets">
+Alice's real value `whsec_abc123` stays in her `.env` only. The template gets the safe placeholder `YOUR_KEY_HERE`.
+</Callout>
+
+---
+
+## Scenario 2: Onboarding a new developer
+
+**Context:** Bob joins the team and clones the repo.
+
+**Step 1: Bob clones and enters project**
+
+```bash
+git clone git@github.com:team/project.git
+cd project
+```
+
+**Step 2: Bob checks what's needed**
+
+```bash
+ls -la
+# Sees: .env.example (committed), .env (missing, gitignored)
+```
+
+**Step 3: Bob creates his local .env**
+
+```bash
+evnx sync --direction reverse
+
+ℹ️  .env not found, creating from .env.example
+✓ Created .env
+⚠️  Replace placeholder values with real credentials!
+```
+
+**Step 4: Bob edits with real values from team password manager**
+
+```bash
+nano .env
+# Changes:
+#   DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+# To:
+#   DATABASE_URL=postgresql://bob:realpass@prod-db:5432/app
+```
+
+**Step 5: Bob secures permissions**
+
+```bash
+chmod 600 .env
+```
+
+**Step 6: Bob validates setup**
+
+```bash
+evnx validate
+✓ All variables present and valid
+```
+
+✅ **Bob is ready to code!**
+
+<Callout type="tip" title="Document the onboarding flow">
+Add this to your README:
+
+## Setup
+1. Clone repo
+2. Run `evnx sync --direction reverse` to create .env
+3. Edit .env with credentials from [password manager]
+4. Run `chmod 600 .env` and `evnx validate`
+</Callout>
+
+---
+
+## Scenario 3: Handling merge conflicts in .env.example
+
+**Context:** Alice and Bob both add different variables and push around the same time.
+
+**Step 1: Alice pushes first**
+
+```bash
+git push
+# ✓ Success
+```
+
+**Step 2: Bob tries to push**
+
+```bash
+git push
+# ✗ rejected: remote contains work you don't have
+```
+
+**Step 3: Bob pulls and sees conflict**
+
+```bash
+git pull
+# CONFLICT (content): Merge conflict in .env.example
+```
+
+**Step 4: Bob opens .env.example to resolve**
+
+```bash
+nano .env.example
+# Keeps both new variables, removes conflict markers
+```
+
+**Step 5: Bob validates the resolved file**
+
+```bash
+evnx validate
+✓ All variables present
+```
+
+**Step 6: Bob completes the merge**
+
+```bash
+git add .env.example
+git commit -m "Resolve merge conflict in .env.example"
+git push
+```
+
+<Callout type="success" title="Why this works">
+Because `.env.example` only contains variable names and placeholders (no secrets), merge conflicts are safe to resolve manually.
+</Callout>
+
+---
+
+## Scenario 4: Syncing before a pull request
+
+**Best practice:** Always sync forward before opening a PR that adds new environment variables.
+
+**Before creating PR:**
+
+```bash
+evnx sync --direction forward --dry-run
+```
+
+**If preview shows new variables:**
+
+```bash
+# 1. Apply the sync
+evnx sync --direction forward
+
+# 2. Commit the template change
+git add .env.example
+git commit -m "chore: sync .env.example with new variables"
+
+# 3. Now create your PR
+gh pr create --title "feat: add new feature"
+```
+
+**In your PR description:**
+
+```markdown
+### Environment Changes
+- Added `NEW_API_KEY` to `.env.example` (placeholder: `YOUR_KEY_HERE`)
+- No secrets committed — all values are safe placeholders
+
+### Testing
+# Preview the sync change:
+$ evnx sync --direction forward --dry-run
+📋 Preview:
+  🔒 NEW_API_KEY = YOUR_KEY_HERE
+```
+
+---
+
+## Communication best practices
+
+### When to notify the team
+
+| Change | Notify team? | How |
+|--------|-------------|-----|
+| New required variable | Yes | Slack/PR description |
+| Removed variable | Yes | Deprecation notice in PR |
+| Changed placeholder pattern | Maybe | Update `.evnx/placeholders.json` + docs |
+| Security-related variable | Yes | Direct message + PR |
+
+### Template for team notifications
+
+```markdown
+**Environment Update** 🔄
+
+A new environment variable has been added:
+
+- **Name:** `NEW_SERVICE_URL`
+- **Purpose:** URL for the new analytics service
+- **Placeholder:** `https://api.demo.example.com`
+- **Required:** Yes (app won't start without it)
+
+**Action needed:**
+1. Pull latest changes: `git pull`
+2. Sync to your .env: `evnx sync --direction reverse`
+3. Edit .env with the real URL from [password manager]
+4. Validate: `evnx validate`
+
+Questions? Reply here or ping @env-team.
+```
+
+---
+
+## Avoiding common team pitfalls
+
+### "It works on my machine"
+
+**Problem:** Developer has a variable locally that's not in `.env.example`.
+
+**Prevention:**
+
+```bash
+# Add to pre-commit hook or CI:
+evnx sync --direction forward --dry-run --force
+if ! git diff --quiet .env.example; then
+  echo "⚠️  .env.example needs updates!"
+  echo "Run: evnx sync --direction forward"
+  exit 1
+fi
+```
+
+### Secrets in .env.example
+
+**Problem:** Someone accidentally commits real values.
+
+**Prevention:**
+
+1. Use `--dry-run` before every sync forward
+2. Add CI check: `grep -E "(sk_live|password)" .env.example && exit 1`
+3. Use custom placeholders that look fake: `sk_demo_XXXXXXXX`
+
+### Merge conflicts in .env
+
+**Problem:** `.env` should never be in Git, but someone commits it.
+
+**Prevention:**
+
+1. Ensure `.env` is in `.gitignore` from day one
+2. Add pre-commit hook to block `.env` commits
+3. Educate team: "If you see `.env` in `git status`, don't add it!"
+
+---
+
+## Advanced: Custom placeholders for teams
+
+Create `.evnx/placeholders.json` for consistent team patterns:
+
+```json
+{
+  "patterns": {
+    ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
+    ".*_SECRET$": "demo_secret_placeholder",
+    "DATABASE_URL": "postgresql://demo:demo@localhost:5432/demo_db"
+  },
+  "default": "REPLACE_IN_PRODUCTION"
+}
+```
+
+**Team workflow:**
+
+1. Commit `.evnx/placeholders.json` to repo
+2. Document in README: "We use custom placeholders — see `.evnx/`"
+3. Use in sync: `evnx sync --template-config .evnx/placeholders.json`
+
+<Callout type="tip" title="Share the config">
+Commit `.evnx/placeholders.json` so every teammate gets the same placeholder patterns automatically.
+</Callout>
+
+---
+
+## Checklist: Team sync health
+
+Run this monthly or when onboarding:
+
+```bash
+# 1. Verify .env.example is up to date
+evnx sync --direction forward --dry-run --force
+
+# 2. Check for secrets in template
+grep -iE "(sk_live|password|secret)" .env.example | grep -v "YOUR_\|placeholder\|demo" && echo "⚠️  Potential secrets found!"
+
+# 3. Validate naming conventions
+evnx sync --naming-policy error --dry-run
+
+# 4. Confirm .gitignore is correct
+git check-ignore .env  # Should output: .env
+
+# 5. Test onboarding flow (in fresh directory)
+mkdir /tmp/test-onboarding && cd /tmp/test-onboarding
+git clone <repo> .
+evnx sync --direction reverse  # Should work without errors
+```
+
+---
+
+## Related guides
+
+- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automate these checks
+- [Security Best Practices](/guides/reference/security) — Protect team secrets
+- [Configuration Reference](/guides/reference/sync-configuration) — Advanced placeholder patterns
+
+<Callout type="success" title="Team sync mastery">
+With these patterns, your team will never lose track of environment variables again. Sync early, sync often, and always preview with `--dry-run`.
+</Callout>
+
+
+---
