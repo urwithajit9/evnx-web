@@ -1,0 +1,121 @@
+---
+slug: "commands-init"
+section: "commands"
+order: 1
+title: "evnx init"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-05"
+excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
+difficulty: "beginner"
+timeToComplete: "3 minutes"
+tags: ["init", "reference", "cli", "setup"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# evnx init — Command Reference
+
+Initialize `.env.example` and `.env` files using Blank, Blueprint, or Architect modes with schema-driven variable generation.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx init [OPTIONS]
+```
+
+### Options reference
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--path`, `-p` | `string` | `.` | Output directory for generated files |
+| `--yes`, `-y` | `bool` | `false` | Skip prompts, use defaults (non-interactive) |
+| `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
+| `--help`, `-h` | `bool` | `false` | Display help information |
+
+### Initialization modes
+
+| Mode | Trigger | Behavior | Best for |
+|------|---------|----------|----------|
+| **Blank** | Interactive → Select | Creates minimal `.env` templates | New projects, manual config |
+| **Blueprint** | Interactive → Select / `--yes` default | Pre-configured stack (e.g., T3, FastAPI) | Quick start with known stacks |
+| **Architect** | Interactive → Select | Step-by-step: language → framework → services → infra | Custom stack composition |
+
+---
+
+## Exit codes
+
+| Code | Meaning | Use case |
+|------|---------|----------|
+| `0` | ✅ Initialization completed successfully | Success in scripts/CI |
+| `1` | 🚨 Init failed (schema error, write failure) | Fail pipeline on setup issues |
+| `2+` | ⚠️ Runtime errors (IO, parsing, validation) | Debug tooling or schema issues |
+
+---
+
+## Basic usage examples
+
+### Interactive setup (recommended)
+```bash
+# Launch mode selector with guided prompts
+evnx init
+```
+
+### Non-interactive default (Blueprint mode)
+```bash
+# Skip prompts, use first available blueprint
+evnx init --yes
+```
+
+### Custom output path
+```bash
+# Generate files in ./config directory
+evnx init --path ./config --yes
+```
+
+### Verbose debugging
+```bash
+# Show selection summary and resolution steps
+evnx init -v
+```
+
+### Combine flags for CI/CD
+```bash
+# Silent init with custom path for automation
+evnx init --yes --path /app/config --verbose
+```
+
+---
+
+## Generated files
+
+| File | Purpose | Overwrite behavior |
+|------|---------|-------------------|
+| `.env.example` | Team template with placeholders + docs | Always updated |
+| `.env` | Local secrets (gitignored) | Created only if missing |
+| `.gitignore` | Auto-appends `.env*` patterns | Appends if patterns missing |
+
+---
+
+## Environment variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive defaults |
+
+---
+
+## See also
+
+- [Init Basics Tutorial](/guides/getting-started/init-basics) — Step-by-step setup guide
+- [Blueprint Catalog](/guides/reference/blueprints) — Available pre-configured stacks
+- [Schema Reference](/guides/reference/schema) — Extend languages, services, and vars
+- [Team Collaboration](/guides/use-cases/team-collaboration) — Share `.env.example` safely

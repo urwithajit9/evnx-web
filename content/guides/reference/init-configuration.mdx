@@ -1,0 +1,349 @@
+---
+slug: "reference-init-configuration"
+section: "reference"
+order: 4
+title: "Init Configuration Reference"
+publishedAt: "2026-03-06"
+updatedAt: "2026-03-06"
+excerpt: "Configuration options for evnx init: schema customization, CLI flags, and environment variables."
+difficulty: "intermediate"
+timeToComplete: "15 minutes"
+tags: ["init", "reference", "configuration", "schema", "setup"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - commands/init
+  - getting-started/init-basics
+draft: false
+---
+
+# Init Configuration Reference
+
+<Callout type="warning" title="Configuration scope">
+Unlike `evnx sync`, the `init` command does **not** support runtime configuration files like `placeholders.json`. Configuration is managed via the embedded `schema.json` and CLI flags. See [limitations](#what-init-does-not-support) for details.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/init">Review init command reference</Prerequisite>
+  <Prerequisite href="/guides/getting-started/init-basics">Understand init basics</Prerequisite>
+</Prerequisites>
+
+---
+
+## Schema-driven configuration
+
+All `init` behavior is driven by `src/assets/schema.json`, embedded at compile-time.
+
+### Schema structure overview
+
+```json
+{
+  "languages": {
+    "javascript_typescript": {
+      "name": "JavaScript / TypeScript",
+      "frameworks": {
+        "nextjs": {
+          "name": "Next.js",
+          "vars": {
+            "NEXTAUTH_URL": {
+              "description": "Canonical URL for your app",
+              "default": "http://localhost:3000",
+              "required": true,
+              "sensitive": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "databases": {
+      "postgresql": {
+        "name": "PostgreSQL",
+        "vars": {
+          "DATABASE_URL": {
+            "description": "PostgreSQL connection string",
+            "default": "postgresql://localhost:5432/app",
+            "required": true,
+            "sensitive": true
+          }
+        }
+      }
+    }
+  },
+  "stacks": {
+    "t3_modern": {
+      "name": "T3 Turbo (Next.js + Clerk + Prisma)",
+      "description": "The 2026 standard for type-safe fullstack apps.",
+      "components": {
+        "language": "javascript_typescript",
+        "framework": "nextjs",
+        "services": ["postgresql", "clerk", "aws_s3"],
+        "infrastructure": ["github_actions", "vercel"]
+      }
+    }
+  }
+}
+```
+
+### Variable definition fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | `string` | Yes | Human-readable explanation |
+| `default` | `string` | No | Placeholder value for `.env.example` |
+| `required` | `bool` | No | Marks variable as mandatory for validation |
+| `sensitive` | `bool` | No | Triggers security warnings if used in `.env` |
+| `pattern` | `string` | No | Regex hint for validation (future use) |
+
+<Callout type="tip" title="Extend without recompiling?">
+Currently, `schema.json` is embedded via `include_str!`. To customize, you must fork and rebuild. Future versions may support external schema loading via `--schema-path`.
+</Callout>
+
+---
+
+## CLI flags reference
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--path`, `-p` | `string` | `.` | Output directory for generated files |
+| `--yes`, `-y` | `bool` | `false` | Skip prompts, use defaults (non-interactive) |
+| `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
+| `--help`, `-h` | `bool` | `false` | Display help information |
+
+### Flag behavior details
+
+#### `--path`
+- Accepts relative or absolute paths
+- Creates parent directories if missing
+- Does **not** validate if path is writable until write time
+
+#### `--yes` (non-interactive mode)
+- Defaults to **Blueprint mode** (first available blueprint)
+- Auto-selects first option at each step in Architect mode
+- Skips preview and confirmation prompts
+- Ideal for CI/CD, Docker builds, or scripting
+
+#### `--verbose`
+- Prints selection summary:
+  ```
+  [DEBUG] Selection summary:
+    Language: javascript_typescript
+    Framework: nextjs
+    Services: ["postgresql", "clerk"]
+    Infrastructure: ["vercel"]
+  ```
+- Shows schema loading and variable resolution steps
+
+---
+
+## Environment variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive defaults |
+
+**Usage:**
+
+```bash
+# Disable colors for CI logs
+NO_COLOR=1 evnx init --verbose
+
+# Auto-enable --yes in CI environments
+CI=1 evnx init
+```
+
+<Callout type="info" title="CI detection">
+When `CI=true` is detected, `init` behaves as if `--yes` was passed, but still respects explicit CLI flags.
+</Callout>
+
+---
+
+## What init does NOT support
+
+<Callout type="danger" title="Important limitations">
+The following features available in `evnx sync` are **not** supported by `init`:
+</Callout>
+
+| Feature | Status | Workaround / Alternative |
+|---------|--------|-------------------------|
+| `--template-config` (custom placeholder JSON) | ❌ Not supported | Edit `schema.json` defaults, then rebuild |
+| `--naming-policy` (warn/error/ignore) | ❌ Not supported | Use `evnx validate` post-init for naming checks |
+| `--dry-run` (preview without writing) | ❌ Not supported | Preview is shown interactively; use `--yes` + manual inspection |
+| `--placeholder` (force placeholder values) | ❌ Not supported | Placeholders come from schema `default` field |
+| `--force` (skip all prompts) | ⚠️ Partial: `--yes` covers this | Use `--yes` for non-interactive mode |
+| External schema path (`--schema-path`) | ❌ Not supported | Fork repo and modify `src/assets/schema.json` |
+| Runtime variable overrides | ❌ Not supported | Use `evnx add` post-init to customize |
+
+---
+
+## Customizing placeholder values
+
+Since `init` pulls defaults from `schema.json`, here's how to customize:
+
+### Option 1: Edit schema (requires rebuild)
+
+```json
+// src/assets/schema.json
+"NEXTAUTH_SECRET": {
+  "description": "Secret for NextAuth.js session encryption",
+  "default": "your_team_prefix_XXXXXXXX",  // ← Customize here
+  "required": true,
+  "sensitive": true
+}
+```
+
+Then rebuild:
+```bash
+cargo build --release
+# Binary now uses your custom defaults
+```
+
+### Option 2: Post-init customization with `evnx add`
+
+```bash
+# Run init first
+evnx init --yes
+
+# Then add/override variables interactively
+evnx add custom
+
+Variable name: NEXTAUTH_SECRET
+Example/placeholder: my_custom_placeholder_123
+Add another? no
+
+✓ Updated .env.example
+```
+
+### Option 3: Manual edit (simplest)
+
+```bash
+evnx init --yes
+nano .env.example  # Edit placeholders directly
+```
+
+<Callout type="tip" title="Team consistency">
+If your team needs custom placeholders, document them in your `CONTRIBUTING.md` and use `evnx add` as a post-init step in your onboarding script.
+</Callout>
+
+---
+
+## File generation behavior
+
+### Output files
+
+| File | Created by | Overwrite policy |
+|------|-----------|-----------------|
+| `.env.example` | Always | Always updated with latest schema |
+| `.env` | Only if missing | Never overwritten (protects local secrets) |
+| `.gitignore` | Appended if patterns missing | Safe append; no duplicate entries |
+
+### .gitignore patterns auto-added
+
+```gitignore
+# Environment files
+.env
+.env.local
+.env.*.local
+```
+
+<Callout type="warning" title="Existing .gitignore">
+If you manage `.gitignore` manually, review after `init` to ensure no conflicts with your existing rules.
+</Callout>
+
+---
+
+## Advanced usage patterns
+
+### Monorepo initialization
+
+```bash
+# Initialize each package with isolated .env files
+for pkg in packages/*; do
+  evnx init --path "$pkg" --yes
+done
+```
+
+### Docker build integration
+
+```dockerfile
+# Dockerfile
+RUN evnx init --yes --path /app/config --verbose
+# Generated files available at /app/config/.env.example
+```
+
+### Pre-commit hook validation
+
+```bash
+# .git/hooks/pre-commit
+#!/bin/bash
+if [ ! -f .env.example ]; then
+  echo "⚠️  .env.example missing. Run: evnx init"
+  exit 1
+fi
+evnx validate --quiet || exit 1
+```
+
+### Schema validation before rebuild
+
+```bash
+# Validate schema.json syntax before rebuilding
+cat src/assets/schema.json | jq . > /dev/null && echo "✓ Schema valid" || echo "✗ Invalid JSON"
+```
+
+---
+
+## Troubleshooting
+
+### Schema changes not reflecting
+
+**Cause:** `schema.json` is embedded at compile-time.
+
+**Fix:** Rebuild after editing:
+```bash
+cargo clean && cargo build --release
+```
+
+### .env not created
+
+**Cause:** `init` only creates `.env` if it doesn't exist.
+
+**Fix:** Delete existing `.env` to regenerate, or use `evnx sync --direction reverse` to populate from `.env.example`.
+
+### Permission denied on write
+
+**Cause:** Output path not writable.
+
+**Fix:**
+```bash
+# Check permissions
+ls -ld ./target/path
+
+# Fix or use different path
+evnx init --path /tmp/myproject --yes
+```
+
+### Verbose output not showing details
+
+**Cause:** `--verbose` must be passed explicitly; `CI=true` doesn't auto-enable it.
+
+**Fix:**
+```bash
+evnx init --verbose
+# Or combine:
+CI=1 evnx init --verbose --yes
+```
+
+---
+
+## Related references
+
+- [Schema JSON structure](https://github.com/urwithajit9/evnx/blob/main/src/assets/schema.json)
+- [Dialoguer CLI library](https://docs.rs/dialoguer)
+- [Colored terminal output](https://docs.rs/colored)
+- [Anyhow error handling](https://docs.rs/anyhow)
+
+<Callout type="success" title="Configure init effectively">
+While `init` has fewer runtime options than `sync`, its schema-driven design makes it powerful for team-standardized setup. Customize the schema, document your workflow, and use `evnx add` for post-init tweaks.
+</Callout>
+---

@@ -13,6 +13,7 @@ import {
 } from "@/lib/content";
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
+import { HelpfulVote } from "@/components/ui/helpful-vote";
 
 // ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
@@ -190,15 +191,16 @@ export default async function GuidePage({ params }: Props) {
             {/* Feedback */}
             <div className="mt-12 pt-8 border-t border-border-subtle flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <p className="font-mono text-sm text-text-muted">
+                {/* <p className="font-mono text-sm text-text-muted">
                   Was this helpful?
-                </p>
-                <button className="font-mono text-xs px-3 py-1 border border-border-muted rounded hover:border-success hover:text-success transition-colors">
+                </p> */}
+                <HelpfulVote slug={`guides/${guide.slug}`} />
+                {/* <button className="font-mono text-xs px-3 py-1 border border-border-muted rounded hover:border-success hover:text-success transition-colors">
                   👍 Yes
                 </button>
                 <button className="font-mono text-xs px-3 py-1 border border-border-muted rounded hover:border-danger hover:text-danger transition-colors">
                   👎 No
-                </button>
+                </button> */}
               </div>
               <a
                 href={`https://github.com/urwithajit9/evnx-web/blob/main/content/guides/${guide.slug}.mdx`}
@@ -261,7 +263,8 @@ export default async function GuidePage({ params }: Props) {
                   Quick install
                 </p>
                 <div className="bg-terminal-bg rounded p-2 font-mono text-xs text-terminal-text mb-3">
-                  <span className="text-brand-500">$ </span>evnx doctor
+                  <span className="text-brand-500">$ </span>curl -fsSL
+                  https://dotenv.space/install.sh | bash
                 </div>
                 <Link
                   href="/install"
