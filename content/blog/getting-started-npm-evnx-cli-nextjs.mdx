@@ -1,0 +1,443 @@
+---
+title: "Getting Started with @evnx/cli: Modern Environment Management for Next.js"
+slug: getting-started-npm-evnx-cli-nextjs
+publishedAt: "2026-03-06"
+updatedAt: "2026-03-06"
+excerpt: "Learn how to install and use @evnx/cli with npm and npx. A practical guide featuring Next.js integration and interactive setup workflows."
+coverImage: "/images/evnx-cli-hero.png"
+author: ajit
+tags: ["Next.js", "DevOps", "Security", "CLI", "TypeScript"]
+category: tutorial
+featured: true
+draft: false
+canonical: "https://www.npmjs.com/package/@evnx/cli"
+relatedSlugs: ["hidden-history-env-ruby-dotenv-rust-evnx", "nextjs-env-validation-best-practices"]
+readTime: 5
+---
+
+# Getting Started with @evnx/cli: Modern Environment Management for Next.js
+
+Managing environment variables doesn't have to be a source of friction. With **@evnx/cli**, you get a unified, interactive, and secure way to handle `.env` files across your Next.js projects — all from your terminal.
+
+In this guide, we'll walk through:
+- Installing `@evnx/cli` via npm or npx
+- Verifying your installation
+- Running the interactive `evnx init` setup
+- Integrating it into a fresh Next.js + Supabase demo app
+
+> 💡 **Note**: This guide covers the essential commands to get started. For advanced usage (`validate`, `scan`, `convert`, etc.), check the (NEED TO UPDATE) [official documentation](https://www.npmjs.com/package/@evnx/cli).
+
+---
+
+## 📦 Installation: npm Ecosystem
+
+### Option 1: Global Install (Recommended)
+```bash
+npm install -g @evnx/cli
+```
+
+### Option 2: Use with `npx` (No Install)
+Perfect for trying it out or CI/CD pipelines:
+```bash
+npx @evnx/cli init
+```
+
+### Option 3: Local Project Dependency
+```bash
+npm install -D @evnx/cli
+```
+
+---
+
+## ✅ Verify Installation
+
+Once installed, confirm everything is working:
+
+```bash
+# Check version via npx
+npx @evnx/cli --version
+# Output: evnx 0.2.1
+
+# Or if installed globally
+evnx --version
+# Output: evnx 0.2.1
+```
+
+### Get Help
+```bash
+evnx --help
+```
+
+<details>
+<summary>View available commands</summary>
+
+```
+Manage .env files — validation, secret scanning, and format conversion
+
+Usage: evnx [OPTIONS] <COMMAND>
+
+Commands:
+  init         Interactive project setup — generates .env.example
+  add          Add environment variables to existing .env files
+  validate     Check .env against .env.example, find issues
+  scan         Detect secrets that look real (AWS keys, tokens, etc.)
+  diff         Compare .env vs .env.example — show missing/extra vars
+  convert      Transform to different formats (JSON, YAML, shell, etc.)
+  migrate      Full migration workflow to secret managers
+  sync         Keep .env and .env.example in sync
+  template     Generate config files from templates
+  backup       Create encrypted backup of .env
+  restore      Restore from encrypted backup
+  doctor       Check .env files, Git config, project structure, and security
+  completions  Generate shell completions
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose   Enable verbose output
+  -q, --quiet     Suppress non-essential output
+      --no-color  Disable colored output
+  -h, --help      Print help
+  -V, --version   Print version
+```
+
+</details>
+
+---
+
+
+## 🚀 Quick Start: Interactive Setup with `evnx init`
+
+The heart of `@evnx/cli` is its interactive initialization. Run:
+
+```bash
+evnx init
+```
+
+You'll see a clean, guided interface:
+
+```
+┌─ evnx init ──────────────────────────────────────────────────────────────┐
+│ Set up environment variables for your project                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+How do you want to start?:
+  📄 Blank (create empty .env files)
+> 🔷 Blueprint (use pre-configured stack)
+  🏗️  Architect (build custom stack)
+```
+
+### Option A: 📄 Blank Template
+
+Select **Blank** for a minimal setup:
+
+```
+┌─ evnx init ──────────────────────────────────────────────────────────────┐
+│ Set up environment variables for your project                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+How do you want to start?: 📄 Blank (create empty .env files)
+
+┌─ Blank Template ──────────────────────────────────────────┐
+│ Creating minimal .env files                              │
+└──────────────────────────────────────────────────────────┘
+
+✓ Created .env from template
+✓ Created empty .env.example
+ℹ️ Tip: Run 'evnx add' to add variables interactively
+
+Next steps:
+  1. Edit .env and replace placeholder values
+  2. Never commit .env to version control
+  3. Run 'evnx validate' to check configuration
+  4. Use 'evnx add' to add more variables later
+```
+
+Perfect for custom projects or when you want full control.
+
+### Option B: 🔷 Blueprint Mode (Recommended for Next.js)
+
+Select **Blueprint** to leverage pre-configured stacks:
+
+```
+┌─ evnx init ──────────────────────────────────────────────────────────────┐
+│ Set up environment variables for your project                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+How do you want to start?: 🔷 Blueprint (use pre-configured stack)
+
+┌─ Blueprint Mode ──────────────────────────────────────────┐
+│ Select a pre-configured stack                            │
+└──────────────────────────────────────────────────────────┘
+
+Choose a stack blueprint::
+  Go Cloud Native (Gin + Kafka + Postgres)
+  Laravel V-Stack (Laravel + Vue + MySQL)
+  Django Secure (Django + Postgres + Celery)
+  App Backend (Node + Firebase)
+  T3 Turbo (Next.js + Clerk + Prisma)
+  SEO Content Stack (Nuxt + S3 + Stripe)
+  Modern MERN (Vite + Express + MongoDB)
+> Supabase Starter (Next.js + Supabase)
+  Rust Speedstack (Axum + SQLx + Postgres)
+  AI/ML Backend (FastAPI + Redis + S3)
+```
+
+Select **Supabase Starter (Next.js + Supabase)** for a zero-backend architecture:
+
+```
+Choose a stack blueprint:: Supabase Starter (Next.js + Supabase)
+   Zero-backend architecture using Supabase as a Platform.
+
+📋 Preview:
+📦 17 variables
+  • service ×9
+  • infra ×4
+  • framework ×4
+  Categories: API, Application, Auth, Backend-as-a-Service, Deployment Platform, Email, Payments
+Generate .env files with these variables? [Y/n]
+```
+
+Type `Y` and press Enter. You'll get:
+- A populated `.env.example` with 17 relevant variables
+- An empty `.env` ready for your secrets
+- Proper `.gitignore` entries (if not already present)
+
+### Option C: 🏗️ Architect Mode (Build Custom Stack)
+
+Select **Architect** when you need full control over your stack composition:
+
+```
+┌─ evnx init ──────────────────────────────────────────────────────────────┐
+│ Set up environment variables for your project                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+How do you want to start?: 🏗️  Architect (build custom stack)
+
+┌─ Architect Mode ──────────────────────────────────────────────────────────────┐
+│ Build your custom stack: language → framework → services → infra             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Select your primary language:: JavaScript / TypeScript
+Select your framework:: NestJS
+Select services you'll use (Space to toggle, Enter to confirm):: [Databases] Redis
+Select deployment/infrastructure (optional):: [Infra] gitlab_ci
+
+📋 Preview:
+📦 12 variables
+  • service ×5
+  • infra ×3
+  • framework ×4
+  Categories: Application, CI/CD, Cache, Connection, Database, Security
+Generate .env files with these variables? [Y/n]
+```
+
+Type `Y` and press Enter to generate a tailored `.env.example` with:
+
+```env
+# Architect Custom Stack - Environment Template
+# Generated by @evnx/cli • DO NOT COMMIT REAL VALUES
+
+# Application
+NODE_ENV=development
+PORT=3000
+APP_SECRET=
+
+# Framework: NestJS
+NESTJS_APP_NAME=
+NESTJS_GLOBAL_PREFIX=api
+
+# Service: Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# Infrastructure: GitLab CI
+CI_REGISTRY=
+CI_REGISTRY_USER=
+CI_REGISTRY_PASSWORD=
+CI_KUBECONFIG_CONTENT=
+
+# Security
+JWT_SECRET=
+ENCRYPTION_KEY=
+```
+
+**When to use Architect Mode:**
+- ✅ You're building a custom microservices architecture
+- ✅ Your stack doesn't match any pre-configured blueprint
+- ✅ You need fine-grained control over which services get env vars
+- ✅ You're integrating with non-standard infrastructure (GitLab CI, custom K8s, etc.)
+
+**Pro Tip**: Use `Space` to toggle multiple services during selection, and `Enter` to confirm. You can always run `evnx add` later to append more variables.
+
+---
+
+## 🧪 Hands-On: Next.js + Supabase Demo App
+
+Let's build a real example from scratch.
+
+### Step 1: Create a Next.js App
+```bash
+npx create-next-app@latest evnx-supabase-demo --typescript --tailwind --app
+cd evnx-supabase-demo
+```
+
+### Step 2: Initialize @evnx/cli
+```bash
+# Install globally for easy CLI access
+npm install -g @evnx/cli
+
+# Run interactive setup
+evnx init
+# → Choose: 🔷 Blueprint → Supabase Starter (Next.js + Supabase)
+```
+
+### Step 3: Review Generated Files
+After setup, you'll have:
+
+```bash
+.env.example          # Documented template (commit this)
+.env                  # Your secrets (gitignored)
+.env.local            # Local overrides (gitignored)
+```
+
+Sample `.env.example` content:
+```env
+# Supabase Starter - Environment Template
+# Generated by @evnx/cli • DO NOT COMMIT REAL VALUES
+
+# Supabase Config
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Auth
+NEXT_PUBLIC_AUTH_ENABLED=true
+AUTH_SECRET=
+
+# App Config
+NEXT_PUBLIC_APP_URL=
+NODE_ENV=development
+
+# Email (Resend)
+RESEND_API_KEY=
+NEXT_PUBLIC_FROM_EMAIL=
+
+# Payments (Stripe)
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+
+# Feature Flags
+ENABLE_BETA_FEATURES=false
+MAX_UPLOAD_SIZE_MB=10
+```
+
+### Step 4: Populate Your `.env`
+```bash
+# Copy template to your local env
+cp .env.example .env
+
+# Edit .env with your actual values from Supabase Dashboard
+# ⚠️ Never commit this file!
+```
+
+### Step 5: Verify Setup
+```bash
+# Quick validation
+evnx --version
+# Output: evnx 0.2.1
+
+# Check help for next steps
+evnx --help
+```
+
+### Step 6: Use in Your Next.js Code
+```typescript
+// lib/supabase/client.ts
+import { createBrowserClient } from '@supabase/ssr'
+
+export const createClient = () =>
+  createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+```
+
+```typescript
+// app/page.tsx
+export default function Home() {
+  return (
+    <main>
+      <h1>Supabase + Next.js + evnx ✅</h1>
+      <p>Environment variables managed securely.</p>
+    </main>
+  )
+}
+```
+
+### Step 7: Add to Your Workflow (Optional)
+Update `package.json`:
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "env:setup": "evnx init",
+    "env:check": "evnx validate"
+  }
+}
+```
+
+Add to `.gitignore` (if missing):
+```gitignore
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# evnx backups
+.env.backup*
+```
+
+---
+
+## 🎯 Why This Matters
+
+| Before @evnx/cli | After @evnx/cli |
+|-----------------|-----------------|
+| Manual `.env.example` maintenance | Interactive generation with stack-aware templates |
+| Guessing which vars your stack needs | Pre-configured blueprints (Supabase, T3, etc.) |
+| Risk of committing secrets | Built-in awareness + `scan` command (coming soon) |
+| Onboarding friction for new devs | One-command setup: `evnx init` |
+
+---
+
+## 🔜 What's Next?
+
+You now have a secure, documented environment setup for your Next.js app. From here:
+
+1. **Explore more commands**: Run `evnx --help` to discover `validate`, `scan`, `convert`, and more.
+2. **Add variables interactively**: Try `evnx add` to safely append new env vars.
+3. **Validate before commit**: Use `evnx validate` in CI/CD or pre-commit hooks.
+4. **Sync across environments**: Keep `.env` and `.env.example` aligned with `evnx sync`.
+
+---
+
+## 📚 Resources
+
+- 📦 [npm package: @evnx/cli](https://www.npmjs.com/package/@evnx/cli)
+- 💬 [Report issues or request features](https://github.com/evnx/cli/issues)
+- 🤝 [Contributing guide](https://github.com/evnx/cli/blob/main/CONTRIBUTING.md)
+
+---
+
+> **💬 Your Turn**: Which blueprint will you try first? Drop a comment or open a discussion — let's build better env workflows together. 🛠️✨
+
+*Found this helpful? Share it with your team!*
+`npx @evnx/cli` • `v0.2.1` • Built with ❤️ for Next.js developers
+
+---
+
+*Disclaimer: @evnx/cli is in active development. Always test in staging before production. Never commit real secrets to version control — use secret managers for production credentials.*
