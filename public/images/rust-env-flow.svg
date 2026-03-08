@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520" font-family="'IBM Plex Mono', 'Menlo', 'Consolas', monospace">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4b5563" />
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f97316" />
+    </marker>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="520" fill="#0d1117" rx="12"/>
+
+  <!-- Title -->
+  <text x="400" y="36" text-anchor="middle" fill="#4b5563" font-size="11" letter-spacing="2">ENVIRONMENT VARIABLE FLOW</text>
+  <text x="400" y="54" text-anchor="middle" fill="#6b7280" font-size="10">OS → dotenvy → Rust Application</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- LAYER 1: OS / Shell -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="60" y="70" width="680" height="120" rx="10" fill="#161b22" stroke="#21262d" stroke-width="1.5"/>
+
+  <!-- Layer label -->
+  <rect x="60" y="70" width="680" height="32" rx="10" fill="#1c2128"/>
+  <rect x="60" y="90" width="680" height="12" fill="#1c2128"/>
+  <circle cx="84" cy="86" r="5" fill="#ff5f57"/>
+  <circle cx="100" cy="86" r="5" fill="#febc2e"/>
+  <circle cx="116" cy="86" r="5" fill="#28c840"/>
+  <text x="400" y="91" text-anchor="middle" fill="#8b949e" font-size="11" letter-spacing="1">OS / SHELL ENVIRONMENT</text>
+
+  <!-- Env var pills -->
+  <rect x="100" y="112" width="260" height="28" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <text x="116" y="130" fill="#4b5563" font-size="11">$</text>
+  <text x="128" y="130" fill="#f97316" font-size="11">DATABASE_URL</text>
+  <text x="258" y="130" fill="#6b7280" font-size="11">=postgres://prod:5432/db</text>
+
+  <rect x="380" y="112" width="200" height="28" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <text x="396" y="130" fill="#4b5563" font-size="11">$</text>
+  <text x="408" y="130" fill="#f97316" font-size="11">PORT</text>
+  <text x="444" y="130" fill="#6b7280" font-size="11">=8080</text>
+
+  <rect x="596" y="112" width="126" height="28" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <text x="612" y="130" fill="#4b5563" font-size="11">$</text>
+  <text x="624" y="130" fill="#f97316" font-size="11">API_KEY</text>
+  <text x="672" y="130" fill="#6b7280" font-size="11">=••••</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ARROWS from OS splitting into two paths -->
+  <!-- ═══════════════════════════════════════════════════ -->
+
+  <!-- Left path: direct to app (production) -->
+  <line x1="220" y1="190" x2="220" y2="220" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="100" y="212" fill="#4b5563" font-size="9" letter-spacing="0.5">PRODUCTION</text>
+  <text x="100" y="224" fill="#4b5563" font-size="9">injected by orchestrator</text>
+  <text x="100" y="236" fill="#4b5563" font-size="9">(K8s, Docker, systemd)</text>
+
+  <!-- Right path: through dotenvy (dev) -->
+  <line x1="560" y1="190" x2="560" y2="220" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow-orange)"/>
+  <text x="610" y="212" fill="#f97316" font-size="9" letter-spacing="0.5">DEVELOPMENT</text>
+  <text x="610" y="224" fill="#6b7280" font-size="9">loaded from .env file</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- LAYER 2: dotenvy (dev path) -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="400" y="220" width="280" height="110" rx="10" fill="#161b22" stroke="#f97316" stroke-width="1" opacity="0.9"/>
+
+  <!-- dotenvy label -->
+  <rect x="400" y="220" width="280" height="30" rx="10" fill="#1a1008"/>
+  <rect x="400" y="238" width="280" height="12" fill="#1a1008"/>
+
+  <!-- crate icon -->
+  <rect x="418" y="227" width="16" height="16" rx="2" fill="#f97316" opacity="0.2" stroke="#f97316" stroke-width="1"/>
+  <text x="422" y="239" fill="#f97316" font-size="9">📦</text>
+  <text x="442" y="239" fill="#f97316" font-size="12" font-weight="bold">dotenvy</text>
+  <text x="510" y="239" fill="#4b5563" font-size="9">= "0.15"</text>
+
+  <!-- .env file representation -->
+  <rect x="418" y="262" width="90" height="54" rx="4" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <text x="430" y="277" fill="#4b5563" font-size="9">.env</text>
+  <line x1="418" y1="281" x2="508" y2="281" stroke="#21262d" stroke-width="1"/>
+  <text x="426" y="294" fill="#6b7280" font-size="8">DB_URL=...</text>
+  <text x="426" y="306" fill="#6b7280" font-size="8">PORT=3000</text>
+
+  <!-- dotenv() call -->
+  <rect x="520" y="262" width="145" height="54" rx="4" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <text x="532" y="279" fill="#8b949e" font-size="9">// main.rs</text>
+  <text x="532" y="293" fill="#60a5fa" font-size="10">dotenvy</text>
+  <text x="586" y="293" fill="#e6edf3" font-size="10">::dotenv()</text>
+  <text x="532" y="307" fill="#e6edf3" font-size="10">  .ok();</text>
+
+  <!-- Dev only badge -->
+  <rect x="418" y="323" width="80" height="0" rx="0"/>
+  <text x="680" y="325" text-anchor="end" fill="#f97316" font-size="8" opacity="0.6">dev only — not in production</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Merge arrows into Layer 3 -->
+  <!-- ═══════════════════════════════════════════════════ -->
+
+  <!-- Left (prod) arrow continues down -->
+  <line x1="220" y1="240" x2="220" y2="360" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- Right (dotenvy) arrow exits bottom of dotenvy box -->
+  <line x1="540" y1="330" x2="540" y2="360" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- Both merge horizontally into center -->
+  <line x1="220" y1="360" x2="380" y2="360" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="540" y1="360" x2="420" y2="360" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- Center merge point -->
+  <circle cx="400" cy="360" r="4" fill="#21262d" stroke="#4b5563" stroke-width="1.5"/>
+
+  <!-- Down into Layer 3 -->
+  <line x1="400" y1="360" x2="400" y2="385" stroke="#e6edf3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="412" y="375" fill="#6b7280" font-size="9">std::env::var()</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- LAYER 3: Rust Application -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="60" y="385" width="680" height="110" rx="10" fill="#161b22" stroke="#21262d" stroke-width="1.5"/>
+
+  <!-- Header bar -->
+  <rect x="60" y="385" width="680" height="30" rx="10" fill="#0c1a2e"/>
+  <rect x="60" y="403" width="680" height="12" fill="#0c1a2e"/>
+  <text x="400" y="405" text-anchor="middle" fill="#60a5fa" font-size="11" letter-spacing="1">RUST APPLICATION</text>
+
+  <!-- Config struct code -->
+  <text x="120" y="432" fill="#8b949e" font-size="10">pub struct </text>
+  <text x="196" y="432" fill="#f0883e" font-size="10">Config</text>
+  <text x="232" y="432" fill="#e6edf3" font-size="10"> {</text>
+
+  <text x="140" y="448" fill="#79c0ff" font-size="10">  database_url</text>
+  <text x="248" y="448" fill="#e6edf3" font-size="10">: </text>
+  <text x="260" y="448" fill="#7ee787" font-size="10">String</text>
+  <text x="302" y="448" fill="#e6edf3" font-size="10">,</text>
+
+  <text x="140" y="463" fill="#79c0ff" font-size="10">  port</text>
+  <text x="175" y="463" fill="#e6edf3" font-size="10">: </text>
+  <text x="187" y="463" fill="#7ee787" font-size="10">u16</text>
+  <text x="210" y="463" fill="#e6edf3" font-size="10">,</text>
+
+  <text x="140" y="478" fill="#79c0ff" font-size="10">  api_key</text>
+  <text x="196" y="478" fill="#e6edf3" font-size="10">: </text>
+  <text x="208" y="478" fill="#7ee787" font-size="10">String</text>
+  <text x="250" y="478" fill="#e6edf3" font-size="10">,</text>
+
+  <text x="120" y="490" fill="#e6edf3" font-size="10">}</text>
+
+  <!-- type-safe badge -->
+  <rect x="480" y="425" width="90" height="22" rx="11" fill="#0d3349" stroke="#60a5fa" stroke-width="1"/>
+  <text x="525" y="440" text-anchor="middle" fill="#60a5fa" font-size="9">🛡 type-safe</text>
+
+  <!-- validated badge -->
+  <rect x="580" y="425" width="90" height="22" rx="11" fill="#0d2d1a" stroke="#7ee787" stroke-width="1"/>
+  <text x="625" y="440" text-anchor="middle" fill="#7ee787" font-size="9">✓ validated</text>
+
+  <!-- Arc/AppState -->
+  <rect x="480" y="455" width="190" height="38" rx="6" fill="#0d1117" stroke="#21262d" stroke-width="1"/>
+  <text x="492" y="470" fill="#8b949e" font-size="9">// shared across handlers</text>
+  <text x="492" y="484" fill="#60a5fa" font-size="9">Arc</text>
+  <text x="510" y="484" fill="#e6edf3" font-size="9">&lt;Config&gt; → AppState</text>
+
+ 
+</svg>
