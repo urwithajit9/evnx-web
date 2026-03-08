@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge-status';
 import { Check } from 'lucide-react';
+import { WaitlistForm } from '@/components/ui/waitlist-form';
+
 
 export const metadata = {
   title: 'Pricing',
@@ -139,18 +141,24 @@ export default function PricingPage() {
 
           <div className="mt-16 bg-bg-surface border border-border-muted rounded-lg p-8 max-w-3xl mx-auto text-center">
             <h3 className="text-2xl font-serif font-bold mb-3">
-              Cloud features launching Q2 2024
+              Cloud features launching Q4 2026
             </h3>
             <p className="text-text-secondary mb-6">
               Join the waitlist to be notified when Pro and Team tiers become available.
             </p>
             <div className="flex gap-4 justify-center">
-              <input
+              {/* <input
                 type="email"
                 placeholder="your@email.com"
                 className="flex-1 bg-bg-base border border-border-muted rounded px-4 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
-              <Button>Notify Me</Button>
+              <Button>Notify Me</Button> */}
+              <WaitlistForm
+  source="pricing-page"
+  buttonText="Notify Me"
+  placeholder="your@email.com"
+  compact
+/>
             </div>
           </div>
         </div>

@@ -1,0 +1,340 @@
+---
+title: "Using evnx with AI Coding Agents"
+slug: "agent-skills-envx"
+section: "integrations"
+order: 5
+publishedAt: "2026-03-07"
+updatedAt: ""
+excerpt: "Install evnx knowledge into Claude Code, Cursor, GitHub Copilot, and 30+ other AI coding agents. One command. Persists across every project."
+difficulty: "beginner"
+timeToComplete: "10 minutes"
+tags: ["cli", "devops", "secrets", "productivity", "open-source"]
+evnxVersion: "0.2.0"
+prerequisites:
+  - "getting-started/installation"
+  - "getting-started/quick-start"
+draft: true
+category: "tutorial"
+---
+
+<Difficulty level="beginner" time="10 minutes" />
+<VersionBadge version="0.2.0" />
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/getting-started/quick-start">Quick Start</Prerequisite>
+</Prerequisites>
+
+## Overview
+
+evnx publishes two **agent skills** to the [Agent Skills ecosystem](https://skills.sh) — an open standard supported by 30+ AI coding agents. Once installed, your agent has a persistent, versioned reference for evnx commands and `.env` best practices that activates automatically when the task is relevant.
+
+This guide covers installing both skills, verifying the installation, committing the lock file for your team, and understanding when each skill activates.
+
+## What you'll set up
+
+- evnx installed and verified in your environment
+- Both agent skills installed into your coding agent
+- `skills-lock.json` committed so teammates get the same skill versions
+- `.gitignore` updated to exclude agent-specific config folders
+
+## Installing evnx
+
+<Step number={1} title="Install evnx">
+
+The skills teach your agent to use evnx. evnx must be installed first.
+
+<CodeTabs>
+
+<Tab label="macOS / Linux">
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+</Tab>
+
+<Tab label="Cargo">
+
+```bash
+# Core features — validate, scan, diff, convert, sync
+cargo install evnx
+
+# All features — adds migrate and encrypted backup
+cargo install evnx --features full
+```
+
+</Tab>
+
+<Tab label="npm">
+
+```bash
+npm install -g @evnx/cli
+```
+
+</Tab>
+
+<Tab label="pip">
+
+```bash
+pip install evnx
+```
+
+</Tab>
+
+<Tab label="Windows (PowerShell)">
+
+```powershell
+# Requires Rust — install from https://rustup.rs first
+cargo install evnx --features full
+```
+
+</Tab>
+
+</CodeTabs>
+
+Verify the install:
+
+```bash
+evnx --version
+```
+
+<TerminalOutput>
+evnx 0.2.1
+</TerminalOutput>
+
+</Step>
+
+## Installing the agent skills
+
+<Step number={2} title="Install both skills">
+
+Navigate to your project directory, then run:
+
+```bash
+npx skills add urwithajit9/agent-skills
+```
+
+The first time you run this, `npx` prompts you to install the `skills` CLI package from npm. Type `y` to proceed.
+
+<TerminalOutput>
+◇  Installation Summary ───────────────────╮
+│                                          │
+│  ~/.agents/skills/dotenv-best-practices  │
+│    universal: OpenCode, Codex            │
+│    symlink → Claude Code                 │
+│                                          │
+├──────────────────────────────────────────╯
+│
+◇  Security Risk Assessments ───────────────────────────────────────────╮
+│                                                                       │
+│                         Gen               Socket            Snyk      │
+│  dotenv-best-practices  Safe              0 alerts          Low Risk  │
+│                                                                       │
+│  Details: https://skills.sh/urwithajit9/agent-skills                  │
+│                                                                       │
+├───────────────────────────────────────────────────────────────────────╯
+│
+◇  Proceed with installation?
+│  Yes
+│
+◇  Installation complete
+
+│
+◇  Installed 1 skill ────────────────────────╮
+│                                            │
+│  ✓ ~/.agents/skills/dotenv-best-practices  │
+│    universal: OpenCode, Codex              │
+│    symlinked: Claude Code                  │
+│                                            │
+├────────────────────────────────────────────╯
+
+│
+└  Done!  Review skills before use; they run with full agent permissions.
+
+</TerminalOutput>
+
+The skills CLI clones the repository, detects your agent, and installs the skill folders into the correct config location.
+
+</Step>
+
+<Step number={3} title="Verify both skills are installed">
+
+```bash
+npx skills check
+```
+
+<TerminalOutput>
+```bash
+Checking for skill updates...
+
+Checking 2 skill(s) for updates...
+
+✓ All skills are up to date
+```
+</TerminalOutput>
+
+You should see two skills tracked: `dotenv-best-practices` and `evnx-cli`.
+
+</Step>
+
+### Installing skills individually
+
+If you only want one skill:
+
+```bash
+# .env best practices — works without evnx installed
+npx skills add urwithajit9/agent-skills/tree/main/skills/dotenv-best-practices
+
+# evnx CLI reference — requires evnx to be installed
+npx skills add urwithajit9/agent-skills/tree/main/skills/evnx-cli
+```
+
+### Where skills are installed
+
+The skills CLI installs into your agent's config directory. These paths are developer-local and should not be committed.
+
+| Agent | Install location |
+|---|---|
+| Claude Code | `.claude/skills/` |
+| Cursor | `.cursor/skills/` |
+| GitHub Copilot | `.github/skills/` |
+| Windsurf | `.windsurf/skills/` |
+| Cline | `.cline/skills/` |
+| Roo | `.roo/skills/` |
+| Goose | `.goose/skills/` |
+
+## Committing the lock file
+
+<Step number={4} title="Update .gitignore and commit skills-lock.json">
+
+`skills-lock.json` pins the exact skill versions installed in this project — commit it so every teammate gets identical versions. The agent config folders are developer-local and go in `.gitignore`.
+
+```bash
+cat >> .gitignore << 'EOF'
+
+# Agent config — local per developer, not committed
+.agents/
+.claude/
+.cursor/
+.cline/
+.windsurf/
+.roo/
+.goose/
+EOF
+
+git add .gitignore skills-lock.json
+git commit -m "chore: add evnx agent skills"
+git push
+```
+
+After this, any teammate can run `npx skills add urwithajit9/agent-skills` and receive the same pinned skill versions.
+
+</Step>
+
+## How each skill activates
+
+Skills don't require explicit invocation. Your agent reads the skill content and decides when to apply it based on your prompt and the project context.
+
+### `dotenv-best-practices` activates when you ask about:
+
+- Setting up `.env` files for a new project
+- Managing environment variables in Django, FastAPI, Next.js, Vite, Rust, or Docker
+- Why a variable is `undefined` or `None` at runtime
+- How `NEXT_PUBLIC_` and `VITE_` prefix behavior works
+- Secrets handling in CI/CD pipelines
+- Docker Compose `env_file` errors
+- Creating or updating `.env.example`
+- The `"False"` is truthy bug in Python
+- Security review of an environment configuration
+
+This skill works without evnx installed. It covers `.env` fundamentals that apply to any project and any tool.
+
+### `evnx-cli` activates when you:
+
+- Ask the agent to validate, scan, or diff your `.env`
+- Need to convert config to another format (Kubernetes, Terraform, GitHub Actions, AWS, etc.)
+- Want to add secret scanning to a CI/CD pipeline
+- Ask about migrating secrets to AWS Secrets Manager, Doppler, or GitHub Actions
+- Mention `evnx` anywhere in your prompt
+- Ask about `.env` backup or encryption
+- Need a Kubernetes Secret manifest generated from your env vars
+
+## What each skill contains
+
+### `dotenv-best-practices`
+
+<FileTree>
+dotenv-best-practices/
+├── SKILL.md
+└── references/
+    ├── format-spec.md
+    ├── security-checklist.md
+    └── debugging.md
+</FileTree>
+
+`SKILL.md` covers: the five-file hierarchy, the `.gitignore` template, the `.env.example` pattern, framework-specific rules for Next.js, Vite, Django, Rust, and Docker, the boolean string trap with fixes in Python and TypeScript, startup validation patterns, and when to move from `.env` to a secrets manager.
+
+`references/` files load on demand — only when your agent needs that depth. The three files cover the `.env` format grammar and parser compatibility, the pre-deploy security checklist, and 10 common bugs with root cause analysis and fix for each.
+
+### `evnx-cli`
+
+<FileTree>
+evnx-cli/
+├── SKILL.md
+└── references/
+    ├── commands.md
+    ├── convert-formats.md
+    └── cicd-integration.md
+</FileTree>
+
+`SKILL.md` covers: all four install methods, feature flags and what each enables, a quick reference table of all commands, full syntax for `validate`, `scan`, `diff`, `convert`, `sync`, `init`, and `doctor`, extended command syntax for `migrate`, `backup`, `restore`, and `template`, the known array/JSON limitation with workarounds, and `.evnx.toml` configuration.
+
+`references/` files cover every flag for every command, all 14 conversion formats with example outputs, and full CI/CD recipes for GitHub Actions, GitLab CI, pre-commit, and Makefile.
+
+<Callout type="warning" title="Known limitation">
+  evnx does not support array or JSON values in `.env` files (e.g. `CORS=["a","b"]`). The skill documents this and the workaround — comma-separated strings or base64-encoded JSON. Your agent will not suggest these unsupported patterns.
+</Callout>
+
+## Keeping skills updated
+
+Skills are pinned in `skills-lock.json`. Pull updates when the skills repo changes:
+
+```bash
+npx skills check
+npx skills add urwithajit9/agent-skills
+```
+
+## Complete example
+
+Project structure after following this guide:
+
+<FileTree>
+your-project/
+├── .env
+├── .env.example
+├── .evnx.toml
+├── .gitignore
+├── skills-lock.json
+└── .github/
+    └── workflows/
+        └── validate.yml
+</FileTree>
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Only one skill appears during install | Not all files were pushed to the repo. Run `find . -name "SKILL.md"` inside `agent-skills` to verify both exist, then push. |
+| Skills installed but agent doesn't use them | Be explicit — mention `.env`, `evnx`, or the specific task in your prompt. |
+| `Unknown command: validate` | Use `npx skills check`, not `npx skills validate`. |
+| Agent config folder in `git status` | Add `.claude/`, `.cursor/`, etc. to `.gitignore`. |
+| Skills not reflecting recent updates | Run `npx skills add urwithajit9/agent-skills` again to pull the latest. |
+
+## Related
+
+- [evnx validate](/guides/commands/validate) — full flag reference for validation
+- [evnx scan](/guides/commands/scan) — secret detection patterns and options
+- [evnx convert](/guides/commands/convert) — all 14 output formats
+- [GitHub Actions integration](/guides/integrations/github-actions) — complete CI/CD setup
+- [Agent skills repository](https://github.com/urwithajit9/agent-skills) — source and issues

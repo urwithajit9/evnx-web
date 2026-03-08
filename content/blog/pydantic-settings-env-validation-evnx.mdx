@@ -1,0 +1,987 @@
+---
+title: "Stop Trusting Your .env Files Blindly: pydantic-settings + evnx for Bulletproof Config"
+slug: pydantic-settings-env-validation-evnx
+publishedAt: "2026-03-07"
+excerpt: "A deep dive into pydantic-settings for type-safe .env validation — compared against os.environ, python-dotenv, and python-decouple — and how evnx closes the security gaps they all leave open."
+author: community
+tags: ["python", "pydantic", "security", "devops", "configuration", "evnx", "dotenv"]
+category: tutorial
+featured: true
+draft: false
+---
+
+Every Python project that talks to the outside world has a `.env` file. And almost every Python project handles that `.env` file wrong — not dangerously wrong, just *subtly* wrong in ways that only bite you in production, at midnight, right before a demo.
+
+This post is about doing it right. We'll walk through every major approach to reading environment variables in Python, benchmark their trade-offs, and show how **pydantic-settings** combined with **[evnx](https://github.com/urwithajit9/evnx)** gives you the validation, safety, and developer experience that none of the alternatives offer on their own.
+
+---
+
+## The Problem with "Just Read the Environment"
+
+Before comparing tools, let's agree on what can go wrong when configuration handling is naive:
+
+```python
+# The classic footgun
+import os
+
+DATABASE_URL = os.environ["DATABASE_URL"]  # KeyError in prod if not set
+DEBUG = os.environ.get("DEBUG", "false")    # Is this the boolean False? No. It's a string.
+PORT = os.environ.get("PORT", 8000)         # Also a string — int() cast forgotten
+TIMEOUT = os.environ.get("TIMEOUT")         # None if missing, not 30
+```
+
+These bugs are invisible in development (where `.env` is present), catastrophic in production (where it may not be), and almost never caught in CI. The four failure modes above represent the majority of config-related production incidents:
+
+1. **Missing variables** crash with unhelpful `KeyError`
+2. **Type confusion** (`"false"` is truthy in Python)
+3. **Missing defaults** silently pass `None` to code that expects a value
+4. **No validation** — a `DATABASE_URL` pointing to `localhost` reaches production undetected
+
+Let's see how each tool addresses (or ignores) these problems.
+
+---
+
+## Approach 1: `os.environ` — The Baseline
+
+**What it is:** Python's built-in environment variable access. No dependencies, ships with the language.
+
+```python
+import os
+from pathlib import Path
+
+# Manually load a .env file (os.environ doesn't do this automatically)
+def load_dotenv_manually(path=".env"):
+    if not Path(path).exists():
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+
+load_dotenv_manually()
+
+# Usage — full manual type casting and validation
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
+DEBUG: bool = os.environ.get("DEBUG", "false").lower() in ("true", "1", "yes")
+PORT: int = int(os.environ.get("PORT", "8080"))
+ALLOWED_HOSTS: list = os.environ.get("ALLOWED_HOSTS", "").split(",")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is required")
+```
+
+**Pros:**
+- Zero dependencies
+- Always available
+- Full control
+
+**Cons:**
+- No automatic `.env` file loading
+- All type casting is manual and error-prone
+- No schema — validation is ad-hoc and scattered
+- No IDE autocomplete on config values
+- `os.environ` is a global mutable dict — not great for testing
+
+**Verdict:** Fine for scripts with 2–3 variables. A maintenance nightmare for anything larger.
+
+---
+
+## Approach 2: `python-dotenv` — The Popular Choice
+
+**What it is:** The most widely used `.env` loader for Python. Reads `.env` files and populates `os.environ`. That's essentially all it does.
+
+```bash
+pip install python-dotenv
+```
+
+```python
+# .env
+DATABASE_URL=postgresql://user:pass@localhost/mydb
+DEBUG=true
+PORT=8080
+REDIS_URL=redis://localhost:6379
+ALLOWED_HOSTS=localhost,127.0.0.1
+```
+
+```python
+from dotenv import load_dotenv, dotenv_values
+import os
+
+# Basic usage — loads .env into os.environ
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+DEBUG = os.getenv("DEBUG", "false")
+PORT = int(os.getenv("PORT", "8080"))
+
+# More control: load from specific path, override existing vars
+load_dotenv(".env.production", override=True)
+
+# Load without touching os.environ
+config = dotenv_values(".env")
+print(config["DATABASE_URL"])  # Always a string
+
+# Useful for multiple environments
+import os
+env = os.getenv("APP_ENV", "development")
+load_dotenv(f".env.{env}", override=True)
+load_dotenv(".env")  # fallback
+```
+
+**Advanced feature: `find_dotenv()`**
+
+```python
+from dotenv import load_dotenv, find_dotenv
+
+# Walks up the directory tree to find the nearest .env
+load_dotenv(find_dotenv())
+```
+
+**Pros:**
+- Simple, well-documented, widely supported
+- Handles most common `.env` syntax including comments and quotes
+- `find_dotenv()` is helpful in monorepos
+- Works anywhere `os.environ` does
+
+**Cons:**
+- Everything is still a string — you still cast manually
+- No validation of any kind
+- No schema, no required fields enforcement
+- No IDE support for config keys
+- Still relies on `os.environ` global state
+
+**Verdict:** A great first step. Solves the file-loading problem but nothing else. Most projects outgrow it within a few months.
+
+---
+
+## Approach 3: `python-decouple` — The Typed Loader
+
+**What it is:** A step up from `python-dotenv` — reads from `.env` or `.ini` files AND provides type casting and default values in a cleaner API.
+
+```bash
+pip install python-decouple
+```
+
+```python
+# .env (same format as dotenv)
+DATABASE_URL=postgresql://user:pass@localhost/mydb
+DEBUG=True
+PORT=8080
+ALLOWED_HOSTS=localhost,127.0.0.1
+```
+
+```python
+from decouple import config, Csv, Choices
+
+# Type casting built in
+DATABASE_URL: str = config("DATABASE_URL")
+DEBUG: bool = config("DEBUG", default=False, cast=bool)
+PORT: int = config("PORT", default=8080, cast=int)
+
+# Csv helper for list-type values
+ALLOWED_HOSTS: list = config("ALLOWED_HOSTS", default="localhost", cast=Csv())
+
+# Choices validation
+LOG_LEVEL: str = config(
+    "LOG_LEVEL",
+    default="INFO",
+    cast=Choices(["DEBUG", "INFO", "WARNING", "ERROR"])
+)
+```
+
+**python-decouple's search priority** (unlike dotenv, it doesn't pollute `os.environ`):
+
+1. Environment variables already set in the shell
+2. `.env` file
+3. `.env.ini` / `settings.ini` files
+4. Default value from `config()`
+
+**Pros:**
+- Built-in type casting — `cast=bool`, `cast=int`, `cast=Csv()`
+- `Choices()` for enum-like validation
+- Doesn't mutate `os.environ`
+- Cleaner than `os.getenv()` + manual casts
+- Supports `.ini` files as an alternative
+
+**Cons:**
+- No schema — config is still scattered across the codebase
+- Validation is per-variable, not centralized
+- No nested settings
+- No complex type validation (URL format, IP ranges, etc.)
+- Relatively small community compared to dotenv/pydantic
+
+**Verdict:** Noticeably better than raw dotenv for type safety. Still doesn't give you a single source of truth for your config schema.
+
+---
+
+## Approach 4: `dynaconf` — The Powerful Generalist
+
+**What it is:** A feature-rich configuration library that supports multiple file formats, environment layering, and validators.
+
+```bash
+pip install dynaconf
+```
+
+```python
+# settings.toml
+[default]
+DATABASE_URL = "postgresql://localhost/dev"
+DEBUG = false
+PORT = 8080
+
+[production]
+DATABASE_URL = "@format {env[DATABASE_URL]}"
+DEBUG = false
+PORT = 443
+```
+
+```python
+from dynaconf import Dynaconf, Validator
+
+settings = Dynaconf(
+    envvar_prefix="MYAPP",
+    settings_files=["settings.toml", ".secrets.toml"],
+    environments=True,
+    load_dotenv=True,
+    validators=[
+        Validator("DATABASE_URL", must_exist=True),
+        Validator("PORT", gte=1024, lte=65535),
+        Validator("DEBUG", is_type_of=bool),
+    ]
+)
+
+# Access as attributes (typed)
+print(settings.DATABASE_URL)
+print(settings.PORT)
+
+# Validate on startup
+settings.validators.validate_all()
+```
+
+**Pros:**
+- Multi-format support (TOML, YAML, JSON, .env, Python)
+- Environment layering (default → staging → production)
+- Validators with range checks
+- Django and Flask extensions
+- `dynaconf` CLI for inspecting settings
+
+**Cons:**
+- Significant learning curve
+- Over-engineered for many use cases
+- Validators are less expressive than Pydantic
+- No IDE type inference from validators
+
+**Verdict:** Excellent for large multi-environment projects with complex config layering. Overkill for most apps.
+
+---
+
+## Approach 5: `pydantic-settings` — The Right Tool
+
+**What it is:** An official extension of [Pydantic v2](https://docs.pydantic.dev/) for settings management. Defines your entire config schema as a Pydantic model — with full type validation, nested models, custom validators, and first-class IDE support.
+
+```bash
+pip install pydantic-settings
+```
+
+### Basic Setup
+
+```python
+# config.py
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AnyUrl, SecretStr, field_validator, model_validator
+from typing import Literal
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",           # ignore unknown env vars
+    )
+
+    # Core app
+    app_name: str = "MyApp"
+    debug: bool = False
+    port: int = 8080
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    # Database — required, no default
+    database_url: AnyUrl
+
+    # Redis — optional
+    redis_url: AnyUrl | None = None
+
+    # Secrets use SecretStr — never accidentally logged
+    secret_key: SecretStr
+
+    # AWS credentials
+    aws_access_key_id: SecretStr | None = None
+    aws_secret_access_key: SecretStr | None = None
+    aws_region: str = "us-east-1"
+
+    # Comma-separated list from env
+    allowed_hosts: list[str] = ["localhost"]
+
+# Singleton pattern
+settings = Settings()
+```
+
+Now your entire configuration contract is in one place, one file, fully typed.
+
+---
+
+### Field Validators
+
+```python
+from pydantic import field_validator, AnyUrl
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    database_url: AnyUrl
+    port: int = 8080
+    allowed_hosts: list[str] = ["localhost"]
+
+    @field_validator("port")
+    @classmethod
+    def port_must_be_valid(cls, v: int) -> int:
+        if not (1024 <= v <= 65535):
+            raise ValueError(f"PORT must be between 1024 and 65535, got {v}")
+        return v
+
+    @field_validator("database_url")
+    @classmethod
+    def database_url_must_not_be_localhost_in_prod(cls, v: AnyUrl) -> AnyUrl:
+        import os
+        if os.getenv("APP_ENV") == "production" and "localhost" in str(v):
+            raise ValueError("DATABASE_URL cannot point to localhost in production")
+        return v
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def parse_allowed_hosts(cls, v):
+        # Accept comma-separated string from env var
+        if isinstance(v, str):
+            return [h.strip() for h in v.split(",") if h.strip()]
+        return v
+```
+
+---
+
+### Nested Settings Models
+
+```python
+from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class DatabaseSettings(BaseModel):
+    host: str = "localhost"
+    port: int = 5432
+    name: str
+    user: str
+    password: SecretStr
+    pool_size: int = 10
+    ssl: bool = False
+
+    @property
+    def url(self) -> str:
+        return (
+            f"postgresql://{self.user}:{self.password.get_secret_value()}"
+            f"@{self.host}:{self.port}/{self.name}"
+        )
+
+class RedisSettings(BaseModel):
+    host: str = "localhost"
+    port: int = 6379
+    db: int = 0
+    password: SecretStr | None = None
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_nested_delimiter="__",  # DB__HOST, DB__PORT, DB__NAME in .env
+    )
+
+    debug: bool = False
+    db: DatabaseSettings
+    redis: RedisSettings
+
+# .env
+# DB__HOST=prod-db.example.com
+# DB__PORT=5432
+# DB__NAME=myapp
+# DB__USER=appuser
+# DB__PASSWORD=supersecret
+# REDIS__HOST=cache.example.com
+# REDIS__PASSWORD=redissecret
+
+settings = Settings()
+print(settings.db.url)      # Full typed object
+print(settings.redis.host)  # Not a raw string from a dict
+```
+
+---
+
+### Multiple Environment Files
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        # Later files take priority
+        env_file=(".env", ".env.local", ".env.production"),
+        env_file_encoding="utf-8",
+    )
+
+    database_url: str
+    debug: bool = False
+```
+
+---
+
+### Secrets from Files (Docker Secrets / Kubernetes Secrets)
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        # Read from /run/secrets/ (Docker Swarm / Kubernetes)
+        secrets_dir="/run/secrets",
+    )
+
+    # Reads content of /run/secrets/database_password
+    database_password: SecretStr
+    api_key: SecretStr
+```
+
+---
+
+### Custom Sources
+
+```python
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
+import json
+import boto3
+
+class AWSSecretsManagerSource(PydanticBaseSettingsSource):
+    """Pull secrets from AWS Secrets Manager at startup."""
+
+    def get_field_value(self, field, field_name):
+        client = boto3.client("secretsmanager")
+        try:
+            secret = client.get_secret_value(SecretId=f"myapp/{field_name}")
+            return json.loads(secret["SecretString"]), field_name, False
+        except client.exceptions.ResourceNotFoundException:
+            return None, field_name, False
+
+    def __call__(self):
+        return {}
+
+class Settings(BaseSettings):
+    database_url: str
+    api_key: SecretStr
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        secrets_settings,
+    ):
+        # Priority: init > env vars > AWS > .env > secrets files
+        return (
+            init_settings,
+            env_settings,
+            AWSSecretsManagerSource(settings_cls),
+            dotenv_settings,
+            secrets_settings,
+        )
+```
+
+---
+
+### Testing with `pydantic-settings`
+
+One of the biggest wins: testing config is trivial because `Settings` is just a class.
+
+```python
+import pytest
+from pydantic import ValidationError
+from config import Settings
+
+def test_settings_load_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/testdb")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    settings = Settings(_env_file=None)  # skip .env file in tests
+    assert str(settings.database_url).startswith("postgresql://")
+
+def test_missing_required_field():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)
+    errors = exc_info.value.errors()
+    assert any(e["loc"] == ("database_url",) for e in errors)
+
+def test_localhost_blocked_in_prod(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/testdb")
+    monkeypatch.setenv("SECRET_KEY", "key")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+def test_settings_singleton():
+    from config import settings
+    assert settings is Settings()  # same instance
+```
+
+---
+
+## Head-to-Head Comparison
+
+| Feature | `os.environ` | `python-dotenv` | `python-decouple` | `dynaconf` | `pydantic-settings` |
+|---|---|---|---|---|---|
+| Loads `.env` files | ❌ Manual | ✅ | ✅ | ✅ | ✅ |
+| Type casting | ❌ Manual | ❌ Manual | ✅ Limited | ✅ | ✅ Full |
+| Schema / model | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Required fields | ❌ Manual | ❌ Manual | ✅ | ✅ | ✅ |
+| Custom validators | ❌ Manual | ❌ | ⚠️ Limited | ✅ | ✅ Full Pydantic |
+| Nested config | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Secret masking | ❌ | ❌ | ❌ | ❌ | ✅ `SecretStr` |
+| IDE autocomplete | ❌ | ❌ | ❌ | ⚠️ | ✅ Full |
+| Docker/K8s secrets | ❌ | ❌ | ❌ | ⚠️ | ✅ |
+| Multi-env files | ❌ | ✅ | ⚠️ | ✅ | ✅ |
+| Custom sources (AWS, Vault) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Testing ergonomics | ❌ Poor | ❌ Poor | ⚠️ | ✅ | ✅ Excellent |
+| Learning curve | None | Low | Low | High | Medium |
+| Dependencies | None | 1 | 1 | Many | pydantic v2 |
+
+---
+
+## The Gap That pydantic-settings Doesn't Cover
+
+`pydantic-settings` is excellent at answering: *"Is my config valid at runtime?"*
+
+But there's a class of problems it **cannot** address — problems that happen *before* runtime:
+
+- Is the `.env` file tracked by git?
+- Does the `.env` file contain high-entropy secrets that could be leaked?
+- Is `.env.example` out of sync with `.env` (so the next developer has no idea what to set)?
+- Are there placeholder values like `your-api-key-here` or `CHANGE_ME` that slipped through?
+- Would these secrets pass a pre-commit hook before they ever reach a remote?
+
+This is exactly the gap that **[evnx](https://github.com/urwithajit9/evnx)** fills.
+
+---
+
+## Where evnx Fits In: Before and After pydantic-settings
+
+Think of the stack this way:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  DEVELOPMENT MACHINE                                        │
+│                                                             │
+│  .env file                                                  │
+│      │                                                      │
+│      ▼                                                      │
+│  evnx scan ──── blocks commit if secrets/placeholders found │
+│  evnx doctor ── warns if .env is git-tracked or unsynced   │
+│      │                                                      │
+│      ▼ (commit passes)                                      │
+│                                                             │
+│  .env.example (safe, committed to repo)                     │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼ deploy
+┌─────────────────────────────────────────────────────────────┐
+│  RUNTIME (server / container)                               │
+│                                                             │
+│  Environment variables injected (from secrets manager,      │
+│  K8s secrets, Docker env, etc.)                             │
+│      │                                                      │
+│      ▼                                                      │
+│  pydantic-settings ── validates schema, types, constraints  │
+│      │                                                      │
+│      ▼                                                      │
+│  App starts (or fails loudly with a clear error)            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+evnx is the pre-flight check. pydantic-settings is the landing system.
+
+---
+
+## Installing evnx
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+Or visit [github.com/urwithajit9/evnx](https://github.com/urwithajit9/evnx) for platform-specific installation options.
+
+---
+
+## Practical Workflow: evnx + pydantic-settings Together
+
+### Step 1: Create your .env with evnx validation in mind
+
+```bash
+# .env (never committed)
+APP_NAME=MyApp
+APP_ENV=development
+DEBUG=true
+PORT=8080
+LOG_LEVEL=INFO
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+
+# Secrets — evnx will scan these
+SECRET_KEY=your-super-secret-key-here
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Comma-separated
+ALLOWED_HOSTS=localhost,127.0.0.1
+```
+
+### Step 2: Run evnx doctor to catch structural issues
+
+```bash
+evnx doctor
+
+# [DOCTOR] Running environment health check...
+# [ERROR]  .env is tracked by git in ./
+# [WARNING] SECRET_KEY contains placeholder pattern: 'your-...-here'
+# [WARNING] AWS_ACCESS_KEY_ID matches example AWS key pattern
+# [OK]     .env.example is present
+# [WARNING] .env.example is missing 2 keys present in .env: REDIS_URL, LOG_LEVEL
+# [INFO]   2 errors, 3 warnings
+```
+
+### Step 3: Run evnx scan before every commit
+
+```bash
+evnx scan
+
+# [SCAN] Scanning .env files...
+# [ERROR] AWS_SECRET_ACCESS_KEY matches high-entropy pattern (256-bit key)
+# [ERROR] Pattern: aws_secret (confidence: high)
+# [ERROR] SECRET_KEY matches generic high-entropy secret pattern
+# [INFO]  2 secrets detected. Commit blocked.
+# [TIP]   Use `evnx migrate --to aws-secrets-manager` to move secrets safely.
+```
+
+### Step 4: Install the pre-commit hook (do this once per repo)
+
+```bash
+evnx install-hook
+
+# [HOOK] Installing pre-commit hook to .git/hooks/pre-commit
+# [OK]   Hook installed. evnx scan will run on every commit.
+# [INFO] Average scan time: ~180ms
+```
+
+Now you can't accidentally commit `.env` with real secrets.
+
+### Step 5: Sync .env.example for your teammates
+
+```bash
+evnx sync --to .env.example
+
+# [SYNC] Comparing .env with .env.example...
+# [ADD]  REDIS_URL → added to .env.example as REDIS_URL=
+# [ADD]  LOG_LEVEL → added to .env.example as LOG_LEVEL=
+# [OK]   .env.example is now in sync with .env
+```
+
+### Step 6: Define your pydantic-settings schema
+
+```python
+# config.py
+from __future__ import annotations
+from functools import lru_cache
+from typing import Literal
+from pydantic import AnyUrl, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # App
+    app_name: str = "MyApp"
+    app_env: Literal["development", "staging", "production"] = "development"
+    debug: bool = False
+    port: int = 8080
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    # Database
+    database_url: AnyUrl
+
+    # Redis
+    redis_url: AnyUrl | None = None
+
+    # Secrets — SecretStr prevents accidental logging
+    secret_key: SecretStr
+
+    # AWS (optional, validated together)
+    aws_access_key_id: SecretStr | None = None
+    aws_secret_access_key: SecretStr | None = None
+    aws_region: str = "us-east-1"
+
+    # Hosts
+    allowed_hosts: list[str] = ["localhost", "127.0.0.1"]
+
+    # ── Validators ──────────────────────────────────────────
+
+    @field_validator("port")
+    @classmethod
+    def port_range(cls, v: int) -> int:
+        if not (1 <= v <= 65535):
+            raise ValueError(f"Port must be 1–65535, got {v}")
+        return v
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def parse_hosts(cls, v) -> list[str]:
+        if isinstance(v, str):
+            return [h.strip() for h in v.split(",") if h.strip()]
+        return v
+
+    @field_validator("database_url")
+    @classmethod
+    def no_localhost_in_prod(cls, v: AnyUrl, info) -> AnyUrl:
+        # info.data gives us already-validated sibling fields
+        app_env = info.data.get("app_env", "development")
+        if app_env == "production" and "localhost" in str(v):
+            raise ValueError(
+                "DATABASE_URL cannot use localhost in production. "
+                "Did you forget to set the real DB URL?"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def aws_credentials_complete(self) -> Settings:
+        """Both AWS keys must be set together or not at all."""
+        has_key = self.aws_access_key_id is not None
+        has_secret = self.aws_secret_access_key is not None
+        if has_key != has_secret:
+            raise ValueError(
+                "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must both be set or both be absent."
+            )
+        return self
+
+    # ── Derived helpers ──────────────────────────────────────
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env == "production"
+
+    @property
+    def is_debug(self) -> bool:
+        return self.debug and not self.is_production
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Cached settings singleton — safe to call anywhere."""
+    return Settings()
+```
+
+### Step 7: Use the settings throughout your app
+
+```python
+# main.py (FastAPI example)
+from fastapi import FastAPI
+from config import get_settings
+
+settings = get_settings()
+
+app = FastAPI(
+    title=settings.app_name,
+    debug=settings.is_debug,
+)
+
+@app.get("/healthz")
+async def health():
+    return {
+        "status": "ok",
+        "env": settings.app_env,
+        "debug": settings.is_debug,
+        # Secret never exposed — SecretStr renders as '**********'
+        "secret_configured": settings.secret_key is not None,
+    }
+```
+
+```python
+# database.py
+from sqlalchemy.ext.asyncio import create_async_engine
+from config import get_settings
+
+settings = get_settings()
+
+engine = create_async_engine(
+    str(settings.database_url),
+    pool_size=10,
+    echo=settings.is_debug,
+)
+```
+
+---
+
+## Migrating Secrets with evnx
+
+Once pydantic-settings is in place and validating your config at runtime, you can use evnx to migrate the actual secrets out of `.env` and into a proper secrets manager.
+
+```bash
+# Migrate secrets to AWS Secrets Manager
+evnx migrate --to aws-secrets-manager --prefix myapp/production
+
+# [MIGRATE] Migrating secrets from .env to AWS Secrets Manager...
+# [OK]  SECRET_KEY → myapp/production/SECRET_KEY
+# [OK]  AWS_SECRET_ACCESS_KEY → myapp/production/AWS_SECRET_ACCESS_KEY
+# [INFO] 2 secrets migrated. Update your app to use AWS SDK or custom source.
+# [TIP] Run `evnx scan` to confirm no secrets remain in .env
+```
+
+```bash
+# Or migrate to GitHub Actions secrets
+evnx migrate --to github-actions
+
+# [MIGRATE] Migrating to GitHub Actions secrets...
+# [OK]  SECRET_KEY → GitHub Actions secret SECRET_KEY
+# [OK]  DATABASE_URL → GitHub Actions secret DATABASE_URL
+```
+
+```bash
+# Create an encrypted backup before migration
+evnx backup --encrypt --output .env.backup.enc
+
+# [BACKUP] Creating encrypted backup...
+# [OK]  Written to .env.backup.enc (AES-256)
+# [INFO] Keep the decryption key separate from the backup.
+```
+
+After migration, your `.env` only has non-sensitive variables (ports, feature flags, app names), and pydantic-settings pulls secrets from the manager via a custom source.
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/validate-config.yml
+name: Validate Config
+
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Check .env.example is committed and complete
+        run: evnx doctor --check-example-only --fail-on-warning
+
+      - name: Validate pydantic-settings schema against .env.example
+        run: |
+          pip install pydantic-settings
+          # Use .env.example as a dry-run config source
+          python -c "
+          from pydantic_settings import BaseSettings, SettingsConfigDict
+          from config import Settings
+
+          class CISettings(Settings):
+              model_config = SettingsConfigDict(
+                  env_file='.env.example',
+                  env_file_encoding='utf-8',
+              )
+
+          # Will raise ValidationError if .env.example is structurally invalid
+          try:
+              CISettings()
+          except Exception as e:
+              # Expected: missing required secrets in CI
+              # Unexpected: field not found, wrong type, etc.
+              import sys
+              if 'field required' in str(e).lower() and 'secret' in str(e).lower():
+                  print('OK: Only expected secrets are missing')
+              else:
+                  print(f'FAIL: {e}')
+                  sys.exit(1)
+          "
+```
+
+### Pre-commit config
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: evnx-scan
+        name: evnx secret scan
+        language: system
+        entry: evnx scan
+        pass_filenames: false
+        always_run: true
+
+      - id: evnx-doctor
+        name: evnx env health check
+        language: system
+        entry: evnx doctor --fail-on-warning
+        pass_filenames: false
+        always_run: true
+```
+
+---
+
+## Summary
+
+Good configuration management has two distinct concerns that need different tools:
+
+**Security before runtime** — ensuring secrets never leave your machine accidentally, `.env` files never get committed, and your team always knows what variables are needed. This is **evnx**'s domain: `scan`, `doctor`, `sync`, `migrate`.
+
+**Correctness at runtime** — ensuring that whatever variables *are* present are the right type, within valid ranges, structurally consistent, and that missing required fields fail loudly with actionable errors instead of silent `None`s. This is **pydantic-settings**'s domain.
+
+Using them together, you get:
+
+- A pre-commit hook that blocks leaks (evnx)
+- A synced `.env.example` that onboards new developers in minutes (evnx)
+- A typed, validated, IDE-friendly config schema that fails fast at startup (pydantic-settings)
+- A migration path off flat `.env` files to real secret managers (evnx)
+
+The tools are complementary. Neither replaces the other.
+
+---
+
+## Resources
+
+- [pydantic-settings documentation](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)
+- [evnx on GitHub](https://github.com/urwithajit9/evnx)
+- [python-dotenv documentation](https://saurabh-kumar.com/python-dotenv/)
+- [python-decouple documentation](https://github.com/HBNetwork/python-decouple)
+- [dynaconf documentation](https://www.dynaconf.com/)
+- [Pydantic v2 validators](https://docs.pydantic.dev/latest/concepts/validators/)
+
+---
+
+*If this saved you from a midnight incident, share it with your team. And install the pre-commit hook. Especially if you're tired.*

@@ -1,93 +1,137 @@
-'use client';
+'use client'
+/**
+ * Terminal — animated typewriter terminal window
+ *
+ * Used on the homepage hero to demo evnx commands.
+ *
+ * Usage:
+ *   <Terminal lines={terminalLines} speed={28} />
+ *
+ * Line types:
+ *   prompt  — orange $ prefix, user input
+ *   output  — dim white, command output
+ *   success — green text
+ *   error   — red text
+ *   warning — yellow text
+ */
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react'
 
-interface TerminalLine {
-  type: 'prompt' | 'output' | 'error' | 'success' | 'warning';
-  content: string;
+type LineType = 'prompt' | 'output' | 'success' | 'error' | 'warning'
+
+export type TerminalLine = {
+  type: LineType
+  content: string
 }
 
-interface TerminalProps {
-  lines: TerminalLine[];
-  speed?: number;
-  blinking?: boolean;
+type Props = {
+  lines: TerminalLine[]
+  speed?: number        // ms per character
+  startDelay?: number   // ms before first character
+  loop?: boolean        // restart after finishing
 }
 
-export function Terminal({ lines, speed = 50, blinking = true }: TerminalProps) {
-  const [displayedLines, setDisplayedLines] = useState<(TerminalLine & { displayed: string })[]>([]);
-  const [currentLineIndex, setCurrentLineIndex] = useState(0);
-  const [currentCharIndex, setCurrentCharIndex] = useState(0);
+const lineStyles: Record<LineType, string> = {
+  prompt:  'text-brand-400',
+  output:  'text-terminal-text',
+  success: 'text-success',
+  error:   'text-danger',
+  warning: 'text-warning',
+}
+
+export function Terminal({ lines, speed = 30, startDelay = 600, loop = true }: Props) {
+  // Which lines are fully visible, plus partial char count of current line
+  const [completedLines, setCompletedLines] = useState<TerminalLine[]>([])
+  const [currentLineIdx, setCurrentLineIdx] = useState(0)
+  const [currentCharIdx, setCurrentCharIdx] = useState(0)
+  const [started, setStarted] = useState(false)
+
+  // Initial delay
+  useEffect(() => {
+    const t = setTimeout(() => setStarted(true), startDelay)
+    return () => clearTimeout(t)
+  }, [startDelay])
 
   useEffect(() => {
-    if (currentLineIndex >= lines.length) return;
-
-    const timer = setTimeout(() => {
-      const currentLine = lines[currentLineIndex];
-      const currentDisplayed = displayedLines[currentLineIndex]?.displayed || '';
-
-      if (currentCharIndex < currentLine.content.length) {
-        const newDisplayed = currentLine.content.slice(0, currentCharIndex + 1);
-        setDisplayedLines(prev => {
-          const updated = [...prev];
-          updated[currentLineIndex] = { ...currentLine, displayed: newDisplayed };
-          return updated;
-        });
-        setCurrentCharIndex(prev => prev + 1);
-      } else {
-        setDisplayedLines(prev => {
-          const updated = [...prev];
-          updated[currentLineIndex] = { ...currentLine, displayed: currentLine.content };
-          return updated;
-        });
-        setCurrentLineIndex(prev => prev + 1);
-        setCurrentCharIndex(0);
+    if (!started) return
+    if (currentLineIdx >= lines.length) {
+      // All lines done
+      if (loop) {
+        const t = setTimeout(() => {
+          setCompletedLines([])
+          setCurrentLineIdx(0)
+          setCurrentCharIdx(0)
+        }, 3000)
+        return () => clearTimeout(t)
       }
-    }, speed);
-
-    return () => clearTimeout(timer);
-  }, [currentLineIndex, currentCharIndex, lines, displayedLines, speed]);
-
-  const getLineColor = (type: string) => {
-    switch (type) {
-      case 'prompt':
-        return 'text-brand-500';
-      case 'success':
-        return 'text-success';
-      case 'error':
-        return 'text-danger';
-      case 'warning':
-        return 'text-warning';
-      default:
-        return 'text-terminal-text';
+      return
     }
-  };
+
+    const currentLine = lines[currentLineIdx]
+    const isPrompt = currentLine.type === 'prompt'
+
+    if (currentCharIdx < currentLine.content.length) {
+      // Type next character
+      const t = setTimeout(
+        () => setCurrentCharIdx(c => c + 1),
+        isPrompt ? speed : speed * 0.4  // output lines appear faster
+      )
+      return () => clearTimeout(t)
+    } else {
+      // Line complete — pause then move to next
+      const pauseAfter = isPrompt ? 180 : 80
+      const t = setTimeout(() => {
+        setCompletedLines(prev => [...prev, currentLine])
+        setCurrentLineIdx(i => i + 1)
+        setCurrentCharIdx(0)
+      }, pauseAfter)
+      return () => clearTimeout(t)
+    }
+  }, [started, currentLineIdx, currentCharIdx, lines, speed, loop])
+
+  const currentLine = currentLineIdx < lines.length ? lines[currentLineIdx] : null
+  const currentText = currentLine ? currentLine.content.slice(0, currentCharIdx) : ''
 
   return (
-    <div className="bg-terminal-bg border border-border-muted rounded-lg p-4 font-mono text-sm overflow-hidden">
-      <div className="space-y-1">
-        {displayedLines.map((line, idx) => (
-          <div key={idx} className="flex">
+    <div className="bg-terminal-bg border border-border-muted rounded-xl overflow-hidden shadow-2xl">
+      {/* Window chrome */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle bg-bg-surface">
+        <div className="w-3 h-3 rounded-full bg-danger/70" />
+        <div className="w-3 h-3 rounded-full bg-warning/70" />
+        <div className="w-3 h-3 rounded-full bg-success/70" />
+        <span className="ml-3 font-mono text-xs text-text-muted">evnx — terminal</span>
+      </div>
+
+      {/* Content */}
+      <div className="p-5 font-mono text-sm space-y-1 min-h-[320px]">
+        {completedLines.map((line, i) => (
+          <div key={i} className={`leading-relaxed ${lineStyles[line.type]}`}>
             {line.type === 'prompt' && (
-              <>
-                <span className="text-brand-500">$</span>
-                <span className="ml-2">{line.displayed}</span>
-                {idx === currentLineIndex && blinking && (
-                  <span className="ml-0.5 animate-pulse text-brand-500">|</span>
-                )}
-              </>
+              <span className="text-brand-500 select-none">$ </span>
             )}
-            {line.type !== 'prompt' && (
-              <span className={getLineColor(line.type)}>{line.displayed}</span>
-            )}
+            {line.content}
           </div>
         ))}
-        {currentLineIndex < lines.length && blinking && (
-          <div className="flex">
-            <span className="text-brand-500">$</span>
-            <span className="ml-0.5 animate-pulse text-brand-500">|</span>
+
+        {/* Currently typing line */}
+        {currentLine && (
+          <div className={`leading-relaxed ${lineStyles[currentLine.type]}`}>
+            {currentLine.type === 'prompt' && (
+              <span className="text-brand-500 select-none">$ </span>
+            )}
+            {currentText}
+            <span className="inline-block w-2 h-4 bg-brand-500 animate-pulse ml-0.5 align-middle" />
+          </div>
+        )}
+
+        {/* Idle cursor when nothing is typing */}
+        {!currentLine && !started && (
+          <div className="flex items-center gap-1">
+            <span className="text-brand-500">$ </span>
+            <span className="inline-block w-2 h-4 bg-brand-500 animate-pulse" />
           </div>
         )}
       </div>
     </div>
-  );
+  )
 }

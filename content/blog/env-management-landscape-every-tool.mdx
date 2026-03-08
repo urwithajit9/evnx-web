@@ -1,0 +1,857 @@
+---
+title: "The Complete Landscape of .env Management: Every Tool, Library, and CLI Across Every Stack"
+slug: "env-management-landscape-every-tool"
+publishedAt: "2026-03-07"
+updatedAt: ""
+excerpt: "From os.environ to dotenvy, from direnv to dotenvx — a developer-maintained map of every meaningful tool for loading, validating, auditing, and securing environment variables across Python, Node.js, Rust, Go, Java, and the shell."
+coverImage: "/blog/covers/env-management-landscape.png"
+author: "ajit"
+tags: ["cli", "devops", "secrets", "open-source", "productivity"]
+category: "deep-dive"
+readTime: 18
+featured: true
+draft: true
+canonical: ""
+relatedSlugs: ["getting-started-with-evnx", "scan-secrets-before-git-push", "ai-agent-skills-evnx"]
+---
+
+Every developer has a `.env` story. Mine ends with pushing AWS keys to a public GitHub repository at 2 AM during an Airflow refactor. Before I noticed, automated bots had already found them.
+
+That incident is why I built evnx. But building a tool in this space first requires understanding the full landscape — every library, CLI, shell extension, and framework integration that developers have built to solve variations of the same problem: *how do we separate configuration from code, manage it safely across environments, and stop secrets from leaking?*
+
+This post is a comprehensive reference. Use it as a map, not a tutorial. Every significant tool is represented. Where evnx fits is clear by the end — not because I say so, but because the gap it fills becomes obvious when you see the whole picture.
+
+---
+
+
+
+## The foundation: the .env file format
+
+Before the tools, the format. The `.env` file was introduced by Heroku in 2012 as part of their twelve-factor app methodology. The concept: store configuration as environment variables, separated from code. The format is intentionally simple:
+
+```bash
+DATABASE_URL=postgres://user:password@localhost/myapp
+API_KEY=sk_live_abc123
+DEBUG=false
+PORT=3000
+```
+
+A key-value pair per line. Comments with `#`. Variable substitution with `${VAR}`. No types. No arrays. No nesting.
+
+That simplicity is both the format's greatest strength and the source of every problem that all the tools below exist to solve.
+
+<Callout type="info" title="The twelve-factor app principle">
+  Factor III of the twelve-factor app methodology states that config should be stored in the environment — meaning anything that varies between deploys (development, staging, production). The .env format is the development-time mechanism for loading that config without setting OS-level variables by hand.
+</Callout>
+
+
+## The placement: Where the .env file  fit into 
+
+The following diagram illustrates how a `.env` file supplies configuration to an application.
+
+At the center is a `.env` file containing key–value pairs such as database URLs, API keys, and ports. 
+From this file, two main paths are shown: 
+
+**Shell-Level Injection**, where tools like `direnv` or `dotenvx` load the variables into the environment before the application starts so the process automatically inherits them, and 
+
+**In-App Library Loading**, where the application explicitly reads the `.env` file at runtime using libraries like `python-dotenv`, `dotenvy`, or `godotenv`. 
+After variables reach the process environment, a 
+
+**validation layer** can parse and enforce types (for example with tools like `pydantic-settings` or `envy`) to ensure required variables exist and have correct formats. Finally, the bottom section highlights operational tooling, such as the `evnx` CLI, which works directly with `.env` files to scan, diff, convert, or migrate environment configurations across systems.
+
+
+<Figure src="/images/how_env_works_simple.png" alt="How env file works in software development">
+  Figure 1: The role of env file in running a software.
+</Figure>
+
+---
+
+## Section 1: Shell-level tools — loading env before your app starts
+
+These tools operate at the shell layer. They load environment variables into your shell session or inject them at process invocation time, before any application code runs.
+
+### direnv — the gold standard for directory-scoped environments
+
+[direnv](https://direnv.net) is a shell extension that automatically loads and unloads environment variables based on which directory you're in. When you `cd` into a project, it evaluates a `.envrc` file and exports all variables to your shell. When you leave, it cleans up.
+
+```bash
+# Install (macOS)
+brew install direnv
+
+# Add to ~/.zshrc
+eval "$(direnv hook zsh)"
+
+# In your project
+echo 'dotenv' >> .envrc      # tells direnv to load .env
+direnv allow .               # trust this directory
+```
+
+direnv checks for a `.envrc` file (and optionally a `.env` file) in the current and parent directories before each prompt. If it exists and is authorized, it loads into a bash sub-shell and exports the resulting environment diff back to the current shell. It supports Bash, Zsh, Fish, and Tcsh.
+
+direnv is language-agnostic. It doesn't care if your project is Python, Go, or Rust. It works at the shell level and is a tool that many developers use alongside language-specific libraries, not instead of them.
+
+**Best for:** developers who work across many projects with different configurations and want automatic, per-directory environment isolation.
+
+### mise (formerly rtx) — polyglot tool version manager with env support
+
+[mise](https://mise.jdx.dev) started as a replacement for `asdf`, the polyglot runtime version manager. It has evolved into something broader: a single tool that manages runtime versions (Node.js, Python, Go, Ruby), sets project-specific environment variables, and runs tasks.
+
+```toml
+# mise.toml
+[tools]
+node = "22"
+python = "3.12"
+
+[env]
+DATABASE_URL = "postgres://localhost/myapp_dev"
+NODE_ENV = "development"
+```
+
+mise installs tool versions scoped to your project. If you go into the parent directory and try running `go version` or `node --version`, it shows different versions — because these tool versions are scoped to the project directory.
+
+direnv and mise both manage environment variables based on directory. They can sometimes conflict with each other because they both analyze the current environment before and after their hook commands are run. The official mise stance is to not combine them, though they usually work fine in practice.
+
+**Best for:** teams who want a single tool for both runtime version management and env configuration, replacing asdf + direnv with one configuration file.
+
+### devenv — Nix-powered reproducible dev environments
+
+[devenv](https://devenv.sh) is a layer on top of Nix that provides fully reproducible, declarative development environments. You declare what your project needs in `devenv.nix` and every developer gets an identical environment.
+
+```nix
+{ pkgs, ... }: {
+  packages = [ pkgs.postgresql pkgs.redis ];
+  env.DATABASE_URL = "postgres://localhost/myapp";
+  dotenv.enable = true;  # load .env file into the environment
+}
+```
+
+devenv activates your environment in under 100ms with precise Nix evaluation caching. It automatically detects all files accessed during evaluation and only re-evaluates what's necessary. It integrates with direnv for automatic activation when entering project directories.
+
+**Best for:** teams with strict reproducibility requirements — often found in open source projects, research settings, or infrastructure teams.
+
+### dotenvx run — cross-language process injection
+
+[dotenvx](https://dotenvx.com) (covered in detail in Section 6) also functions as a shell-level tool via `dotenvx run --`. It injects `.env` variables as a wrapper around any process:
+
+```bash
+dotenvx run -- node server.js
+dotenvx run -- python app.py
+dotenvx run -- go run main.go
+dotenvx run -f .env.production -- ./your-binary
+```
+
+By using `dotenvx run -- your-cmd`, you can inject your environment variables at runtime, ensuring uniform behavior across all languages, frameworks, and platforms.
+
+---
+
+## Section 2: Python
+
+Python's environment variable handling spans from the stdlib's `os` module to fully typed, validated config classes. The ecosystem has more options here than any other language.
+
+### `os.environ` — the stdlib baseline
+
+Every Python environment variable story starts here. `os.environ` is a mapping object that represents the current process environment:
+
+```python
+import os
+
+# Read a variable (raises KeyError if missing)
+db_url = os.environ["DATABASE_URL"]
+
+# Read with a default (never raises)
+debug = os.environ.get("DEBUG", "false")
+
+# Set a variable
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+
+# Check membership
+if "API_KEY" in os.environ:
+    ...
+```
+
+The standard library doesn't load `.env` files. It only reads variables already present in the process environment. For development, that means you either set them manually, use a shell tool like direnv, or use one of the libraries below.
+
+<Callout type="warning" title="The bool trap">
+  `os.environ.get("DEBUG", "false")` returns the string `"false"`, which is truthy in Python. `bool(os.environ.get("DEBUG", "false"))` is always `True`. This is the most common `.env` bug in Python applications.
+</Callout>
+
+
+
+### The History & Origin of Similar Package
+
+**django-dotenv (2013)**: This was the original project started by Jacob Kaplan-Moss. It was specifically designed to make Django development easier by loading .env files into os.environ via the manage.py file.
+There is another repo for [django-dotenv](https://github.com/jpadilla/django-dotenv) from José Padilla for Django.
+
+**python-dotenv (2014)**: Created by Saurabh Kumar, this project was based on Jacob’s original django-dotenv but was intended to be a more general-purpose, framework-agnostic Python library.
+
+**[python-decouple (2013)](https://github.com/HBNetwork/python-decouple)**: Created by Henrique Bastos, this library focuses on the strict separation of settings from code, ensuring your app remains agnostic of its environment while allowing configuration changes without redeployment. It provides a robust interface for loading .env or .ini files, featuring built-in type casting (e.g., converting strings to booleans or integers) and "fail-fast" validation for missing required variables.
+
+The "Standard": Today, python-dotenv is the widely recognized industry standard for general Python applications (Flask, FastAPI, scripts). While django-dotenv still exists, python-dotenv is significantly more popular and actively maintained.
+
+### python-dotenv — the most widely used loader
+
+[python-dotenv](https://github.com/theskumar/python-dotenv) (originally called `django-dotenv`, started by Django co-creator Jacob Kaplan-Moss in 2013) is the standard way to load `.env` files into `os.environ`.
+
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # loads .env from current dir or walks up the tree
+db_url = os.environ["DATABASE_URL"]
+```
+
+It also provides a CLI:
+
+```bash
+dotenv set DATABASE_URL "postgres://localhost/myapp"
+dotenv get DATABASE_URL
+dotenv run -- python app.py
+```
+
+python-dotenv is deliberately minimal. It doesn't validate types, doesn't enforce required variables, and doesn't provide defaults beyond what you build yourself.
+
+### pydantic-settings — typed, validated config for modern Python
+
+[pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) is the de facto standard for type-safe configuration in FastAPI, and increasingly in any Python application. It reads environment variables (and optionally `.env` files) into a Pydantic model with full type validation:
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
+    database_url: str
+    debug: bool = False
+    port: int = 8000
+    api_key: str
+
+settings = Settings()
+# Settings() raises ValidationError immediately if a required field is missing
+# or if a value can't be coerced to the declared type
+print(settings.port)  # int, not string
+```
+
+If you create a model that inherits from `BaseSettings`, the model initialiser will attempt to determine the values of fields not passed as keyword arguments by reading from the environment. This means your settings are validated at startup, not at the point of use.
+
+FastAPI recommends using pydantic-settings for loading settings from environment variables — it provides great utilities for handling settings from environment variables, with Pydantic model validation applied automatically.
+
+For Django specifically, [pydjantic](https://github.com/erhosen-libs/pydjantic) bridges pydantic-settings and Django's settings system.
+
+### django-environ — Django-specific loader
+
+[django-environ](https://django-environ.readthedocs.io) is popular in the Django community because it handles the DSN-style connection strings Django expects:
+
+```python
+import environ
+
+env = environ.Env(DEBUG=(bool, False))
+environ.Env.read_env()
+
+DATABASES = {"default": env.db()}          # reads DATABASE_URL
+CACHES = {"default": env.cache()}          # reads CACHE_URL
+EMAIL_CONFIG = env.email_url("EMAIL_URL")  # reads EMAIL_URL
+DEBUG = env("DEBUG")                       # bool-cast from env
+```
+
+The special value is its DSN parsers: `env.db()` takes a `DATABASE_URL` string like `postgres://user:pass@host/name` and returns a Django `DATABASES` dict. No manual parsing.
+
+### python-decouple — config from env or ini
+
+[python-decouple](https://github.com/HBNetwork/python-decouple) reads config from environment variables, `.env` files, and `.ini` files, with explicit type casting:
+
+```python
+from decouple import config
+
+DEBUG = config("DEBUG", default=False, cast=bool)
+PORT = config("PORT", default=8000, cast=int)
+```
+
+python-decouple loads settings from `.env` and `.ini` files. Variables are set with calls to instances of its `AutoConfig` class, which offers type-casting to convert strings to other Python types.
+
+### environs — human-friendly env parsing
+
+[environs](https://github.com/sloria/environs) is inspired by django-environ but with a more ergonomic API. It provides named type-cast methods:
+
+```python
+from environs import Env
+
+env = Env()
+env.read_env()
+
+DEBUG = env.bool("DEBUG", default=False)
+PORT = env.int("PORT", default=8000)
+DATABASE_URL = env.url("DATABASE_URL")
+```
+
+The environs README compares its approach to `os.environ` directly, justifying the additional features it provides. It separates config from code as suggested by the twelve-factor app methodology, while also combining environment variables and settings. It depends on python-dotenv internally.
+
+### starlette.config — FastAPI/Starlette's built-in
+
+Starlette includes its own config module that doesn't require python-dotenv:
+
+```python
+from starlette.config import Config
+
+config = Config(".env")
+
+DATABASE_URL = config("DATABASE_URL", cast=str)
+DEBUG = config("DEBUG", cast=bool, default=False)
+```
+
+Starlette offers a config module for working with environment variables and settings, which takes inspiration from python-decouple. It intuitively casts Boolean values, unlike the Python built-in `bool` type.
+
+### Quick comparison
+
+| Library | Load .env | Type casting | Validation | Django support | Framework |
+|---|---|---|---|---|---|
+| `os.environ` | ❌ | ❌ | ❌ | ✅ | Any |
+| python-dotenv | ✅ | ❌ | ❌ | ✅ | Any |
+| pydantic-settings | ✅ | ✅ | ✅ | via pydjantic | FastAPI/Any |
+| django-environ | ✅ | ✅ | Partial | ✅ (DSN) | Django |
+| python-decouple | ✅ | ✅ | Partial | ✅ | Any |
+| environs | ✅ | ✅ | Partial | ✅ | Any |
+| starlette.config | ✅ | ✅ | Partial | ❌ | Starlette/FastAPI |
+
+---
+
+## Section 3: Node.js and TypeScript / JavaScript
+
+The JavaScript ecosystem has the most tooling, the most fragmentation, and the most recent innovations in this space.
+
+### `process.env` — the baseline
+
+Node.js exposes environment variables through `process.env`, a plain object where every value is a string:
+
+```javascript
+const dbUrl = process.env.DATABASE_URL;
+const port = parseInt(process.env.PORT, 10) || 3000;
+const debug = process.env.DEBUG === "true";
+```
+
+No `.env` loading built in. The same bool-as-string trap from Python exists here. TypeScript adds the `process.env.SOME_VAR` being typed as `string | undefined` — which means you get type errors if you don't check for `undefined` first.
+
+### dotenv — the npm equivalent of Python's dotenv
+
+[dotenv](https://www.npmjs.com/package/dotenv) is one of the most downloaded npm packages ever. It loads a `.env` file into `process.env` with a single call:
+
+```javascript
+require("dotenv").config();
+// or
+import "dotenv/config";
+
+const dbUrl = process.env.DATABASE_URL;
+```
+
+Used in hundreds of millions of projects. The source of the `.env` convention in the Node.js ecosystem. Still widely used, though newer tools have addressed its limitations around type safety and multi-environment support.
+
+### @t3-oss/env — type-safe, schema-validated env for TypeScript
+
+[T3 Env](https://env.t3.gg) is the most significant advancement in Node.js env management in recent years. It wraps environment variables in a Zod schema (or any Standard Schema compliant validator), giving you type safety, runtime validation, and IDE autocompletion:
+
+```typescript
+import { createEnv } from "@t3-oss/env-core";
+import { z } from "zod";
+
+export const env = createEnv({
+  server: {
+    DATABASE_URL: z.url(),
+    API_KEY: z.string().min(1),
+  },
+  clientPrefix: "NEXT_PUBLIC_",
+  client: {
+    NEXT_PUBLIC_APP_URL: z.url(),
+  },
+  runtimeEnv: process.env,
+});
+
+// env.DATABASE_URL is typed as string, not string | undefined
+// Missing required vars throw at startup with a clear error message
+```
+
+T3 Env works with Zod, Valibot, ArkType, Typia, and other validators that support the Standard Schema specification.
+
+T3 Env allows you to define a Zod schema for your environment variables, ensuring they are present and of the correct type. As a bonus, you get autocompletion, which helps prevent misspelling or misremembering variable names.
+
+It has first-class integrations for Next.js (`@t3-oss/env-nextjs`) and Nuxt (`@t3-oss/env-nuxt`), correctly handling the server/client variable split and the bundling behavior of each framework.
+
+### envalid — validated, documented env for Node.js
+
+[envalid](https://github.com/af/envalid) provides a set of built-in validators for common types and a clean output object:
+
+```javascript
+import { cleanEnv, str, url, port, bool } from "envalid";
+
+const env = cleanEnv(process.env, {
+  DATABASE_URL: url(),
+  PORT: port({ default: 3000 }),
+  DEBUG: bool({ default: false }),
+  API_KEY: str({ docs: "https://example.com/api-keys" }),
+});
+
+env.PORT; // number, not string
+```
+
+When validation fails, envalid prints a clean summary of every missing or invalid variable. The `docs` field on each validator lets you link directly to where developers can get the value.
+
+### dotenv-safe / dotenv-vault
+
+[dotenv-safe](https://github.com/rolodato/dotenv-safe) loads `.env` like dotenv but requires all variables defined in `.env.example` to be present. It's a simple enforcement of the `.env.example` contract without any type system.
+
+[dotenv-vault](https://www.dotenv.org/docs/dotenv-vault/readme) is a newer product that provides encrypted `.env` storage synced across a team. It predates dotenvx but follows a similar encrypted-commit philosophy.
+
+### Vite and Next.js — framework-native env handling
+
+Modern JavaScript frameworks have built-in `.env` support with environment-specific file loading and client/server variable separation:
+
+```bash
+# Next.js convention
+.env               # loaded always
+.env.local         # loaded always, gitignored, overrides .env
+.env.development   # loaded in development
+.env.production    # loaded in production
+
+# Client-exposed variables require NEXT_PUBLIC_ prefix
+NEXT_PUBLIC_APP_URL=https://app.example.com
+DATABASE_URL=postgres://...        # server-only
+```
+
+Vite follows a similar convention with `VITE_` as the prefix for client-exposed variables. These frameworks enforce the prefix rule at build time — referencing a server variable in client code produces a build error.
+
+### znv — Zod env parsing without a framework
+
+[znv](https://github.com/lostfictions/znv) is a minimal library that parses environment variables using Zod schemas without any framework assumptions:
+
+```typescript
+import { parseEnv } from "znv";
+import { z } from "zod";
+
+export const { PORT, DATABASE_URL, DEBUG } = parseEnv(process.env, {
+  PORT: z.number().int().positive().default(3000),
+  DATABASE_URL: z.url(),
+  DEBUG: z.boolean().default(false),
+});
+```
+
+znv wraps each Zod schema passed to `parseEnv` in a preprocessor that coerces strings to the expected type. For example, `z.coerce.boolean()` would parse `"false"` as `true` (since the string is truthy in JavaScript), but znv correctly coerces `"false"` to `false`.
+
+---
+
+## Section 4: Rust
+
+The Rust ecosystem has a few well-established crates, with one security-driven fork now the recommended choice.
+
+### `std::env` — the stdlib baseline
+
+The Rust standard library provides `std::env::var` for reading environment variables:
+
+```rust
+use std::env;
+
+let db_url = env::var("DATABASE_URL")
+    .expect("DATABASE_URL must be set");
+
+// Or with a default
+let port: u16 = env::var("PORT")
+    .unwrap_or("3000".to_string())
+    .parse()
+    .expect("PORT must be a valid number");
+```
+
+Like all stdlib approaches, this reads variables already in the process environment. Loading from `.env` files requires a separate crate.
+
+### dotenvy — the recommended .env loader
+
+[dotenvy](https://crates.io/crates/dotenvy) is the actively maintained fork of the original `dotenv` crate, which was abandoned in 2020 with an unfixed security advisory (RUSTSEC-2021-0141). dotenvy is the suggested alternative for `dotenv` in security advisory RUSTSEC-2021-0141. The current stable release is 0.15.7.
+
+```rust
+use std::env;
+
+fn main() {
+    dotenvy::dotenv().ok();  // load .env, ignore if not found
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL not set");
+}
+```
+
+dotenvy also provides a CLI binary that loads env before executing a command:
+
+```bash
+cargo install dotenvy --features cli
+dotenvy -- cargo run
+```
+
+dotenvy contains two APIs: a non-environment-modifying API (recommended) and an environment-modifying API. The modifying API calls `std::env::set_var` internally, which is marked `unsafe` in the Rust 2024 edition.
+
+### envy — deserialize env into typed structs with Serde
+
+[envy](https://crates.io/crates/envy) does what pydantic-settings does for Python: it deserializes environment variables directly into a typed struct using Serde:
+
+```rust
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+struct Config {
+    database_url: String,
+    port: u16,
+    debug: bool,
+}
+
+fn main() {
+    dotenvy::dotenv().ok();
+    let config: Config = envy::from_env().expect("Failed to load config");
+    // config.port is u16, not String
+}
+```
+
+envy normalizes variable names to lowercase, so `DATABASE_URL` becomes the `database_url` field of the struct. It supports serde attributes to control renames, and because it uses serde, you can deserialize comma-separated values into a `Vec`.
+
+### config / figment — layered configuration
+
+[config](https://crates.io/crates/config) (by halvors) and [figment](https://crates.io/crates/figment) (used by Rocket) provide layered configuration — values from `.env` files, environment variables, TOML files, JSON files, and defaults merged in priority order. More complex than dotenvy + envy, but appropriate for applications with many configuration sources.
+
+### Quick comparison
+
+| Crate | Loads .env | Type-safe | Security | Notes |
+|---|---|---|---|---|
+| `dotenv` | ✅ | ❌ | ⚠️ Abandoned | RUSTSEC-2021-0141, do not use |
+| `dotenvy` | ✅ | ❌ | ✅ | Official replacement |
+| `envy` | via dotenvy | ✅ | ✅ | Serde deserialization |
+| `config` | via env vars | ✅ | ✅ | Layered multi-source |
+| `figment` | ✅ | ✅ | ✅ | Used by Rocket |
+
+---
+
+## Section 5: Go
+
+Go's stdlib and ecosystem approach env management differently from other languages, favouring explicit struct mapping over magic loaders.
+
+### `os.Getenv` / `os.LookupEnv` — the stdlib baseline
+
+```go
+import "os"
+
+dbURL := os.Getenv("DATABASE_URL")  // returns "" if missing
+
+// LookupEnv distinguishes between missing and empty
+dbURL, ok := os.LookupEnv("DATABASE_URL")
+if !ok {
+    log.Fatal("DATABASE_URL is required")
+}
+```
+
+Like all stdlib approaches: reads the process environment, no `.env` loading.
+
+### godotenv — Go port of the Ruby dotenv convention
+
+[godotenv](https://github.com/joho/godotenv) (by John Barton) is a Go port of the Ruby dotenv library that makes the pattern familiar to developers coming from other languages:
+
+```go
+import (
+    "github.com/joho/godotenv"
+    "os"
+)
+
+func main() {
+    godotenv.Load()  // loads .env
+    dbHost := os.Getenv("DB_HOST")
+}
+```
+
+For simple projects, godotenv is quick, minimal, and easy to use. Its approach and name exist in every language worked with in recent years, making it familiar for developers coming to Go from other languages.
+
+### envconfig — map env vars into structs with struct tags
+
+[envconfig](https://github.com/kelseyhightower/envconfig) by Kelsey Hightower maps environment variables to struct fields using struct tags, similar to JSON unmarshalling:
+
+```go
+type Config struct {
+    DatabaseURL string        `envconfig:"DATABASE_URL"`
+    Port        int           `envconfig:"PORT" default:"8080"`
+    Debug       bool          `envconfig:"DEBUG" default:"false"`
+    Timeout     time.Duration `envconfig:"TIMEOUT" default:"30s"`
+}
+
+var cfg Config
+envconfig.Process("", &cfg)
+```
+
+envconfig supports the use of struct tags to specify alternate, default, and required environment variables. If it can't find a value for a `required:"true"` field, it returns an error when processing the struct.
+
+### Viper — full configuration solution for Go
+
+[Viper](https://github.com/spf13/viper) is the most feature-complete configuration library in the Go ecosystem. Used by Hugo, Docker Notary, and many other Go projects, it supports reading from `.env` files, YAML, JSON, TOML, HCL, and Java properties files, with automatic environment variable binding and hot reloading:
+
+```go
+viper.SetConfigFile(".env")
+viper.ReadInConfig()
+viper.AutomaticEnv()
+
+dbURL := viper.GetString("DATABASE_URL")
+port := viper.GetInt("PORT")
+```
+
+For more complex needs — such as supporting multiple file formats, nested configs, and advanced options — Viper offers greater flexibility compared to godotenv. Both are excellent tools; the choice depends on project requirements.
+
+### caarlos0/env — zero-dependency struct parsing
+
+[caarlos0/env](https://github.com/caarlos0/env) parses environment variables into Go structs with no dependencies beyond the standard library:
+
+```go
+type Config struct {
+    Host string `env:"HOST" envDefault:"localhost"`
+    Port int    `env:"PORT" envDefault:"8080"`
+}
+
+cfg := Config{}
+env.Parse(&cfg)
+```
+
+Popular for its simplicity and zero-dependency footprint in microservices.
+
+---
+
+## Section 6: Java / JVM
+
+Java's configuration story is more fragmented than other languages because the ecosystem spans Spring Boot, Quarkus, Micronaut, and plain Java, each with different approaches.
+
+### `System.getenv()` — the stdlib baseline
+
+```java
+String dbUrl = System.getenv("DATABASE_URL");
+String port = System.getenv().getOrDefault("PORT", "8080");
+```
+
+### Spring Boot — `@Value` and `application.properties`
+
+Spring Boot reads environment variables automatically and can inject them with `@Value`:
+
+```java
+@Service
+public class DatabaseService {
+    @Value("${DATABASE_URL}")
+    private String databaseUrl;
+
+    @Value("${PORT:8080}")  // with default
+    private int port;
+}
+```
+
+Spring also reads `application.properties` and `application.yml`, with environment variables overriding file values. The `spring-dotenv` library adds `.env` file support.
+
+### MicroProfile Config / SmallRye Config — for Quarkus and Jakarta EE
+
+[SmallRye Config](https://smallrye.io/smallrye-config) implements the MicroProfile Config specification used by Quarkus, WildFly, and Open Liberty. It reads from multiple sources in priority order: system properties, environment variables, and `microprofile-config.properties`.
+
+```java
+@Inject
+@ConfigProperty(name = "database.url")
+String databaseUrl;
+
+@Inject
+@ConfigProperty(name = "port", defaultValue = "8080")
+int port;
+```
+
+A configuration property lookup starts at the highest ordinal ConfigSource and works its way down until a match is found. A property configured using an environment variable overrides the value provided in `microprofile-config.properties`.
+
+SmallRye's `DotEnvConfigSourceProvider` creates a ConfigSource from a `.env` file, which can be activated via the Java ServiceLoader mechanism.
+
+### java-dotenv
+
+[java-dotenv](https://github.com/cdimascio/dotenv-java) is a port of dotenv for Java with no framework dependency:
+
+```java
+Dotenv dotenv = Dotenv.load();
+String dbUrl = dotenv.get("DATABASE_URL");
+String port = dotenv.get("PORT", "8080");
+```
+
+---
+
+## Section 7: The new generation — encrypted and multi-environment CLIs
+
+The tools above load and validate environment variables. The tools in this section address the next generation of problems: **encrypting secrets so they can be safely committed**, managing multiple environments, and providing a cross-language runner.
+
+### dotenvx — encrypted .env files, from the creator of dotenv
+
+[dotenvx](https://dotenvx.com) is built by Scott Motte, the original creator of the dotenv Node.js package. Its central innovation is `.env` encryption using public-key cryptography:
+
+```bash
+# Encrypt your .env file in place
+dotenvx encrypt
+
+# Result: .env now contains encrypted values
+# DOTENV_PUBLIC_KEY is committed (safe)
+# DOTENV_PRIVATE_KEY goes in .env.keys (never committed)
+```
+
+dotenvx encrypts your `.env` files — limiting their attack vector while retaining their benefits. It uses AES-256 with ephemeral keys, with the encryption keys themselves protected using Secp256k1 elliptic curve cryptography, the same as Bitcoin.
+
+dotenvx is installed more than two million times weekly. Paypal, NASA, Procore, Supabase, AWS, and Facebook have all adopted it. AWS recommends it with AWS Amplify, NASA uses it to help power Earthdata Search, and Supabase requires it to unlock their Branching feature.
+
+Beyond encryption, dotenvx supports multiple environments via `-f` flag composition and a `--convention=nextjs` flag for Next.js-style file cascading.
+
+The five core commands are `run`, `get`, `set`, `encrypt`, and `decrypt`.
+
+**What it doesn't address:** validation, scanning for existing leaked secrets, converting to CI/CD formats, diffing environments, or auditing what changed. It's a loader and encryptor, not an auditor or converter.
+
+### Other "envx" tools in the ecosystem
+
+The name `envx` appears independently across several tools that are unrelated to each other and to evnx:
+
+- [@dotenvx/dotenvx](https://www.npmjs.com/package/@dotenvx/dotenvx) — the official dotenvx npm package
+- [@t3-oss/env](https://env.t3.gg) — TypeScript schema validation (not "envx" named, but often compared)
+- Various other packages on npm under `envx` or similar names are experimental or abandoned; check publish dates before using
+
+---
+
+## Section 8: Windows and cross-platform CLI tools
+
+### EnvTool (Windows)
+
+[EnvTool](https://github.com/gvanem/EnvTool) is a Windows-focused utility for searching and managing environment variables. It scans `PATH`, `INCLUDE`, and `LIB` for missing or outdated entries. Primarily a diagnostic tool for C/C++ developers debugging build environment issues.
+
+### dotenv-cli (npm)
+
+```bash
+npm install -g dotenv-cli
+dotenv -- node server.js
+dotenv -e .env.production -- node server.js
+```
+
+A thin wrapper that loads `.env` and runs a command, similar to `dotenvx run` but without encryption.
+
+---
+
+## Section 9: Secret managers — when .env isn't enough
+
+At scale, `.env` files — even encrypted ones — are the wrong tool. Secret managers centralize secrets, provide audit logs, support rotation, and handle access control:
+
+| Tool | Best for | Self-hosted | Free tier |
+|---|---|---|---|
+| HashiCorp Vault | Large teams, compliance requirements | ✅ | ✅ |
+| AWS Secrets Manager | AWS-native applications | ❌ | Pay per secret |
+| Doppler | Developer experience focus | ❌ | ✅ generous |
+| 1Password Secrets | Teams already on 1Password | ❌ | ✅ |
+| Infisical | Open source, self-hostable | ✅ | ✅ |
+| GitHub Actions Secrets | CI/CD only | N/A | ✅ |
+
+The migration path from `.env` to any of these is non-trivial because each uses a different format. This is one of the gaps that evnx addresses — `evnx migrate` handles the conversion.
+
+---
+
+## Section 10: evnx — what the gap looks like
+
+Looking across this entire landscape, a pattern emerges. The ecosystem has excellent tools for individual concerns:
+
+- **Loading**: python-dotenv, dotenv (npm), dotenvy, godotenv
+- **Validation**: pydantic-settings, T3 Env, envy, envconfig
+- **Directory scoping**: direnv, mise
+- **Encryption**: dotenvx
+- **Secret management**: Vault, Doppler, AWS Secrets Manager
+
+What doesn't exist is a **single CLI** that handles the operational side of `.env` management: validation, secret scanning, diffing environments, converting to CI/CD formats, and migrating to secret managers — across any stack, without being embedded in a language runtime.
+
+evnx fills that gap. It's a Rust binary with no runtime dependency. It doesn't care if your project is Python, Go, or TypeScript. It works on the files.
+
+```bash
+# Validate your .env against .env.example
+evnx validate
+
+# Scan for leaked secrets
+evnx scan
+
+# Diff two environments
+evnx diff .env .env.production
+
+# Convert to GitHub Actions secrets format
+evnx convert --format github-actions
+
+# Convert to Kubernetes secret manifest
+evnx convert --format k8s-secret
+
+# Migrate to AWS Secrets Manager
+evnx migrate --to aws
+```
+
+### The 14 conversion formats
+
+One of evnx's most practical features for teams bridging the `.env` world and CI/CD infrastructure:
+
+```bash
+evnx convert --format [format]
+```
+
+Available formats: `github-actions`, `gitlab-ci`, `k8s-secret`, `k8s-configmap`, `docker-compose`, `heroku`, `terraform`, `aws-ssm`, `aws-secrets-manager`, `doppler`, `vercel`, `json`, `yaml`, `shell`.
+
+No other single tool covers this breadth. Typically you'd write a custom script for each platform. evnx makes the conversion a one-liner.
+
+### The stack template system
+
+Most env management tools assume you already know what variables you need. evnx's `evnx init` generates a complete, stack-specific `.env` file with the right variables pre-populated for your project type:
+
+```bash
+evnx init
+# Prompts for stack selection:
+# Django Secure, FastAPI + Redis, Next.js (T3 Turbo),
+# Node + Firebase, Go Cloud Native, Rust Speedstack,
+# Modern MERN, Laravel V-Stack, Supabase Starter, SEO Content Stack
+```
+
+For a Next.js project, this generates `NEXT_PUBLIC_*` prefixed variables for client-side config, database connection variables, and authentication secret variables — all with the right naming conventions pre-applied.
+
+### Install evnx
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+```bash
+# Verify
+evnx --version
+evnx doctor
+```
+
+<Callout type="info" title="evnx as a language-agnostic auditor">
+  evnx does not replace python-dotenv, dotenvy, godotenv, or T3 Env. Those libraries load variables into your application's runtime. evnx operates on the files themselves — scanning, diffing, validating, converting. They're complementary layers of the same workflow.
+</Callout>
+
+---
+
+## How the tools map to your workflow
+
+Here's how the tools described in this post map to each phase of the development lifecycle:
+
+**Project start:** `evnx init` (generate stack-appropriate .env template) → add to `.gitignore` → create `.env.example`
+
+**Development:** python-dotenv / dotenv / dotenvy / godotenv (load variables into your runtime) + direnv / mise (automatic per-directory loading)
+
+**Pre-commit:** `evnx scan` (detect secrets before they're committed) + `evnx validate` (verify all required variables are present)
+
+**CI/CD setup:** `evnx convert --format github-actions` (convert .env.example to CI secrets format)
+
+**PR review:** `evnx diff .env.example .env.example.new` (review new variables being added)
+
+**Production:** `evnx migrate --to aws` (migrate from .env to secrets manager) or dotenvx encrypt (encrypt .env for committed storage)
+
+**Type safety at runtime:** pydantic-settings (Python) / T3 Env (TypeScript) / envy + dotenvy (Rust) / envconfig (Go)
+
+---
+
+## Further reading
+
+These posts go deeper on specific tools covered here:
+
+- [dotenvx blog: from dotenv to dotenvx](https://dotenvx.com/blog/2024/06/24/dotenvx-next-generation-config-management.html) — the original dotenv creator's case for encryption
+- [The problems with dotenv and how dotenvx solves them](https://dev.to/adarshbp/the-problems-with-dotenv-and-how-dotenvx-solves-them-35io) — practical walkthrough
+- [Load .env files into typesafe structs in Rust](https://dev.to/veerawat/load-and-map-environment-variables-in-rust-with-dotenvy-serde-and-envy-26a9) — dotenvy + envy pattern
+- [Godotenv vs Viper in Golang](https://enigmacamp.medium.com/difference-between-godotenv-vs-viper-in-golang-22a8d20f9835) — choosing the right Go library
+- [T3 Env: type-safe environment variables](https://www.mwskwong.com/blog/why-t3-env-is-my-go-to-for-managing-environment-variables) — detailed T3 Env walkthrough
+- [Why I built my own environment management CLI](https://medium.com/@rahulretnan/why-i-built-my-own-environment-management-cli-and-how-ai-made-it-possible-in-minutes-0d1f4c954833) — another solo developer's perspective on the gap in this space
+
+---
+
+<AuthorNote>
+The incident that started evnx was real. The gap in this landscape is real. I spent several weeks mapping every tool listed here before writing a single line of evnx code, because understanding what already exists is the only way to know what's actually missing. The answer was: there's no language-agnostic CLI that treats .env files as first-class objects worthy of the same tooling we give source code. That's evnx.
+
+If you find a tool I missed — a language-specific library, a shell extension, an interesting project from any ecosystem — open an issue at [github.com/urwithajit9/evnx](https://github.com/urwithajit9/evnx). This post is meant to stay current.
+</AuthorNote>

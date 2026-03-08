@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postbuild": "pagefind --site .next/server/app --output-path public/pagefind",
+    "search:index": "pagefind --site .next/server/app --output-path public/pagefind"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -55,6 +57,7 @@
     "gray-matter": "^4.0.3",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.446.0",
+    "mermaid": "^11.12.3",
     "next": "16.1.6",
     "next-mdx-remote": "^6.0.0",
     "next-themes": "^0.3.0",
@@ -80,7 +83,8 @@
   },
   "devDependencies": {
     "@types/mdx": "^2.0.13",
-    "eslint": "^9.39.3"
+    "eslint": "^9.39.3",
+    "pagefind": "^1.4.0"
   },
   "overrides": {
     "@types/react": "19.2.14",

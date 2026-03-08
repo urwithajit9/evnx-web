@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Github, Star } from "lucide-react";
-import { EVNX_VERSION, GITHUB_URL, CRATES_IO_URL } from "@/lib/config";
+import { EVNX_VERSION, GITHUB_URL, CRATES_IO_URL, NPM_URL, PYPI_URL, AGENT_SKILLS_URL } from "@/lib/config";
 
 // ── TypeScript fix: every link has `external`, defaulting to false ────────────
 // The previous LINKS object mixed { href, label } and { href, label, external }
@@ -29,10 +29,14 @@ const LINKS: Record<string, NavLink[]> = {
     },
     { href: "/blog", label: "Blog", external: false },
     { href: "/changelog", label: "Changelog", external: false },
+    { href: "/testimonials", label: "Testimonials", external: false },
   ],
   Project: [
     { href: GITHUB_URL, label: "GitHub", external: true },
     { href: CRATES_IO_URL, label: "Crates.io", external: true },
+    { href: NPM_URL, label: "NPM", external: true },
+    { href: PYPI_URL, label: "PyPI", external: true },
+    { href: AGENT_SKILLS_URL, label: "Agent Skills", external: true },
     { href: "/pricing", label: "Pricing", external: false },
     { href: "/install", label: "Install", external: false },
   ],

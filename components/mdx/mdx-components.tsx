@@ -67,10 +67,13 @@ function UL({ children }: { children?: React.ReactNode }) {
 function OL({ children }: { children?: React.ReactNode }) {
   return <ol className="mb-4 ml-4 list-decimal space-y-2">{children}</ol>;
 }
+// Single LI used for both UL and OL.
+// UL gets the › bullet via the span; OL gets its number from list-decimal on OL.
+// The span is hidden for OL via the [ol_&]:hidden selector.
 function LI({ children }: { children?: React.ReactNode }) {
   return (
     <li className="text-text-secondary leading-relaxed flex gap-2 items-start">
-      <span className="text-brand-500 flex-shrink-0 mt-[3px] select-none">
+      <span className="text-brand-500 flex-shrink-0 mt-[3px] select-none [ol_&]:hidden">
         ›
       </span>
       <span className="min-w-0">{children}</span>
@@ -102,6 +105,88 @@ function A({ href, children }: { href?: string; children?: React.ReactNode }) {
 function Strong({ children }: { children?: React.ReactNode }) {
   return (
     <strong className="font-semibold text-text-primary">{children}</strong>
+  );
+}
+function Em({ children }: { children?: React.ReactNode }) {
+  return <em className="italic text-text-muted">{children}</em>;
+}
+
+// ── Images ────────────────────────────────────────────────────────────────────
+// IMPORTANT: Do NOT wrap in <figure> or any block element.
+//
+// MDX compiles  ![alt](src)  as  <p><img/></p>.
+// A block wrapper (figure, div) inside <p> is invalid HTML → hydration error.
+// Styling the <img> directly is safe — <p><img> is valid HTML.
+//
+// For a captioned figure, use the explicit <Figure> component in MDX:
+//   <Figure src="/images/flow.png" alt="Flow diagram">
+//     Figure 1: caption text here
+//   </Figure>
+// Bare markdown image: ![alt](src)
+// MDX passes width/height attributes if specified in the alt text workaround,
+// but the cleanest way to control size is to use <Figure size="sm"> instead.
+// The default max-w-2xl keeps images readable without spanning the full column.
+function Img({ src, alt }: { src?: string; alt?: string }) {
+  return (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      className="block w-full max-w-2xl mx-auto my-8 rounded-xl border border-border-muted shadow-sm"
+      loading="lazy"
+    />
+  );
+}
+
+// ── Figure (explicit captioned image component) ───────────────────────────────
+// Use this in MDX when you need an image + caption together.
+//
+//   <Figure src="/images/pydantic-flow.png" alt="Pydantic Validation Flow">
+//     Figure 2: Pydantic intercepts loading to validate types and requirements.
+//   </Figure>
+//
+// This is a named component (capital F), so MDX does NOT auto-wrap it in <p>.
+// size controls max-width:
+//   "sm"   → max-w-sm   (~384px)  — small diagrams, icons
+//   "md"   → max-w-md   (~448px)  — medium screenshots
+//   "lg"   → max-w-2xl  (~672px)  — default, most content images
+//   "full" → max-w-full           — full prose column width
+//
+// Usage:
+//   <Figure src="/images/flow.png" alt="Flow" size="sm">Caption</Figure>
+//   <Figure src="/images/wide.png" alt="Wide" size="full" />
+const FIGURE_SIZES: Record<string, string> = {
+  sm:   "max-w-sm",
+  md:   "max-w-md",
+  lg:   "max-w-2xl",
+  full: "max-w-full",
+};
+
+function Figure({
+  src,
+  alt,
+  size = "lg",
+  children,
+}: {
+  src: string;
+  alt?: string;
+  size?: "sm" | "md" | "lg" | "full";
+  children?: React.ReactNode;
+}) {
+  const maxW = FIGURE_SIZES[size] ?? FIGURE_SIZES.lg;
+  return (
+    <figure className="my-8">
+      <img
+        src={src}
+        alt={alt ?? ""}
+        className={`block w-full ${maxW} mx-auto rounded-xl border border-border-muted shadow-sm`}
+        loading="lazy"
+      />
+      {children && (
+        <figcaption className={`text-center text-sm text-text-muted italic mt-3 ${maxW} mx-auto`}>
+          {children}
+        </figcaption>
+      )}
+    </figure>
   );
 }
 
@@ -148,7 +233,7 @@ function TD({ children }: { children?: React.ReactNode }) {
 // ── Export ────────────────────────────────────────────────────────────────────
 export const mdxComponents: MDXComponents = {
   pre: FencedCodeBlock, // ← fenced ```blocks``` — async Shiki
-  code: InlineCode, // ← `inline` only
+  code: InlineCode,     // ← `inline` only
 
   h2: H2,
   h3: H3,
@@ -161,6 +246,8 @@ export const mdxComponents: MDXComponents = {
   hr: HR,
   a: A,
   strong: Strong,
+  em: Em,
+  img: Img,
 
   table: Table,
   thead: THead,
@@ -169,6 +256,8 @@ export const mdxComponents: MDXComponents = {
   th: TH,
   td: TD,
 
+  // ── Custom MDX components (capital letter = not auto-wrapped in <p>) ───────
+  Figure,
   Callout,
   CodeTabs,
   Tab,

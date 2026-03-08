@@ -32,100 +32,110 @@
  *   </CommandSignature>
  */
 
-import React from "react";
+import React from 'react'
 
 type Props = {
-  children: React.ReactNode;
-};
+  children: React.ReactNode
+}
 
 // Tokenise a single line of CLI syntax with colour coding
 function TokenisedLine({ line }: { line: string }) {
-  if (!line.trim()) return <span className="block h-2" />;
+  if (!line.trim()) return <span className="block h-2" />
 
   // Split on spaces, but keep bracket groups and quoted strings intact
-  const tokens = line.match(/(\[.*?\]|<.*?>|"[^"]*"|'[^']*'|\S+)/g) ?? [];
+  const tokens = line.match(/(\[.*?\]|<.*?>|"[^"]*"|'[^']*'|\S+)/g) ?? []
 
   return (
     <span className="block leading-[1.8]">
       {tokens.map((token, i) => {
         // Command name (first word, no - prefix)
-        if (i === 0 && !token.startsWith("-")) {
-          const parts = token.split(" ");
+        if (i === 0 && !token.startsWith('-')) {
+          const parts = token.split(' ')
           return (
             <span key={i}>
               {parts.map((p, j) => (
                 <span key={j}>
-                  {j === 0 ? (
-                    <span className="text-brand-400 font-semibold">{p}</span>
-                  ) : (
-                    <span className="text-brand-300">{p}</span>
-                  )}
-                  {j < parts.length - 1 && " "}
+                  {j === 0
+                    ? <span className="text-brand-400 font-semibold">{p}</span>
+                    : <span className="text-brand-300">{p}</span>
+                  }
+                  {j < parts.length - 1 && ' '}
                 </span>
-              ))}{" "}
+              ))}
+              {' '}
             </span>
-          );
+          )
         }
 
         // Optional block [--flag] or [PATH]
-        if (token.startsWith("[") && token.endsWith("]")) {
+        if (token.startsWith('[') && token.endsWith(']')) {
           return (
             <span key={i} className="text-text-muted">
-              {token}{" "}
+              {token}{' '}
             </span>
-          );
+          )
         }
 
         // Required argument <arg>
-        if (token.startsWith("<") && token.endsWith(">")) {
+        if (token.startsWith('<') && token.endsWith('>')) {
           return (
             <span key={i} className="text-warning">
-              {token}{" "}
+              {token}{' '}
             </span>
-          );
+          )
         }
 
         // Flag --flag
-        if (token.startsWith("--") || token.startsWith("-")) {
+        if (token.startsWith('--') || token.startsWith('-')) {
           return (
             <span key={i} className="text-info">
-              {token}{" "}
+              {token}{' '}
             </span>
-          );
+          )
         }
 
         // METAVARIABLE (all caps)
         if (/^[A-Z][A-Z0-9_]+$/.test(token)) {
           return (
             <span key={i} className="text-warning italic">
-              {token}{" "}
+              {token}{' '}
             </span>
-          );
+          )
         }
 
         // Literal value (lowercase, no special prefix)
         return (
           <span key={i} className="text-terminal-text">
-            {token}{" "}
+            {token}{' '}
           </span>
-        );
+        )
       })}
     </span>
-  );
+  )
+}
+
+function extractText(node: React.ReactNode): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (!node) return ''
+  if (Array.isArray(node)) return node.map(extractText).join('')
+  if (React.isValidElement(node)) {
+    const el = node as React.ReactElement<{ children?: React.ReactNode }>
+    const tag = typeof el.type === 'string' ? el.type : ''
+    const blockTags = new Set(['p', 'div', 'li', 'br', 'pre', 'blockquote'])
+    const inner = extractText(el.props.children)
+    return blockTags.has(tag) ? inner + '\n' : inner
+  }
+  return ''
 }
 
 export function CommandSignature({ children }: Props) {
-  const raw = React.Children.toArray(children)
-    .map((c) => (typeof c === "string" ? c : ""))
-    .join("")
-    .trim();
+  const raw = extractText(children).trim()
 
-  const lines = raw.split("\n");
+  const lines = raw.split('\n')
   // First non-empty line is the canonical signature; the rest are examples
-  const signatureLine = lines.find((l) => l.trim()) ?? "";
-  const exampleLines = lines
-    .slice(lines.indexOf(signatureLine) + 1)
-    .filter((l) => l.trim());
+  const signatureLine = lines.find(l => l.trim()) ?? ''
+  const exampleLines  = lines.slice(lines.indexOf(signatureLine) + 1).filter(l => l.trim())
 
   return (
     <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
@@ -134,7 +144,7 @@ export function CommandSignature({ children }: Props) {
         <span className="font-mono text-xs text-text-muted">syntax</span>
         {exampleLines.length > 0 && (
           <span className="font-mono text-xs text-text-muted">
-            + {exampleLines.length} example{exampleLines.length > 1 ? "s" : ""}
+            + {exampleLines.length} example{exampleLines.length > 1 ? 's' : ''}
           </span>
         )}
       </div>
@@ -151,9 +161,7 @@ export function CommandSignature({ children }: Props) {
             </span>
             {exampleLines.map((line, i) => (
               <span key={i} className="flex items-start gap-2">
-                <span className="text-brand-500 select-none flex-shrink-0">
-                  $
-                </span>
+                <span className="text-brand-500 select-none flex-shrink-0">$</span>
                 <TokenisedLine line={line} />
               </span>
             ))}
@@ -167,8 +175,8 @@ export function CommandSignature({ children }: Props) {
         <span className="font-mono text-xs text-info">--flag</span>
         <span className="font-mono text-xs text-warning italic">METAVAR</span>
         <span className="font-mono text-xs text-text-muted">[optional]</span>
-        <span className="font-mono text-xs text-warning">{"<required>"}</span>
+        <span className="font-mono text-xs text-warning">{'<required>'}</span>
       </div>
     </div>
-  );
+  )
 }

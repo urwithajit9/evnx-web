@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X, Github } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
+import { SearchTrigger , SearchModal} from'@/components/ui/search-modal'
 
 const NAV_LINKS = [
   { href: "/guides", label: "Guides" },
   { href: "/blog", label: "Blog" },
+  { href: "/testimonials", label: "Testimonials" },
   { href: "/changelog", label: "Changelog" },
   { href: "/pricing", label: "Pricing" },
 ];
@@ -16,6 +18,7 @@ const NAV_LINKS = [
 export function Header() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  <SearchTrigger />
 
   return (
     <header className="sticky top-0 z-50 bg-bg-base/90 backdrop-blur-sm border-b border-border-subtle">

@@ -23,6 +23,8 @@ import {
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { GITHUB_URL, EVNX_VERSION, INSTALL_COMMANDS } from "@/lib/config";
+// import { WaitlistForm } from "@/components/ui/waitlist-form";
+// import { TestimonialsGrid } from '@/components/ui/testimonials-grid'
 
 // ─── Terminal animation data ──────────────────────────────────────────────────
 
@@ -585,6 +587,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+{/* <div className="max-w-md">
+  <WaitlistForm source="hero" />
+</div> */}
+
       </section>
 
       {/* ── Origin Story (Incident Timeline) ───────────────────────────────── */}
@@ -960,6 +966,7 @@ RUN evnx validate --strict \
             </Link>
           </div>
         </div>
+        {/* <TestimonialsGrid limit={6} /> */}
       </section>
 
       {/* ── Final CTA ───────────────────────────────────────────────────────── */}

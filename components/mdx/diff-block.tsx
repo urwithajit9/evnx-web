@@ -23,27 +23,41 @@
  *   </DiffBlock>
  */
 
-import React from "react";
-import { CopyButton } from "./copy-button";
+import React from 'react'
+import { CopyButton } from './copy-button'
 
 type Props = {
-  filename?: string;
-  children: React.ReactNode;
-};
+  filename?: string
+  children: React.ReactNode
+}
+
+// Recursively extract all text from the React node tree.
+// MDX wraps content in <p> elements, so typeof c === 'string' misses everything.
+function extractText(node: React.ReactNode): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (!node) return ''
+  if (Array.isArray(node)) return node.map(extractText).join('')
+  if (React.isValidElement(node)) {
+    const el = node as React.ReactElement<{ children?: React.ReactNode }>
+    const tag = typeof el.type === 'string' ? el.type : ''
+    const blockTags = new Set(['p', 'div', 'li', 'br', 'pre', 'blockquote'])
+    const inner = extractText(el.props.children)
+    return blockTags.has(tag) ? inner + '\n' : inner
+  }
+  return ''
+}
 
 export function DiffBlock({ filename, children }: Props) {
-  const raw = React.Children.toArray(children)
-    .map((c) => (typeof c === "string" ? c : ""))
-    .join("")
-    .trim();
+  const raw = extractText(children).trim()
 
-  const lines = raw.split("\n");
+  const lines = raw.split('\n')
 
   // Build copyable "after" version: only + lines (without the + prefix) and context lines
   const copyable = lines
-    .filter((l) => !l.startsWith("-"))
-    .map((l) => (l.startsWith("+") ? l.slice(1).trimStart() : l))
-    .join("\n");
+    .filter(l => !l.startsWith('-'))
+    .map(l => (l.startsWith('+') ? l.slice(1).trimStart() : l))
+    .join('\n')
 
   return (
     <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
@@ -54,9 +68,7 @@ export function DiffBlock({ filename, children }: Props) {
           {filename && (
             <>
               <span className="text-border-default">·</span>
-              <span className="font-mono text-xs text-text-muted">
-                {filename}
-              </span>
+              <span className="font-mono text-xs text-text-muted">{filename}</span>
             </>
           )}
         </div>
@@ -72,39 +84,40 @@ export function DiffBlock({ filename, children }: Props) {
       <div className="bg-terminal-bg overflow-x-auto">
         <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
           {lines.map((line, i) => {
-            let bgClass = "";
-            let textClass = "text-terminal-text";
-            let prefix = " ";
+            let bgClass = ''
+            let textClass = 'text-terminal-text'
+            let prefix = ' '
 
-            if (line.startsWith("+")) {
-              bgClass = "bg-success/5";
-              textClass = "text-success";
-              prefix = "+";
-            } else if (line.startsWith("-")) {
-              bgClass = "bg-danger/5";
-              textClass = "text-danger";
-              prefix = "-";
-            } else if (line.startsWith("#")) {
-              textClass = "text-text-muted";
+            if (line.startsWith('+')) {
+              bgClass   = 'bg-success/5'
+              textClass = 'text-success'
+              prefix    = '+'
+            } else if (line.startsWith('-')) {
+              bgClass   = 'bg-danger/5'
+              textClass = 'text-danger'
+              prefix    = '-'
+            } else if (line.startsWith('#')) {
+              textClass = 'text-text-muted'
             }
 
             return (
-              <span key={i} className={`flex gap-3 px-2 rounded-sm ${bgClass}`}>
-                <span
-                  className={`select-none flex-shrink-0 w-3 ${textClass} opacity-60`}
-                >
+              <span
+                key={i}
+                className={`flex gap-3 px-2 rounded-sm ${bgClass}`}
+              >
+                <span className={`select-none flex-shrink-0 w-3 ${textClass} opacity-60`}>
                   {prefix}
                 </span>
                 <span className={textClass}>
-                  {line.startsWith("+") || line.startsWith("-")
+                  {line.startsWith('+') || line.startsWith('-')
                     ? line.slice(1)
-                    : line || "\u00A0"}
+                    : line || '\u00A0'}
                 </span>
               </span>
-            );
+            )
           })}
         </pre>
       </div>
     </div>
-  );
+  )
 }

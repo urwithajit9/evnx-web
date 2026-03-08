@@ -9,6 +9,7 @@ import {
   SITE_URL,
   TWITTER_HANDLE,
 } from "@/lib/config";
+import { SearchModal } from "@/components/ui/search-modal";
 
 // IBM Plex Mono — UI / body font (fully monospace site)
 const ibmPlexMono = IBM_Plex_Mono({
@@ -72,6 +73,7 @@ export default function RootLayout({
     >
       <body className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] font-mono antialiased">
         <Header />
+        {/* <SearchModal /> */}
         <main className="flex-1">{children}</main>
         <Footer />
       </body>

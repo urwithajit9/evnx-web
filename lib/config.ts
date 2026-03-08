@@ -9,6 +9,9 @@ export const GITHUB_URL = "https://github.com/urwithajit9/evnx";
 export const GITHUB_DISCUSSIONS_URL =
   "https://github.com/urwithajit9/evnx/discussions";
 export const CRATES_IO_URL = "https://crates.io/crates/evnx";
+export const NPM_URL = "https://www.npmjs.com/package/evnx";
+export const PYPI_URL = "https://pypi.org/project/evnx/";
+export const AGENT_SKILLS_URL = "https://github.com/urwithajit9/agent-skills";
 
 export const INSTALL_SCRIPT_URL = "https://dotenv.space/install.sh";
 

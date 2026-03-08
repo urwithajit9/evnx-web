@@ -45,6 +45,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   knowledge: "Knowledge",
 };
 
+
+ 
+
+
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     year: "numeric",
@@ -162,6 +167,10 @@ export default async function BlogPostPage({ params }: Props) {
                 </span>
               ))}
             </div>
+              {/* Helpful vote */}
+              <div className="mt-8 pt-6 border-t border-border-subtle">
+                <HelpfulVote slug={`blog/${post.slug}`} />
+              </div>
 
             {/* Author card */}
             <div className="mt-12 bg-bg-surface border border-border-muted rounded-xl p-6">
