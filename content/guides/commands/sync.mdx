@@ -4,12 +4,12 @@ section: "commands"
 order: 3
 title: "evnx sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
-excerpt: "Reference documentation for the evnx sync command: options, exit codes, and basic usage."
+updatedAt: "2026-03-09"
+excerpt: "Reference documentation for the evnx sync command: bidirectional sync, smart placeholders, and security features."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
-tags: ["sync", "reference", "cli", "env"]
-evnxVersion: "0.2.0"
+tags: ["sync", "reference", "cli", "env", "security"]
+evnxVersion: "0.2.1"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -17,11 +17,21 @@ draft: false
 
 # evnx sync — Command Reference
 
-Keep `.env` and `.env.example` in perfect synchronization with bidirectional sync, smart placeholders, and security guards.
+Keep `.env` and `.env.example` in perfect synchronization with bidirectional sync, smart placeholder generation, and built-in security guards.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
 </Prerequisites>
+
+<Callout type="warning">
+  <strong>Security Notice:</strong> The "add with actual values" option in forward sync can expose secrets if <code>.env.example</code> is committed to version control. This option:
+  <ul>
+    <li>Shows an explicit warning prompt before proceeding</li>
+    <li>Is automatically disabled when <code>--force</code> is used in CI environments</li>
+    <li>Logs a security audit message when selected</li>
+  </ul>
+  Always prefer placeholder values for template files.
+</Callout>
 
 ---
 
@@ -35,12 +45,12 @@ evnx sync [OPTIONS]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--direction`, `-d` | `enum` | `forward` | Sync direction: `forward` or `reverse` |
-| `--placeholder`, `-p` | `bool` | `false` | Force placeholder values when adding variables |
-| `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing files |
-| `--force`, `-f` | `bool` | `false` | Skip interactive prompts (CI/CD mode) |
-| `--template-config` | `string` | — | Path to custom placeholder JSON config |
-| `--naming-policy` | `enum` | `warn` | Handle non-standard names: `warn`, `error`, `ignore` |
+| `--direction`, `-d` | `enum` | `forward` | Sync direction: `forward` (`.env` → `.env.example`) or `reverse` (`.env.example` → `.env`) |
+| `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when adding new variables (ignored in `--force` mode, which always uses placeholders for safety) |
+| `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files |
+| `--force`, `-f` | `bool` | `false` | Skip interactive prompts; auto-use placeholders (safe for CI/CD) |
+| `--template-config` | `path` | — | Path to custom placeholder JSON config for regex-based pattern matching |
+| `--naming-policy` | `enum` | `warn` | Handle non-standard variable names: `warn`, `error`, or `ignore` |
 | `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
 | `--help`, `-h` | `bool` | `false` | Display help information |
 
@@ -48,16 +58,33 @@ evnx sync [OPTIONS]
 
 | Value | Flow | Use case |
 |-------|------|----------|
-| `forward` | `.env` → `.env.example` | Update team template with your new variables |
-| `reverse` | `.env.example` → `.env` | Pull team changes to your local `.env` |
+| `forward` | `.env` → `.env.example` | Update team template with new variables from your local environment |
+| `reverse` | `.env.example` → `.env` | Pull new variables from team template to your local environment |
 
 ### Naming policy values
 
 | Policy | Behavior | Best for |
 |--------|----------|----------|
-| `warn` | Shows warning, continues | Local development (default) |
-| `error` | Fails on non-standard names | CI/CD validation |
-| `ignore` | No validation | Legacy projects |
+| `warn` | Shows warning for non-`UPPERCASE_WITH_UNDERSCORES` names, continues | Local development (default) |
+| `error` | Fails immediately on non-standard names | CI/CD validation, strict teams |
+| `ignore` | No validation, silent | Legacy projects with unconventional naming |
+
+### Placeholder generation rules
+
+When adding variables with placeholders, evnx uses these built-in heuristics (customizable via `--template-config`):
+
+| Variable pattern | Generated placeholder |
+|-----------------|----------------------|
+| Contains `SECRET`, `KEY`, or `TOKEN` | `YOUR_KEY_HERE` |
+| Contains `PASSWORD` or `PASS` | `YOUR_PASSWORD_HERE` |
+| Contains `URL` + value starts with `postgresql://` | `postgresql://user:password@localhost:5432/dbname` |
+| Contains `URL` + value starts with `redis://` | `redis://localhost:6379/0` |
+| Contains `URL` + value starts with `http(s)://` | `https://your-api-url-here.com` |
+| Contains `URL` (other) | `YOUR_URL_HERE` |
+| Contains `PORT` | `8000` |
+| Contains `DEBUG` | `true` |
+| Contains `HOST` or `SERVER` | `localhost` |
+| Unmatched | `YOUR_VALUE_HERE` (or custom default from config) |
 
 ---
 
@@ -66,8 +93,8 @@ evnx sync [OPTIONS]
 | Code | Meaning | Use case |
 |------|---------|----------|
 | `0` | ✅ Sync completed successfully | Success in scripts/CI |
-| `1` | 🚨 Sync failed (missing files, validation errors) | Fail pipeline on issues |
-| `2+` | ⚠️ Runtime errors (IO, parsing failures) | Debug tooling issues |
+| `1` | 🚨 Sync failed (missing files, validation errors, user abort) | Fail pipeline on issues |
+| `2+` | ⚠️ Runtime errors (IO failures, parsing errors, permission issues) | Debug tooling or environment issues |
 
 ---
 
@@ -76,31 +103,121 @@ evnx sync [OPTIONS]
 ### Forward sync (default)
 ```bash
 # Update .env.example with new variables from .env
+# Interactive: choose placeholder vs actual values
 evnx sync
 ```
 
 ### Reverse sync
 ```bash
 # Pull new variables from .env.example to .env
+# Interactive: choose placeholder vs prompt for real values
 evnx sync --direction reverse
 ```
 
 ### Preview without changes
 ```bash
 # See what would change before applying
+# Shows 🔒 for placeholders, ⚠️ for actual values
 evnx sync --dry-run
 ```
 
-### CI/CD mode
+### CI/CD mode (safe defaults)
 ```bash
-# Skip prompts, use placeholders, fail on naming issues
-evnx sync --force --dry-run --naming-policy error
+# Skip prompts, always use placeholders, fail on naming issues
+# Actual values option is disabled for security
+evnx sync --force --naming-policy error
 ```
 
 ### Custom placeholder config
 ```bash
-# Use team-specific placeholder patterns
+# Use team-specific placeholder patterns with regex
+# Example placeholders.json:
+# {
+#   "patterns": {
+#     "AWS_.*": "aws_placeholder",
+#     "STRIPE_.*": "sk_test_xxx"
+#   },
+#   "default": "TEAM_DEFAULT_VALUE"
+# }
 evnx sync --template-config .evnx/placeholders.json
+```
+
+### Strict naming validation
+```bash
+# Fail if any variable doesn't match UPPERCASE_WITH_UNDERSCORES
+evnx sync --naming-policy error
+```
+
+---
+
+## Interactive mode behavior
+
+### Forward sync prompts
+When new variables are found in `.env` but not `.env.example`:
+
+```
+┌─ Variables to Add ─────────────────────────────────────┐
+│ Found 2 variable(s) in .env missing from .env.example:│
+│   • NEW_API_KEY                                       │
+│   • DATABASE_URL                                      │
+└────────────────────────────────────────────────────────┘
+
+Add these to .env.example?
+❯ Yes, add with placeholder values (recommended)
+  Yes, add with actual values ⚠️ SECURITY RISK
+  Let me choose individually
+  No, skip
+```
+
+### Reverse sync prompts
+When new variables are found in `.env.example` but not `.env`:
+
+```
+┌─ Missing Variables ────────────────────────────────────┐
+│ Found 2 variable(s) in .env.example missing from .env:│
+│   • NEW_FEATURE_FLAG                                  │
+│   • OPTIONAL_CONFIG                                   │
+└────────────────────────────────────────────────────────┘
+
+Add to .env?
+❯ Yes, with placeholder values
+  Yes, prompt me for real values
+  Let me choose individually
+  No, skip
+```
+
+---
+
+## Security features
+
+### File permissions check
+On Unix systems, evnx warns if `.env` has overly permissive permissions:
+
+```
+⚠️ .env has permissive permissions (0o664). Consider: chmod 600 .env
+ℹ️ Overly permissive .env files may expose secrets to other users
+```
+
+**Recommendation**: Always use `chmod 600 .env` to restrict access to owner only.
+
+### Atomic file writes
+All file modifications use atomic write operations:
+1. Write to temporary file in same directory
+2. Sync to disk with `fsync`
+3. Atomic rename to target path
+
+This prevents file corruption from interrupted operations or power loss.
+
+### Force mode safety
+When `--force` is used:
+- Interactive prompts are skipped entirely
+- Placeholder values are **always** used (actual values option disabled)
+- Suitable for CI/CD pipelines where non-interactive execution is required
+
+### Audit logging
+When actual values are added to `.env.example` (interactive mode only), a security audit message is logged to stderr in verbose mode:
+```
+[AUDIT] User added actual values to .env.example for keys: ["SECRET_KEY", "API_TOKEN"]
 ```
 
 ---
@@ -109,15 +226,75 @@ evnx sync --template-config .evnx/placeholders.json
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode |
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode (equivalent to `--force`) |
+
+---
+
+## Troubleshooting
+
+### ".env file not found" error
+```
+✗ File not found: .env
+
+┌─ 💡 Getting Started ─────────────────────────────────┐
+│ It looks like this project hasn't been initialized   │
+│ yet. To create .env and .env.example files, run:     │
+│                                                      │
+│ $ evnx init                                          │
+└──────────────────────────────────────────────────────┘
+```
+
+**Solution**: Run `evnx init` to create template files, or copy your existing `.env` to the project directory.
+
+### ".env.example not found" in reverse sync
+```
+✗ File not found: .env.example
+
+┌─ 💡 Getting Started ─────────────────────────────────┐
+│ The template file .env.example is missing.           │
+│ To create it, either:                                │
+│ 1. Run 'evnx init' to generate from a blueprint, OR │
+│ 2. Create .env.example manually with your variables │
+└──────────────────────────────────────────────────────┘
+```
+
+**Solution**: Run `evnx init` or create `.env.example` manually with variable names (values can be placeholders).
+
+### Non-standard variable name warnings
+```
+⚠️ Variable 'myCamelCaseVar' doesn't follow convention (UPPERCASE_WITH_UNDERSCORES)
+```
+
+**Solution**: Rename to `MY_CAMEL_CASE_VAR`, or use `--naming-policy ignore` for legacy projects.
+
+### Placeholder not matching expected pattern
+If a variable like `DATABASE_URL` gets `YOUR_URL_HERE` instead of a PostgreSQL template:
+
+**Check**: The original value in `.env` must start with `postgresql://` (not just `postgres://`) to trigger the specialized template.
+
+**Fix**: Update the value format, or use `--template-config` to define custom patterns:
+```json
+{
+  "patterns": {
+    "DATABASE_URL": "postgresql://user:pass@localhost:5432/mydb"
+  }
+}
+```
 
 ---
 
 ## See also
 
-- [Sync Basics Tutorial](/guides/getting-started/sync-basics) — Learn sync step-by-step
-- [Team Collaboration](/guides/use-cases/team-collaboration) — Multi-developer workflows
-- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automation setup
-- [Configuration Reference](/guides/reference/sync-configuration) — Advanced options
----
+- [Sync Basics Tutorial](/guides/getting-started/sync-basics) — Learn sync step-by-step with examples
+- [Team Collaboration](/guides/use-cases/team-collaboration) — Multi-developer workflows and merge strategies
+- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automation setup for GitHub Actions, GitLab CI, etc.
+- [Configuration Reference](/guides/reference/sync-configuration) — Advanced placeholder config and pattern syntax
+- [Security Best Practices](/guides/security/env-file-security) — Protecting secrets in environment files
+
+
+
+
+
+
+
