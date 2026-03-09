@@ -1,0 +1,502 @@
+---
+title: "Validate your environment: A practical guide"
+slug: validate-basic
+section: guides
+order: 12
+publishedAt: "2026-03-09"
+excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
+difficulty: beginner
+timeToComplete: "15 minutes"
+tags: ["validate", "tutorial", "best-practices", "ci-cd", "evnx"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/validate
+draft: false
+---
+
+This guide walks through practical use cases for `evnx validate` — from local development to CI/CD pipelines. You'll learn how to catch misconfigurations early, auto-fix common issues, and integrate validation into your workflow.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/validate">Reference: evnx validate</Prerequisite>
+</Prerequisites>
+
+---
+
+## Why validate your .env?
+
+Environment variables are easy to misconfigure:
+
+```bash
+# .env
+DATABASE_URL=postgres://localhost:5432/myapp
+SECRET_KEY=changeme          # ❌ Weak placeholder
+DEBUG=True                   # ❌ String, not boolean
+API_KEY=                     # ❌ Missing value
+AWS_REGION=us-east-          # ❌ Incomplete
+```
+
+These issues might work locally but fail in production. `evnx validate` catches them before deployment.
+
+<Callout type="info" title="What validation prevents">
+- 🚫 Deploying with placeholder secrets
+- 🚫 Boolean parsing bugs (`"False"` is truthy in Python!)
+- 🚫 Missing required configuration
+- 🚫 localhost URLs in Docker deployments
+- 🚫 Weak or predictable SECRET_KEY values
+</Callout>
+
+---
+
+## 🎯 Use case 1: Local development quick check
+
+**When**: Before running your app locally
+
+**What**: Catch missing or misconfigured variables early
+
+```bash
+# Run validation
+evnx validate
+```
+
+```
+┌─ evnx validate ────────────────────────────────────────────┐
+│ Check environment configuration                           │
+└───────────────────────────────────────────────────────────┘
+
+📋 Preview:
+
+⚠️ Issues Found:
+  1. 🚨 Missing required variable: STRIPE_SECRET_KEY
+     → Add STRIPE_SECRET_KEY=<value> to .env
+     💡 Auto-fixable with --fix
+     📍 .env:?
+
+  2. ⚠️ DEBUG is set to "True" (string, not boolean)
+     → Use true or 0 for proper boolean handling
+     💡 Auto-fixable with --fix
+     📍 .env:?
+
+┌─ Summary ─────────────────────────────────────────────────┐
+│ Errors: 1  |  Warnings: 1  |  Fixed: 0                   │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Fix it**:
+
+```bash
+# Auto-fix common issues
+evnx validate --fix
+
+# Review changes
+git diff .env
+
+# Commit after review
+git commit -m "fix: apply env validation fixes"
+```
+
+---
+
+## 🎯 Use case 2: Onboarding new developers
+
+**When**: A teammate clones the repo for the first time
+
+**What**: Help them set up their environment correctly
+
+```bash
+# In your project README.md:
+
+## Setup
+
+#1. Copy the example environment file:
+
+cp .env.example .env
+
+
+# 2. Validate and auto-fix common issues:
+
+evnx validate --fix
+
+
+#3. Review the changes and fill in any remaining values:
+
+cat .env
+
+```
+
+**Why this works**:
+- ✅ New devs get a working `.env` in seconds
+- ✅ Auto-fix handles placeholders and formatting
+- ✅ Clear guidance on what still needs manual input
+
+---
+
+## 🎯 Use case 3: CI/CD pipeline integration
+
+**When**: Before deploying to staging or production
+
+**What**: Block deployments with configuration errors
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/validate.yml
+name: Validate Environment
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Validate .env.example
+        run: evnx validate --format github-actions --strict
+
+      - name: Validate production config
+        run: evnx validate --pattern .env.production --validate-formats --format json
+```
+
+**Result**: Inline annotations appear on PR diffs:
+
+```
+::error file=.env.production,line=5::SECRET_KEY is too weak or predictable
+::warning file=.env.production,line=12::DATABASE_URL uses localhost/127.0.0.1
+```
+
+### Generic CI (Jenkins, CircleCI, GitLab)
+
+```bash
+# Script snippet
+if ! evnx validate --format json --strict | jq -e '.summary.errors == 0' > /dev/null; then
+    echo "❌ Environment validation failed"
+    evnx validate --format json | jq -r '.issues[] | select(.severity == "error") | "  • \(.message)"'
+    exit 1
+fi
+echo "✅ Environment validation passed"
+```
+
+---
+
+## 🎯 Use case 4: Multi-environment validation
+
+**When**: Managing `.env.local`, `.env.staging`, `.env.production`
+
+**What**: Validate each environment with appropriate strictness
+
+```bash
+# Development: lenient, skip Docker warnings
+evnx validate --pattern .env.local --ignore localhost_in_docker
+
+# Staging: moderate checks
+evnx validate --pattern .env.staging --validate-formats
+
+# Production: strictest validation
+evnx validate \
+  --pattern .env.production \
+  --strict \
+  --validate-formats \
+  --format json | tee validation-report.json
+```
+
+**Pro tip**: Add to your Makefile:
+
+```makefile
+.PHONY: validate-dev validate-staging validate-prod validate-all
+
+validate-dev:
+	evnx validate --pattern .env.local --ignore localhost_in_docker
+
+validate-staging:
+	evnx validate --pattern .env.staging --validate-formats
+
+validate-prod:
+	evnx validate --pattern .env.production --strict --validate-formats
+
+validate-all: validate-dev validate-staging validate-prod
+```
+
+Then run:
+```bash
+make validate-all
+```
+
+---
+
+## 🎯 Use case 5: Suppressing non-critical warnings
+
+**When**: You have known, acceptable deviations
+
+**What**: Use `--ignore` to focus on important issues
+
+```bash
+# Ignore localhost warnings during local dev
+evnx validate --ignore localhost_in_docker
+
+# Ignore multiple issue types
+evnx validate --ignore boolean_trap,extra_variable
+
+# Combine with other flags
+evnx validate --strict --ignore extra_variable --format json
+```
+
+**Common scenarios**:
+
+| Scenario | Suggested `--ignore` | Reason |
+|----------|---------------------|--------|
+| Local Docker development | `localhost_in_docker` | localhost is expected locally |
+| Legacy code with string booleans | `boolean_trap` | Refactor planned, not blocking |
+| Developer-specific env vars | `extra_variable` | Personal overrides are OK |
+| Example values in docs | `placeholder_value` | `.env.example` intentionally has placeholders |
+
+<Callout type="warning" title="Don't ignore everything">
+Using `--ignore` to suppress all warnings defeats the purpose of validation. Only ignore issues you've consciously reviewed and accepted.
+</Callout>
+
+---
+
+## 🎯 Use case 6: Security audit mode
+
+**When**: Preparing for a security review or compliance check
+
+**What**: Focus validation on security-critical issues
+
+```bash
+# Run strict validation, output JSON for analysis
+evnx validate --strict --validate-formats --format json > audit.json
+
+# Extract only security-relevant errors
+jq '[.issues[] | select(.severity == "error" and (.type == "weak_secret" or .type == "placeholder_value"))]' audit.json
+
+# Check specifically for weak secrets
+evnx validate --format json | jq -r '.issues[] | select(.type == "weak_secret") | "🔐 \(.variable): \(.message)"'
+```
+
+**Security checks performed**:
+- ✅ SECRET_KEY length ≥ 32 characters
+- ✅ No weak patterns (`password`, `secret`, `1234`, `changeme`)
+- ✅ No placeholder values in sensitive variables
+- ✅ AWS/Stripe keys not set to example values
+
+---
+
+## 🔧 Common patterns & recipes
+
+### Pre-commit hook
+
+```bash
+# .git/hooks/pre-commit
+#!/bin/bash
+set -e
+
+echo "🔍 Validating environment configuration..."
+
+if ! evnx validate --format json --exit-zero | jq -e '.summary.errors == 0' > /dev/null; then
+    echo "❌ Environment validation failed!"
+    echo "💡 Run 'evnx validate' to see details"
+    echo "💡 Or run 'evnx validate --fix' to auto-correct common issues"
+    exit 1
+fi
+
+echo "✅ Environment validation passed"
+```
+
+Make it executable:
+```bash
+chmod +x .git/hooks/pre-commit
+```
+
+### Docker build integration
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine
+
+# Install evnx
+RUN curl -fsSL https://dotenv.space/install.sh | bash
+
+# Copy and validate environment template
+COPY .env.example /app/.env.example
+RUN evnx validate --example /app/.env.example --format github-actions || true
+
+# Continue with build...
+COPY . /app
+WORKDIR /app
+```
+
+### npm script integration
+
+```json
+{
+  "scripts": {
+    "env:check": "evnx validate",
+    "env:fix": "evnx validate --fix",
+    "env:ci": "evnx validate --strict --format json",
+    "prestart": "npm run env:check"
+  }
+}
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### "Validation failed but I don't see errors"
+
+```bash
+# Check output format
+evnx validate --format pretty
+
+# Enable verbose mode
+evnx validate -v
+
+# Check exit code explicitly
+evnx validate; echo "Exit code: $?"
+```
+
+### "Auto-fix didn't change my file"
+
+```bash
+# --fix only applies to auto-fixable issues
+evnx validate --format json | jq '.issues[] | select(.auto_fixable == false)'
+
+# Review which issues were fixed
+evnx validate --fix --format json | jq '.fixed'
+
+# Check file permissions
+ls -la .env
+```
+
+### "Port validation rejects valid port 0"
+
+Port 0 is reserved by the OS for ephemeral assignment and is not valid for application configuration.
+
+```bash
+# Use a valid port (1-65535)
+MY_PORT=8080  # ✅ Valid
+MY_PORT=0     # ❌ Invalid (reserved)
+```
+
+---
+
+## ✅ Best practices checklist
+
+<Callout type="success" title="Do this">
+- ✅ Commit `.env.example`, never `.env`
+- ✅ Run `evnx validate` in CI before deployment
+- ✅ Use `--fix` for onboarding, then review changes
+- ✅ Validate formats for production configs
+- ✅ Add validation to pre-commit hooks
+</Callout>
+
+<Callout type="danger" title="Avoid this">
+- ❌ Don't commit `.env` with real secrets
+- ❌ Don't ignore all warnings in CI
+- ❌ Don't use `--exit-zero` to hide failures
+- ❌ Don't skip validation for "just this once"
+</Callout>
+
+---
+
+## 🔄 Migration: Upgrading validate
+
+If you're upgrading from an older version:
+
+### Breaking changes
+| Old behavior | New behavior | Action |
+|-------------|--------------|--------|
+| Boolean message mentioned Python | Language-agnostic message | Update test assertions if you check output |
+| UI headers in all output formats | UI only in `pretty` format | No action needed (improvement) |
+| `--fix` was unimplemented | `--fix` now works | Try `--fix` for faster onboarding |
+
+### New features to explore
+```bash
+# Try auto-fix
+evnx validate --fix
+
+# Validate formats
+evnx validate --validate-formats
+
+# Suppress specific warnings
+evnx validate --ignore boolean_trap
+
+# Use environment patterns
+evnx validate --pattern .env.production
+```
+
+---
+
+## 📞 Getting help
+
+```bash
+# Full help
+evnx validate --help
+
+# Verbose debugging
+evnx validate -v
+
+# Report issues
+https://github.com/urwithajit9/evnx/issues
+```
+
+---
+
+## 🧪 Quick reference
+
+```bash
+# ─────────────────────────────────────
+# Local Development
+# ─────────────────────────────────────
+evnx validate                          # Quick check
+evnx validate --fix                    # Auto-fix issues
+evnx validate --ignore localhost_in_docker  # Skip Docker warnings
+
+# ─────────────────────────────────────
+# CI/CD Integration
+# ─────────────────────────────────────
+evnx validate --format github-actions  # GitHub annotations
+evnx validate --format json            # Machine-readable
+evnx validate --strict --exit-zero     # Warnings OK, errors fail
+
+# ─────────────────────────────────────
+# Multi-Environment
+# ─────────────────────────────────────
+evnx validate --pattern .env.local         # Dev
+evnx validate --pattern .env.staging       # Staging
+evnx validate --pattern .env.production --validate-formats  # Prod
+
+# ─────────────────────────────────────
+# Security & Auditing
+# ─────────────────────────────────────
+evnx validate --strict --format json | jq '.issues[] | select(.severity=="error")'
+
+# ─────────────────────────────────────
+# Output & Integration
+# ─────────────────────────────────────
+evnx validate --format json > report.json
+evnx validate --format json | jq '.summary'
+evnx validate && cargo run        # Validate before running
+```
+
+---
+
+<Callout type="tip" title="Pro tip">
+Add `evnx validate` to your `pre-commit` hook and CI pipeline to catch environment issues before they reach production!
+</Callout>
+
+---
+
+## Related guides
+
+- **[Setting up .env.example](/guides/env-example)** — best practices for environment templates
+- **[Secrets management](/guides/secrets)** — when to use evnx vs. cloud secret managers
+- **[CI/CD integration](/guides/ci-cd)** — full pipeline examples with evnx
+

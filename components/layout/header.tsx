@@ -12,7 +12,8 @@ const NAV_LINKS = [
   { href: "/blog", label: "Blog" },
   { href: "/testimonials", label: "Testimonials" },
   { href: "/changelog", label: "Changelog" },
-  { href: "/pricing", label: "Pricing" },
+  // { href: "/pricing", label: "Pricing" },
+  // { href: "/login", label: "Login"},
 ];
 
 export function Header() {

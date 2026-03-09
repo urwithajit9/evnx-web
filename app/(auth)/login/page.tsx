@@ -28,7 +28,7 @@ export default function LoginPage() {
                 Authentication coming soon with cloud features.
               </p>
               <p className="text-xs text-text-muted">
-                Cloud sync and team collaboration launching Q2 2024
+                Cloud sync and team collaboration launching Q4 2026
               </p>
             </div>
           </div>

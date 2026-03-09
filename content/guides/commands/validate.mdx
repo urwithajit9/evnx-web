@@ -1,0 +1,194 @@
+---
+title: "evnx validate"
+slug: validate
+section: commands
+order: 4
+publishedAt: "2026-03-09"
+excerpt: "Validate .env against .env.example — catch missing variables, placeholders, weak secrets, and format issues before deployment."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx validate` compares your `.env` file against a `.env.example` template and runs comprehensive checks for configuration issues, security problems, and best-practice violations.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx validate [OPTIONS]
+```
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--env` | `string` | `.env` | Path to your environment file |
+| `--example` | `string` | `.env.example` | Path to your example/template file |
+| `--strict` | `bool` | `false` | Warn about extra variables not in `.env.example` |
+| `--fix` | `bool` | `false` | Auto-fix common issues (placeholders, booleans, weak secrets) |
+| `--format` | `pretty\|json\|github-actions` | `pretty` | Output format |
+| `--exit-zero` | `bool` | `false` | Always exit 0 (useful for CI) |
+| `--ignore` | `string[]` | `[]` | Comma-separated issue types to suppress |
+| `--validate-formats` | `bool` | `false` | Enable URL/port/email format validation |
+| `--pattern` | `string` | `None` | Use `.env.*` files like `.env.production`, `.env.local` |
+| `-v, --verbose` | `bool` | `false` | Enable verbose output |
+
+---
+
+## Validation checks
+
+evnx validate runs these checks automatically:
+
+| Check | Severity | Auto-fixable | Description |
+|-------|----------|--------------|-------------|
+| `missing_variable` | `error` | ✅ | Variable in `.env.example` not present in `.env` |
+| `extra_variable` | `warning` | ❌ | Variable in `.env` not in `.env.example` (strict mode) |
+| `placeholder_value` | `error` | ✅ | Value looks like `changeme`, `your_key_here`, etc. |
+| `boolean_trap` | `warning` | ✅ | `DEBUG=False` (string) vs `DEBUG=false` (boolean) |
+| `weak_secret` | `error` | ✅ | SECRET_KEY < 32 chars or contains weak patterns |
+| `localhost_in_docker` | `warning` | ❌ | localhost URL when Docker files detected |
+| `invalid_url` | `warning` | ❌ | URL variable doesn't match `https?://...` |
+| `invalid_port` | `error` | ❌ | Port variable not in range 1-65535 |
+| `invalid_email` | `warning` | ❌ | Email variable doesn't match standard format |
+
+<Callout type="info" title="Auto-fix behavior">
+The `--fix` flag only applies to issues marked as auto-fixable. It generates secure secrets, replaces placeholders with sensible defaults, and fixes boolean formatting. Always review changes with `git diff` before committing.
+</Callout>
+
+---
+
+## Output formats
+
+### Pretty (default)
+
+Human-readable, color-coded output for terminal use:
+
+```bash
+evnx validate
+```
+
+```
+┌─ evnx validate ────────────────────────────────────────────┐
+│ Check environment configuration                           │
+└───────────────────────────────────────────────────────────┘
+
+📋 Preview:
+
+⚠️ Issues Found:
+  1. 🚨 Missing required variable: API_KEY
+     → Add API_KEY=<value> to .env
+     💡 Auto-fixable with --fix
+     📍 .env:?
+
+  2. ⚠️ DEBUG is set to "False" (string, not boolean)
+     → Use false or 0 for proper boolean handling
+     💡 Auto-fixable with --fix
+     📍 .env:?
+
+┌─ Summary ─────────────────────────────────────────────────┐
+│ Errors: 1  |  Warnings: 1  |  Fixed: 0                   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### JSON
+
+For programmatic processing or CI/CD integration:
+
+```bash
+evnx validate --format json
+```
+
+```json
+{
+  "status": "failed",
+  "required_present": 8,
+  "required_total": 10,
+  "issues": [
+    {
+      "severity": "error",
+      "type": "missing_variable",
+      "variable": "API_KEY",
+      "message": "Missing required variable: API_KEY",
+      "location": ".env:?",
+      "suggestion": "Add API_KEY=<value> to .env",
+      "auto_fixable": true
+    }
+  ],
+  "fixed": [],
+  "summary": {
+    "errors": 1,
+    "warnings": 1,
+    "style": 0,
+    "fixed_count": 0
+  }
+}
+```
+
+### GitHub Actions
+
+Inline annotations for PR checks:
+
+```bash
+evnx validate --format github-actions
+```
+
+```
+::error file=.env,line=1::Missing required variable: API_KEY
+::warning file=.env,line=1::DEBUG is set to "False" (string, not boolean)
+```
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | No errors (or `--exit-zero` set) |
+| `1` | One or more errors detected |
+
+<Callout type="tip" title="CI/CD tip">
+Use `--exit-zero` to report findings without blocking the pipeline. Combine with `--format json` to parse results in scripts.
+</Callout>
+
+---
+
+## Quick examples
+
+```bash
+# Basic validation
+evnx validate
+
+# Auto-fix common issues
+evnx validate --fix
+
+# Strict mode + JSON for CI
+evnx validate --strict --format json
+
+# Validate production config with format checks
+evnx validate --pattern .env.production --validate-formats
+
+# Suppress specific warnings
+evnx validate --ignore boolean_trap,localhost_in_docker
+
+# Verbose debugging
+evnx validate -v
+```
+
+---
+
+## Related commands
+
+- **[evnx scan](/guides/commands/scan)** — detect secrets and high-entropy strings in `.env` files
+- **[evnx migrate](/guides/commands/migrate)** — move secrets to cloud secret managers
+- **[evnx doctor](/guides/commands/doctor)** — full environment health check
+
