@@ -1,0 +1,373 @@
+---
+title: "evnx restore"
+slug: restore
+section: commands
+order: 4
+publishedAt: "2026-03-10"
+excerpt: "Decrypt and restore a .env file from an encrypted backup created by evnx backup. Includes safety features to prevent accidental overwrites."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["restore", "backup", "encryption", "disaster-recovery", "evnx"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/backup
+draft: false
+---
+
+`evnx restore` decrypts and restores a `.env` file from an encrypted backup created by `evnx backup`. It uses the same AES-256-GCM encryption and Argon2id key derivation, ensuring your secrets are only accessible with the correct password.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/backup">Create a backup first</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx restore [OPTIONS] <BACKUP>
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<BACKUP>` | Yes | Path to the `.backup` file created by `evnx backup` |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--output` | `string` | `.env` | Destination path for the restored file |
+| `--dry-run` | `bool` | `false` | Decrypt and validate but do not write any files |
+| `--verbose` | `bool` | `false` | Print extra diagnostic information |
+
+
+
+
+---
+
+## Safety features
+
+### Overwrite protection (no `--force`)
+
+If the output file already exists, `evnx restore` **always prompts** before overwriting. There is intentionally no `--force` flag.
+
+```
+⚠️  Output file already exists: .env
+Overwrite .env? (y/N) ›
+```
+
+<Callout type="info" title="Why no --force?">
+The `.env` file often contains production credentials. An accidental overwrite could:
+- Destroy credentials not backed up elsewhere
+- Break running applications
+- Require manual recovery from other sources
+
+The prompt adds intentional friction to prevent costly mistakes.
+</Callout>
+
+### Validation fallback (`.restored` suffix)
+
+If decrypted content does not look like a valid `.env` file, evnx writes to `<output>.restored` instead:
+
+```
+⚠️  Decrypted content does not look like a valid .env file.
+  Writing to .env.restored instead of .env to protect your current file.
+  Inspect the file manually, then rename it if the content is correct:
+    mv .env.restored .env
+```
+
+The validation uses a heuristic: at least **80%** of non-empty lines must be blank, comments (`#`), or `KEY=VALUE` assignments with alphanumeric keys.
+
+<Callout type="tip" title="When fallback is useful">
+The `.restored` fallback helps when:
+- The backup was created with a different tool or format
+- The file was corrupted during transfer
+- You're restoring a non-.env file that was encrypted with evnx
+
+You can inspect the output and manually rename it if the content is correct.
+</Callout>
+
+### Password handling asymmetry
+
+Unlike `backup`, the `restore` command uses a **single password prompt** without confirmation.
+
+<Callout type="info" title="Why single prompt for restore?">
+- **Backup**: A typo in the password makes data permanently unrecoverable → confirmation required
+- **Restore**: A typo simply fails decryption (safe, reversible error) → single prompt for UX
+
+This asymmetry is intentional and documented.
+</Callout>
+
+---
+
+## Basic usage
+
+### Restore to default location
+
+```bash
+evnx restore .env.backup
+```
+
+```
+┌─ Restore from encrypted backup ─────────────────────┐
+│ Your backup will be decrypted with AES-256-GCM      │
+└──────────────────────────────────────────────────────┘
+
+✓ Read backup from .env.backup
+Enter decryption password: ••••••••
+Decrypting… (Argon2id key derivation in progress)
+✓ Decryption successful
+✓ Decryption key cleared from memory
+
+Backup information:
+  Schema version: v1
+  Original file : .env
+  Created at    : 2026-03-10T14:30:00Z
+  Tool version  : evnx v0.2.1
+  Variables     : 12
+
+✓ Restored 12 variables to .env
+
+Next steps:
+  1. Run: evnx validate --env .env
+  2. Verify your application starts correctly
+  3. Delete the backup file once you have confirmed the restore
+```
+
+### Restore to a custom path
+
+```bash
+evnx restore .env.backup --output .env.production
+```
+
+Useful when restoring to a different environment or testing before overwriting the live file.
+
+### Dry-run mode (validate without writing)
+
+```bash
+evnx restore .env.backup --dry-run
+```
+
+```
+✓ Dry-run successful — no files were written
+
+Backup information:
+  Schema version: v1
+  Original file : .env
+  Created at    : 2026-03-10T14:30:00Z
+  Tool version  : evnx v0.2.1
+  Variables     : 12
+
+✓ Decrypted content appears to be a valid .env file
+```
+
+<Callout type="tip" title="When to use --dry-run">
+Use `--dry-run` to:
+- Verify a backup is readable before a critical restore
+- Check which environment a backup was created for (via metadata)
+- Audit backup contents without modifying any files
+- Test automation scripts before enabling writes
+</Callout>
+
+---
+
+## Automation and CI/CD
+
+
+
+### Dry-run in CI for validation
+
+```yaml
+- name: Validate backup integrity
+  run: |
+    evnx restore latest.backup --dry-run --password "$BACKUP_PASSWORD" \
+      | grep -q "Decrypted content appears to be a valid .env file"
+```
+
+### Conditional restore based on environment
+
+```bash
+#!/bin/bash
+# restore-if-needed.sh
+
+BACKUP="backups/prod.backup"
+OUTPUT=".env.production"
+
+# Only restore if .env.production doesn't exist
+if [ ! -f "$OUTPUT" ]; then
+  echo "No $OUTPUT found — restoring from backup..."
+  evnx restore "$BACKUP" --output "$OUTPUT" --password "$ENV_PASSWORD"
+else
+  echo "$OUTPUT already exists — skipping restore"
+fi
+```
+
+---
+
+## Error handling and troubleshooting
+
+### "Backup file not found"
+
+```
+Error: Backup file not found: .env.backup
+```
+
+**Fix**: Verify the backup path and ensure the file was transferred correctly.
+
+### "Decryption failed. The password may be incorrect or the backup file is corrupt."
+
+This error intentionally does not distinguish between wrong password and file corruption to avoid leaking information.
+
+**Troubleshooting steps**:
+1. Verify you're using the correct password for this backup
+2. Check the backup file wasn't truncated during transfer (`wc -c .env.backup`)
+3. Try restoring with `--dry-run` to see if metadata is readable
+4. If you suspect corruption, restore from a different backup generation
+
+### "Backup envelope is missing the 'content' field"
+
+The decrypted JSON envelope is malformed. This could indicate:
+- Backup created with an incompatible tool version
+- File corruption
+- Tampering
+
+**Fix**: Verify the backup source and try an earlier backup generation.
+
+### "Unsupported backup format version"
+
+```
+Error: Unsupported backup format version: 2.
+This backup was created by a newer version of evnx.
+Please upgrade the tool and try again.
+```
+
+**Fix**: Update evnx to the latest version:
+
+```bash
+cargo install evnx --features backup --force
+```
+
+### "Feature not enabled"
+
+```
+✗ Backup/restore feature not enabled
+Rebuild with: cargo build --features backup
+```
+
+**Fix**: Rebuild with the feature flag enabled (see [backup docs](/guides/commands/backup#feature-flag-awareness)).
+
+---
+
+## Security considerations
+
+### Password memory handling
+
+evnx uses the `zeroize` crate to clear passwords from heap memory after use:
+
+```
+✓ Decryption key cleared from memory
+```
+
+This reduces the window for memory-scraping attacks, though it cannot eliminate all risks on a compromised system.
+
+### File permissions
+
+Restored `.env` files are created with restrictive permissions on Unix:
+
+```bash
+$ evnx restore .env.backup
+$ ls -l .env
+-rw------- 1 user user 342 Mar 10 15:00 .env  # 0o600: owner read/write only
+```
+
+### Metadata exposure
+
+Backup metadata (original filename, creation timestamp, tool version) is encrypted inside the payload. An attacker without the password cannot:
+- Learn which environment the backup was for
+- Determine when it was created
+- Tamper with metadata without detection
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Restore completed successfully (or dry-run validated) |
+| `1` | Error: backup not found, decryption failed, write failed |
+| `2` | Error: invalid password (empty) or user cancelled overwrite prompt |
+
+---
+
+## Best practices
+
+### Test restores regularly
+
+A backup strategy is only as good as your ability to restore. Schedule periodic restore tests:
+
+```bash
+# Monthly restore test script
+#!/bin/bash
+BACKUP_DIR="backups"
+TEST_DIR="$(mktemp -d)"
+
+for backup in "$BACKUP_DIR"/*.backup; do
+  echo "Testing restore: $backup"
+  evnx restore "$backup" --output "$TEST_DIR/.env" --dry-run \
+    || echo "  ❌ Failed: $backup"
+done
+
+rm -rf "$TEST_DIR"
+```
+
+### Use `--dry-run` in automation pipelines
+
+Before enabling writes in CI/CD, validate backups with dry-run:
+
+```yaml
+- name: Validate backup before deploy
+  run: evnx restore latest.backup --dry-run --password "$PASSWORD"
+
+- name: Restore if validation passed
+  run: evnx restore latest.backup --output .env --password "$PASSWORD"
+  if: success()
+```
+
+### Document restore procedures
+
+Include restore instructions in your runbooks:
+
+```markdown
+## Emergency restore procedure
+
+1. Locate the most recent backup: `ls -lt backups/*.backup`
+2. Verify backup integrity: `evnx restore latest.backup --dry-run`
+3. Restore to staging first: `evnx restore latest.backup --output .env.staging`
+4. Test application with restored config
+5. If successful, restore to production: `evnx restore latest.backup --output .env.production`
+6. Monitor application logs for credential-related errors
+```
+
+### Rotate backup passwords
+
+Periodically rotate backup passwords and re-encrypt existing backups:
+
+```bash
+# Re-encrypt with new password
+evnx restore old.backup --dry-run --password "$OLD_PASS"
+evnx restore old.backup --output new.backup --password "$NEW_PASS"
+# Verify new.backup works, then delete old.backup
+```
+
+---
+
+## Related commands
+
+- **[evnx backup](/guides/commands/backup)** — create an encrypted backup of your `.env` file
+- **[evnx validate](/guides/commands/validate)** — check `.env` files for misconfiguration
+- **[evnx scan](/guides/commands/scan)** — detect secrets and sensitive patterns in `.env` files
+- **[evnx doctor](/guides/commands/doctor)** — full environment health check including backup status

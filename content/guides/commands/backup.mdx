@@ -1,0 +1,310 @@
+---
+title: "evnx backup"
+slug: backup
+section: commands
+order: 3
+publishedAt: "2026-03-10"
+excerpt: "Create an encrypted, portable backup of your .env file using AES-256-GCM and Argon2id key derivation."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["backup", "encryption", "security", "disaster-recovery", "evnx"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx backup` creates a cryptographically secure, portable backup of your `.env` file. The backup is encrypted with **AES-256-GCM** using a key derived from your password via **Argon2id**, ensuring your secrets remain confidential even if the backup file is exposed.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/concepts/security-model">Understand evnx security model</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx backup [OPTIONS]
+```
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--env` | `string` | `.env` | Path to the `.env` file to back up |
+| `--output` | `string` | `<env>.backup` | Destination path for the encrypted backup |
+| `--verbose` | `bool` | `false` | Print extra diagnostic information |
+
+
+
+## How encryption works
+
+### Security model
+
+Every backup uses industry-standard cryptography:
+
+```
+┌─────────────────────────────────────────┐
+│ 1. User enters password (no echo)       │
+│ 2. Fresh 32-byte salt generated         │
+│ 3. Argon2id derives 32-byte AES key     │
+│    • Memory: 64 MiB                     │
+│    • Iterations: 3                      │
+│    • Parallelism: 1                     │
+│ 4. Fresh 12-byte nonce generated        │
+│ 5. AES-256-GCM encrypts JSON envelope   │
+│ 6. Binary envelope Base64-encoded       │
+│ 7. File written with 0o600 permissions  │
+└─────────────────────────────────────────┘
+```
+
+### Binary format (version 1)
+
+```text
+┌─────────┬────────────┬──────────┬────────────────────────────────┐
+│ version │    salt    │  nonce   │  AES-256-GCM ciphertext        │
+│  1 byte │  32 bytes  │ 12 bytes │  variable (JSON envelope)      │
+└─────────┴────────────┴──────────┴────────────────────────────────┘
+```
+
+The entire structure is Base64-encoded before being written to disk.
+
+### Encrypted payload structure
+
+The ciphertext decrypts to a JSON envelope containing both your `.env` content and metadata:
+
+```json
+{
+  "schema_version": 1,
+  "version": 1,
+  "created_at": "2026-03-10T14:30:00Z",
+  "original_file": ".env.production",
+  "tool_version": "0.2.1",
+  "content": "DATABASE_URL=postgresql://...\nAPI_KEY=sk-...\n"
+}
+```
+
+<Callout type="info" title="Why metadata is encrypted">
+Embedding metadata *inside* the encrypted payload means it is both **confidential** (an attacker cannot learn filenames or timestamps without the password) and **tamper-evident** (altering metadata invalidates the GCM authentication tag).
+</Callout>
+
+---
+
+## Basic usage
+
+### Create a backup of `.env`
+
+```bash
+evnx backup
+```
+
+```
+┌─ Create encrypted backup ───────────────────────────┐
+│ Your .env will be encrypted with AES-256-GCM        │
+│ Key derived via Argon2id (64 MiB, 3 iterations)     │
+└──────────────────────────────────────────────────────┘
+
+✓ Read 342 bytes from .env
+Enter encryption password: ••••••••
+Confirm password: ••••••••
+✓ Password accepted
+Encrypting… (Argon2id key derivation in progress)
+✓ Backup created at .env.backup
+    Size: 1024 bytes (encrypted + Base64)
+
+⚠️  Important:
+  • Keep your password safe — it cannot be recovered
+  • Store the backup in a secure, separate location
+  • To restore: evnx restore .env.backup --output .env
+  • Test the restore before deleting the original .env
+```
+
+### Backup a specific environment file
+
+```bash
+evnx backup --env .env.production --output prod.backup
+```
+
+### Verbose mode for debugging
+
+```bash
+evnx backup --verbose
+```
+
+```
+Running backup in verbose mode
+┌─ Create encrypted backup ───────────────────────────┐
+│ Your .env will be encrypted with AES-256-GCM        │
+│ Key derived via Argon2id (64 MiB, 3 iterations)     │
+└──────────────────────────────────────────────────────┘
+
+✓ Read 342 bytes from .env.production
+Enter encryption password: ••••••••
+Confirm password: ••••••••
+✓ Password accepted
+Encrypting… (Argon2id key derivation in progress)
+✓ Decryption key cleared from memory
+✓ Backup created at prod.backup
+    Size: 1024 bytes (encrypted + Base64)
+```
+
+---
+
+## Automation and CI/CD
+
+### Pre-commit backup hook
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: evnx-backup
+        name: evnx — backup .env before commit
+        entry: bash -c 'evnx backup --output .env.backup.pre-commit'
+        language: system
+        files: '\.env$'
+        pass_filenames: false
+```
+
+---
+
+## File permissions and security
+
+### Automatic permission hardening
+
+On Unix-like systems, `evnx backup` creates backup files with restrictive permissions:
+
+```bash
+$ evnx backup
+$ ls -l .env.backup
+-rw------- 1 user user 1024 Mar 10 14:30 .env.backup  # 0o600: owner read/write only
+```
+
+This prevents other users on the same system from reading your encrypted backups.
+
+### Verifying backup integrity
+
+You can verify a backup was created correctly by testing restore in dry-run mode:
+
+```bash
+evnx restore .env.backup --dry-run --password "$BACKUP_PASSWORD"
+```
+
+```
+✓ Dry-run successful — no files were written
+
+Backup information:
+  Schema version: v1
+  Original file : .env
+  Created at    : 2026-03-10T14:30:00Z
+  Tool version  : evnx v0.2.1
+  Variables     : 12
+
+✓ Decrypted content appears to be a valid .env file
+```
+
+---
+
+## Troubleshooting
+
+### "Password must be at least 8 characters"
+
+evnx enforces a minimum password length as a sanity check. Argon2id makes brute-forcing expensive, but short passwords remain vulnerable to dictionary attacks.
+
+**Fix**: Use a stronger password or passphrase:
+
+```bash
+# ❌ Too short
+evnx backup --password "short"
+
+# ✅ Acceptable
+evnx backup --password "correct-horse-battery-staple"
+```
+
+### "File does not look like a standard .env file"
+
+evnx heuristically checks if the input resembles a `.env` file. This warning is non-fatal — you can still back up non-standard files.
+
+```
+⚠️  File does not look like a standard .env file — backing up anyway
+```
+
+<Callout type="tip" title="When this is expected">
+This warning appears when backing up:
+- Files with unusual formatting
+- Files containing mostly comments
+- Non-.env files you intentionally want to encrypt
+
+If unexpected, verify you specified the correct `--env` path.
+</Callout>
+
+### "Backup feature not enabled"
+
+The backup/restore feature is optional and must be enabled at build time:
+
+```
+✗ Backup feature not enabled
+Rebuild with: cargo build --features backup
+```
+
+**Fix**: Rebuild with the feature flag:
+
+```bash
+cargo install evnx --features backup
+# or for local development:
+cargo build --features backup
+```
+
+---
+
+## Best practices
+
+### Password management
+
+- **Never** commit backup passwords to version control
+- Use a password manager to generate and store strong, unique passwords
+- Consider using different passwords for different environments (dev/staging/prod)
+- Rotate backup passwords periodically and re-encrypt existing backups
+
+### Backup storage
+
+- Store backups in a location separate from your source code repository
+- Use encrypted storage or secret managers for backup files themselves
+- Keep multiple generations of backups for disaster recovery
+- Test restore procedures regularly — a backup you can't restore is not a backup
+
+### Feature flag awareness
+
+Since backup/restore is feature-gated:
+
+```toml
+# Cargo.toml
+[features]
+default = []
+backup = ["dep:aes-gcm", "dep:argon2", "dep:base64", "dep:chrono", "dep:serde_json"]
+```
+
+Document this requirement in team onboarding materials to avoid confusion.
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Backup created successfully |
+| `1` | Error: file not found, permission denied, encryption failed |
+| `2` | Error: invalid password (empty, too short, mismatch) |
+
+---
+
+## Related commands
+
+- **[evnx restore](/guides/commands/restore)** — decrypt and restore a backup to a `.env` file
+- **[evnx validate](/guides/commands/validate)** — check `.env` files for misconfiguration
+- **[evnx scan](/guides/commands/scan)** — detect secrets and sensitive patterns in `.env` files
+
+

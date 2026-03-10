@@ -1,0 +1,570 @@
+---
+title: "Security Model -e vnx"
+slug: "concepts-security-model"
+section: reference
+order: 2
+publishedAt: "2026-03-10"
+updatedAt: "2026-03-10"
+excerpt: "Deep dive into evnx cryptographic architecture: AES-256-GCM encryption, Argon2id key derivation, and defense-in-depth design principles."
+difficulty: "intermediate"
+timeToComplete: "15 minutes"
+tags: ["security", "cryptography", "encryption", "argon2", "aes-gcm", "evnx"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/backup
+draft: false
+---
+
+# evnx Security Model
+
+<Callout type="tip" title="Who this is for">
+This guide is for security-conscious users, DevOps engineers, and auditors who need to understand how evnx protects sensitive configuration data. If you just want to use backup/restore, see the [command references](/guides/commands/backup) instead.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/backup">Understand backup command basics</Prerequisite>
+</Prerequisites>
+
+---
+
+## Core security principles
+
+evnx is built on four foundational principles:
+
+| Principle | Implementation | Why it matters |
+|-----------|---------------|----------------|
+| **Confidentiality** | AES-256-GCM authenticated encryption | Secrets remain unreadable without the password |
+| **Integrity** | GCM authentication tag + JSON schema validation | Detect tampering or corruption before restore |
+| **Key uniqueness** | Fresh salt + nonce per operation | Identical inputs produce different ciphertexts |
+| **Defense in depth** | Multiple independent safety layers | Single failure doesn't compromise security |
+
+<Callout type="info" title="Threat model scope">
+evnx protects against:
+- ✅ Backup file theft (encrypted at rest)
+- ✅ Password brute-force (Argon2id memory-hard KDF)
+- ✅ File tampering (GCM authentication)
+- ✅ Accidental overwrites (prompt + fallback path)
+
+evnx does **not** protect against:
+- ❌ Compromised host with memory access (password in use)
+- ❌ Social engineering to obtain password
+- ❌ Weak passwords chosen by user
+- ❌ Malicious `--password` flag exposure in shell history
+</Callout>
+
+---
+
+## Cryptographic architecture
+
+### Encryption flow diagram
+
+```
+┌─────────────────────────────────────────────────┐
+│ 1. User enters password (no echo, dialoguer)    │
+│ 2. Generate fresh 32-byte salt (OsRng)          │
+│ 3. Argon2id derives 32-byte key                 │
+│    • Variant: Argon2id (GPU + side-channel res) │
+│    • Memory: 64 MiB                             │
+│    • Iterations: 3                              │
+│    • Parallelism: 1                             │
+│    • Output: 32 bytes (AES-256 key)             │
+│ 4. Generate fresh 12-byte nonce (OsRng)         │
+│ 5. Build JSON envelope with metadata + content  │
+│ 6. AES-256-GCM encrypt envelope                 │
+│ 7. Assemble binary: v1 || salt || nonce || ct   │
+│ 8. Base64-encode for portability                │
+│ 9. Write file with 0o600 permissions (Unix)     │
+└─────────────────────────────────────────────────┘
+```
+
+### Binary format specification (version 1)
+
+```text
+Offset  Length  Field           Description
+──────  ──────  ─────────────   ─────────────────────────────
+0       1       version         Format version (currently 1)
+1       32      salt            Argon2id salt (random per backup)
+33      12      nonce           AES-GCM nonce (random per encryption)
+45      variable ciphertext     AES-256-GCM output + 16-byte auth tag
+```
+
+The entire binary structure is Base64-encoded using the standard alphabet before being written to disk.
+
+<Callout type="warning" title="Format versioning">
+The leading version byte enables future format changes. If evnx encounters `version != 1`, it returns a clear error:
+
+```
+Error: Unsupported backup format version: 2.
+This backup was created by a newer version of evnx.
+Please upgrade the tool and try again.
+```
+
+Never manually edit the binary format — always use evnx commands.
+</Callout>
+
+### JSON envelope structure
+
+The ciphertext decrypts to a UTF-8 JSON object:
+
+```json
+{
+  "schema_version": 1,
+  "version": 1,
+  "created_at": "2026-03-10T14:30:00Z",
+  "original_file": ".env.production",
+  "tool_version": "0.2.1",
+  "content": "DATABASE_URL=postgresql://...\nAPI_KEY=sk-...\n"
+}
+```
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `schema_version` | `integer` | JSON envelope schema (for future extension) |
+| `version` | `integer` | Binary format version (matches leading byte) |
+| `created_at` | `string` | ISO 8601 UTC timestamp of backup creation |
+| `original_file` | `string` | Original filename (for user context during restore) |
+| `tool_version` | `string` | evnx version that created the backup |
+| `content` | `string` | Raw `.env` file content (the sensitive payload) |
+
+<Callout type="info" title="Why metadata is encrypted">
+Embedding metadata *inside* the encrypted payload provides two guarantees:
+
+1. **Confidentiality**: An attacker without the password cannot learn which environment the backup was for, when it was created, or what tool version made it.
+
+2. **Tamper-evidence**: The GCM authentication tag covers the entire JSON envelope. Any modification to metadata (or content) invalidates the tag, causing decryption to fail with a generic error that doesn't leak which part was altered.
+</Callout>
+
+---
+
+## Key derivation: Argon2id parameters
+
+### Parameter table
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| `variant` | `Argon2id` | Hybrid: resistant to GPU cracking + side-channel attacks |
+| `memory_cost` | `65536` (64 MiB) | Slows brute-force on commodity hardware; tunable for future |
+| `time_cost` | `3` iterations | Adds time cost on top of memory; balances security vs. UX |
+| `parallelism` | `1` thread | Single-threaded CLI usage; avoids thread-safety complexity |
+| `output_len` | `32` bytes | Exactly one AES-256 key; no truncation or expansion needed |
+
+### Why these values?
+
+```rust
+// From backup.rs encrypt_content():
+let params = Params::new(65536, 3, 1, Some(32))?;
+let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+```
+
+- **64 MiB memory**: Makes GPU/FPGA attacks expensive (memory bandwidth is the bottleneck)
+- **3 iterations**: Adds ~3x time cost without making interactive use unbearable
+- **Argon2id variant**: Best of both worlds — Argon2i's side-channel resistance + Argon2d's GPU resistance
+
+<Callout type="tip" title="Adjusting parameters">
+These parameters are hardcoded for consistency. If you need different values (e.g., for embedded systems), fork evnx and modify `Params::new()`. Document your changes for auditability.
+
+Future versions may support `--kdf-profile` flags for predefined parameter sets.
+</Callout>
+
+---
+
+## Randomness and uniqueness guarantees
+
+### Salt and nonce generation
+
+```rust
+// Fresh salt for key derivation (32 bytes)
+let mut salt_bytes = [0u8; 32];
+OsRng.fill_bytes(&mut salt_bytes);
+
+// Fresh nonce for encryption (12 bytes)
+let mut nonce_bytes = [0u8; 12];
+OsRng.fill_bytes(&mut nonce_bytes);
+```
+
+| Value | Purpose | Uniqueness guarantee |
+|-------|---------|---------------------|
+| `salt` | Argon2id input | Fresh per backup → same password + file → different key |
+| `nonce` | AES-GCM input | Fresh per encryption → same key + plaintext → different ciphertext |
+
+### Why both salt AND nonce?
+
+- **Salt** ensures the *derived key* is unique per backup
+- **Nonce** ensures the *ciphertext* is unique per encryption
+
+This dual randomness means:
+
+```bash
+# Two backups of identical .env with same password:
+$ evnx backup --output a.backup  # password: "correct-horse"
+$ evnx backup --output b.backup  # password: "correct-horse"
+
+$ diff a.backup b.backup  # Files are DIFFERENT (Base64 output varies)
+```
+
+<Callout type="warning" title="Never reuse nonces">
+AES-GCM security collapses if the same (key, nonce) pair encrypts two different messages. evnx uses `OsRng` (OS-provided CSPRNG) to guarantee nonce uniqueness. Never manually specify nonces or salts.
+</Callout>
+
+---
+
+## Password handling and memory safety
+
+### Interactive input
+
+```rust
+use dialoguer::Password;
+
+let password = Password::new()
+    .with_prompt("Enter encryption password")
+    .interact()?;  // No echo, reads from TTY
+```
+
+- **No echo**: Password never appears in terminal output
+- **TTY-only**: `dialoguer` reads directly from terminal, not stdin (prevents accidental logging)
+- **Confirmation for backup**: Prevents irreversible typos when creating backups
+
+### Memory zeroization
+
+```rust
+use zeroize::Zeroize;
+
+// After password is no longer needed:
+password.zeroize();  // Overwrites heap buffer with zeros
+```
+
+| Stage | Memory handling |
+|-------|----------------|
+| Input | `String` allocated on heap via `dialoguer` |
+| Use | Borrowed as `&str` for Argon2id derivation |
+| Cleanup | `zeroize()` called immediately after crypto operation |
+
+<Callout type="info" title="Limitations of zeroize">
+`zeroize` mitigates but doesn't eliminate memory-scraping risks:
+
+- ✅ Clears the specific `String` buffer
+- ❌ Cannot clear copies made by the OS, allocator, or other libraries
+- ❌ Cannot protect against kernel-level memory dumps or cold-boot attacks
+
+For high-security environments, consider:
+- Using a dedicated, air-gapped machine for backup operations
+- Encrypting the entire disk where backups are stored
+- Using hardware security modules (HSMs) for key management
+</Callout>
+
+### Password strength enforcement
+
+```rust
+// Minimum length check (sanity guard, not cryptographic guarantee)
+if password.len() < 8 {
+    return Err(anyhow!("Password must be at least 8 characters (got {})", password.len()));
+}
+```
+
+| Check | Purpose | Cryptographic impact |
+|-------|---------|---------------------|
+| `len >= 8` | Prevent trivial passwords | Low: Argon2id slows brute-force regardless |
+| Non-empty | Avoid accidental empty password | Medium: Empty password = no protection |
+| Confirmation (backup only) | Prevent typos causing data loss | UX: Not cryptographic, but critical for recoverability |
+
+<Callout type="tip" title="Recommend strong passphrases">
+Use a password manager to generate and store passphrases like:
+
+```
+correct-horse-battery-staple  # 4 random words ~44 bits entropy
+Tr0ub4dor&3                   # Complex but shorter ~28 bits entropy
+```
+
+Longer passphrases are easier to remember and harder to brute-force than complex short passwords.
+</Callout>
+
+---
+
+## File system security
+
+### Permission hardening (Unix)
+
+```rust
+#[cfg(unix)]
+{
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::fs::OpenOptions;
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)  // rw------- : owner read/write only
+        .open(path)?;
+    // ... write content ...
+}
+```
+
+| File type | Permissions | Rationale |
+|-----------|-------------|-----------|
+| `.backup` files | `0o600` | Encrypted but still sensitive; limit access |
+| Restored `.env` | `0o600` | Contains plaintext secrets; strict access control |
+| Config files | Default | Usually non-sensitive; follow user umask |
+
+<Callout type="warning" title="Windows limitations">
+On Windows, evnx uses default ACLs, which are typically user-only but not guaranteed. For strict Windows security:
+
+1. Store backups on encrypted volumes (BitLocker)
+2. Use Windows file auditing to monitor access
+3. Consider WSL2 for Unix-like permission behavior
+</Callout>
+
+### Atomic writes
+
+```rust
+// Simplified atomic write pattern
+fn atomic_write(path: &str, content: &[u8]) -> Result<()> {
+    let temp = NamedTempFile::new_in(parent_dir)?;  // Random name in same dir
+    temp.write_all(content)?;
+    temp.sync_all()?;  // Ensure data on disk
+    temp.persist(path)?;  // Atomic rename
+
+    #[cfg(unix)]
+    set_permissions(path, 0o600)?;  // Set permissions after persist
+    Ok(())
+}
+```
+
+**Benefits:**
+
+- ✅ No partial files if process interrupted (power loss, kill signal)
+- ✅ No race conditions with concurrent readers/writers
+- ✅ Permissions set atomically with content
+
+---
+
+## Threat model and mitigations
+
+### Attack scenarios
+
+| Threat | Likelihood | Impact | evnx mitigation | Residual risk |
+|--------|-----------|--------|-----------------|---------------|
+| **Backup file theft** | Medium | High | AES-256-GCM encryption | Low (if password strong) |
+| **Password brute-force** | Low | High | Argon2id (64 MiB, 3 iter) | Low (with 8+ char password) |
+| **File tampering** | Low | High | GCM auth tag + schema validation | Very low |
+| **Memory scraping** | Very low | High | `zeroize` on password buffers | Medium (OS-level attacks possible) |
+| **Shell history leak** | Medium | High | `--password` flag warning + interactive default | Low (if user follows guidance) |
+| **Accidental overwrite** | High | High | Mandatory prompt + no `--force` + `.restored` fallback | Very low |
+| **Wrong password on restore** | Medium | Low | Generic error message (no oracle) | Low (safe failure) |
+
+### Security boundaries
+
+```
+┌─────────────────────────────────────────┐
+│ Trusted:                                │
+│ • evnx binary (signed, verified)        │
+│ • User password (entered interactively) │
+│ • OS CSPRNG (OsRng)                     │
+├─────────────────────────────────────────┤
+│ Untrusted (protected against):          │
+│ • Backup file content (encrypted)       │
+│ • File system (permissions enforced)    │
+│ • Network (evnx is offline-only)        │
+├─────────────────────────────────────────┤
+│ Out of scope:                           │
+│ • Compromised OS/kernel                 │
+│ • Social engineering for password       │
+│ • Physical access to unlocked machine   │
+└─────────────────────────────────────────┘
+```
+
+<Callout type="info" title="Offline-by-design">
+evnx never phones home, uploads backups, or contacts external services. All cryptography happens locally. This reduces attack surface but means:
+
+- ✅ No risk of backup exfiltration via evnx
+- ❌ No cloud recovery if you lose password + backup
+- ❌ No automatic security updates (must manually update evnx)
+</Callout>
+
+---
+
+## Security audit checklist
+
+Use this checklist to verify evnx is configured securely in your environment:
+
+### Build-time checks
+
+```bash
+# 1. Verify backup feature is enabled
+cargo build --features backup 2>&1 | grep -q "Compiling evnx" && echo "✓ Feature enabled"
+
+# 2. Check for known dependency vulnerabilities
+cargo audit  # Requires cargo-audit installed
+
+# 3. Verify Rust toolchain is up to date
+rustc --version  # Should be >= 1.75.0 for latest crypto crate compatibility
+```
+
+### Runtime checks
+
+```bash
+# 4. Test backup/restore roundtrip
+echo "TEST_SECRET=super_secret_value" > .env.test
+evnx backup --env .env.test --output test.backup  # Interactive password
+evnx restore test.backup --output .env.test.restored --dry-run  # Verify metadata
+
+# 5. Verify file permissions
+ls -l .env.test.backup  # Should show -rw------- (0o600) on Unix
+
+# 6. Confirm no network activity
+strace -e trace=network evnx backup --env .env.test 2>&1 | grep -E "connect|sendto" || echo "✓ No network calls"
+```
+
+### Operational checks
+
+```bash
+# 7. Validate password policy compliance
+# (evnx enforces min 8 chars; consider org policy for stronger requirements)
+
+# 8. Ensure backup storage is encrypted at rest
+# (Use LUKS, FileVault, or cloud KMS for backup directory)
+
+# 9. Document password recovery procedure
+# (Since passwords are unrecoverable, define team protocol for lost passwords)
+
+# 10. Schedule periodic restore tests
+# (A backup you can't restore is not a backup)
+```
+
+<Callout type="success" title="Audit complete">
+If all checks pass, your evnx deployment follows security best practices. Re-run this checklist quarterly or after major updates.
+</Callout>
+
+---
+
+## Advanced: Customizing security parameters
+
+### Modifying Argon2id parameters (fork only)
+
+```rust
+// In backup.rs encrypt_content():
+// Default: Params::new(65536, 3, 1, Some(32))
+
+// For memory-constrained environments (less secure):
+let params = Params::new(16384, 2, 1, Some(32))?;  // 16 MiB, 2 iterations
+
+// For high-security environments (slower):
+let params = Params::new(262144, 4, 1, Some(32))?;  // 256 MiB, 4 iterations
+```
+
+<Callout type="warning" title="Parameter changes break compatibility">
+Changing KDF parameters means:
+- ❌ New backups won't decrypt with old evnx versions
+- ❌ Old backups won't decrypt with new parameters unless you add version branching
+
+Always document parameter changes and coordinate team updates.
+</Callout>
+
+### Adding asymmetric encryption (future work)
+
+The codebase is structured to support public-key encryption via the `--recipient` flag:
+
+```rust
+// Future interface (not yet implemented):
+evnx backup --recipient "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs"  // age public key
+```
+
+This would allow:
+- ✅ Decrypt by key holder without knowing password
+- ✅ Multiple recipients (team key sharing)
+- ✅ Integration with existing PKI infrastructure
+
+Track progress in [GitHub issue #42](https://github.com/evnx/evnx/issues/42).
+
+---
+
+## Troubleshooting security issues
+
+### "Decryption failed. The password may be incorrect or the backup file is corrupt."
+
+**Why the vague error?**
+Distinguishing "wrong password" from "tampered file" would create a decryption oracle — an attacker could test passwords or modifications and learn which part failed.
+
+**Debugging steps:**
+
+```bash
+# 1. Verify backup file integrity
+wc -c .env.backup  # Should be > 61 bytes (min: 1+32+12+16 Base64-encoded)
+
+# 2. Check Base64 validity
+base64 -d .env.backup > /dev/null && echo "✓ Valid Base64" || echo "✗ Corrupt Base64"
+
+# 3. Test with known-good password
+# (If you have a test backup with known password)
+
+# 4. Try restore with --dry-run to see if metadata parses
+evnx restore .env.backup --dry-run  # Still prompts for password
+```
+
+### "Derived key too short: X bytes (expected 32)"
+
+**Cause**: Argon2id output was truncated or misconfigured.
+
+**Fix**: This should never occur with hardcoded parameters. If seen:
+1. Update evnx to latest version
+2. Report as a bug with full error context
+3. Do not use affected backups until resolved
+
+### "Failed to encode salt for Argon2"
+
+**Cause**: Salt bytes couldn't be Base64-encoded (shouldn't happen with valid RNG).
+
+**Fix**:
+```bash
+# Check system RNG health
+cat /dev/random | head -c 32 | base64  # Should produce output without error
+
+# If RNG is broken, address OS-level issue first
+```
+
+### Password prompt not appearing (CI/CD)
+
+**Cause**: `dialoguer` requires a TTY; CI environments often lack one.
+
+**Solution**: Use `--password` flag with secure secret injection:
+
+```yaml
+# GitHub Actions example
+- name: Restore backup
+  env:
+    ENV_PASSWORD: ${{ secrets.ENV_BACKUP_PASSWORD }}
+  run: |
+    # Use --password ONLY with secrets manager injection
+    evnx restore backup.env --password "$ENV_PASSWORD"
+```
+
+<Callout type="warning" title="Never hardcode passwords">
+❌ Bad: `evnx restore backup --password "my_secret_123"`
+✅ Good: `evnx restore backup --password "$VAULT_READ_ENV_PASSWORD"`
+
+Hardcoded passwords in scripts or CI configs are a critical security risk.
+</Callout>
+
+---
+
+## Related references
+
+- [AES-GCM specification](https://csrc.nist.gov/publications/detail/sp/800-38d/final)
+- [Argon2 RFC 9106](https://www.rfc-editor.org/rfc/rfc9106.html)
+- [Rust crypto best practices](https://github.com/rustcrypto/FAQ)
+- [Zeroize crate documentation](https://docs.rs/zeroize/latest/zeroize/)
+- [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
+
+<Callout type="success" title="Security is a process">
+evnx provides strong cryptographic guarantees, but security requires ongoing vigilance. Regularly:
+- Update evnx to receive security patches
+- Rotate backup passwords and re-encrypt
+- Test restore procedures
+- Review audit logs and access controls
+
+With these practices, evnx can be a trusted component of your secrets management workflow.
+</Callout>
+
+
