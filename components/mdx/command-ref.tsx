@@ -75,15 +75,21 @@ const COMMAND_META: Record<string, { slug: string; description: string }> = {
     slug: "commands/init",
     description: "Scaffold a new project with a pre-wired .env for your stack",
   },
+  "evnx share": {
+    slug: "commands/share",
+    description:
+      "Share encrypted secrets with teammates using public-key crypto",
+  },
 };
 
 type Props = {
-  command: string;
+  command?: string;
   /** Override the default description */
   label?: string;
 };
 
 export function CommandRef({ command, label }: Props) {
+  if (!command) return null;
   const meta = COMMAND_META[command];
   const href = meta
     ? `/guides/${meta.slug}`

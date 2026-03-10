@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BookOpen } from "lucide-react";
 
 type PrerequisitesProps = { children: React.ReactNode };
-type PrerequisiteProps = { href: string; children: React.ReactNode };
+type PrerequisiteProps = { href?: string; children: React.ReactNode }; // href now optional
 
 export function Prerequisites({ children }: PrerequisitesProps) {
   return (
@@ -19,12 +19,18 @@ export function Prerequisites({ children }: PrerequisitesProps) {
 export function Prerequisite({ href, children }: PrerequisiteProps) {
   return (
     <li>
-      <Link
-        href={href}
-        className="font-mono text-sm text-brand-400 hover:text-brand-300 transition-colors"
-      >
-        → {children}
-      </Link>
+      {href ? (
+        <Link
+          href={href}
+          className="font-mono text-sm text-brand-400 hover:text-brand-300 transition-colors"
+        >
+          → {children}
+        </Link>
+      ) : (
+        <span className="font-mono text-sm text-text-secondary">
+          → {children}
+        </span>
+      )}
     </li>
   );
 }

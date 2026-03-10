@@ -1,0 +1,946 @@
+---
+title: "The Complete Rust Doc String Guide: From Beginner to Senior Engineer"
+slug: "the-complete-rust-doc-string-guide-from-beginner-to-senior-engineer"
+publishedAt: "2025-03-10"
+excerpt: "A comprehensive walkthrough of Rust documentation conventions — covering doc comment syntax, module-level docs, doc tests, intra-doc links, advanced patterns, and every community standard from the Rust API Guidelines."
+author: "ajit"
+category: "tutorial"
+tags: ["rust", "documentation", "best-practices", "rustdoc", "cargo"]
+featured: true
+draft: false
+---
+
+Rust treats documentation as a **first-class language feature**. Unlike many ecosystems where docs are an afterthought, Rust's toolchain compiles and runs your doc examples as tests, generates beautiful HTML automatically, enforces lint warnings for missing docs, and publishes everything to [docs.rs](https://docs.rs) the moment you publish your crate.
+
+The Rust API Guidelines — the community's official standard — are unambiguous:
+
+> "All public items — crates, modules, types, traits, functions, methods, fields, type parameters, and associated constants — should have documentation."
+
+This guide takes you from your very first `///` all the way to senior-level patterns used in production crates, targeting **stable Rust 1.80+**.
+
+---
+
+## Doc Comment Syntax Fundamentals
+
+Rust has two doc comment syntaxes and two scoping directions. Getting these four forms straight is the foundation of everything else.
+
+### Outer Doc Comments: `///`
+
+The `///` form documents the **item below** the comment. This is the most common form you will write.
+
+```rust
+/// A single-line outer doc comment.
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}!", name)
+}
+```
+
+For multi-line documentation, stack multiple `///` lines — a blank `///` becomes a paragraph break in the rendered output:
+
+```rust
+/// Computes the nth Fibonacci number using fast doubling.
+///
+/// This implementation runs in O(log n) time rather than the naive
+/// O(n) iterative approach, making it suitable for large values of `n`.
+pub fn fibonacci(n: u64) -> u64 {
+    todo!()
+}
+```
+
+### Block Outer Doc Comments: `/** ... */`
+
+```rust
+/**
+ * Converts a temperature from Celsius to Fahrenheit.
+ *
+ * The formula used is: `F = (C × 9/5) + 32`
+ */
+pub fn celsius_to_fahrenheit(c: f64) -> f64 {
+    (c * 9.0 / 5.0) + 32.0
+}
+```
+
+<Callout type="tip">
+  Prefer `///` over `/** */`. The stacked `///` style is idiomatic Rust, is consistent with `rustfmt` formatting, and is what you'll see in the standard library and most popular crates. Reserve `/** */` only for unusually long prose blocks where the visual separation genuinely helps.
+</Callout>
+
+### Inner Doc Comments: `//!`
+
+The `//!` form documents the **enclosing item** — the module or crate that contains it. Place it at the top of `lib.rs` for crate-level docs, or at the top of any `mod.rs` / inline module for submodule docs.
+
+```rust
+//! # My Crate
+//!
+//! This crate provides utilities for parsing CSV files with zero-copy semantics.
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use my_crate::CsvReader;
+//! let reader = CsvReader::from_str("a,b,c\n1,2,3");
+//! ```
+
+pub mod reader;
+pub mod writer;
+```
+
+### The Four Forms at a Glance
+
+| Syntax | Direction | Typical Use |
+|--------|-----------|-------------|
+| `///` | Outer | Functions, structs, fields, `impl` blocks |
+| `/** */` | Outer | Same — when prose is very long |
+| `//!` | Inner | Crate root (`lib.rs`), module files |
+| `/*! */` | Inner | Same — less common |
+
+---
+
+## Module-Level Documentation
+
+Every public module needs a `//!` block. The crate root doc is the **front page** of your docs.rs page — invest real effort here.
+
+### The Crate Root (`src/lib.rs`)
+
+A great crate-level doc contains: a one-line summary (appears in search results), a feature overview, a minimal working example, links to the most important types, and feature flag documentation.
+
+```rust
+//! # `csv-turbo` — Zero-copy CSV parsing for Rust
+//!
+//! `csv-turbo` is a fast, ergonomic CSV parsing library that avoids heap
+//! allocation during parsing using a zero-copy design backed by [`memmap2`].
+//!
+//! ## Features
+//!
+//! - **Zero-copy**: Records borrow directly from the input buffer
+//! - **SIMD-accelerated**: Uses AVX2/SSE4.2 on x86-64 when available
+//! - **Streaming**: Process files larger than RAM with [`StreamReader`]
+//! - **Serde integration**: Enable the `serde` feature flag
+//!
+//! ## Getting Started
+//!
+//! ```rust
+//! use csv_turbo::Reader;
+//!
+//! let data = "name,age\nAlice,30\nBob,25";
+//! let mut reader = Reader::from_str(data);
+//!
+//! for record in reader.records() {
+//!     println!("{:?}", record.unwrap());
+//! }
+//! ```
+//!
+//! ## Feature Flags
+//!
+//! | Feature | Default | Description |
+//! |---------|---------|-------------|
+//! | `serde` | No | Enables Serde serialization support |
+//! | `async` | No | Async streaming via Tokio |
+//! | `simd` | Yes | SIMD acceleration on supported CPUs |
+//!
+//! [`memmap2`]: https://docs.rs/memmap2
+
+#![warn(missing_docs)]
+#![warn(missing_debug_implementations)]
+
+pub mod error;
+pub mod reader;
+pub mod writer;
+```
+
+### Submodule Documentation
+
+```rust
+//! # Authentication Module
+//!
+//! Handles user authentication using JWT tokens and bcrypt password hashing.
+//!
+//! ## Security Considerations
+//!
+//! All tokens are signed with HS256. Secrets must be at least 32 bytes.
+//! Never store raw passwords — use [`hash_password`] before persistence.
+//!
+//! ## Example
+//!
+//! ```rust
+//! use myapp::auth::{hash_password, verify_password};
+//!
+//! let hash = hash_password("hunter2").unwrap();
+//! assert!(verify_password("hunter2", &hash).unwrap());
+//! ```
+```
+
+---
+
+## Function & Method Documentation
+
+### The One-Line Summary Rule
+
+The **first line** is the single most important part of any doc comment. It appears in module-level summaries, IDE hover tooltips, search results, and crate indexes. It must:
+
+- Be a complete sentence that ends with a period
+- Open with a **third-person verb phrase**: _"Returns…", "Computes…", "Creates…", "Parses…"_
+- Fit on one line (aim for under 100 characters)
+
+<DiffBlock>
+```diff
+- /// Function `add` takes two integers and returns their sum
+- /// split a string
+- /// The function that you can use to split a string into parts
++ /// Adds two integers and returns their result.
++ /// Splits a string by the given delimiter and returns an iterator.
+```
+</DiffBlock>
+
+### A Fully-Documented Function
+
+```rust
+/// Performs an HTTP GET request and returns the response body as a `String`.
+///
+/// This function blocks the current thread until the response is received.
+/// For non-blocking behavior, use [`async_get`] instead.
+///
+/// # Arguments
+///
+/// * `url` - The URL to fetch. Must be a valid HTTP or HTTPS URL.
+/// * `timeout` - Maximum duration to wait for a response.
+///
+/// # Returns
+///
+/// Returns `Ok(String)` containing the response body on success.
+///
+/// # Errors
+///
+/// Returns [`HttpError::Timeout`] if the request exceeds `timeout`.
+/// Returns [`HttpError::InvalidUrl`] if `url` cannot be parsed.
+/// Returns [`HttpError::ConnectionFailed`] if the server is unreachable.
+///
+/// # Panics
+///
+/// Panics if `timeout` is zero. Use [`Duration::from_secs`] to
+/// construct a valid duration.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::time::Duration;
+/// use my_http::get;
+///
+/// let body = get("https://example.com", Duration::from_secs(10))?;
+/// println!("Response: {}", body);
+/// # Ok::<(), my_http::HttpError>(())
+/// ```
+///
+/// # See Also
+///
+/// - [`post`] for HTTP POST requests
+/// - [`async_get`] for non-blocking requests
+pub fn get(url: &str, timeout: std::time::Duration) -> Result<String, HttpError> {
+    todo!()
+}
+```
+
+### Methods on `impl` Blocks
+
+```rust
+/// A pool of reusable database connections.
+pub struct ConnectionPool {
+    connections: Vec<Connection>,
+    max_size: usize,
+}
+
+impl ConnectionPool {
+    /// Creates a new `ConnectionPool` with the specified maximum size.
+    ///
+    /// The pool starts empty. Connections are created lazily on demand
+    /// and returned to the pool after use.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `max_size` is 0.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let pool = ConnectionPool::new(10);
+    /// assert_eq!(pool.available(), 0);
+    /// ```
+    pub fn new(max_size: usize) -> Self {
+        assert!(max_size > 0, "pool size must be non-zero");
+        Self { connections: Vec::new(), max_size }
+    }
+
+    /// Acquires a connection from the pool, blocking if none are available.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PoolError::Closed`] if the pool has been shut down.
+    pub fn acquire(&self) -> Result<PooledConnection<'_>, PoolError> {
+        todo!()
+    }
+
+    /// Returns the number of connections currently available in the pool.
+    pub fn available(&self) -> usize {
+        self.connections.len()
+    }
+}
+```
+
+---
+
+## Structs, Enums & Traits
+
+### Structs — Document Every Public Field
+
+```rust
+/// A 2D point in Cartesian coordinate space.
+///
+/// # Examples
+///
+/// ```rust
+/// let origin = Point::new(0.0, 0.0);
+/// let p = Point::new(3.0, 4.0);
+/// assert_eq!(p.distance_from(&origin), 5.0);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point {
+    /// The horizontal coordinate (x-axis).
+    pub x: f64,
+    /// The vertical coordinate (y-axis).
+    pub y: f64,
+}
+```
+
+### Enums — Document Every Variant and Its Contents
+
+```rust
+/// Represents the possible states of an HTTP request.
+///
+/// State transitions: `Pending` → `InFlight` → `Complete` | `Failed`
+#[derive(Debug)]
+pub enum RequestState {
+    /// The request has been created but not yet sent.
+    Pending,
+
+    /// The request is currently in transit.
+    ///
+    /// Contains the number of bytes sent so far.
+    InFlight(usize),
+
+    /// The request completed successfully.
+    Complete {
+        /// HTTP status code (e.g., `200`, `404`).
+        status: u16,
+        /// Response body as raw bytes.
+        body: Vec<u8>,
+    },
+
+    /// The request failed with an error.
+    Failed(RequestError),
+}
+```
+
+### Traits — Document Contract, Not Implementation
+
+```rust
+/// A type that can serialize itself to a byte buffer.
+///
+/// # Implementation Notes
+///
+/// Implementations must be deterministic: calling [`encode`] twice on
+/// the same value must produce identical byte sequences.
+/// Implementations should be allocation-free where possible.
+///
+/// # Examples
+///
+/// ```rust
+/// use my_crate::Encode;
+///
+/// struct Color { r: u8, g: u8, b: u8 }
+///
+/// impl Encode for Color {
+///     fn encode(&self, buf: &mut Vec<u8>) {
+///         buf.extend_from_slice(&[self.r, self.g, self.b]);
+///     }
+/// }
+/// ```
+pub trait Encode {
+    /// Serializes this value into `buf`, appending to existing contents.
+    fn encode(&self, buf: &mut Vec<u8>);
+
+    /// Returns the encoded size in bytes, if known without serializing.
+    ///
+    /// Returns `None` if the size cannot be computed without encoding.
+    fn encoded_size_hint(&self) -> Option<usize> {
+        None
+    }
+}
+```
+
+---
+
+## The Standard Doc Sections
+
+The Rust community has settled on canonical section names. Using them consistently makes your API predictable and searchable across the ecosystem.
+
+### Required Sections
+
+| Section | Heading | When to Include |
+|---------|---------|-----------------|
+| Summary | _(first line)_ | Always |
+| Extended description | _(after blank line)_ | When behavior needs explanation |
+| Examples | `# Examples` | Always for public API items |
+| Errors | `# Errors` | Any function returning `Result` |
+| Panics | `# Panics` | Any function that can `panic!` |
+| Safety | `# Safety` | Any `unsafe fn` |
+
+### Optional Sections
+
+| Section | Heading | When to Include |
+|---------|---------|-----------------|
+| Arguments | `# Arguments` | Complex parameter semantics |
+| Returns | `# Returns` | Non-obvious return values |
+| Performance | `# Performance` | Algorithmic complexity notes |
+| Thread Safety | `# Thread Safety` | Concurrency guarantees |
+| See Also | `# See Also` | Related types or functions |
+
+### The `# Safety` Section — Mandatory for `unsafe`
+
+<Callout type="danger">
+  Omitting `# Safety` on an `unsafe fn` is treated as a critical documentation failure by the community. `clippy` will warn on it with `-W clippy::missing_safety_doc`. Always document every precondition the caller must satisfy.
+</Callout>
+
+```rust
+/// Dereferences a raw pointer as a shared reference.
+///
+/// # Safety
+///
+/// The caller must ensure:
+///
+/// - `ptr` is non-null and properly aligned for type `T`.
+/// - `ptr` points to a valid, initialized value of type `T`.
+/// - The memory pointed to by `ptr` is not mutated for the lifetime `'a`.
+/// - `ptr` was obtained from a live, properly owned allocation.
+///
+/// Violating any of these conditions is **undefined behavior**.
+pub unsafe fn deref_ptr<'a, T>(ptr: *const T) -> &'a T {
+    &*ptr
+}
+```
+
+### Documenting `# Errors` Precisely
+
+List every error variant the function can return and under what conditions, using intra-doc links:
+
+```rust
+/// Parses a JSON string into a value of type `T`.
+///
+/// # Errors
+///
+/// - [`ParseError::UnexpectedToken`] — input contains invalid JSON syntax.
+/// - [`ParseError::TrailingComma`] — a JSON object or array has a trailing comma.
+/// - [`ParseError::Overflow`] — a numeric value overflows `T`'s range.
+/// - [`ParseError::MissingField`] — a required field for `T` is absent.
+pub fn parse<T: DeserializeOwned>(json: &str) -> Result<T, ParseError> {
+    todo!()
+}
+```
+
+---
+
+## Doc Tests — Your Examples Are Your Tests
+
+Doc tests are the killer feature that sets Rust documentation apart. Every fenced code block in a `///` comment is compiled and executed by `cargo test --doc`. If your example goes stale, CI breaks.
+
+### Basic Doc Test
+
+```rust
+/// Adds two integers and returns the result.
+///
+/// # Examples
+///
+/// ```rust
+/// let result = my_crate::add(2, 3);
+/// assert_eq!(result, 5);
+/// ```
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
+
+### Hiding Setup Lines with `#`
+
+Prefix any line with `#` to compile it but hide it from rendered output. Use this for boilerplate that would distract from the point of the example:
+
+```rust
+/// ```rust
+/// # use myapp::db::{Connection, Config};
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = Config::default();
+/// let conn = Connection::connect(&config)?;
+/// println!("Connected: {}", conn.is_alive());
+/// # Ok(())
+/// # }
+/// ```
+```
+
+### Doc Test Attributes
+
+<OptionTable>
+  <Option flag="```rust" type="default" default="—">
+    Compiled and executed. The standard for all working examples.
+  </Option>
+  <Option flag="```rust,should_panic" type="flag" default="—">
+    The code block must panic to pass. Use for documenting panic conditions.
+  </Option>
+  <Option flag="```rust,no_run" type="flag" default="—">
+    Compiled but not executed. Use for network calls or external resources.
+  </Option>
+  <Option flag="```rust,compile_fail" type="flag" default="—">
+    Must fail to compile. Use for negative examples (e.g., `Send` bounds).
+  </Option>
+  <Option flag="```rust,ignore" type="flag" default="—">
+    Not compiled or run. Avoid — prefer `no_run` or `compile_fail` instead.
+  </Option>
+</OptionTable>
+
+### The `?` Operator in Doc Tests
+
+Two clean patterns for using `?` without cluttering examples with a full `main` function:
+
+```rust
+// Pattern 1: hidden main wrapper
+/// ```rust
+/// # fn main() -> std::io::Result<()> {
+/// let content = std::fs::read_to_string("README.md")?;
+/// println!("File has {} bytes", content.len());
+/// # Ok(())
+/// # }
+/// ```
+
+// Pattern 2: trailing Ok expression (cleaner for short examples)
+/// ```rust
+/// # use std::error::Error;
+/// let n: i32 = "42".parse()?;
+/// assert_eq!(n, 42);
+/// # Ok::<(), Box<dyn Error>>(())
+/// ```
+```
+
+### A Realistic Multi-Step Example
+
+```rust
+/// # Examples
+///
+/// Building and executing a query:
+///
+/// ```rust
+/// use my_db::{QueryBuilder, OrderBy};
+///
+/// let query = QueryBuilder::new("users")
+///     .select(&["id", "name", "email"])
+///     .where_eq("active", true)
+///     .order_by("name", OrderBy::Asc)
+///     .limit(10)
+///     .build();
+///
+/// assert_eq!(
+///     query.to_sql(),
+///     "SELECT id, name, email FROM users \
+///      WHERE active = true ORDER BY name ASC LIMIT 10"
+/// );
+/// ```
+```
+
+---
+
+## Intra-Doc Links
+
+Since Rust 1.48, you can link to any item in your crate — or any dependency — directly from doc comments without fragile URL strings.
+
+### Basic Syntax
+
+```rust
+/// Returns a [`Vec`] of all elements satisfying `predicate`.
+///
+/// Unlike [`Iterator::filter`], this collects results eagerly.
+/// See [`partition`] to split into two collections simultaneously.
+pub fn filter_collect<T, F>(iter: impl Iterator<Item = T>, predicate: F) -> Vec<T>
+where
+    F: Fn(&T) -> bool,
+{
+    iter.filter(predicate).collect()
+}
+```
+
+### Disambiguating with Namespace Qualifiers
+
+When a name exists as both a type and a function, prefix with the namespace:
+
+```rust
+/// Creates a new [`struct@Context`] from the current thread's environment.
+///
+/// This differs from [`fn@context`], which creates a detached context.
+pub fn thread_context() -> Context { todo!() }
+```
+
+The available qualifiers are: `struct@`, `enum@`, `trait@`, `fn@`, `mod@`, `macro@`, `const@`, `static@`, `type@`, `value@`.
+
+<Callout type="info">
+  Always enable `#![deny(rustdoc::broken_intra_doc_links)]` in your crate root. This turns a misspelled link into a compile error, preventing silent broken documentation.
+</Callout>
+
+---
+
+## Attributes That Shape Your Docs
+
+### Lint Enforcement — Put These in Your Crate Root
+
+```rust
+// In src/lib.rs
+#![warn(missing_docs)]
+#![warn(missing_debug_implementations)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![warn(rustdoc::missing_crate_level_docs)]
+#![warn(rustdoc::invalid_codeblock_attributes)]
+```
+
+For library crates targeting production stability, escalate `warn` to `deny`.
+
+### `#[doc(alias)]` — Searchability
+
+Help users find items with the names they already know:
+
+```rust
+#[doc(alias = "strlen")]
+#[doc(alias = "length")]
+/// Returns the number of bytes in this string slice.
+pub fn byte_len(s: &str) -> usize { s.len() }
+```
+
+### `#[doc(hidden)]` — Internal API
+
+Marks an item as not part of the public API without making it private (often needed for macro internals):
+
+```rust
+#[doc(hidden)]
+pub fn __macro_internal_helper() { /* ... */ }
+```
+
+### `#[deprecated]`
+
+```rust
+/// Connects to the database using the legacy protocol.
+#[deprecated(since = "2.1.0", note = "use connect_v2 which supports TLS 1.3")]
+pub fn connect(url: &str) -> Connection { todo!() }
+```
+
+### Feature-Gated Items with `doc(cfg)`
+
+```rust
+#[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+/// Asynchronously reads data from a stream.
+///
+/// **Requires the `async` feature flag.**
+pub async fn read_async(stream: impl AsyncRead) -> Vec<u8> { todo!() }
+```
+
+Add the following to `Cargo.toml` to enable feature badges on docs.rs:
+
+```toml
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+```
+
+---
+
+## Advanced Patterns
+
+### Documenting `async` Functions
+
+Always document cancellation safety — it's a critical contract for async Rust:
+
+```rust
+/// Asynchronously fetches user data by ID from the database.
+///
+/// # Cancellation Safety
+///
+/// This function is **cancellation-safe**. If the future is dropped before
+/// it completes, no partial writes are made to the database.
+///
+/// # Errors
+///
+/// Returns [`DbError::NotFound`] if no user with `id` exists.
+pub async fn fetch_user(id: u64) -> Result<User, DbError> {
+    todo!()
+}
+```
+
+### Documenting Error Types
+
+```rust
+/// All errors that can occur in this library.
+///
+/// This type is non-exhaustive — new variants may be added in future
+/// minor versions without a breaking change.
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// An I/O error reading from or writing to the filesystem.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// The input data was not valid UTF-8.
+    ///
+    /// The byte offset of the first invalid byte is included.
+    #[error("invalid UTF-8 at byte offset {offset}")]
+    InvalidUtf8 {
+        /// Byte offset of the first invalid byte sequence.
+        offset: usize,
+    },
+}
+```
+
+### Documenting Macros
+
+```rust
+/// Creates a [`HashMap`] from a list of key-value pairs.
+///
+/// # Examples
+///
+/// ```rust
+/// use my_crate::map;
+///
+/// let scores = map! {
+///     "Alice" => 95,
+///     "Bob"   => 87,
+/// };
+///
+/// assert_eq!(scores["Alice"], 95);
+/// ```
+#[macro_export]
+macro_rules! map {
+    ( $($key:expr => $val:expr),* $(,)? ) => {{
+        let mut m = std::collections::HashMap::new();
+        $( m.insert($key, $val); )*
+        m
+    }};
+}
+```
+
+### Documenting Generic Parameters
+
+```rust
+/// A cache mapping keys of type `K` to values of type `V`.
+///
+/// # Type Parameters
+///
+/// - `K` — The key type. Must implement [`Eq`] and [`Hash`] for lookup.
+///   [`Clone`] is required because keys are duplicated into the cache.
+/// - `V` — The value type. No bounds required; values are stored as-is.
+pub struct Cache<K, V>
+where
+    K: Eq + std::hash::Hash + Clone,
+{ /* ... */ }
+```
+
+### The Prelude Pattern
+
+```rust
+/// Convenient access to the most commonly used types.
+///
+/// Import with `use my_crate::prelude::*;`.
+pub mod prelude {
+    /// Core parser — see [`crate::parser::Parser`] for full docs.
+    pub use crate::parser::Parser;
+    /// Primary error type — see [`crate::error::Error`] for full docs.
+    pub use crate::error::Error;
+    /// Convenience result alias.
+    pub use crate::error::Result;
+}
+```
+
+---
+
+## Best Practices & Community Standards
+
+These rules come directly from the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/).
+
+### The Non-Negotiables
+
+| Rule | Requirement |
+|------|-------------|
+| `C-CRATE-DOC` | Crate root has `//!` docs with a working example |
+| `C-EXAMPLE` | Every public item has at least one `# Examples` block |
+| `C-QUESTION-MARK` | Examples use `?` not `.unwrap()` |
+| `C-FAILURE` | All `Result`-returning functions have `# Errors` |
+| `C-PANIC` | All panicking functions have `# Panics` |
+| `C-LINK` | Use intra-doc links, not raw URL strings |
+
+### Do This
+
+```rust
+// ✅ Third-person verb phrase, ends with period
+/// Parses a duration from a human-readable string.
+
+// ✅ Use ? in examples
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let d = parse_duration("5m30s")?;
+/// # Ok(()) }
+
+// ✅ Document every public field
+pub struct Config {
+    /// Maximum number of retry attempts before giving up.
+    pub max_retries: u32,
+}
+
+// ✅ Add aliases for discoverability
+#[doc(alias = "size")]
+/// Returns the number of elements in the collection.
+pub fn len(&self) -> usize { self.inner.len() }
+```
+
+### Don't Do This
+
+<Callout type="warning">
+  These anti-patterns are the most common mistakes seen in code reviews. Treat each one as a bug.
+</Callout>
+
+```rust
+// ❌ Restates the signature — adds zero information
+/// Function `add` takes `a: i32` and `b: i32` and returns `i32`.
+pub fn add(a: i32, b: i32) -> i32 { a + b }
+
+// ❌ Imperative mood
+/// Add two numbers.        ← wrong
+/// Adds two numbers.       ← correct
+
+// ❌ unwrap() in examples — examples are documentation of good practice
+/// ```rust
+/// let result = might_fail().unwrap().do_thing().unwrap();
+/// ```
+
+// ❌ Missing # Errors on a Result-returning function
+pub fn parse(s: &str) -> Result<i32, ParseError> { ... }
+
+// ❌ Missing # Safety on an unsafe function
+pub unsafe fn raw_write(ptr: *mut i32, val: i32) { *ptr = val; }
+
+// ❌ Inconsistent terminology — pick one word and use it everywhere
+/// Adds an item to the collection.  pub fn push(...) {}
+/// Removes from the container.      pub fn pop(...) {}
+/// Clears the store.                pub fn clear(...) {}
+```
+
+---
+
+## Tooling Reference
+
+### Key Cargo Commands
+
+<TerminalOutput>
+# Build and open documentation locally
+cargo doc --open
+
+# Build with every feature flag enabled
+cargo doc --all-features --open
+
+# Run all doc tests
+cargo test --doc
+
+# Run a specific doc test by path
+cargo test --doc my_module::my_function
+
+# Fail on broken intra-doc links (use in CI)
+RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links" cargo doc
+
+# Warn on all missing docs
+RUSTFLAGS="-W missing-docs" cargo check
+</TerminalOutput>
+
+### Recommended `Cargo.toml` for docs.rs
+
+```toml
+[package.metadata.docs.rs]
+# Build docs for every feature combination
+all-features = true
+# Enable doc(cfg) feature badges
+rustdoc-args = ["--cfg", "docsrs"]
+# Target extra platforms
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+```
+
+### Useful CLI Tools
+
+<TerminalOutput>
+# Sync README.md from lib.rs crate-level doc
+cargo install cargo-rdme
+cargo rdme
+
+# Find dead links in generated docs
+cargo install cargo-deadlinks
+cargo deadlinks
+</TerminalOutput>
+
+---
+
+## Quick Reference
+
+```
+DOC COMMENT TYPES
+───────────────────────────────────────────────────
+///        Outer — documents the item below
+//!        Inner — documents the enclosing module/crate
+/** */     Outer block (prefer ///)
+/*! */     Inner block (prefer //!)
+
+SECTION ORDER (canonical)
+───────────────────────────────────────────────────
+First line   Short summary, verb phrase, ends with .
+             (blank line)
+             Extended description
+# Arguments  Optional: complex parameter semantics
+# Returns    Optional: non-obvious return values
+# Errors     Required: for Result-returning fns
+# Panics     Required: for fns that can panic
+# Safety     Required: for unsafe fns
+# Examples   Required: all public API items
+# See Also   Optional: related items
+
+DOC TEST MODES
+───────────────────────────────────────────────────
+```rust              Compile + run (default)
+```rust,should_panic Must panic to pass
+```rust,no_run       Compile only
+```rust,compile_fail Must fail to compile
+# hidden line        Compiled, hidden in output
+
+INTRA-DOC LINK SYNTAX
+───────────────────────────────────────────────────
+[`TypeName`]           Link to type
+[`fn_name`]            Link to function
+[`Trait::method`]      Link to trait method
+[`struct@Name`]        Disambiguate by namespace
+
+CRATE ROOT LINTS (put in lib.rs)
+───────────────────────────────────────────────────
+#![warn(missing_docs)]
+#![warn(missing_debug_implementations)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![warn(rustdoc::missing_crate_level_docs)]
+```
+
+---
+
+## Further Reading
+
+- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) — the authoritative community standard
+- [The rustdoc Book](https://doc.rust-lang.org/rustdoc/) — complete rustdoc reference
+- [RFC 1574](https://rust-lang.github.io/rfcs/1574-more-api-documentation-conventions.html) — the documentation conventions RFC
+- [CommonMark Spec](https://spec.commonmark.org/) — the Markdown dialect rustdoc renders
+- [docs.rs metadata](https://docs.rs/about/metadata) — publishing and configuration
+
+<AuthorNote>
+  The single biggest documentation improvement you can make to any existing crate is adding `#![deny(rustdoc::broken_intra_doc_links)]` to the crate root and then fixing the errors. It forces you to audit every cross-reference and usually surfaces dead code and renamed APIs in the process.
+</AuthorNote>
