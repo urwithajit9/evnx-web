@@ -1,0 +1,409 @@
+---
+slug: "getting-started-diff-basics"
+section: "getting-started"
+order: 5
+title: "Diff Basics — Compare Environment Files"
+publishedAt: "2026-03-11"
+updatedAt: "2026-03-11"
+excerpt: "Learn how to use evnx diff to compare .env and .env.example files. Detect missing variables, spot mismatches, and keep your environment in sync."
+difficulty: "beginner"
+timeToComplete: "5 minutes"
+tags: ["diff", "tutorial", "beginner", "env", "comparison"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# Diff Basics — Compare Environment Files
+
+<Callout type="tip" title="What you'll learn">
+In this tutorial, you'll learn how to use `evnx diff` to:
+- Detect missing, extra, and mismatched variables between `.env` and `.env.example`
+- Understand the three output formats: pretty, json, and patch
+- Use `--show-values` safely with auto-redaction for sensitive keys
+- Integrate diff checks into your workflow with exit codes
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/getting-started/init-basics">Initialize a project</Prerequisite>
+</Prerequisites>
+
+---
+
+## What is diff and why use it?
+
+As your project evolves, `.env` and `.env.example` can drift apart:
+
+- **Missing**: New variables added to `.env.example` but not in your `.env`
+- **Extra**: Local-only variables in `.env` that aren't in the template
+- **Different**: Same variable name, but different values (dev vs. prod)
+
+The `diff` command compares these files and shows exactly what's out of sync — with security-first defaults.
+
+<Callout type="danger" title="Values are hidden by default">
+For security, `evnx diff` does NOT show variable values unless you pass <code>--show-values</code>. Even then, sensitive keys (like <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>) are auto-redacted to <code>ab***</code> format.
+</Callout>
+
+---
+
+## Quick start: Your first diff
+
+### Scenario: You just pulled a team update
+
+**Step 1: Run diff with default settings**
+
+```bash
+cd my-project
+evnx diff
+```
+
+**Step 2: Read the output**
+
+```
+┌─ Comparing .env ↔ .env.example ─────────────────────┐
+└──────────────────────────────────────────────────────┘
+
+Missing from .env (present in .env.example):
+  + NEW_FEATURE_FLAG
+
+Extra in .env (not in .env.example):
+  - LOCAL_DEBUG_MODE
+
+Different values:
+  ~ DATABASE_URL
+    .env.example: postgresql://localhost:5432/dev
+    .env: postgresql://prod-server:5432/prod
+
+Summary:
+  + 1 missing (add to .env)
+  - 1 extra (consider removing or adding to .env.example)
+  ~ 1 different values
+```
+
+**Step 3: Take action**
+
+```bash
+# Add the missing variable to your .env
+echo "NEW_FEATURE_FLAG=true" >> .env
+
+# Run diff again to verify
+evnx diff
+✓ Files are identical
+```
+
+✅ **Done!** Your environment is back in sync.
+
+---
+
+## Understanding the output
+
+### Status indicators
+
+| Icon | Meaning | Color |
+|------|---------|-------|
+| `+` | Variable is missing from `.env` | 🟢 Green |
+| `-` | Variable is extra in `.env` | 🔴 Red |
+| `~` | Variable has different values | 🟡 Yellow |
+| `✓` | Files are identical | 🟢 Green |
+
+### Value display rules
+
+```bash
+# Default: values hidden
+evnx diff
+# Output:
+#   + NEW_API_KEY
+
+# With --show-values: non-sensitive keys show full values
+evnx diff --show-values
+# Output:
+#   + NEW_API_KEY = sk_test_abc123
+
+# Sensitive keys are always redacted, even with --show-values
+evnx diff --show-values
+# Output:
+#   + DB_PASSWORD = ab***
+#   + API_TOKEN = to***
+```
+
+<Callout type="info" title="Sensitive key patterns">
+Keys containing these substrings (case-insensitive) are auto-redacted: <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>, <code>KEY</code>, <code>AUTH</code>, <code>CREDENTIAL</code>, <code>PRIVATE_KEY</code>.
+</Callout>
+
+---
+
+## Three output formats
+
+### 1. Pretty (default) — For humans
+
+Colored, readable output for terminal use:
+
+```bash
+evnx diff
+```
+
+```
+Missing from .env:
+  + FEATURE_X_ENABLED
+
+Different values:
+  ~ API_TIMEOUT
+    .env.example: 30
+    .env: 60
+```
+
+### 2. JSON — For automation
+
+Machine-readable output for scripts and CI/CD:
+
+```bash
+evnx diff --format json
+```
+
+```json
+{
+  "missing": ["FEATURE_X_ENABLED"],
+  "extra": [],
+  "different": [
+    {
+      "key": "API_TIMEOUT",
+      "example_value": "30",
+      "env_value": "60",
+      "example_value_redacted": null,
+      "env_value_redacted": null
+    }
+  ]
+}
+```
+
+<Callout type="tip" title="Add statistics to JSON">
+Use <code>--with-stats</code> to include similarity metrics:
+<pre><code>evnx diff --format json --with-stats | jq '.stats.similarity_percent'</code></pre>
+</Callout>
+
+### 3. Patch — For applying changes
+
+Unified diff format compatible with `patch` and scripts:
+
+```bash
+evnx diff --format patch
+```
+
+```patch
+# Add these to .env:
++ FEATURE_X_ENABLED=true
+
+# Update these in .env:
+- API_TIMEOUT=60
++ API_TIMEOUT=30
+```
+
+<Callout type="info" title="Interactive merge">
+Add <code>--interactive</code> to patch mode for selective application:
+<pre><code>evnx diff --format patch --interactive</code></pre>
+Prompts: <code>(y)es</code>, <code>(n)o</code>, <code>(s)kip rest</code>
+</Callout>
+
+---
+
+## Practical examples
+
+### Check before committing
+
+```bash
+# Ensure your .env matches the team template
+evnx diff && git commit -am "Update feature"
+# If diff finds differences, commit is skipped (exit code 1)
+```
+
+### Compare custom file paths
+
+```bash
+# Compare production env with example
+evnx diff --env .env.production --example .env.example
+
+# Compare in a monorepo subdirectory
+evnx diff --env ./packages/api/.env --example ./packages/api/.env.example
+```
+
+### Ignore environment-specific variables
+
+```bash
+# Skip variables that differ by environment
+evnx diff --ignore-keys DATABASE_URL,REDIS_URL,DEPLOY_REGION
+```
+
+### Reverse comparison direction
+
+```bash
+# See what's in .env.example but missing from .env (default)
+evnx diff
+
+# See what's in .env but missing from .env.example
+evnx diff --reverse
+```
+
+### Debug with verbose output
+
+```bash
+# See parsing details and internal steps
+evnx diff --verbose 2>&1 | grep "verbose"
+```
+
+---
+
+## Using diff in CI/CD
+
+### Basic pipeline check
+
+```yaml
+# .github/workflows/check-env.yml
+- name: Check environment consistency
+  run: |
+    evnx diff || {
+      echo "❌ Environment drift detected!"
+      echo "Run 'evnx diff' locally to see differences"
+      exit 1
+    }
+```
+
+### JSON output for programmatic checks
+
+```bash
+# Extract just the missing keys
+evnx diff --format json | jq -r '.missing[]'
+
+# Fail if similarity is below threshold
+SIMILARITY=$(evnx diff --format json --with-stats | jq '.stats.similarity_percent')
+if (( $(echo "$SIMILARITY < 90" | bc -l) )); then
+  echo "⚠️  Environment similarity too low: ${SIMILARITY}%"
+  exit 1
+fi
+```
+
+### Suppress colored output for logs
+
+```bash
+# Disable colors for clean CI logs
+NO_COLOR=1 evnx diff --format json
+```
+
+---
+
+## Common pitfalls to avoid
+
+### Forgetting that values are hidden by default
+
+```bash
+# ❌ Expecting to see values without the flag
+evnx diff | grep "DATABASE_URL"
+# Output: ~ DATABASE_URL (no values shown)
+
+# ✅ Add --show-values to see non-sensitive values
+evnx diff --show-values | grep "DATABASE_URL"
+```
+
+### Misinterpreting exit codes
+
+```bash
+# ❌ Assuming any non-zero exit is an error
+evnx diff
+if [ $? -ne 0 ]; then
+  echo "Command failed!"  # Wrong: could just mean differences found
+fi
+
+# ✅ Check for specific exit codes
+evnx diff
+case $? in
+  0) echo "✅ Files identical" ;;
+  1) echo "⚠️  Differences found (review output above)" ;;
+  *) echo "❌ Runtime error" ;;
+esac
+```
+
+### Using --show-values in shared logs
+
+```bash
+# ❌ Logging sensitive values accidentally
+evnx diff --show-values > deploy.log  # May leak secrets!
+
+# ✅ Keep values hidden in logs
+evnx diff > deploy.log  # Safe: values masked by default
+```
+
+### Ignoring key order in patch output
+
+```bash
+# ❌ Assuming patch output order is arbitrary
+# ✅ Order matches file insertion order — use this for predictable diffs
+evnx diff --format patch | head -10
+```
+
+---
+
+## Troubleshooting
+
+### "Files are identical" but I see differences
+
+**Check**: Are you comparing the correct files?
+
+```bash
+# Verify file paths
+ls -la .env .env.example
+
+# Specify paths explicitly if needed
+evnx diff --env ./config/.env --example ./config/.env.example
+```
+
+### Sensitive values still visible
+
+**Check**: Does the key name contain a sensitive pattern?
+
+```bash
+# ❌ This key won't be redacted (no sensitive pattern)
+MY_CUSTOM_SECRET_VALUE=abc123
+
+# ✅ Rename to trigger redaction
+MY_CUSTOM_PASSWORD=abc123  # Contains "PASSWORD" → redacted
+```
+
+### JSON output missing expected fields
+
+**Check**: Did you include `--with-stats` for statistics?
+
+```bash
+# ❌ Stats not included by default
+evnx diff --format json | jq '.stats'  # null
+
+# ✅ Add --with-stats
+evnx diff --format json --with-stats | jq '.stats'  # { ... }
+```
+
+### Interactive mode not prompting
+
+**Check**: Interactive mode only works with `--format patch`:
+
+```bash
+# ❌ Interactive ignored with pretty format
+evnx diff --interactive  # No prompts
+
+# ✅ Use with patch format
+evnx diff --format patch --interactive  # Prompts appear
+```
+
+---
+
+## Next steps
+
+Now that you can compare environment files:
+
+1. **[Sync Basics](/guides/getting-started/sync-basics)** — Automatically reconcile differences instead of just detecting them
+2. **[Validate Command](/commands/validate)** — Check for security issues and common mistakes
+3. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share `.env.example` safely with your team
+4. **[CI/CD Integration](/guides/integrations/ci-cd-diff)** — Enforce environment consistency in pipelines
+
+<Callout type="success" title="You're ready!">
+You now know how to detect and understand environment drift. Run <code>evnx diff</code> before commits, after pulls, and in CI to keep your project secure and consistent.
+</Callout>

@@ -1,0 +1,300 @@
+---
+slug: "commands-diff"
+section: "commands"
+order: 4
+title: "evnx diff"
+publishedAt: "2026-03-11"
+updatedAt: "2026-03-11"
+excerpt: "Reference documentation for the evnx diff command: compare .env and .env.example with auto-redaction, ordered output, and CI/CD exit codes."
+difficulty: "beginner"
+timeToComplete: "3 minutes"
+tags: ["diff", "reference", "cli", "env", "security", "ci-cd"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# evnx diff — Command Reference
+
+Compare `.env` and `.env.example` files to identify missing, extra, and mismatched variables with security-first defaults and predictable output.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+<Callout type="info">
+  <strong>Security by Default:</strong> Variable values are hidden in output unless <code>--show-values</code> is explicitly passed. Sensitive keys (containing <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>, etc.) are auto-redacted even when <code>--show-values</code> is enabled, showing only the first 2 characters followed by <code>***</code>.
+</Callout>
+
+---
+
+## Command signature
+
+```bash
+evnx diff [OPTIONS]
+```
+
+### Options reference
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--env`, `-e` | `path` | `.env` | Path to the active environment file to compare |
+| `--example` | `path` | `.env.example` | Path to the example/template file to compare against |
+| `--show-values` | `bool` | `false` | Display variable values in output (⚠️ may expose sensitive data) |
+| `--format`, `-f` | `enum` | `pretty` | Output format: `pretty` (colored terminal), `json` (machine-readable), or `patch` (unified diff) |
+| `--reverse`, `-r` | `bool` | `false` | Reverse comparison direction: compare example → env instead of env → example |
+| `--ignore-keys` | `list` | `[]` | Comma-separated list of keys to exclude from comparison (e.g., `DATABASE_URL,REDIS_URL`) |
+| `--with-stats` | `bool` | `false` | Include extended statistics in JSON output (`similarity_percent`, `overlap_count`, etc.) |
+| `--interactive`, `-i` | `bool` | `false` | Enable interactive merge mode (only applies when `--format patch` is used) |
+| `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output to stderr |
+| `--help`, `-h` | `bool` | `false` | Display help information |
+
+### Format values
+
+| Value | Output style | Best for |
+|-------|-------------|----------|
+| `pretty` | Colored terminal output with icons (`+`, `-`, `~`) | Human review, local development |
+| `json` | Structured JSON with `missing`, `extra`, `different` arrays | CI/CD pipelines, programmatic consumption |
+| `patch` | Unified diff format with `+`/`-` prefixes | Automation, piping to `patch` or scripts |
+
+---
+
+## Exit codes
+
+| Code | Meaning | Use case |
+|------|---------|----------|
+| `0` | ✅ Files are identical (no differences detected) | Success in scripts; proceed with deployment |
+| `1` | ⚠️ Differences found (missing, extra, or mismatched values) | Fail CI/CD pipeline when drift detected |
+| `2+` | ❌ Runtime error (file not found, parse error, permission denied) | Debug tooling or environment issues |
+
+<Callout type="warning">
+  <strong>CI/CD Integration:</strong> By default, <code>evnx diff</code> exits with code <code>1</code> when any differences are found. Use this behavior in CI pipelines to enforce environment file consistency:
+  <pre><code>evnx diff && echo "✅ Env files in sync" || echo "❌ Drift detected"</code></pre>
+</Callout>
+
+---
+
+## Output structure by format
+
+### `pretty` format (default)
+
+Human-readable output with colored status indicators:
+
+```
+┌─ Comparing .env ↔ .env.example ─────────────────────┐
+└──────────────────────────────────────────────────────┘
+
+Missing from .env (present in .env.example):
+  + NEW_FEATURE_FLAG
+
+Extra in .env (not in .env.example):
+  - DEPRECATED_VAR
+
+Different values:
+  ~ DATABASE_URL
+    .env.example: postgresql://localhost:5432/dev
+    .env: postgresql://prod-server:5432/prod
+
+Summary:
+  + 1 missing (add to .env)
+  - 1 extra (consider removing or adding to .env.example)
+  ~ 1 different values
+```
+
+### `json` format
+
+Machine-readable output for programmatic consumption:
+
+```json
+{
+  "missing": ["NEW_FEATURE_FLAG"],
+  "extra": ["DEPRECATED_VAR"],
+  "different": [
+    {
+      "key": "DATABASE_URL",
+      "example_value": "postgresql://localhost:5432/dev",
+      "env_value": "postgresql://prod-server:5432/prod",
+      "example_value_redacted": null,
+      "env_value_redacted": null
+    }
+  ],
+  "stats": {
+    "total_keys_env": 12,
+    "total_keys_example": 13,
+    "overlap_count": 11,
+    "similarity_percent": 84.62
+  }
+}
+```
+
+<Callout type="info">
+  The <code>stats</code> field is only included when <code>--with-stats</code> is passed. Redacted value fields appear when the key matches sensitive patterns.
+</Callout>
+
+### `patch` format
+
+Unified diff-style output for automation:
+
+```patch
+# Add these to .env:
++ NEW_FEATURE_FLAG=placeholder
+
+# Remove these from .env:
+- DEPRECATED_VAR=old_value
+
+# Update these in .env:
+- DATABASE_URL=postgresql://prod-server:5432/prod
++ DATABASE_URL=postgresql://localhost:5432/dev
+```
+
+---
+
+## Sensitive key auto-redaction
+
+Keys matching these patterns (case-insensitive) have values auto-redacted in output:
+
+| Pattern | Example keys | Redacted output |
+|---------|-------------|-----------------|
+| `PASSWORD`, `PASSWD`, `PWD` | `DB_PASSWORD`, `ADMIN_PWD` | `ab***` |
+| `SECRET` | `SECRET_KEY`, `APP_SECRET` | `su***` |
+| `TOKEN` | `API_TOKEN`, `AUTH_TOKEN` | `to***` |
+| `KEY`, `API_KEY`, `APIKEY` | `AWS_ACCESS_KEY`, `STRIPE_APIKEY` | `AK***` |
+| `PRIVATE_KEY` | `RSA_PRIVATE_KEY` | `pr***` |
+| `AUTH`, `CREDENTIAL` | `OAUTH_SECRET`, `DB_CREDENTIAL` | `oa***` |
+
+Redaction behavior:
+- Default mode (`--show-values` not set): All values shown as `***`
+- With `--show-values`: Non-sensitive keys show full values; sensitive keys show first 2 chars + `***`
+- JSON output: Includes both original (`example_value`) and redacted (`example_value_redacted`) fields when applicable
+
+---
+
+## Key order preservation
+
+Output order matches insertion order from the source files (not hash order):
+
+```bash
+# .env.example contents (insertion order):
+Z_LAST=value
+A_FIRST=value
+M_MIDDLE=value
+
+# Output shows missing/extra keys in file order:
+Missing from .env:
+  + Z_LAST
+  + A_FIRST
+  + M_MIDDLE
+```
+
+This ensures predictable, reproducible output for:
+- ✅ Code review diffs
+- ✅ CI/CD log comparison
+- ✅ Automated patch application
+
+---
+
+## Interactive merge mode (`--format patch --interactive`)
+
+When both `--format patch` and `--interactive` are specified, evnx prompts for selective change application:
+
+```
+🔧 Interactive Merge Mode
+Prompts: (y)es, (n)o, (s)kip rest
+
+➕ Add NEW_FEATURE_FLAG=placeholder? [y/n/s]: y
+   ✓ Queued: + NEW_FEATURE_FLAG=placeholder
+
+✏️  Update DATABASE_URL?
+   - postgresql://prod-server:5432/prod
+   + postgresql://localhost:5432/dev? [y/n/s]: n
+   ✗ Skipped
+
+📋 Applied changes:
+  + NEW_FEATURE_FLAG=placeholder
+
+💡 Tip: Save output and apply with: patch -p1 < changes.patch
+```
+
+<Callout type="warning">
+  Interactive mode only works with <code>--format patch</code>. Other formats ignore the <code>--interactive</code> flag.
+</Callout>
+
+---
+
+## Statistics reference (`--with-stats`)
+
+When `--with-stats` is passed with `--format json`, the output includes a `stats` object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_keys_env` | `integer` | Total variable count in the `.env` file |
+| `total_keys_example` | `integer` | Total variable count in the `.env.example` file |
+| `overlap_count` | `integer` | Keys present in both files |
+| `similarity_percent` | `float` | Sørensen-Dice coefficient: `2×overlap / (env + example) × 100` |
+
+Similarity interpretation:
+- `100.0`: Files have identical key sets
+- `50.0`: Half the keys overlap (e.g., 1 shared key out of 2 total each)
+- `0.0`: No keys in common
+
+---
+
+## Environment variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive behavior (affects interactive mode) |
+
+---
+
+## Troubleshooting
+
+### "Failed to parse" error
+```
+✗ Failed to parse .env: Invalid format at line 5: missing '=' separator
+```
+
+**Solution**: Check the indicated line for malformed `KEY=value` syntax. Comments (`#`) and blank lines are allowed; `export` prefix is supported.
+
+### No output despite expected differences
+```
+✓ Files are identical
+```
+
+**Check**:
+1. Are you comparing the correct files? Use `--env` and `--example` to specify paths explicitly
+2. Are keys being filtered by `--ignore-keys`? Remove the flag or verify the key list
+3. Is `--reverse` changing the comparison direction unexpectedly?
+
+### Sensitive values still visible in output
+```
+  + DB_PASSWORD = mysecretpassword123
+```
+
+**Solution**:
+- Omit `--show-values` to hide all values: `evnx diff`
+- Or ensure the key name contains a sensitive pattern: rename `DB_PASSWORD` → `DATABASE_PASSWORD` (still matches)
+
+### JSON output missing `stats` field
+```json
+{
+  "missing": [...],
+  "extra": [...],
+  "different": [...]
+  // stats field absent
+}
+```
+
+**Solution**: Add `--with-stats` flag: `evnx diff --format json --with-stats`
+
+---
+
+## See also
+
+- [Diff Basics Tutorial](/guides/getting-started/diff-basics) — Step-by-step comparison workflows
+- [Security Best Practices](/guides/security/env-file-security) — Managing secrets in environment files
+- [CI/CD Integration](/guides/integrations/ci-cd-diff) — Enforcing environment consistency in pipelines
+- [Configuration Reference](/guides/reference/parser-configuration) — Advanced `.env` parsing options
+- [Sync Command](/commands/sync) — Automatically reconcile differences instead of just detecting them
