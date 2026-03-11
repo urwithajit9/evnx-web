@@ -1,0 +1,246 @@
+---
+slug: "use-cases-github-actions"
+section: "use-cases"
+order: 1
+title: "Migrate to GitHub Actions Secrets"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-09"
+excerpt: "Upload secrets from your .env file directly into GitHub Actions repository secrets using evnx migrate."
+difficulty: "beginner"
+timeToComplete: "10 minutes"
+tags: ["migrate", "github-actions", "ci-cd", "secrets"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - concepts/migrate-intro
+draft: false
+---
+
+# Migrate to GitHub Actions Secrets
+
+`evnx migrate --to github-actions` is the only destination where evnx uploads secrets for you directly — no copy-pasting commands. It calls the GitHub REST API, encrypts each value with the repository's public key, and streams results with a live progress bar.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx with the migrate feature</Prerequisite>
+  <Prerequisite href="/guides/concepts/migrate-intro">Understand the migration pipeline</Prerequisite>
+</Prerequisites>
+
+<Callout type="warning">
+  <strong>Feature flag required.</strong> GitHub Actions migration is only available when evnx is built with the <code>migrate</code> feature:
+  <ul>
+    <li><code>cargo install evnx --features migrate</code></li>
+  </ul>
+</Callout>
+
+---
+
+## What you need
+
+- A GitHub Personal Access Token (PAT) with the **`secrets:write`** permission for the target repository
+- The repository in **`owner/repo`** format
+- A `.env` file with the secrets you want to upload
+
+The token can be supplied three ways (in priority order):
+
+1. `--github-token "ghp_…"` flag
+2. `GITHUB_TOKEN` environment variable
+3. Interactive prompt (evnx asks if neither of the above is set)
+
+---
+
+## How it works
+
+evnx does not handle raw secret values. Before uploading, it:
+
+1. Fetches the repository's RSA public key from `GET /repos/{owner}/{repo}/actions/secrets/public-key`
+2. Encrypts each value using a **libsodium sealed box** (X25519 / XSalsa20-Poly1305) with that public key
+3. Sends the encrypted payload to `PUT /repos/{owner}/{repo}/actions/secrets/{NAME}`
+
+Only the encrypted ciphertext leaves your machine. GitHub decrypts it server-side when the secret is used in a workflow.
+
+---
+
+## Basic usage
+
+```bash
+evnx migrate \
+  --from env-file \
+  --to github-actions \
+  --repo owner/repo \
+  --github-token "$GITHUB_TOKEN"
+```
+
+Without `--from`, evnx defaults to `env-file` and reads `.env` in the current directory. Without `--source-file`, it reads `.env`.
+
+---
+
+## Step-by-step walkthrough
+
+<Step title="Scan and validate your .env first">
+Avoid uploading test keys or placeholder values to GitHub.
+
+```bash
+evnx scan
+evnx validate --strict
+```
+</Step>
+
+<Step title="Preview the migration">
+Run with `--dry-run` to see exactly which secrets would be uploaded, skipped, or would conflict with existing ones — without making any API calls.
+
+```bash
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --github-token "$GITHUB_TOKEN" \
+  --dry-run
+```
+
+Example output:
+
+```
+✓ Loaded 14 secrets from env-file
+
+Migration plan:
+  • 11 to upload
+  • 2 to skip (already exist)
+  • 1 conflicts (will overwrite)
+
+ℹ️ Dry-run — no changes made.
+```
+</Step>
+
+<Step title="Filter to what you need">
+Your `.env` probably has local-only variables that should not go into CI. Use `--exclude` to drop them.
+
+```bash
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST" \
+  --dry-run
+```
+</Step>
+
+<Step title="Run the migration">
+Remove `--dry-run`. evnx shows a progress bar and prints a line per secret.
+
+```bash
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --github-token "$GITHUB_TOKEN" \
+  --exclude "*_LOCAL,*_DEV"
+```
+
+```
+🚀 Migrating to GitHub Actions Secrets…
+
+Migration plan:
+  • 11 to upload
+
+Proceed with migration? › Yes
+
+⠸ [████████████████████░░░░░░░░░░░░░░░░░░░░] 10/11 DB_PASSWORD
+  ✓ DATABASE_URL
+  ✓ DB_PASSWORD
+  ✓ STRIPE_SECRET_KEY
+  …
+
+Summary:
+  ✓  11 uploaded
+  ⊘  2 skipped
+```
+</Step>
+
+<Step title="Update your workflows">
+Reference the uploaded secrets in `.github/workflows/*.yml`:
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run app
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: ./deploy.sh
+```
+</Step>
+
+---
+
+## Handling conflicts
+
+When a secret already exists in the repository, evnx gives you three options:
+
+**Interactive (default)** — prompts for each conflict:
+```bash
+evnx migrate --to github-actions --repo owner/repo
+# → Overwrite existing secret 'DATABASE_URL'? › No
+```
+
+**Skip all existing** — never overwrite:
+```bash
+evnx migrate --to github-actions --repo owner/repo --skip-existing
+```
+
+**Overwrite all existing** — no prompts:
+```bash
+evnx migrate --to github-actions --repo owner/repo --overwrite
+```
+
+---
+
+## Renaming keys before upload
+
+Strip an application prefix from key names so GitHub secrets stay clean:
+
+```bash
+# APP_DATABASE_URL → DATABASE_URL
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --strip-prefix "APP_"
+```
+
+Add an environment prefix so staging and production secrets can coexist in one repository:
+
+```bash
+# DATABASE_URL → PROD_DATABASE_URL
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --add-prefix "PROD_"
+```
+
+---
+
+## Token permission requirements
+
+The PAT must have:
+
+| Permission | Scope |
+|-----------|-------|
+| Repository secrets — read | Required to check for existing secrets |
+| Repository secrets — write | Required to create or update secrets |
+
+For a fine-grained PAT: **Repository permissions → Secrets → Read and write**.  
+For a classic PAT: the `repo` scope covers both.
+
+---
+
+## Rate limiting
+
+GitHub allows 1 000 API requests per hour for authenticated users. evnx adds a 100 ms delay between secret uploads to stay comfortably within this limit for repositories with up to a few hundred secrets.
+
+---
+
+## Next steps
+
+- [Migration concepts](/guides/concepts/migrate-intro) — understand filtering and transforms
+- [AWS Secrets Manager migration](/guides/use-cases/aws-use-cases) — if you also use AWS
+- [`evnx scan`](/guides/commands/scan) — detect real secrets before migrating
+- [`evnx backup`](/guides/commands/backup) — encrypt your local `.env` after a successful migration

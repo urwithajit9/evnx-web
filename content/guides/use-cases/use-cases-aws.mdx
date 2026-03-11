@@ -1,0 +1,235 @@
+---
+slug: "use-cases-aws"
+section: "use-cases"
+order: 2
+title: "Migrate to AWS Secrets Manager"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-09"
+excerpt: "Generate ready-to-run AWS CLI commands to store your .env secrets in AWS Secrets Manager as a single JSON secret."
+difficulty: "beginner"
+timeToComplete: "10 minutes"
+tags: ["migrate", "aws", "secrets-manager", "cli"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - concepts/migrate-intro
+draft: false
+---
+
+# Migrate to AWS Secrets Manager
+
+`evnx migrate --to aws-secrets-manager` generates `aws secretsmanager` CLI commands that store all your secrets as a **single JSON object** in AWS Secrets Manager. You review the output, then run it — evnx never holds your AWS credentials.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/concepts/migrate-intro">Understand the migration pipeline</Prerequisite>
+</Prerequisites>
+
+---
+
+## What evnx generates
+
+evnx packs all filtered secrets into a single JSON object and prints two `aws secretsmanager` commands — one to create a new secret, one to update an existing one. You run whichever applies.
+
+```bash
+# Create a new secret:
+aws secretsmanager create-secret \
+  --name prod/myapp/config \
+  --secret-string '{"DATABASE_URL":"postgres://…","STRIPE_SECRET_KEY":"sk_live_…"}'
+
+# Or update an existing secret:
+aws secretsmanager update-secret \
+  --secret-id prod/myapp/config \
+  --secret-string '{"DATABASE_URL":"postgres://…","STRIPE_SECRET_KEY":"sk_live_…"}'
+```
+
+<Callout type="info">
+  Storing all secrets as one JSON object is the AWS-recommended pattern for application configs. Your application reads the JSON and parses individual keys at runtime.
+</Callout>
+
+---
+
+## What you need
+
+- AWS CLI installed and configured (`aws configure` or environment variables)
+- An IAM user or role with `secretsmanager:CreateSecret` and `secretsmanager:UpdateSecret`
+- A secret name path like `prod/myapp/config`
+
+evnx does not need AWS credentials — it only generates commands.
+
+---
+
+## Basic usage
+
+```bash
+evnx migrate \
+  --to aws-secrets-manager \
+  --secret-name prod/myapp/config
+```
+
+If `--secret-name` is omitted, evnx prompts interactively.
+
+---
+
+## Step-by-step walkthrough
+
+<Step title="Validate your .env">
+```bash
+evnx validate --strict
+```
+</Step>
+
+<Step title="Preview the migration">
+`--dry-run` shows the secret name, count, and a preview of the JSON payload without printing the full commands.
+
+```bash
+evnx migrate \
+  --to aws-secrets-manager \
+  --secret-name prod/myapp/config \
+  --dry-run
+```
+
+```
+☁️ AWS Secrets Manager migration
+
+Dry-run — would upload to AWS Secrets Manager:
+  Secret name : prod/myapp/config
+  Secrets     : 12
+
+  JSON preview (first 300 chars):
+  {
+    "DATABASE_URL": "postgres://user:pass@host:5432/db",
+    "STRIPE_SECRET_KEY": "sk_live_…",
+    …
+```
+</Step>
+
+<Step title="Filter out local-only variables">
+```bash
+evnx migrate \
+  --to aws-secrets-manager \
+  --secret-name prod/myapp/config \
+  --exclude "*_LOCAL,*_TEST,*_DEV" \
+  --dry-run
+```
+</Step>
+
+<Step title="Generate the commands">
+Remove `--dry-run`. Pipe to a file so you can review before running.
+
+```bash
+evnx migrate \
+  --to aws-secrets-manager \
+  --secret-name prod/myapp/config \
+  --exclude "*_LOCAL,*_TEST,*_DEV" \
+  > aws-upload.sh
+```
+</Step>
+
+<Step title="Review and run">
+```bash
+cat aws-upload.sh     # inspect the JSON payload
+bash aws-upload.sh    # run create-secret (first time)
+                      # or update-secret (subsequent runs)
+```
+</Step>
+
+---
+
+## Using an AWS profile
+
+If you use named AWS profiles, pass `--aws-profile` and evnx includes it in the printed commands:
+
+```bash
+evnx migrate \
+  --to aws \
+  --secret-name prod/myapp/config \
+  --aws-profile production
+```
+
+Output:
+```bash
+aws secretsmanager create-secret \
+  --profile production \
+  --name prod/myapp/config \
+  --secret-string '{…}'
+```
+
+---
+
+## Naming conventions for secrets
+
+AWS Secrets Manager organises secrets by name path. Common conventions:
+
+| Pattern | Example |
+|---------|---------|
+| `env/app/config` | `prod/myapp/config` |
+| `app/env` | `myapp/production` |
+| Flat | `myapp-prod-secrets` |
+
+Hierarchical paths (`prod/myapp/config`) let you apply IAM policies at any level — for example, granting a role access to all secrets under `prod/` without listing each one.
+
+---
+
+## Stripping prefixes before upload
+
+If your `.env` uses an application prefix, strip it so AWS key names stay clean:
+
+```bash
+# APP_DATABASE_URL → DATABASE_URL in the JSON
+evnx migrate \
+  --to aws \
+  --secret-name prod/myapp/config \
+  --strip-prefix "APP_"
+```
+
+---
+
+## Reading secrets in your application
+
+After upload, your application retrieves the JSON and parses it:
+
+```python
+import boto3, json
+
+client = boto3.client("secretsmanager", region_name="us-east-1")
+response = client.get_secret_value(SecretId="prod/myapp/config")
+secrets = json.loads(response["SecretString"])
+
+DATABASE_URL = secrets["DATABASE_URL"]
+```
+
+```javascript
+const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+
+const client = new SecretsManagerClient({ region: "us-east-1" });
+const { SecretString } = await client.send(
+  new GetSecretValueCommand({ SecretId: "prod/myapp/config" })
+);
+const secrets = JSON.parse(SecretString);
+```
+
+---
+
+## Minimum IAM permissions
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "secretsmanager:CreateSecret",
+    "secretsmanager:UpdateSecret"
+  ],
+  "Resource": "arn:aws:secretsmanager:*:*:secret:prod/myapp/*"
+}
+```
+
+For applications reading secrets at runtime, add `secretsmanager:GetSecretValue` and `secretsmanager:DescribeSecret` to a separate role.
+
+---
+
+## Next steps
+
+- [Migration concepts](/guides/concepts/migrate-intro) — filtering and transform details
+- [GCP Secret Manager migration](/guides/use-cases/gcp-use-cases)
+- [`evnx convert --to aws-secrets`](/guides/commands/convert) — generate a static JSON file without CLI commands

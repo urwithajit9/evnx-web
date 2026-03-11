@@ -1,0 +1,213 @@
+---
+slug: "use-cases-gcp"
+section: "use-cases"
+order: 3
+title: "Migrate to GCP Secret Manager"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-09"
+excerpt: "Generate gcloud CLI commands to store each .env variable as an individual secret in Google Cloud Secret Manager."
+difficulty: "beginner"
+timeToComplete: "10 minutes"
+tags: ["migrate", "gcp", "secret-manager", "gcloud"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - concepts/migrate-intro
+draft: false
+---
+
+# Migrate to GCP Secret Manager
+
+`evnx migrate --to gcp-secret-manager` prints a `gcloud secrets create` block per variable, piping the value through stdin — the GCP-recommended pattern for creating secrets without exposing values in shell history.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/concepts/migrate-intro">Understand the migration pipeline</Prerequisite>
+</Prerequisites>
+
+---
+
+## What you need
+
+- `gcloud` CLI installed and authenticated (`gcloud auth login`)
+- A GCP project set (`gcloud config set project YOUR_PROJECT`)
+- The Secret Manager API enabled (`gcloud services enable secretmanager.googleapis.com`)
+
+evnx does not need GCP credentials — it only generates commands.
+
+---
+
+## What evnx generates
+
+Unlike AWS (one JSON object), GCP Secret Manager stores **one secret per variable**. evnx prints a pipe block for each key:
+
+```bash
+echo -n "${DATABASE_URL}" | \
+  gcloud secrets create DATABASE_URL \
+    --data-file=- \
+    --replication-policy=automatic
+
+echo -n "${STRIPE_SECRET_KEY}" | \
+  gcloud secrets create STRIPE_SECRET_KEY \
+    --data-file=- \
+    --replication-policy=automatic
+```
+
+The value is passed through `--data-file=-` (stdin), which avoids logging the secret value in shell history or process lists.
+
+<Callout type="info">
+  <strong>Alternative with evnx convert.</strong> For GCP, evnx offers a second path: <code>evnx convert --to gcp-secrets {">"} upload.sh && bash upload.sh</code>. Both produce equivalent <code>gcloud</code> commands. Use <code>migrate</code> when you want filtering and key transforms; use <code>convert</code> when you want a static shell script to commit or share.
+</Callout>
+
+---
+
+## Basic usage
+
+```bash
+evnx migrate --to gcp-secret-manager
+```
+
+`gcp` is accepted as a shorthand:
+
+```bash
+evnx migrate --to gcp
+```
+
+---
+
+## Step-by-step walkthrough
+
+<Step title="Enable the API and authenticate">
+```bash
+gcloud services enable secretmanager.googleapis.com
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+```
+</Step>
+
+<Step title="Validate your .env">
+```bash
+evnx validate --strict
+```
+</Step>
+
+<Step title="Preview the migration">
+```bash
+evnx migrate --to gcp --dry-run
+```
+
+```
+☁️ GCP Secret Manager migration
+
+Dry-run — would upload to GCP Secret Manager:
+  Secrets : 12
+```
+</Step>
+
+<Step title="Filter what you need">
+```bash
+evnx migrate \
+  --to gcp \
+  --exclude "*_LOCAL,*_TEST" \
+  --dry-run
+```
+</Step>
+
+<Step title="Generate and run the commands">
+Pipe to a script, review it, then execute:
+
+```bash
+evnx migrate \
+  --to gcp \
+  --exclude "*_LOCAL,*_TEST" \
+  > gcp-upload.sh
+
+cat gcp-upload.sh    # inspect
+bash gcp-upload.sh   # run
+```
+
+Or run directly from a `.env` with values already exported:
+
+```bash
+set -a && source .env && set +a
+evnx migrate --to gcp --exclude "*_LOCAL" | bash
+```
+</Step>
+
+<Step title="Grant access to your service accounts">
+Each secret must be granted to the service account your application runs as:
+
+```bash
+gcloud secrets add-iam-policy-binding DATABASE_URL \
+  --member="serviceAccount:myapp@PROJECT.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+</Step>
+
+---
+
+## Updating existing secrets
+
+The generated `gcloud secrets create` command fails if a secret already exists. To update a version instead:
+
+```bash
+# Add a new version to an existing secret
+echo -n "${DATABASE_URL}" | \
+  gcloud secrets versions add DATABASE_URL --data-file=-
+```
+
+evnx does not currently detect existing GCP secrets or generate `versions add` commands. Run `evnx migrate --to gcp --dry-run` to see the list, then decide manually whether to create or update.
+
+---
+
+## Replication policy
+
+evnx uses `--replication-policy=automatic` in all generated commands, which lets GCP choose the storage regions. For a specific region:
+
+```bash
+# Edit the generated script to replace --replication-policy=automatic with:
+--replication-policy=user-managed \
+--locations=us-central1
+```
+
+---
+
+## Reading secrets in your application
+
+GCP-native applications can use the Secret Manager client library:
+
+```python
+from google.cloud import secretmanager
+
+client = secretmanager.SecretManagerServiceClient()
+name = "projects/PROJECT_ID/secrets/DATABASE_URL/versions/latest"
+response = client.access_secret_version(request={"name": name})
+DATABASE_URL = response.payload.data.decode("UTF-8")
+```
+
+Or in Cloud Run / GKE, mount secrets as environment variables via the `--set-secrets` flag or a pod spec — no code changes needed.
+
+---
+
+## Minimum IAM permissions
+
+For creating secrets (migration time):
+
+| Role | When |
+|------|------|
+| `roles/secretmanager.admin` | Creating new secrets |
+| `roles/secretmanager.secretVersionAdder` | Adding versions to existing secrets |
+
+For reading secrets (application runtime):
+
+| Role | Scope |
+|------|-------|
+| `roles/secretmanager.secretAccessor` | Grant per secret or at project level |
+
+---
+
+## Next steps
+
+- [Migration concepts](/guides/concepts/migrate-intro)
+- [AWS Secrets Manager migration](/guides/use-cases/aws-use-cases) — for comparison
+- [`evnx convert --to gcp-secrets`](/guides/commands/convert) — static script alternative
