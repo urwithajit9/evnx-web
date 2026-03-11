@@ -1,0 +1,137 @@
+---
+slug: "commands/convert"
+section: "commands"
+order: 4
+title: "evnx convert"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-11"
+excerpt: "Command reference for evnx convert — flags, supported formats, transform values, glob patterns, and exit codes."
+difficulty: "beginner"
+timeToComplete: "3 minutes"
+tags: ["convert", "reference", "cli", "env", "formats"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# evnx convert
+
+Transform `.env` files into 14+ output formats including JSON, YAML, Kubernetes secrets,
+Terraform variables, and cloud provider configs.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+<Callout type="info">
+  Run <code>evnx convert</code> without <code>--to</code> to open an interactive TUI format
+  selector — no flags required.
+</Callout>
+
+---
+
+## Signature
+
+```bash
+evnx convert [OPTIONS]
+```
+
+All flags are optional. Omitting `--to` launches interactive mode.
+
+---
+
+## Flags
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--env` | — | `path` | `.env` | Path to input `.env` file |
+| `--to` | — | `string` | — | Target output format (omit for interactive selection) |
+| `--output` | `-o` | `path` | — | Write output to file instead of stdout |
+| `--include` | — | `glob` | — | Include only variables matching this pattern |
+| `--exclude` | — | `glob` | — | Exclude variables matching this pattern |
+| `--base64` | — | `bool` | `false` | Base64-encode all values before output |
+| `--prefix` | — | `string` | — | Prepend a string to all variable names |
+| `--transform` | — | `enum` | — | Transform key casing (see [Transform values](#transform-values)) |
+| `--verbose` | `-v` | `bool` | `false` | Print debug output to stderr (global flag) |
+| `--help` | `-h` | `bool` | `false` | Display help |
+
+<Callout type="warning">
+  <code>--to</code> has no <code>-t</code> short alias. <code>--verbose</code> / <code>-v</code>
+  is a global flag on the top-level <code>evnx</code> command, not specific to <code>convert</code>.
+</Callout>
+
+---
+
+## Supported formats
+
+| Category | Format name | Aliases |
+|----------|-------------|---------|
+| **Generic** | `json` | — |
+| | `yaml` | `yml` |
+| | `shell` | `bash`, `export` |
+| **Cloud Providers** | `aws-secrets` | `aws`, `aws-secrets-manager` |
+| | `gcp-secrets` | `gcp`, `gcp-secret-manager` |
+| | `azure-keyvault` | `azure`, `azure-key-vault` |
+| **CI/CD** | `github-actions` | `github`, `gh-actions` |
+| **Containers** | `docker-compose` | `compose` |
+| | `kubernetes` | `k8s`, `kubectl` |
+| **Infrastructure as Code** | `terraform` | `tf`, `tfvars` |
+| **Secret Managers** | `doppler` | — |
+| | `heroku` | — |
+| | `vercel` | — |
+| | `railway` | — |
+
+---
+
+## Transform values
+
+Passed to `--transform`. Applied to every key in the output after `--prefix` is prepended.
+
+| Value | Input example | Output example |
+|-------|--------------|----------------|
+| `uppercase` | `database_url` | `DATABASE_URL` |
+| `lowercase` | `DATABASE_URL` | `database_url` |
+| `camelCase` | `database_url` | `databaseUrl` |
+| `snake_case` | `DatabaseURL` | `database_url` |
+
+Order of operations: filter → prefix → transform.
+
+---
+
+## Glob pattern support
+
+`--include` and `--exclude` accept simple glob patterns.
+`--exclude` is applied after `--include`.
+
+| Pattern | Meaning | Example match |
+|---------|---------|---------------|
+| `*` | Everything | all variables |
+| `PREFIX_*` | Starts with prefix | `AWS_KEY`, `AWS_SECRET` |
+| `*_SUFFIX` | Ends with suffix | `APP_DEBUG`, `DB_DEBUG` |
+| `*CONTAINS*` | Contains substring | `DATABASE_URL`, `REDIS_URL` |
+| `EXACT` | Exact key name only | `PORT` |
+
+<Callout type="warning">
+  Character classes and brace expansions (<code>[abc]</code>, <code>{a,b}</code>) are not supported.
+</Callout>
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Conversion completed successfully |
+| `1` | Failure — unknown format, parse error, or I/O error |
+
+<Callout type="info">
+  Exit code <code>2</code> is used only by <code>evnx diff</code>, not by <code>convert</code>.
+</Callout>
+
+---
+
+## See also
+
+- [Convert basics](/guides/getting-started/convert-basics) — Practical examples for everyday conversion tasks
+- [Convert reference](/guides/reference/convert-reference) — Format-by-format output examples and troubleshooting

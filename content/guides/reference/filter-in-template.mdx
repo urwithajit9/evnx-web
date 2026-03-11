@@ -1,0 +1,717 @@
+---
+title: "Writing Templates and Using Filters"
+slug: "guides-template-filters"
+section: guides
+order: 3
+publishedAt: "2026-03-11"
+updatedAt: "2026-03-11"
+excerpt: "Learn to write template files and use every evnx filter correctly — with precise input/output behavior, config-format guidance, and the pitfalls that cause silent misconfiguration."
+difficulty: "intermediate"
+timeToComplete: "20 minutes"
+tags: ["template", "filters", "tutorial", "config", "yaml", "toml", "json"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/template
+draft: false
+---
+
+# Writing Templates and Using Filters
+
+The `evnx template` command reads a template file, substitutes variables from a `.env` file, and writes the result. Writing a template correctly — choosing the right substitution syntax, applying the right filters, and understanding what the engine actually does with your `.env` values — is the skill that makes the difference between configs that just work and configs that silently misfire.
+
+This tutorial covers every filter with exact input-to-output behavior, the three substitution syntax styles and when each one applies, and a worked end-to-end example you can follow along with.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/template">evnx template reference</Prerequisite>
+</Prerequisites>
+
+<Callout type="info">
+  <strong>What you'll build:</strong> By the end of this tutorial you'll have written a <code>config.toml.template</code> from scratch, understand exactly what each filter does to your values, and know the three pitfalls that trip up most first-time template authors.
+</Callout>
+
+---
+
+## How the engine processes your template
+
+Before writing templates it helps to understand what the engine does in what order. It runs in two passes:
+
+**Pass 1 — Filters.** Every `{{VAR|filter}}` reference is resolved first. The variable value is looked up in your `.env`, the filter transformation is applied, and the token is replaced with the result.
+
+**Pass 2 — Plain substitution.** After all filtered references are resolved, the engine replaces the remaining `${VAR}`, `{{VAR}}`, and `$VAR` tokens with their raw values.
+
+This ordering matters for one specific reason: you can use both `{{APP_ENV|upper}}` and `{{APP_ENV}}` in the same template and get different values from the same variable, without one interfering with the other.
+
+```text
+# Template:
+env_label: {{APP_ENV|upper}}
+env_slug: {{APP_ENV}}
+
+# .env:
+APP_ENV=production
+
+# Output:
+env_label: PRODUCTION
+env_slug: production
+```
+
+The filter pass resolves `{{APP_ENV|upper}}` to `PRODUCTION` first, then the plain pass resolves the remaining `{{APP_ENV}}` to `production`. No conflict.
+
+---
+
+## Part 1 — The three substitution styles
+
+The template engine recognizes three ways to reference a variable. They produce the same output — the raw value from your `.env` — but they have different syntax rules and one critical limitation.
+
+### Style 1: `${VAR}` — Shell style
+
+```text
+host: ${DB_HOST}
+url: ${DATABASE_URL}
+```
+
+Familiar from shell scripting and Docker Compose files. The curly braces are required — `$VAR` and `${VAR}` are different styles, not interchangeable. This style is the safest choice when you need the raw string value and nothing else.
+
+### Style 2: `{{VAR}}` — Template style
+
+```text
+host: {{DB_HOST}}
+url: {{DATABASE_URL}}
+```
+
+Familiar from Jinja2 and similar templating systems. Functionally identical to `${VAR}` for plain substitution, but **this is the only style that supports filters**. If you need to apply a filter to a value, you must use `{{VAR|filter}}` — filters do not work with `${VAR|filter}` or `$VAR|filter`.
+
+### Style 3: `$VAR` — Simple prefix style
+
+```text
+host: $DB_HOST
+```
+
+The shortest form. The engine matches `$VARNAME` followed by a word boundary, which means `$PORT` in `$PORT_NUMBER` is not a match — the `_` counts as a word character and there is no boundary between `T` and `_`. This style is convenient for brief templates but requires care: a variable named `DB` would match inside `$DB_HOST` if your `.env` contains `DB=something`. Prefer `${VAR}` or `{{VAR}}` in templates with multiple related variable names.
+
+### Mixing styles
+
+All three styles can coexist in one template. The engine processes all of them in each pass.
+
+```text
+# All three styles in one file — valid and supported
+app_name: ${APP_NAME}
+environment: {{APP_ENV|lower}}
+debug: $DEBUG
+```
+
+<Callout type="warning">
+  <strong>Filters only work with double-brace syntax.</strong> Writing <code>{"${APP_ENV|upper}"}</code> is not a filter expression — the engine will try to look up a variable literally named <code>APP_ENV|upper</code>, which will not be found, and emit a warning.
+</Callout>
+
+---
+
+## Part 2 — Filters in depth
+
+Filters transform a variable's value at substitution time. They are written inside double braces, separated from the variable name by a pipe: `{{VAR|filter}}`.
+
+<Callout type="danger">
+  <strong>Filters are not chainable.</strong> <code>{"{{PORT|int|default:8080}}"}</code> is not valid — the engine applies one filter per reference. If you need a default and a type assertion, handle the value in your <code>.env</code> file (e.g. <code>PORT=8080</code>) rather than in the template.
+</Callout>
+
+---
+
+### `|upper` — Convert to uppercase
+
+Converts the entire value to uppercase. Every character, including those after spaces.
+
+```text
+# Template
+LOG_LEVEL: {{LOG_LEVEL|upper}}
+APP_ENV:   {{APP_ENV|upper}}
+
+# .env
+LOG_LEVEL=warn
+APP_ENV=production
+
+# Output
+LOG_LEVEL: WARN
+APP_ENV:   PRODUCTION
+```
+
+**When to use it:** Enum-style fields in configs where your app expects uppercase — log levels (`WARN`, `ERROR`), environment names, status codes. Normalizes any casing the `.env` author used, so your app sees a consistent value regardless.
+
+---
+
+### `|lower` — Convert to lowercase
+
+Converts the entire value to lowercase.
+
+```text
+# Template
+environment: {{APP_ENV|lower}}
+region:      {{AWS_REGION|lower}}
+
+# .env
+APP_ENV=Production        # mixed case — normalized
+AWS_REGION=EU-WEST-1      # normalized for label use
+
+# Output
+environment: production
+region:      eu-west-1
+```
+
+**When to use it:** Labels, slugs, directory names, Kubernetes labels, and anywhere case-insensitive config keys are stored. Normalizes `.env` values that different team members might set differently.
+
+---
+
+### `|title` — Capitalize the first character
+
+Converts the first character of the value to uppercase and leaves the rest unchanged.
+
+```text
+# Template
+service_name: {{SERVICE_NAME|title}}
+
+# .env
+SERVICE_NAME=my api service
+
+# Output
+service_name: My api service
+```
+
+<Callout type="warning">
+  <strong><code>|title</code> only uppercases the very first character</strong> — not the first letter of every word. <code>my api service</code> becomes <code>My api service</code>, not <code>My Api Service</code>. Use it for display names and short labels where sentence-style capitalization is appropriate.
+</Callout>
+
+| Input | Output |
+|-------|--------|
+| `hello world` | `Hello world` |
+| `HELLO` | `HELLO` |
+| `my api` | `My api` |
+| `a` | `A` |
+
+---
+
+### `|bool` — Normalize to a boolean string
+
+Converts the value to the literal string `true` or `false`. This is the most permissive filter — it never fails, and any value that is not recognized as truthy becomes `false`.
+
+**Truthy values** (case-insensitive): `true`, `yes`, `1`
+
+**Everything else** is `false` — including `false`, `no`, `0`, empty string, or any unrecognized value like `maybe`.
+
+```text
+# Template
+debug:          {{DEBUG|bool}}
+enable_metrics: {{ENABLE_METRICS|bool}}
+feature_beta:   {{FEATURE_BETA|bool}}
+
+# .env
+DEBUG=yes
+ENABLE_METRICS=1
+FEATURE_BETA=false
+
+# Output
+debug:          true
+enable_metrics: true
+feature_beta:   false
+```
+
+**Full truthy/falsy reference:**
+
+| `.env` value | Output |
+|--------------|--------|
+| `true` | `true` |
+| `True` | `true` |
+| `TRUE` | `true` |
+| `yes` | `true` |
+| `Yes` | `true` |
+| `1` | `true` |
+| `false` | `false` |
+| `no` | `false` |
+| `0` | `false` |
+| `maybe` | `false` |
+| *(empty)* | `false` |
+
+**When to use it:** YAML boolean fields, TOML boolean fields, and any config format where the target field must be the literal `true` or `false`. Without this filter, a `.env` value of `yes` would be substituted as the string `"yes"` — which YAML parses as a boolean `true` but TOML and most JSON parsers do not.
+
+---
+
+### `|int` — Parse and validate as an integer
+
+Parses the value as a 64-bit signed integer and substitutes the parsed number. Unlike other filters, **`|int` fails hard** if the value cannot be parsed — the command exits with an error and the output file is not written.
+
+```text
+# Template
+port:            {{SERVER_PORT|int}}
+workers:         {{WORKER_COUNT|int}}
+max_connections: {{DB_MAX_CONNECTIONS|int}}
+
+# .env
+SERVER_PORT=8080
+WORKER_COUNT=4
+DB_MAX_CONNECTIONS=25
+
+# Output
+port:            8080
+workers:         4
+max_connections: 25
+```
+
+**Values that cause a hard failure:**
+
+| `.env` value | Error |
+|--------------|-------|
+| `not-a-number` | not a valid integer |
+| `8.5` | not a valid integer (decimals not supported) |
+| `8000 ` | not a valid integer (trailing space) |
+| `0x1F` | not a valid integer (hex not supported) |
+| *(empty)* | not a valid integer |
+
+<Callout type="danger">
+  <strong>Empty values fail with <code>|int</code>.</strong> If a variable is defined but empty in your <code>.env</code> (e.g. <code>PORT=</code>), the <code>|int</code> filter will fail. If the variable might legitimately be unset, use <code>|default:8080</code> on a separate reference instead.
+</Callout>
+
+**When to use it:** TOML integer fields, Nginx `worker_processes`, Kubernetes replica counts, connection pool sizes — anywhere the config format expects a bare number and passing a quoted string would cause a parse error at runtime.
+
+---
+
+### `|json` — JSON-escape a string value
+
+Passes the value through `serde_json::to_string`, which escapes special characters for safe embedding in JSON.
+
+**The output always includes surrounding double quotes** — this is intentional and correct for JSON string literals.
+
+```text
+# Template
+{
+  "description": {{DESCRIPTION|json}},
+  "author":      {{AUTHOR|json}}
+}
+
+# .env
+DESCRIPTION=hello "world" & <test>
+AUTHOR=Jane Smith
+
+# Output
+{
+  "description": "hello \"world\" & <test>",
+  "author":      "Jane Smith"
+}
+```
+
+**Exact input → output:**
+
+| `.env` value | Output (with quotes) |
+|--------------|----------------------|
+| `hello` | `"hello"` |
+| `hello "world"` | `"hello \"world\""` |
+| `line1\nline2` | `"line1\\nline2"` |
+| *(empty)* | `""` |
+
+<Callout type="danger">
+  <strong>Do not use <code>|json</code> in YAML or TOML templates.</strong> Because the output includes surrounding double quotes, placing <code>{"{{VALUE|json}}"}</code> in a YAML file produces <code>key: "hello \"world\""</code> — the literal backslash-quote sequences become part of the YAML string value, which is not what you want. In YAML and TOML, use plain <code>{"${VALUE}"}</code> or <code>{"{{VALUE}}"}</code> instead, and ensure your values don't contain characters that break the target format.
+</Callout>
+
+**When to use it:** Embedding string values inside `.json` template files only. The filter exists precisely for JSON — it handles quotes, backslashes, and control characters correctly.
+
+---
+
+### `|default:value` — Fallback for empty or undefined variables
+
+Substitutes a fallback value when the variable is either empty (including whitespace-only) or not defined in the `.env` file at all.
+
+```text
+# Template
+log_level:  {{LOG_LEVEL|default:warn}}
+sentry_dsn: {{SENTRY_DSN|default:}}
+timeout:    {{REQUEST_TIMEOUT|default:30}}
+
+# .env
+LOG_LEVEL=             # defined but empty → triggers default
+REQUEST_TIMEOUT=60     # defined with value → uses value
+# SENTRY_DSN not in .env at all → triggers default
+
+# Output
+log_level:  warn
+sentry_dsn:             ← empty string (default was empty)
+timeout:    60
+```
+
+**The two conditions that trigger the default:**
+
+1. The variable is in your `.env` but its value is empty or only whitespace: `LOG_LEVEL=` or `LOG_LEVEL=   `
+2. The variable is not in your `.env` at all
+
+When `|default:` is specified with no value (nothing after the colon), the fallback is an empty string. This is useful for optional fields that your app handles gracefully as empty — use it to silence the undefined variable warning without leaving a bare template token in the output.
+
+**When to use it:**
+- Optional config fields that have a safe default (`|default:warn`, `|default:30`)
+- Optional secrets that are only set in some environments — `|default:` (empty) suppresses the warning and produces an empty value rather than leaving the token unresolved
+- Any variable that might be absent on a developer's local `.env` but required in CI
+
+---
+
+## Part 3 — Writing a template file
+
+A template file is just the config file you want to generate, with `.env` variable references in place of the actual values. The recommended workflow is:
+
+1. Start with a working copy of the target config file
+2. Identify every value that changes between environments or contains a secret
+3. Replace each such value with the appropriate substitution syntax
+4. Choose filters where the format requires specific types or casing
+
+### Naming conventions
+
+Store template files with a `.template` or `.tpl` extension next to where the generated file will live:
+
+```text
+config.toml           ← generated, gitignored
+config.toml.template  ← committed to version control
+nginx.conf            ← generated, gitignored
+nginx.conf.tpl        ← committed to version control
+```
+
+Add the generated outputs to `.gitignore`:
+
+```bash
+# .gitignore
+config.toml
+nginx.conf
+docker-compose.yml
+k8s/configmap.yaml
+```
+
+### Deciding which substitution style to use
+
+A practical heuristic for each line in your config:
+
+- **Need a filter?** → must use `{{VAR|filter}}`
+- **Value is a URL, connection string, or contains special characters?** → use `${VAR}` — shell style handles these reliably
+- **Short, unambiguous variable name with no naming relatives?** → `$VAR` works fine
+- **YAML or TOML string field where the value is plain text?** → any style works; prefer `${VAR}` for readability
+
+### Mixing styles in one file
+
+You can mix all three styles freely. A common pattern is using shell style for URLs and secrets (where readability matters and no filter is needed) and template style for typed or normalized fields:
+
+```toml
+# config.toml.template
+
+[server]
+host        = "${SERVER_HOST}"
+port        = {{SERVER_PORT|int}}
+environment = "{{APP_ENV|lower}}"
+
+[database]
+url             = "${DATABASE_URL}"
+max_connections = {{DB_MAX_CONNECTIONS|int}}
+
+[logging]
+level = "{{LOG_LEVEL|upper}}"
+
+[features]
+enable_beta    = {{ENABLE_BETA|bool}}
+enable_metrics = {{ENABLE_METRICS|bool}}
+```
+
+---
+
+## Part 4 — Common patterns and their reasons
+
+### Using `|int` for numeric fields in typed config formats
+
+TOML requires unquoted integers for integer fields. A TOML file with `port = "8080"` (quoted) is valid TOML but the value is a string — Rust's `toml` crate will fail to deserialize it into a `u16`. Using `{{PORT|int}}` ensures the output is an unquoted integer:
+
+```toml
+# Template
+port = {{SERVER_PORT|int}}
+
+# Output — unquoted integer, valid for TOML integer fields
+port = 8080
+```
+
+The same applies to YAML. `port: "8080"` (quoted in YAML) is a string; `port: 8080` is an integer. YAML's own syntax distinguishes these, and many YAML parsers will pass the quoted form to your app as a string.
+
+### Using `|bool` instead of passing the value directly
+
+`.env` files have no type system. A value of `yes` is a string. Your config format may expect the literal `true`. The `|bool` filter normalizes any of the recognized truthy forms:
+
+```yaml
+# Template
+debug: {{DEBUG|bool}}
+
+# .env — any of these work:
+# DEBUG=yes  →  debug: true
+# DEBUG=1    →  debug: true
+# DEBUG=true →  debug: true
+# DEBUG=no   →  debug: false
+```
+
+Without `|bool`, `DEBUG=yes` would produce `debug: yes` in YAML — which YAML 1.1 parses as boolean `true` but YAML 1.2 and many strict parsers do not. Using `|bool` makes the output unambiguous.
+
+### Using `|default:` for optional variables
+
+When a variable is optional — only set in some environments — use `|default:` to prevent the undefined variable warning and avoid leaving an unresolved token in the output:
+
+```yaml
+# Template
+sentry:
+  dsn:     "{{SENTRY_DSN|default:}}"
+  enabled: {{SENTRY_ENABLED|default:false}}
+```
+
+If `SENTRY_DSN` is not set, the output is `dsn: ""`. Your app can check for an empty string to disable the Sentry integration. If you omit `|default:` and `SENTRY_DSN` is undefined, evnx warns and the output contains the literal text `{{SENTRY_DSN}}` — which is almost certainly not valid in your config format.
+
+### Using the same variable with and without a filter
+
+Because filters run before plain substitution, you can reference the same variable both ways in one template without conflict:
+
+```yaml
+# Template
+environment:  "{{APP_ENV|lower}}"   # normalized lowercase label
+display_name: "{{APP_ENV|title}}"   # first-char capitalized display name
+env_code:     "{{APP_ENV|upper}}"   # uppercase enum value
+raw_value:    "{{APP_ENV}}"         # raw, exactly as set in .env
+```
+
+Each reference is resolved independently. The four tokens produce four different outputs from the same `.env` value.
+
+---
+
+## Part 5 — Pitfalls
+
+### Pitfall 1: Expecting `|int` to be forgiving
+
+`|int` is the only filter that causes a hard failure. An empty value, a decimal, trailing whitespace, or a hex literal all fail with an error — the output file is not written. If your variable might be empty or absent, do not use `|int` directly. Set a concrete integer value in your `.env`, or use `|default:8080` on a plain reference.
+
+```text
+# ❌ Will fail if PORT is empty or missing
+port = {{PORT|int}}
+
+# ✅ Use a concrete default in .env, OR use |default for the raw value
+port = {{PORT|default:8080}}
+```
+
+### Pitfall 2: Using `|json` in YAML or TOML
+
+`|json` output includes surrounding double quotes. In a YAML context:
+
+```yaml
+# Template — WRONG for YAML
+description: {{DESCRIPTION|json}}
+
+# .env
+DESCRIPTION=hello "world"
+
+# Output — the quotes are part of the YAML string value
+description: "hello \"world\""
+# YAML parses this as the string: hello "world"
+# BUT the backslash-quote sequences are YAML escape sequences,
+# not all YAML parsers handle them identically.
+```
+
+Use `|json` only inside `.json` template files where the surrounding quotes are part of valid JSON syntax. In YAML and TOML, use plain substitution:
+
+```yaml
+# Template — CORRECT for YAML
+description: "{{DESCRIPTION}}"
+# or
+description: "${DESCRIPTION}"
+```
+
+### Pitfall 3: `$VAR` matching a prefix of another variable name
+
+The `$VAR` style uses a word boundary (`\b`) to avoid partial matches. Underscore `_` is a word character, so `$PORT` in a template will not accidentally match `$PORT_NUMBER`. However, if your template has a variable named `DB` and another named `DB_HOST`, and your `.env` has `DB=mydb`, the `$DB` substitution could match in unexpected places if you are not careful about surrounding characters.
+
+When two variable names share a prefix, prefer `${VAR}` for both — the curly braces make the boundary unambiguous:
+
+```text
+# ❌ Ambiguous — $DB could interfere depending on context
+url: $DB_HOST/$DB
+
+# ✅ Unambiguous with curly braces
+url: ${DB_HOST}/${DB}
+```
+
+---
+
+## Worked example: building `config.toml.template` from scratch
+
+Let's build a complete template for a service that reads TOML config. We'll go line by line, deciding the right syntax for each value.
+
+### Step 1: Start with the target config
+
+Here is what the working `config.toml` looks like for production:
+
+```toml
+[server]
+host        = "0.0.0.0"
+port        = 8080
+workers     = 8
+environment = "production"
+
+[database]
+url             = "postgresql://prod-user:secret@db.internal:5432/app"
+max_connections = 50
+ssl_mode        = "require"
+
+[logging]
+level  = "WARN"
+format = "json"
+
+[features]
+enable_beta    = false
+enable_metrics = true
+service_label  = "My Service"
+```
+
+### Step 2: Identify what varies or is secret
+
+Going through each value:
+
+- `host` — always `0.0.0.0`, not worth templating
+- `port` — changes per environment; must be an **integer** in TOML
+- `workers` — changes per environment; must be an **integer**
+- `environment` — changes per environment; we want it **lowercase** always
+- `url` — secret, changes per environment; raw string, `${VAR}` is clear
+- `max_connections` — changes per environment; must be an **integer**
+- `ssl_mode` — optional: required in prod, might be `disable` in dev
+- `level` — changes per environment; we want **uppercase** always
+- `format` — always `json`, not worth templating
+- `enable_beta` — a feature flag; must be a **boolean** in TOML
+- `enable_metrics` — a feature flag; must be a **boolean** in TOML
+- `service_label` — the same everywhere except capitalization differs in team's `.env` files; use **title** to normalize
+
+### Step 3: Write the template
+
+```toml
+# config.toml.template
+# Generated by: evnx template -i config.toml.template -o config.toml --env .env
+
+[server]
+host        = "0.0.0.0"
+port        = {{SERVER_PORT|int}}
+workers     = {{WORKER_COUNT|int}}
+environment = "{{APP_ENV|lower}}"
+
+[database]
+url             = "${DATABASE_URL}"
+max_connections = {{DB_MAX_CONNECTIONS|int}}
+ssl_mode        = "{{DB_SSL_MODE|default:require}}"
+
+[logging]
+level  = "{{LOG_LEVEL|upper}}"
+format = "json"
+
+[features]
+enable_beta    = {{ENABLE_BETA|bool}}
+enable_metrics = {{ENABLE_METRICS|bool}}
+service_label  = "{{SERVICE_LABEL|title}}"
+```
+
+### Step 4: Write the `.env` files
+
+**`.env.production`** (populated by secrets manager at deploy time):
+
+```bash
+SERVER_PORT=8080
+WORKER_COUNT=8
+APP_ENV=production
+DATABASE_URL=postgresql://prod-user:secret@db.internal:5432/app
+DB_MAX_CONNECTIONS=50
+DB_SSL_MODE=require
+LOG_LEVEL=warn
+ENABLE_BETA=false
+ENABLE_METRICS=1
+SERVICE_LABEL=my service
+```
+
+**`.env.dev`** (committed safe defaults for local development):
+
+```bash
+SERVER_PORT=9000
+WORKER_COUNT=2
+APP_ENV=development
+DATABASE_URL=postgresql://postgres:password@localhost:5432/app_dev
+DB_MAX_CONNECTIONS=10
+# DB_SSL_MODE not set — will use default "require" from template
+LOG_LEVEL=debug
+ENABLE_BETA=yes
+ENABLE_METRICS=0
+SERVICE_LABEL=my service
+```
+
+### Step 5: Generate and verify
+
+```bash
+# Generate production config
+evnx template \
+  -i config.toml.template \
+  -o config.toml \
+  --env .env.production \
+  --verbose
+
+✓ Loaded 10 variables from .env.production
+✓ Read template from config.toml.template
+✓ Generated config at config.toml
+
+# Generate dev config (DB_SSL_MODE undefined — default will apply)
+evnx template \
+  -i config.toml.template \
+  -o config.toml \
+  --env .env.dev \
+  --verbose
+
+✓ Loaded 9 variables from .env.dev
+✓ Read template from config.toml.template
+⚠️  Variable 'DB_SSL_MODE' referenced in template but not defined in .env.dev
+✓ Generated config at config.toml
+ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+```
+
+**Generated `config.toml` (dev):**
+
+```toml
+[server]
+host        = "0.0.0.0"
+port        = 9000
+workers     = 2
+environment = "development"
+
+[database]
+url             = "postgresql://postgres:password@localhost:5432/app_dev"
+max_connections = 10
+ssl_mode        = "require"
+
+[logging]
+level  = "DEBUG"
+format = "json"
+
+[features]
+enable_beta    = true
+enable_metrics = false
+service_label  = "My service"
+```
+
+Every field is correctly typed for TOML: integers are unquoted, booleans are `true`/`false`, strings are quoted. `DB_SSL_MODE` was undefined in `.env.dev` — the `|default:require` filter covered it, and the warning in verbose output confirms that was the path taken.
+
+---
+
+## Filter quick reference
+
+| Filter | Syntax | Fails on bad input | Output includes quotes | Use in |
+|--------|--------|--------------------|------------------------|--------|
+| `\|upper` | `{{VAR\|upper}}` | No | No | YAML, TOML, Nginx, any |
+| `\|lower` | `{{VAR\|lower}}` | No | No | YAML, TOML, Nginx, any |
+| `\|title` | `{{VAR\|title}}` | No | No | YAML, TOML, any (first char only) |
+| `\|bool` | `{{VAR\|bool}}` | No | No | YAML, TOML (produces `true`/`false`) |
+| `\|int` | `{{VAR\|int}}` | **Yes** | No | YAML, TOML (produces unquoted integer) |
+| `\|json` | `{{VAR\|json}}` | No | **Yes** | JSON only |
+| `\|default:val` | `{{VAR\|default:val}}` | No | No | Any format, any filter context |
+
+---
+
+## See also
+
+- [evnx template reference](/commands/template) — Full command options and exit codes
+- [Production Use Cases](/use-cases/template-production) — Complete real-world template examples for Docker, Kubernetes, Nginx, and CI/CD
+- [CI/CD Integration](/guides/integrations/ci-cd-template) — Integrating template generation into automated pipelines
+- [Security Best Practices](/guides/security/template-secrets) — Gitignore patterns and secrets manager integration

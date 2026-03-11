@@ -1,0 +1,744 @@
+---
+slug: "use-cases-template-production"
+section: "use-cases"
+order: 5
+title: "Production Use Cases — Real-World `evnx template` Workflows"
+publishedAt: "2026-03-11"
+updatedAt: "2026-03-11"
+excerpt: "Explore real production scenarios where `evnx template` eliminates manual config file editing — with before/after comparisons showing the friction of hand-crafted files vs. template-driven generation."
+difficulty: "intermediate"
+timeToComplete: "15 minutes"
+tags: ["template", "use-cases", "production", "workflow", "config", "ci-cd"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/template
+draft: false
+---
+
+# Production Use Cases — Real-World `evnx template` Workflows
+
+<Callout type="tip">
+  <strong>What you'll learn:</strong> This guide shows how <code>evnx template</code> solves real production config generation challenges:
+  <ul>
+    <li>Generating Docker Compose files for multiple environments from one source</li>
+    <li>Producing Kubernetes ConfigMap YAML with validated, typed values</li>
+    <li>Creating TOML configs for apps that don't support native env expansion</li>
+    <li>Generating Nginx server blocks per environment without config drift</li>
+    <li>Running multi-environment config generation loops in CI/CD pipelines</li>
+  </ul>
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/template">evnx template reference</Prerequisite>
+</Prerequisites>
+
+---
+
+## Why this matters
+
+Config file management seems manageable until you're:
+- 🐳 Maintaining three slightly different `docker-compose.yml` files for dev, staging, and prod
+- ☸️ Hand-editing Kubernetes YAML and hoping replica counts and log levels are valid types
+- ⚙️ Copying values into TOML or INI files that have no native environment variable support
+- 🌐 Keeping Nginx server blocks for five services in sync when a port changes
+- 🚀 Writing CI/CD scripts that regenerate configs differently per deployment target
+
+**Without tooling**, these scenarios mean manual editing across multiple files, copy-paste drift between environments, no type validation, and secrets that creep into committed files.
+
+**With `evnx template`**, you maintain one template per config format, committed to version control with no secrets, and generate every environment's output with a single command — with filter transformations that produce correctly typed values.
+
+---
+
+## Use Case 1: Docker Compose Files per Environment
+
+### 🎯 Scenario
+Your team runs a web service with a background worker and PostgreSQL. Docker Compose configuration differs between dev (local images, debug on, low resource limits) and production (versioned images, debug off, specific port bindings).
+
+### ❌ Without `evnx template` (Manual Approach)
+
+```bash
+# You end up with three diverging files:
+docker-compose.yml           # dev
+docker-compose.staging.yml   # staging
+docker-compose.prod.yml      # production
+
+# Editing one means manually patching the others.
+# Last week someone updated the health check timeout in dev
+# and forgot staging and prod. Staging went down.
+
+# When a new SERVICE_PORT is decided:
+# 1. Open all three files
+# 2. Search-replace carefully (don't touch the wrong port)
+# 3. Hope no file has drifted further ahead
+# 4. Review in PR — reviewer can't tell what changed vs what drifted
+```
+
+**Pain points:**
+- 🚫 Three files drift apart silently — no structural diff, just values
+- 🚫 No validation that `APP_PORT` is actually a number before compose runs
+- 🚫 Real credentials accidentally committed to `docker-compose.prod.yml`
+- 🚫 PR reviews are noisy — changes mixed with formatting drift
+
+### ✅ With `evnx template`
+
+**`docker-compose.yml.template`** (committed, no secrets):
+
+```yaml
+version: "3.9"
+
+services:
+  app:
+    image: myapp:${IMAGE_TAG}
+    environment:
+      APP_ENV: {{APP_ENV|upper}}
+      DEBUG: {{DEBUG|bool}}
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "{{APP_PORT|int}}:8000"
+    restart: ${RESTART_POLICY}
+
+  worker:
+    image: myapp:${IMAGE_TAG}
+    command: python manage.py runworker
+    environment:
+      APP_ENV: {{APP_ENV|upper}}
+      DATABASE_URL: ${DATABASE_URL}
+    restart: ${RESTART_POLICY}
+```
+
+**`.env.dev`** (gitignored):
+
+```bash
+IMAGE_TAG=latest
+APP_ENV=development
+DEBUG=true
+APP_PORT=8000
+DATABASE_URL=postgresql://postgres:password@db:5432/myapp
+RESTART_POLICY=no
+```
+
+**`.env.production`** (gitignored, injected by secrets manager at deploy time):
+
+```bash
+IMAGE_TAG=v1.4.2
+APP_ENV=production
+DEBUG=false
+APP_PORT=80
+DATABASE_URL=postgresql://prod-user:secret@prod-db:5432/myapp
+RESTART_POLICY=always
+```
+
+**Generate per environment:**
+
+```bash
+# Dev
+evnx template -i docker-compose.yml.template -o docker-compose.yml --env .env.dev
+
+✓ Loaded 6 variables from .env.dev
+✓ Read template from docker-compose.yml.template
+✓ Generated config at docker-compose.yml
+
+# Production
+evnx template -i docker-compose.yml.template -o docker-compose.yml.prod --env .env.production
+
+✓ Loaded 6 variables from .env.production
+✓ Generated config at docker-compose.yml.prod
+```
+
+**Generated `docker-compose.yml` (dev output):**
+
+```yaml
+version: "3.9"
+
+services:
+  app:
+    image: myapp:latest
+    environment:
+      APP_ENV: DEVELOPMENT
+      DEBUG: true
+      DATABASE_URL: postgresql://postgres:password@db:5432/myapp
+    ports:
+      - "8000:8000"
+    restart: no
+
+  worker:
+    image: myapp:latest
+    command: python manage.py runworker
+    environment:
+      APP_ENV: DEVELOPMENT
+      DATABASE_URL: postgresql://postgres:password@db:5432/myapp
+    restart: no
+```
+
+**Benefits:**
+- ✅ One template in version control — diffs show real structural changes only
+- ✅ `{{APP_PORT|int}}` ensures the port binding is always a valid integer
+- ✅ `{{DEBUG|bool}}` produces `true`/`false` — valid YAML boolean values
+- ✅ `{{APP_ENV|upper}}` normalizes the environment name regardless of how it's set in `.env`
+- ✅ No secrets ever touch the template file
+
+<Callout type="success">
+  <strong>Time saved: eliminating 3 diverging files → 1 template.</strong> Every environment change is a one-line edit to a <code>.env.*</code> file and one regeneration command.
+</Callout>
+
+---
+
+## Use Case 2: Kubernetes ConfigMap YAML with Typed Values
+
+### 🎯 Scenario
+Your Kubernetes deployment reads app config from a ConfigMap. Values need to be correctly typed (integers for replica counts and pool sizes, uppercase for log levels), and some optional fields should have safe defaults rather than rendering as empty strings when unset.
+
+### ❌ Without `evnx template` (Manual Approach)
+
+```bash
+# Developer hand-edits k8s/configmap.yaml:
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  LOG_LEVEL: "info"       # lowercase? uppercase? nobody agrees
+  DB_POOL_SIZE: "10"      # is "10" a string? kubectl treats it as string anyway
+  REPLICAS: ""            # forgot to set this — deploy uses wrong replica count
+  ENABLE_CACHING: "True"  # capital T — your app might not parse this as bool
+
+# Problems discovered at runtime, not at config generation time.
+# Fixing requires: edit YAML, commit, push, wait for CI, redeploy.
+```
+
+**Pain points:**
+- 🚫 Empty values for optional vars cause silent misconfigurations
+- 🚫 No validation that replica counts are integers before `kubectl apply`
+- 🚫 Inconsistent casing for log levels and booleans across environments
+- 🚫 Manual YAML editing risks indentation errors that break `kubectl`
+
+### ✅ With `evnx template`
+
+**`k8s/configmap.yaml.template`** (committed):
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    environment: {{APP_ENV|lower}}
+data:
+  LOG_LEVEL: "{{LOG_LEVEL|upper}}"
+  DB_POOL_SIZE: "{{DB_POOL_SIZE|int}}"
+  ENABLE_CACHING: "{{ENABLE_CACHING|bool}}"
+  APP_NAME: "{{APP_NAME|title}}"
+  SUPPORT_EMAIL: "{{SUPPORT_EMAIL|default:support@example.com}}"
+  ANALYTICS_ENDPOINT: "{{ANALYTICS_ENDPOINT|default:}}"
+```
+
+**`.env.production`**:
+
+```bash
+APP_ENV=production
+LOG_LEVEL=warn
+DB_POOL_SIZE=25
+ENABLE_CACHING=yes
+APP_NAME=my service
+SUPPORT_EMAIL=ops@mycompany.com
+# ANALYTICS_ENDPOINT intentionally not set — optional
+```
+
+**Generate the ConfigMap:**
+
+```bash
+evnx template \
+  -i k8s/configmap.yaml.template \
+  -o k8s/configmap.yaml \
+  --env .env.production \
+  --verbose
+
+Running template in verbose mode
+✓ Loaded 6 variables from .env.production
+✓ Read template from k8s/configmap.yaml.template
+⚠️  Variable 'ANALYTICS_ENDPOINT' referenced in template but not defined in .env.production
+✓ Generated config at k8s/configmap.yaml
+ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+```
+
+**Generated `k8s/configmap.yaml`:**
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    environment: production
+data:
+  LOG_LEVEL: "WARN"
+  DB_POOL_SIZE: "25"
+  ENABLE_CACHING: "true"
+  APP_NAME: "My service"
+  SUPPORT_EMAIL: "ops@mycompany.com"
+  ANALYTICS_ENDPOINT: ""
+```
+
+**Benefits:**
+- ✅ `{{LOG_LEVEL|upper}}` enforces consistent casing — app code can rely on uppercase
+- ✅ `{{DB_POOL_SIZE|int}}` catches `"twenty-five"` before the pod starts, not after
+- ✅ `{{ENABLE_CACHING|bool}}` normalizes `yes`/`1`/`true`/`True` → `true` consistently
+- ✅ `{{SUPPORT_EMAIL|default:support@example.com}}` prevents empty required-ish fields
+- ✅ `--verbose` surfaces the `ANALYTICS_ENDPOINT` warning so you can decide if it matters
+
+<Callout type="warning">
+  <strong>Watch the undefined variable warning.</strong> When <code>--verbose</code> reports a variable referenced but not defined, evnx substitutes nothing and leaves the value empty. For optional fields this is intentional — for required fields, it means a misconfiguration you want to catch before <code>kubectl apply</code>.
+</Callout>
+
+---
+
+## Use Case 3: TOML Config for Apps Without Native Env Expansion
+
+### 🎯 Scenario
+Your Rust API server reads its configuration from `config.toml` at startup. TOML has no native environment variable expansion — values are literals. You need typed values: integers for connection limits, booleans for feature toggles, and lowercase strings for mode names. Without a generation step, every deploy means hand-editing the TOML file.
+
+### ❌ Without `evnx template` (Manual Approach)
+
+```bash
+# Developer edits config.toml before each deploy:
+[server]
+host = "0.0.0.0"
+port = 8080              # Must remember to change for staging (9000)
+workers = 4              # Must be integer — typo "four" causes panic at startup
+
+[database]
+url = "postgresql://..."  # Paste prod URL here (don't commit!)
+max_connections = 20
+
+[features]
+enable_beta = true       # Forget to flip this to false in prod last release
+
+# Result: config.toml ends up in git with a prod database URL inside it.
+# Security incident. Post-mortem. New process mandating manual review.
+# New process also not followed consistently.
+```
+
+**Pain points:**
+- 🚫 TOML is committed to the repo — secrets leak into git history
+- 🚫 No validation that `workers` or `port` are integers before the app panics
+- 🚫 Manual value changes per environment with no audit trail
+- 🚫 Boolean values must match TOML syntax exactly (`true`/`false`, not `yes`/`1`)
+
+### ✅ With `evnx template`
+
+**`config.toml.template`** (committed, safe):
+
+```toml
+[server]
+host = "${SERVER_HOST}"
+port = {{SERVER_PORT|int}}
+workers = {{WORKER_COUNT|int}}
+environment = "{{APP_ENV|lower}}"
+
+[database]
+url = "${DATABASE_URL}"
+max_connections = {{DB_MAX_CONNECTIONS|int}}
+
+[features]
+enable_beta = {{ENABLE_BETA|bool}}
+enable_metrics = {{ENABLE_METRICS|bool}}
+service_name = "{{APP_NAME|title}}"
+```
+
+**`.env.staging`**:
+
+```bash
+SERVER_HOST=0.0.0.0
+SERVER_PORT=9000
+WORKER_COUNT=2
+APP_ENV=Staging
+DATABASE_URL=postgresql://staging-user:secret@staging-db:5432/app
+DB_MAX_CONNECTIONS=10
+ENABLE_BETA=true
+ENABLE_METRICS=yes
+APP_NAME=my api
+```
+
+**`.env.production`**:
+
+```bash
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
+WORKER_COUNT=8
+APP_ENV=Production
+DATABASE_URL=postgresql://prod-user:secret@prod-db:5432/app
+DB_MAX_CONNECTIONS=50
+ENABLE_BETA=false
+ENABLE_METRICS=1
+APP_NAME=my api
+```
+
+**Generate per environment:**
+
+```bash
+# Staging
+evnx template -i config.toml.template -o config.toml --env .env.staging
+
+✓ Loaded 10 variables from .env.staging
+✓ Generated config at config.toml
+
+# Production
+evnx template -i config.toml.template -o config.toml --env .env.production
+
+✓ Loaded 10 variables from .env.production
+✓ Generated config at config.toml
+```
+
+**Generated `config.toml` (staging):**
+
+```toml
+[server]
+host = "0.0.0.0"
+port = 9000
+workers = 2
+environment = "staging"
+
+[database]
+url = "postgresql://staging-user:secret@staging-db:5432/app"
+max_connections = 10
+
+[features]
+enable_beta = true
+enable_metrics = true
+service_name = "My Api"
+```
+
+**Benefits:**
+- ✅ `{{SERVER_PORT|int}}` and `{{WORKER_COUNT|int}}` produce unquoted TOML integers — exactly what the Rust parser expects
+- ✅ `{{ENABLE_BETA|bool}}` and `{{ENABLE_METRICS|bool}}` normalize `yes`/`1`/`true` → TOML `true`/`false`
+- ✅ `{{APP_ENV|lower}}` normalizes `Staging`/`STAGING`/`staging` → consistent lowercase
+- ✅ `config.toml.template` is safe to commit — no secrets, just structure
+- ✅ Generated `config.toml` is gitignored; injected fresh each deploy
+
+<Callout type="danger">
+  <strong>Add generated output files to <code>.gitignore</code>.</strong> Only the <code>.template</code> file belongs in version control. The generated <code>config.toml</code> will contain real credentials from <code>.env</code> and must never be committed.
+</Callout>
+
+---
+
+## Use Case 4: Nginx Server Block Generation
+
+### 🎯 Scenario
+You run five services behind Nginx. Each has a different domain, upstream port, worker process count, and log level depending on the environment. Keeping five separate `nginx.conf` files synchronized when a timeout or log format changes is a constant source of drift and late-night incidents.
+
+### ❌ Without `evnx template` (Manual Approach)
+
+```bash
+# You maintain:
+nginx/api.conf
+nginx/api.staging.conf
+nginx/api.dev.conf
+nginx/worker.conf
+nginx/worker.staging.conf
+# ... 10+ files total
+
+# When access log format changes:
+# 1. Update api.conf
+# 2. Remember to update api.staging.conf (you forget)
+# 3. Staging uses wrong log format for 3 weeks
+# 4. Log parsing pipeline silently breaks
+# 5. Discovered during incident postmortem
+
+# No validation that worker_processes is actually a number.
+# nginx -t catches it — but only after you've already deployed.
+```
+
+**Pain points:**
+- 🚫 Structural changes require editing every env variant of every service config
+- 🚫 No validation that numeric values (`worker_processes`, `proxy_connect_timeout`) are integers
+- 🚫 Optional directives left blank rather than given safe defaults
+- 🚫 `nginx -t` is the only safety net — runs too late in the deploy process
+
+### ✅ With `evnx template`
+
+**`nginx/service.conf.template`** (committed):
+
+```nginx
+worker_processes {{WORKER_PROCESSES|int}};
+error_log /var/log/nginx/error.log {{LOG_LEVEL|default:warn}};
+
+events {
+    worker_connections {{WORKER_CONNECTIONS|int}};
+}
+
+http {
+    upstream backend {
+        server 127.0.0.1:{{UPSTREAM_PORT|int}};
+    }
+
+    server {
+        listen {{NGINX_PORT|int}};
+        server_name ${SERVER_NAME};
+
+        location / {
+            proxy_pass http://backend;
+            proxy_connect_timeout {{PROXY_TIMEOUT|int}};
+            proxy_read_timeout {{PROXY_TIMEOUT|int}};
+        }
+
+        access_log /var/log/nginx/${SERVICE_NAME}-access.log;
+        error_log  /var/log/nginx/${SERVICE_NAME}-error.log {{LOG_LEVEL|default:warn}};
+    }
+}
+```
+
+**`.env.api.production`**:
+
+```bash
+WORKER_PROCESSES=4
+LOG_LEVEL=warn
+WORKER_CONNECTIONS=1024
+UPSTREAM_PORT=8000
+NGINX_PORT=443
+SERVER_NAME=api.mycompany.com
+PROXY_TIMEOUT=30
+SERVICE_NAME=api
+```
+
+**`.env.api.dev`**:
+
+```bash
+WORKER_PROCESSES=1
+# LOG_LEVEL intentionally unset — will use default "warn"
+WORKER_CONNECTIONS=256
+UPSTREAM_PORT=8000
+NGINX_PORT=80
+SERVER_NAME=localhost
+PROXY_TIMEOUT=60
+SERVICE_NAME=api-dev
+```
+
+**Generate per service and environment:**
+
+```bash
+# Production API
+evnx template \
+  -i nginx/service.conf.template \
+  -o nginx/api.conf \
+  --env .env.api.production \
+  --verbose
+
+✓ Loaded 8 variables from .env.api.production
+✓ Generated config at nginx/api.conf
+
+# Dev API (LOG_LEVEL not in .env.api.dev)
+evnx template \
+  -i nginx/service.conf.template \
+  -o nginx/api.dev.conf \
+  --env .env.api.dev \
+  --verbose
+
+✓ Loaded 7 variables from .env.api.dev
+⚠️  Variable 'LOG_LEVEL' referenced in template but not defined in .env.api.dev
+✓ Generated config at nginx/api.dev.conf
+ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+```
+
+**Generated `nginx/api.dev.conf`:**
+
+```nginx
+worker_processes 1;
+error_log /var/log/nginx/error.log warn;
+
+events {
+    worker_connections 256;
+}
+
+http {
+    upstream backend {
+        server 127.0.0.1:8000;
+    }
+
+    server {
+        listen 80;
+        server_name localhost;
+
+        location / {
+            proxy_pass http://backend;
+            proxy_connect_timeout 60;
+            proxy_read_timeout 60;
+        }
+
+        access_log /var/log/nginx/api-dev-access.log;
+        error_log  /var/log/nginx/api-dev-error.log warn;
+    }
+}
+```
+
+**Benefits:**
+- ✅ `{{WORKER_PROCESSES|int}}` and `{{UPSTREAM_PORT|int}}` catch non-integer values before `nginx -t`
+- ✅ `{{LOG_LEVEL|default:warn}}` produces a valid directive even when `LOG_LEVEL` is unset — no blank `error_log` line
+- ✅ One template for all services and environments — structural changes (log format, proxy headers) touch one file
+- ✅ The `--verbose` warning on `LOG_LEVEL` signals the fallback is active, so it's visible in CI logs
+
+<Callout type="info">
+  <strong>The undefined variable warning is useful here.</strong> When <code>LOG_LEVEL</code> is not set in <code>.env.api.dev</code>, evnx warns you and the <code>\|default:warn</code> filter takes over. This is intentional — the warning tells you the fallback is active, without failing the generation.
+</Callout>
+
+---
+
+## Use Case 5: Multi-Environment Config Generation in CI/CD
+
+### 🎯 Scenario
+Your deployment pipeline needs to generate application config files for dev, staging, and production before uploading them to the respective environments. Each environment has its own `.env` file managed by your secrets manager. The CI script must regenerate all configs on every deploy, and output must be verbose enough to debug failures in CI logs.
+
+### ❌ Without `evnx template` (Manual Approach)
+
+```bash
+# CI script maintains separate sed/awk substitution per file:
+sed -i "s/__APP_ENV__/production/g" config.yaml
+sed -i "s/__DEBUG__/false/g" config.yaml
+sed -i "s/__PORT__/8080/g" config.yaml
+# ... repeated for 15 more variables
+
+# Problems:
+# 1. sed replaces anywhere — __PORT__ inside a comment gets replaced too
+# 2. No way to validate that PORT is an integer before substitution
+# 3. Add a new variable → add a new sed line in every CI stage
+# 4. Different escaping rules for values with slashes (DATABASE_URL breaks sed)
+# 5. Boolean normalization: does staging .env use "true" or "yes" or "1"?
+#    sed doesn't know, your app might not handle all three
+```
+
+**Pain points:**
+- 🚫 `sed` substitutions are fragile — special characters in values break them
+- 🚫 No boolean or integer normalization — app receives whatever string is in `.env`
+- 🚫 Adding a new config key means updating CI scripts, not just the template
+- 🚫 Silent failures: `sed` succeeds even when the pattern doesn't match
+
+### ✅ With `evnx template`
+
+**`config.yaml.template`** (committed):
+
+```yaml
+app:
+  name: "{{APP_NAME|title}}"
+  environment: "{{APP_ENV|lower}}"
+  debug: {{DEBUG|bool}}
+  port: {{APP_PORT|int}}
+  log_level: "{{LOG_LEVEL|upper}}"
+
+sentry:
+  dsn: "{{SENTRY_DSN|default:}}"
+  environment: "{{APP_ENV|lower}}"
+  enabled: {{SENTRY_ENABLED|bool}}
+```
+
+**CI/CD deploy script:**
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+ENVIRONMENTS=("dev" "staging" "production")
+
+for env in "${ENVIRONMENTS[@]}"; do
+  echo "--- Generating config for: ${env} ---"
+
+  evnx template \
+    --input config.yaml.template \
+    --output "deploy/config.${env}.yaml" \
+    --env ".env.${env}" \
+    --verbose
+
+  echo "--- Done: ${env} ---"
+done
+
+# Upload to respective environment targets
+upload_config deploy/config.dev.yaml dev
+upload_config deploy/config.staging.yaml staging
+upload_config deploy/config.production.yaml production
+```
+
+**CI log output (staging):**
+
+```
+--- Generating config for: staging ---
+Running template in verbose mode
+✓ Loaded 8 variables from .env.staging
+✓ Read template from config.yaml.template
+⚠️  Variable 'SENTRY_DSN' referenced in template but not defined in .env.staging
+✓ Generated config at deploy/config.staging.yaml
+ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+--- Done: staging ---
+```
+
+**Generated `deploy/config.staging.yaml`:**
+
+```yaml
+app:
+  name: "My App"
+  environment: "staging"
+  debug: false
+  port: 9000
+  log_level: "INFO"
+
+sentry:
+  dsn: ""
+  environment: "staging"
+  enabled: false
+```
+
+**Generated `deploy/config.production.yaml`:**
+
+```yaml
+app:
+  name: "My App"
+  environment: "production"
+  debug: false
+  port: 8080
+  log_level: "WARN"
+
+sentry:
+  dsn: "https://abc123@sentry.io/456"
+  environment: "production"
+  enabled: true
+```
+
+**Benefits:**
+- ✅ `{{DEBUG|bool}}` and `{{SENTRY_ENABLED|bool}}` normalize all truthy variants — CI `.env` files can use `yes`, `1`, or `true` interchangeably
+- ✅ `{{APP_PORT|int}}` fails the CI job immediately if the port value is invalid — before the config reaches the environment
+- ✅ `{{SENTRY_DSN|default:}}` uses an empty default so staging (which has no DSN) produces a valid YAML string rather than an undefined variable warning leaving a bare template token in the output
+- ✅ `--verbose` ensures each generation step is logged in CI output — warnings about undefined variables appear inline
+- ✅ Adding a new config key means updating the template only — the CI script and the loop don't change
+
+<Callout type="tip">
+  <strong>Use <code>|default:</code> (empty default) for optional secrets.</strong> If a variable like <code>SENTRY_DSN</code> is legitimately absent in some environments, <code>{"{{SENTRY_DSN|default:}}"}</code> substitutes an empty string rather than leaving a template token in the generated file. Your app can then check for an empty string to disable the integration.
+</Callout>
+
+---
+
+## Summary: Choosing the Right Filter for Each Config Format
+
+| Config Format | Value Type | Filter to Use | Why |
+|--------------|------------|---------------|-----|
+| YAML / TOML boolean | `true`/`false` | `\|bool` | Normalizes `yes`, `1`, `True` → `true`/`false` |
+| YAML / TOML integer | `8080` | `\|int` | Fails fast if value is not a valid integer |
+| JSON string with quotes | `"value"` | `\|json` | Escapes special characters and includes surrounding quotes |
+| Uppercase enum | `PRODUCTION` | `\|upper` | Normalizes casing regardless of `.env` input |
+| Lowercase mode name | `production` | `\|lower` | Normalizes casing for labels, tags, directories |
+| Title-cased display name | `My Service` | `\|title` | Capitalizes first letter for human-readable fields |
+| Optional field with safe fallback | `warn` | `\|default:warn` | Prevents empty values when variable is unset |
+
+---
+
+## Next steps
+
+Put these patterns together to fully automate your config pipeline:
+
+1. **[evnx template reference](/commands/template)** — Full filter documentation and exit codes
+2. **[Template Syntax Guide](/guides/advanced/template-syntax)** — Deep dive into all three substitution styles and when to use each
+3. **[CI/CD Integration](/guides/integrations/ci-cd-template)** — Integrating `evnx template` into GitHub Actions, GitLab CI, and similar pipelines
+4. **[Security Best Practices](/guides/security/template-secrets)** — Gitignore patterns, secrets manager integration, and auditing generated files
+5. **[evnx add — Production Use Cases](/use-cases/add-production)** — Fill `.env` templates before running generation
+
+<Callout type="success">
+  <strong>You're production-ready.</strong> One template per config format, one command per environment, and filter transformations that catch type errors before your app does. Commit the templates, gitignore the outputs, and let the generation step be the last manual task you ever remove from your deploy checklist.
+</Callout>

@@ -1,0 +1,267 @@
+---
+slug: "commands-template"
+section: "commands"
+order: 4
+title: "evnx template"
+publishedAt: "2026-03-11"
+updatedAt: "2026-03-11"
+excerpt: "Reference documentation for the evnx template command: generate configuration files from templates with variable substitution and filters."
+difficulty: "intermediate"
+timeToComplete: "10 minutes"
+tags: ["template", "reference", "cli", "config", "env"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - guides/advanced/env-file-syntax
+draft: false
+---
+
+# evnx template — Command Reference
+
+Generate configuration files from templates using `.env` variables, with support for flexible substitution syntax and powerful filter transformations.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/advanced/env-file-syntax">Understanding .env syntax</Prerequisite>
+</Prerequisites>
+
+<Callout type="info">
+  <strong>When to use this command:</strong> Use <code>evnx template</code> when you need to generate environment-specific configuration files (YAML, JSON, TOML, etc.) from a template, injecting values from your <code>.env</code> file. Ideal for CI/CD pipelines, Docker builds, or multi-environment deployments.
+</Callout>
+
+---
+
+## Command signature
+
+```bash
+evnx template --input <TEMPLATE> --output <OUTPUT> [--env <ENV_FILE>] [--verbose]
+```
+
+### Required arguments
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `--input`, `-i` | `path` | Path to the template file (e.g., `config.yaml.template`) |
+| `--output`, `-o` | `path` | Path where the generated configuration file will be written |
+
+### Optional options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--env`, `-e` | `path` | `.env` | Path to the environment file containing variable definitions |
+| `--verbose`, `-v` | `bool` | `false` | Enable detailed progress output to stderr |
+| `--help`, `-h` | `bool` | `false` | Display help information |
+
+---
+
+## Variable substitution syntax
+
+The template engine supports three styles for referencing variables from your `.env` file:
+
+| Syntax | Example | Description |
+|--------|---------|-------------|
+| `\${VAR}` | `\${DATABASE_URL}` | Shell-style (bash-like); most portable |
+| `{{VAR}}` | `{{DATABASE_URL}}` | Template-style (Jinja-like); recommended for filters |
+| `$VAR` | `$DATABASE_URL` | Simple prefix style; use with word boundaries |
+
+<Callout type="warning">
+  <strong>Pattern precedence:</strong> Filters are processed <em>before</em> simple substitution. This ensures <code>{"{{VAR|upper}}"}</code> is not accidentally replaced by a plain <code>{"{{VAR}}"}</code> pattern.
+</Callout>
+
+---
+
+## Filter transformations
+
+Apply transformations to variable values using the pipe (`|`) operator within double braces:
+
+```text
+{{VAR|filter}}
+```
+
+### Supported filters
+
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `\|upper` | Convert to uppercase | Input: `production` → Output: `PRODUCTION` |
+| `\|lower` | Convert to lowercase | Input: `PRODUCTION` → Output: `production` |
+| `\|title` | Capitalize first letter | Input: `hello world` → Output: `Hello world` |
+| `\|bool` | Convert to boolean string | Input: `yes` or `1` → Output: `true`; others → `false` |
+| `\|int` | Parse as 64-bit integer | Input: `8000` → Output: `8000`; errors on invalid input |
+| `\|json` | JSON-escape for safe embedding | See example below |
+| `\|default:value` | Fallback if variable is empty or undefined | Input: `""` → Output: `value`; Input: `actual` → Output: `actual` |
+
+<Callout type="warning">
+  <strong>Filters are not chainable.</strong> Each filter is applied independently — <code>{"|int"}</code> and <code>{"|default:value"}</code> cannot be combined on the same variable reference. Use separate template variables or validate values in your <code>.env</code> file before templating.
+</Callout>
+
+### JSON filter example
+
+The `|json` filter properly escapes values for embedding in JSON structures:
+
+```text
+# If VALUE = hello "world"
+# Template:  "desc": {{VALUE|json}}
+# Output:    "desc": "hello \"world\""
+```
+
+<Callout type="danger">
+  <strong>Integer filter errors:</strong> The <code>{"|int"}</code> filter will <em>fail</em> if the value cannot be parsed as an integer. This prevents silent configuration errors. Use the <code>{"|default:8000"}</code> filter on a separate variable reference as a fallback if the variable might be missing.
+</Callout>
+
+---
+
+## Basic usage examples
+
+### Generate a config file from template
+
+```bash
+# Simple substitution: replace ${VAR} patterns with .env values
+evnx template --input config.yaml.template --output config.yaml
+```
+
+### Use a custom environment file
+
+```bash
+# Generate production config using .env.production
+evnx template -i deploy.yaml.tpl -o deploy.yaml --env .env.production
+```
+
+### Enable verbose output for debugging
+
+```bash
+# See detailed progress and variable loading info
+evnx template -i template.json -o output.json --verbose
+```
+
+### Generate multiple configs in a script
+
+```bash
+#!/bin/bash
+# Generate configs for multiple environments
+for env in dev staging prod; do
+  evnx template \
+    --input config.yaml.template \
+    --output "config.${env}.yaml" \
+    --env ".env.${env}" \
+    --verbose
+done
+```
+
+---
+
+## When to use `evnx template`
+
+| Scenario | Why use this command |
+|----------|---------------------|
+| **CI/CD pipeline config generation** | Generate environment-specific configs at build time without committing secrets |
+| **Docker/Kubernetes deployments** | Create `docker-compose.yml` or `k8s/` manifests from templates using runtime env vars |
+| **Multi-environment setups** | Maintain one template file, generate `config.dev.yaml`, `config.prod.yaml`, etc. |
+| **Dynamic configuration injection** | Inject values from `.env` into config formats that don't natively support env vars (JSON, TOML) |
+| **Safe secret handling** | Use `\|json` filter to properly escape values; avoid manual string concatenation bugs |
+
+<Callout type="success">
+  <strong>Pro tip:</strong> Store your template files with a <code>.template</code> or <code>.tpl</code> extension and add them to version control. Keep <code>.env*</code> files in <code>.gitignore</code>. This separates configuration structure from sensitive values.
+</Callout>
+
+---
+
+## Exit codes
+
+| Code | Meaning | Use case |
+|------|---------|----------|
+| `0` | ✅ Template processed successfully | Success in scripts/CI |
+| `1` | 🚨 Processing failed | Missing files, parse errors, or invalid filter values (e.g. non-integer for `\|int`) |
+| `2+` | ⚠️ Runtime error | I/O failures, file permission issues, or unexpected OS-level errors |
+
+---
+
+## Troubleshooting
+
+### "Failed to parse environment file" error
+
+```
+✗ Failed to parse environment file: .env.production
+```
+
+**Solution**: Validate your `.env` file syntax or run `evnx validate --env .env.production` to check for issues. Ensure the file uses valid `KEY=VALUE` syntax:
+
+- One variable per line
+- No spaces around `=` (`KEY=value`, not `KEY = value`)
+- Quote values with spaces: `KEY="value with spaces"`
+- Use `#` for comments
+
+### "Variable 'X' referenced but not defined" warning
+
+```
+⚠️ Variable 'MISSING_VAR' referenced in template but not defined in .env
+ℹ️ Tip: Define 1 undefined variable to avoid runtime issues
+```
+
+**Solution**: Add the missing variable to your `.env` file, or use the `|default:value` filter to provide a fallback:
+
+```text
+{{MISSING_VAR|default:fallback_value}}
+```
+
+### Filter transformation errors
+
+```
+✗ Failed to process template substitutions
+Caused by: Variable 'PORT' value 'not-a-number' is not a valid integer for |int filter
+```
+
+**Solution**: Ensure the variable value in your `.env` file is a valid integer. If the variable might be absent or malformed, provide a validated default in `.env` rather than relying on the template:
+
+```bash
+# In .env — validate and set a safe default before templating
+PORT=${PORT:-8000}
+```
+
+Or use the `|default` filter on a separate variable:
+
+```text
+# Only use |default — filters cannot be chained
+{{PORT|default:8000}}
+```
+
+### JSON filter output has unexpected quotes
+
+```text
+# Template: key={{VALUE|json}}
+# Output:   key="hello \"world\""
+```
+
+**This is correct behavior.** The `|json` filter returns a properly quoted JSON string literal, including the surrounding double quotes. Use it when embedding values directly inside JSON structures:
+
+```json
+{
+  "description": {{DESCRIPTION|json}}
+}
+```
+
+If `DESCRIPTION = hello "world"`, the output will be:
+
+```json
+{
+  "description": "hello \"world\""
+}
+```
+
+---
+
+## Environment variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
+| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode (affects verbose output formatting) |
+
+---
+
+## See also
+
+- [Template Syntax Guide](/guides/advanced/template-syntax) — Deep dive into substitution patterns and filter reference
+- [Configuration Management](/guides/use-cases/config-management) — Strategies for managing configs across environments
+- [CI/CD Integration](/guides/integrations/ci-cd-template) — Automating config generation in pipelines
+- [Security Best Practices](/guides/security/template-secrets) — Safely handling sensitive values in templates
+- [evnx sync](/commands/sync) — Keep `.env` and `.env.example` synchronized before templating

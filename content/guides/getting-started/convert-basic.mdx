@@ -1,0 +1,438 @@
+---
+slug: "guides/getting-started/convert-basics"
+section: "guides"
+order: 10
+title: "Convert basics"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-11"
+excerpt: "Step-by-step examples for transforming .env files with evnx convert — JSON, Kubernetes, filtering, transforms, and CI/CD pipelines."
+difficulty: "beginner"
+timeToComplete: "10 minutes"
+tags: ["convert", "examples", "tutorial", "env", "kubernetes", "terraform"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/convert
+draft: false
+---
+
+# Convert basics
+
+This guide walks through the most common `evnx convert` workflows with concrete
+before-and-after examples. For the full flag reference, see
+[evnx convert](/commands/convert).
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/commands/convert">evnx convert reference</Prerequisite>
+</Prerequisites>
+
+---
+
+## Your starting .env
+
+All examples on this page assume the following `.env`:
+
+```env
+# .env
+DATABASE_URL=postgres://user:pass@localhost:5432/mydb
+REDIS_URL=redis://localhost:6379
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_REGION=us-east-1
+APP_DEBUG=false
+APP_PORT=3000
+APP_LOG_LEVEL=info
+TEST_ONLY_VAR=not-for-prod
+```
+
+---
+
+## Interactive mode
+
+The fastest way to explore formats. Run `evnx convert` with no flags:
+
+```bash
+evnx convert
+```
+
+A TUI menu appears:
+
+```
+┌─ Convert environment variables ─────────────────────┐
+│ Transform .env into different formats               │
+└──────────────────────────────────────────────────────┘
+
+Select output format
+❯ json - Generic JSON key-value object
+  yaml - Generic YAML key-value format
+  shell - Shell export script (bash/zsh)
+  aws-secrets - AWS Secrets Manager (CLI commands)
+  ...
+```
+
+Use ↑/↓ to navigate, Enter to confirm, Ctrl+C to cancel.
+Useful for one-off tasks or when you can't remember a format name.
+
+---
+
+## Basic format conversion
+
+### JSON
+
+```bash
+evnx convert --to json
+```
+
+Output:
+
+```json
+{
+  "DATABASE_URL": "postgres://user:pass@localhost:5432/mydb",
+  "REDIS_URL": "redis://localhost:6379",
+  "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+  "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  "AWS_REGION": "us-east-1",
+  "APP_DEBUG": "false",
+  "APP_PORT": "3000",
+  "APP_LOG_LEVEL": "info",
+  "TEST_ONLY_VAR": "not-for-prod"
+}
+```
+
+### YAML
+
+```bash
+evnx convert --to yaml
+```
+
+Output:
+
+```yaml
+DATABASE_URL: postgres://user:pass@localhost:5432/mydb
+REDIS_URL: redis://localhost:6379
+AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_REGION: us-east-1
+APP_DEBUG: "false"
+APP_PORT: "3000"
+APP_LOG_LEVEL: info
+TEST_ONLY_VAR: not-for-prod
+```
+
+### Shell export script
+
+```bash
+evnx convert --to shell
+```
+
+Output:
+
+```bash
+export DATABASE_URL="postgres://user:pass@localhost:5432/mydb"
+export REDIS_URL="redis://localhost:6379"
+export AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
+export AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+export AWS_REGION="us-east-1"
+export APP_DEBUG="false"
+export APP_PORT="3000"
+export APP_LOG_LEVEL="info"
+export TEST_ONLY_VAR="not-for-prod"
+```
+
+---
+
+## Writing to a file
+
+Use `--output` (or `-o`) to write to a file instead of stdout:
+
+```bash
+evnx convert --to json --output config.json
+evnx convert --to yaml -o config.yaml
+evnx convert --to terraform --output prod.tfvars
+```
+
+---
+
+## Filtering variables
+
+### Include only variables matching a pattern
+
+```bash
+evnx convert --to json --include "AWS_*"
+```
+
+Output:
+
+```json
+{
+  "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+  "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  "AWS_REGION": "us-east-1"
+}
+```
+
+### Exclude variables matching a pattern
+
+```bash
+evnx convert --to json --exclude "TEST_*"
+```
+
+All variables are included except `TEST_ONLY_VAR`.
+
+### Combine include and exclude
+
+Exclude is applied after include, so you can narrow down a broad match:
+
+```bash
+evnx convert --to json \
+  --include "APP_*" \
+  --exclude "*_DEBUG"
+```
+
+Output — `APP_DEBUG` is excluded because it matches `*_DEBUG`:
+
+```json
+{
+  "APP_PORT": "3000",
+  "APP_LOG_LEVEL": "info"
+}
+```
+
+---
+
+## Transforming key names
+
+### Uppercase
+
+```bash
+evnx convert --to json --include "APP_*" --transform uppercase
+```
+
+Input keys are already uppercase, so output is unchanged.
+
+### Lowercase
+
+```bash
+evnx convert --to json --include "APP_*" --transform lowercase
+```
+
+Output:
+
+```json
+{
+  "app_debug": "false",
+  "app_port": "3000",
+  "app_log_level": "info"
+}
+```
+
+### camelCase
+
+Useful for JavaScript/TypeScript configuration:
+
+```bash
+evnx convert --to json --include "APP_*" --transform camelCase
+```
+
+Output:
+
+```json
+{
+  "appDebug": "false",
+  "appPort": "3000",
+  "appLogLevel": "info"
+}
+```
+
+### snake_case
+
+```bash
+evnx convert --to json --include "APP_*" --transform snake_case
+```
+
+Output (already snake_case, so keys are lowercased):
+
+```json
+{
+  "app_debug": "false",
+  "app_port": "3000",
+  "app_log_level": "info"
+}
+```
+
+---
+
+## Adding a prefix
+
+`--prefix` prepends a string to every key, applied before `--transform`:
+
+```bash
+evnx convert --to json \
+  --include "DATABASE_URL" \
+  --prefix "MYAPP_"
+```
+
+Output:
+
+```json
+{
+  "MYAPP_DATABASE_URL": "postgres://user:pass@localhost:5432/mydb"
+}
+```
+
+### Combining prefix and transform
+
+```bash
+evnx convert --to json \
+  --include "APP_*" \
+  --prefix "prod_" \
+  --transform camelCase
+```
+
+Key pipeline: `APP_PORT` → `prod_APP_PORT` → `prodAppPort`
+
+Output:
+
+```json
+{
+  "prodAppDebug": "false",
+  "prodAppPort": "3000",
+  "prodAppLogLevel": "info"
+}
+```
+
+---
+
+## Kubernetes secret
+
+The `kubernetes` format always base64-encodes values per the Kubernetes spec.
+Do **not** add `--base64` — it would double-encode.
+
+```bash
+evnx convert --to kubernetes \
+  --include "DATABASE_URL" \
+  --output k8s-secret.yaml
+```
+
+Output written to `k8s-secret.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  DATABASE_URL: cG9zdGdyZXM6Ly91c2VyOnBhc3NAbG9jYWxob3N0OjU0MzIvbXlkYg==
+```
+
+Apply directly:
+
+```bash
+kubectl apply -f k8s-secret.yaml
+```
+
+---
+
+## Base64-encoding values
+
+For formats that don't auto-encode (like JSON or YAML), `--base64` encodes every value:
+
+```bash
+evnx convert --to json --include "AWS_*" --base64
+```
+
+Output:
+
+```json
+{
+  "AWS_ACCESS_KEY_ID": "QUtJQUlPU0ZPRE5ON0VYQU1QTEU=",
+  "AWS_SECRET_ACCESS_KEY": "d0phbHJYVXRuRkVNSS9LN01ERU5HL2JQeFJmaUNZRVhBTVBMRUtFWQ==",
+  "AWS_REGION": "dXMtZWFzdC0x"
+}
+```
+
+---
+
+## Piping output to cloud CLIs
+
+### AWS Secrets Manager
+
+```bash
+evnx convert --to aws-secrets | \
+  aws secretsmanager create-secret \
+    --name prod/myapp \
+    --secret-string file:///dev/stdin
+```
+
+### Heroku
+
+```bash
+evnx convert --to heroku | bash
+# Runs: heroku config:set KEY=value KEY2=value2 ...
+```
+
+---
+
+## CI/CD: GitHub Actions
+
+Generate a shell script to set GitHub secrets via the `gh` CLI:
+
+```bash
+evnx convert --to github-actions \
+  --exclude "TEST_*" \
+  --output set-secrets.sh
+
+bash set-secrets.sh
+```
+
+Or inline in a workflow step:
+
+```yaml
+# .github/workflows/deploy.yml
+- name: Set secrets
+  env:
+    GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  run: |
+    evnx convert --to github-actions --exclude "TEST_*" | bash
+```
+
+---
+
+## Terraform
+
+```bash
+evnx convert --to terraform \
+  --exclude "TEST_*" \
+  --transform lowercase \
+  --output prod.tfvars
+```
+
+Output (`prod.tfvars`):
+
+```hcl
+database_url = "postgres://user:pass@localhost:5432/mydb"
+redis_url    = "redis://localhost:6379"
+app_port     = "3000"
+app_log_level = "info"
+```
+
+---
+
+## Verbose output
+
+`--verbose` (or `-v`) prints progress to stderr, leaving stdout clean for piping:
+
+```bash
+evnx convert --to json --verbose 2>convert.log
+```
+
+`convert.log` will contain:
+
+```
+🔄 Running convert in verbose mode: .env
+📦 Loaded 9 variables from .env
+⚙️  Converting to json format...
+✓ Output written to stdout
+```

@@ -1,0 +1,535 @@
+---
+slug: "guides/reference/convert-reference"
+section: "reference"
+order: 1
+title: "Convert reference"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-11"
+excerpt: "Deep reference for evnx convert — format-by-format output samples, processing pipeline internals, environment variables, and troubleshooting."
+difficulty: "intermediate"
+timeToComplete: "15 minutes"
+tags: ["convert", "reference", "formats", "troubleshooting", "env"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+  - commands/convert
+  - guides/getting-started/convert-basics
+draft: false
+---
+
+# Convert reference
+
+In-depth documentation for `evnx convert` — covering every supported output format with
+sample output, the internal processing pipeline, environment variable controls, and a
+troubleshooting guide for common issues.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/commands/convert">evnx convert reference</Prerequisite>
+  <Prerequisite href="/guides/getting-started/convert-basics">Convert basics</Prerequisite>
+</Prerequisites>
+
+---
+
+## Processing pipeline
+
+Understanding the order in which `evnx convert` processes your variables helps predict
+output when combining multiple flags.
+
+```
+.env file
+    │
+    ▼
+Parse → IndexMap<String, String>   (preserves insertion order)
+    │
+    ▼
+Filter: --include pattern          (keep only matching keys)
+    │
+    ▼
+Filter: --exclude pattern          (drop matching keys)
+    │
+    ▼
+Transform: --prefix                (prepend string to every key)
+    │
+    ▼
+Transform: --transform             (apply key casing)
+    │
+    ▼
+Encode: --base64                   (base64-encode every value)
+    │
+    ▼
+Format-specific serializer         (produces final string)
+    │
+    ▼
+stdout  or  --output file
+```
+
+**Key points:**
+
+- Filtering happens before any key mutation, so `--include "APP_*"` matches the
+  original keys in your `.env`, not the post-prefix or post-transform keys.
+- `--prefix` is applied before `--transform`, so a key named `PORT` with
+  `--prefix "app_"` and `--transform camelCase` becomes `appPort`,
+  not `app_PORT`.
+- The `kubernetes` format always base64-encodes values internally, independent of
+  the `--base64` flag. All other formats do not encode unless `--base64` is passed.
+
+---
+
+## Format reference
+
+### `json`
+
+Generic JSON object. All values are strings.
+
+```bash
+evnx convert --to json
+```
+
+```json
+{
+  "DATABASE_URL": "postgres://user:pass@localhost:5432/mydb",
+  "APP_PORT": "3000"
+}
+```
+
+**Use when:** Feeding config into Node.js apps, REST APIs, or any tooling that accepts
+a flat JSON key-value map.
+
+---
+
+### `yaml` (alias: `yml`)
+
+Generic YAML mapping. Values that look like numbers or booleans are quoted to prevent
+type coercion.
+
+```bash
+evnx convert --to yaml
+```
+
+```yaml
+DATABASE_URL: postgres://user:pass@localhost:5432/mydb
+APP_PORT: "3000"
+APP_DEBUG: "false"
+```
+
+**Use when:** Generating config files for Python, Go, or Ruby applications; or feeding
+into Helm chart value overrides.
+
+---
+
+### `shell` (aliases: `bash`, `export`)
+
+Outputs a shell script of `export` statements, compatible with bash and zsh.
+Values are double-quoted.
+
+```bash
+evnx convert --to shell
+```
+
+```bash
+export DATABASE_URL="postgres://user:pass@localhost:5432/mydb"
+export APP_PORT="3000"
+export APP_DEBUG="false"
+```
+
+**Use when:** Sourcing into a shell session (`source <(evnx convert --to shell)`) or
+generating `.envrc` files for `direnv`.
+
+---
+
+### `aws-secrets` (aliases: `aws`, `aws-secrets-manager`)
+
+Outputs the JSON payload expected by the AWS Secrets Manager `--secret-string` parameter.
+
+```bash
+evnx convert --to aws-secrets --include "AWS_*"
+```
+
+```json
+{
+  "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+  "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  "AWS_REGION": "us-east-1"
+}
+```
+
+**Pipe directly to AWS CLI:**
+
+```bash
+evnx convert --to aws-secrets | \
+  aws secretsmanager create-secret \
+    --name prod/myapp \
+    --secret-string file:///dev/stdin
+```
+
+---
+
+### `gcp-secrets` (aliases: `gcp`, `gcp-secret-manager`)
+
+Outputs `gcloud` CLI commands to create each variable as a separate GCP Secret Manager
+secret.
+
+```bash
+evnx convert --to gcp-secrets --include "DATABASE_URL"
+```
+
+```bash
+echo -n "postgres://user:pass@localhost:5432/mydb" | \
+  gcloud secrets create DATABASE_URL --data-file=-
+```
+
+**Use when:** Migrating to GCP Secret Manager or scripting secret provisioning for a
+GCP project.
+
+---
+
+### `azure-keyvault` (aliases: `azure`, `azure-key-vault`)
+
+Outputs `az` CLI commands to set each variable as an Azure Key Vault secret.
+
+```bash
+evnx convert --to azure-keyvault --include "DATABASE_URL"
+```
+
+```bash
+az keyvault secret set \
+  --vault-name YOUR_VAULT_NAME \
+  --name DATABASE-URL \
+  --value "postgres://user:pass@localhost:5432/mydb"
+```
+
+<Callout type="info">
+  Azure Key Vault secret names must use hyphens, not underscores. evnx converts
+  underscores to hyphens automatically in this format.
+</Callout>
+
+---
+
+### `github-actions` (aliases: `github`, `gh-actions`)
+
+Outputs `gh secret set` commands for the GitHub CLI, ready to paste or pipe to `bash`.
+
+```bash
+evnx convert --to github-actions --exclude "TEST_*"
+```
+
+```bash
+gh secret set DATABASE_URL --body "postgres://user:pass@localhost:5432/mydb"
+gh secret set APP_PORT --body "3000"
+```
+
+**Use when:** Provisioning GitHub Actions secrets from an existing `.env` without
+manually entering them in the web UI.
+
+---
+
+### `docker-compose` (alias: `compose`)
+
+Outputs the `environment:` block for a Docker Compose service definition.
+
+```bash
+evnx convert --to docker-compose
+```
+
+```yaml
+environment:
+  DATABASE_URL: postgres://user:pass@localhost:5432/mydb
+  REDIS_URL: redis://localhost:6379
+  APP_PORT: "3000"
+  APP_DEBUG: "false"
+```
+
+Paste this block under the `services.<name>` key in your `docker-compose.yml`.
+
+---
+
+### `kubernetes` (aliases: `k8s`, `kubectl`)
+
+Outputs a complete Kubernetes `Secret` manifest. Values are base64-encoded
+automatically by the format — do not pass `--base64` alongside this format.
+
+```bash
+evnx convert --to kubernetes \
+  --include "DATABASE_URL" \
+  --output k8s-secret.yaml
+```
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  DATABASE_URL: cG9zdGdyZXM6Ly91c2VyOnBhc3NAbG9jYWxob3N0OjU0MzIvbXlkYg==
+```
+
+```bash
+kubectl apply -f k8s-secret.yaml
+```
+
+<Callout type="warning">
+  The <code>kubernetes</code> format always base64-encodes values internally. Adding
+  <code>--base64</code> will double-encode them, causing your pods to receive garbled values.
+</Callout>
+
+**Referencing the secret in a pod spec:**
+
+```yaml
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: app-secrets
+        key: DATABASE_URL
+```
+
+---
+
+### `terraform` (aliases: `tf`, `tfvars`)
+
+Outputs a `.tfvars` file. Keys are lowercased by default to follow Terraform convention.
+
+```bash
+evnx convert --to terraform \
+  --exclude "TEST_*" \
+  --output prod.tfvars
+```
+
+```hcl
+database_url = "postgres://user:pass@localhost:5432/mydb"
+redis_url    = "redis://localhost:6379"
+app_port     = "3000"
+app_log_level = "info"
+```
+
+**Corresponding variable declarations** (add to `variables.tf`):
+
+```hcl
+variable "database_url" { type = string }
+variable "redis_url"    { type = string }
+variable "app_port"     { type = string }
+variable "app_log_level" { type = string }
+```
+
+---
+
+### `doppler`
+
+Outputs the JSON payload for Doppler's bulk import API.
+
+```bash
+evnx convert --to doppler
+```
+
+```json
+{
+  "DATABASE_URL": "postgres://user:pass@localhost:5432/mydb",
+  "APP_PORT": "3000"
+}
+```
+
+---
+
+### `heroku`
+
+Outputs a single `heroku config:set` command with all variables as key=value pairs.
+
+```bash
+evnx convert --to heroku --exclude "TEST_*"
+```
+
+```bash
+heroku config:set \
+  DATABASE_URL="postgres://user:pass@localhost:5432/mydb" \
+  APP_PORT="3000" \
+  APP_LOG_LEVEL="info"
+```
+
+Pipe directly to run immediately:
+
+```bash
+evnx convert --to heroku --exclude "TEST_*" | bash
+```
+
+---
+
+### `vercel`
+
+Outputs the JSON format accepted by Vercel's environment variable import.
+
+```bash
+evnx convert --to vercel
+```
+
+```json
+[
+  { "key": "DATABASE_URL", "value": "postgres://user:pass@localhost:5432/mydb", "type": "encrypted", "target": ["production"] },
+  { "key": "APP_PORT", "value": "3000", "type": "plain", "target": ["production"] }
+]
+```
+
+---
+
+### `railway`
+
+Outputs the JSON format for Railway's variable import.
+
+```bash
+evnx convert --to railway
+```
+
+```json
+{
+  "DATABASE_URL": "postgres://user:pass@localhost:5432/mydb",
+  "APP_PORT": "3000"
+}
+```
+
+---
+
+## Environment variables
+
+These shell environment variables affect `evnx convert` behaviour:
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `NO_COLOR` | `1`, `true` | Disables all ANSI colour in terminal output |
+| `CI` | `1`, `true` | Interactive TUI is disabled; `--to` becomes required |
+
+---
+
+## Troubleshooting
+
+### Unknown format error
+
+```
+✗ Unknown format: k8s-secret
+
+Supported formats:
+  Generic:      json, yaml, shell
+  ...
+  Aliases:      k8s → kubernetes, tf → terraform
+```
+
+**Cause:** The format name was misspelled or an unsupported alias was used.
+
+**Fix:** Use the canonical name (`kubernetes`) or a supported alias (`k8s`).
+Run `evnx convert --help` for the full list.
+
+---
+
+### Input file not found
+
+```
+Error: Failed to validate input file: '.env.production'
+Caused by: Input file not found: '.env.production'
+```
+
+**Fix:** Pass an explicit `--env` path, or run from the directory that contains your
+`.env` file:
+
+```bash
+evnx convert --to json --env /absolute/path/to/.env.production
+```
+
+---
+
+### Double base64-encoding in Kubernetes output
+
+**Symptom:** Pod environment variables contain garbled strings like
+`cG9zdGdyZXM6Ly91c2Vy...` instead of your actual values.
+
+**Cause:** The `kubernetes` format already base64-encodes values. Adding `--base64`
+encodes them a second time.
+
+```bash
+# ❌ Double-encodes — values will be garbled in the pod
+evnx convert --to kubernetes --base64
+
+# ✅ Correct — kubernetes handles encoding internally
+evnx convert --to kubernetes
+```
+
+---
+
+### Glob pattern not matching expected variables
+
+**Symptom:** `--include "AWS*"` returns no results, but `AWS_KEY` is in your `.env`.
+
+**Cause:** Glob patterns require explicit wildcard placement. `AWS*` matches
+`AWS_KEY` only if the `*` covers the `_KEY` portion — which it does — but a
+common mistake is omitting the wildcard entirely.
+
+**Fix:** Always include `*` after the prefix, with the underscore:
+
+```bash
+# ❌ Matches only the literal string "AWS"
+evnx convert --include "AWS" --to json
+
+# ✅ Matches AWS_KEY, AWS_REGION, AWS_SECRET_ACCESS_KEY
+evnx convert --include "AWS_*" --to json
+```
+
+---
+
+### Prefix and transform produce unexpected key names
+
+**Symptom:** With `--prefix "app_"` and `--transform camelCase`, the key `PORT`
+becomes `appPort` rather than `app_PORT`.
+
+**Explanation:** This is the correct and intended behaviour.
+The pipeline is: original key → prefix applied → transform applied.
+
+```
+PORT
+→ app_PORT     (after --prefix "app_")
+→ appPort      (after --transform camelCase)
+```
+
+If you want `app_PORT` in the output, omit `--transform` or use `uppercase`:
+
+```bash
+evnx convert --prefix "app_" --transform uppercase
+# PORT → app_PORT → APP_PORT
+```
+
+---
+
+### camelCase produces all-lowercase first word
+
+**Symptom:** `MY_API_KEY` with `--transform camelCase` becomes `myApiKey`
+(first word fully lowercased).
+
+**Explanation:** This is by design. The `camelCase` transform lowercases the
+first word segment entirely, regardless of how many characters it has.
+
+**Workaround:** If you need a specific capitalisation, pre-process the key with
+`--transform snake_case` first, then pipe through a second conversion — or use
+a post-processing step with `jq`:
+
+```bash
+evnx convert --to json --transform camelCase | \
+  jq 'with_entries(.key |= gsub("^(?<a>[A-Z])"; (.a | ascii_downcase)))'
+```
+
+---
+
+### Azure Key Vault rejects secret names with underscores
+
+**Cause:** Azure Key Vault does not allow underscores in secret names.
+
+**Explanation:** The `azure-keyvault` format automatically converts underscores to
+hyphens. `DATABASE_URL` becomes `DATABASE-URL` in the generated `az` commands.
+This is expected and matches Azure requirements.
+
+---
+
+## See also
+
+- [evnx convert](/commands/convert) — Complete flag reference
+- [Convert basics](/guides/getting-started/convert-basics) — Step-by-step examples
+- [Kubernetes integration](/guides/integrations/kubernetes-secrets)
+- [Terraform workflow](/guides/integrations/terraform-tfvars)
+- [CI/CD automation](/guides/integrations/ci-cd-convert)
