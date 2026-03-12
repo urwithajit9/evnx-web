@@ -4,12 +4,12 @@ section: "use-cases"
 order: 5
 title: "Production Use Cases — Real-World `evnx template` Workflows"
 publishedAt: "2026-03-11"
-updatedAt: "2026-03-11"
+updatedAt: "2026-03-12"
 excerpt: "Explore real production scenarios where `evnx template` eliminates manual config file editing — with before/after comparisons showing the friction of hand-crafted files vs. template-driven generation."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["template", "use-cases", "production", "workflow", "config", "ci-cd"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.2.2"
 prerequisites:
   - getting-started/installation
   - commands/template
@@ -134,17 +134,19 @@ RESTART_POLICY=always
 
 ```bash
 # Dev
-evnx template -i docker-compose.yml.template -o docker-compose.yml --env .env.dev
+evnx template -i docker-compose.yml.template -o docker-compose.yml --env .env.dev --gitignore
 
 ✓ Loaded 6 variables from .env.dev
 ✓ Read template from docker-compose.yml.template
 ✓ Generated config at docker-compose.yml
+✓ Added 'docker-compose.yml' to .gitignore
 
 # Production
-evnx template -i docker-compose.yml.template -o docker-compose.yml.prod --env .env.production
+evnx template -i docker-compose.yml.template -o docker-compose.yml.prod --env .env.production --gitignore
 
 ✓ Loaded 6 variables from .env.production
 ✓ Generated config at docker-compose.yml.prod
+✓ Added 'docker-compose.yml.prod' to .gitignore
 ```
 
 **Generated `docker-compose.yml` (dev output):**
@@ -418,7 +420,7 @@ service_name = "My Api"
 - ✅ Generated `config.toml` is gitignored; injected fresh each deploy
 
 <Callout type="danger">
-  <strong>Add generated output files to <code>.gitignore</code>.</strong> Only the <code>.template</code> file belongs in version control. The generated <code>config.toml</code> will contain real credentials from <code>.env</code> and must never be committed.
+  <strong>Add generated output files to <code>.gitignore</code>.</strong> Only the <code>.template</code> file belongs in version control. The generated <code>config.toml</code> will contain real credentials from <code>.env</code> and must never be committed. Run with <code>--gitignore</code> to let evnx add it automatically, or add <code>config.toml</code> to <code>.gitignore</code> manually before your first commit.
 </Callout>
 
 ---
@@ -646,6 +648,7 @@ for env in "${ENVIRONMENTS[@]}"; do
     --input config.yaml.template \
     --output "deploy/config.${env}.yaml" \
     --env ".env.${env}" \
+    --gitignore \
     --verbose
 
   echo "--- Done: ${env} ---"
@@ -666,7 +669,7 @@ Running template in verbose mode
 ✓ Read template from config.yaml.template
 ⚠️  Variable 'SENTRY_DSN' referenced in template but not defined in .env.staging
 ✓ Generated config at deploy/config.staging.yaml
-ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+✓ Added 'deploy/config.staging.yaml' to .gitignore
 --- Done: staging ---
 ```
 
@@ -707,6 +710,7 @@ sentry:
 - ✅ `{{APP_PORT|int}}` fails the CI job immediately if the port value is invalid — before the config reaches the environment
 - ✅ `{{SENTRY_DSN|default:}}` uses an empty default so staging (which has no DSN) produces a valid YAML string rather than an undefined variable warning leaving a bare template token in the output
 - ✅ `--verbose` ensures each generation step is logged in CI output — warnings about undefined variables appear inline
+- ✅ `--gitignore` adds each generated `deploy/config.*.yaml` to `.gitignore` automatically — idempotent on repeated runs, so re-running the pipeline never creates duplicates
 - ✅ Adding a new config key means updating the template only — the CI script and the loop don't change
 
 <Callout type="tip">
@@ -726,6 +730,7 @@ sentry:
 | Lowercase mode name | `production` | `\|lower` | Normalizes casing for labels, tags, directories |
 | Title-cased display name | `My Service` | `\|title` | Capitalizes first letter for human-readable fields |
 | Optional field with safe fallback | `warn` | `\|default:warn` | Prevents empty values when variable is unset |
+| Generated output file protection | `.gitignore` entry | `--gitignore` flag | Ensures generated files containing secrets are never committed |
 
 ---
 
