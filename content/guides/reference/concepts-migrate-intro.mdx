@@ -1,0 +1,253 @@
+---
+slug: "concepts-migrate-intro"
+section: "concepts"
+order: 1
+title: "How evnx migrate works"
+publishedAt: "2026-03-05"
+updatedAt: "2026-03-09"
+excerpt: "Understand the evnx migration pipeline: source loading, filtering, key transforms, and how each destination is handled."
+difficulty: "beginner"
+timeToComplete: "8 minutes"
+tags: ["migrate", "concepts", "secrets", "pipeline"]
+evnxVersion: "0.2.1"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# How evnx migrate works
+
+`evnx migrate` moves secrets from a `.env` file (or the current environment) to a cloud secret manager or CI/CD platform. This page explains the internal pipeline so you know exactly what happens to your secrets at each step.
+
+---
+
+## The migration pipeline
+
+Every `evnx migrate` run flows through four fixed stages:
+
+```
+Source (.env / environment)
+  │
+  ▼
+Load secrets
+  │
+  ▼
+Filter + Transform  ← --include / --exclude / --strip-prefix / --add-prefix
+  │
+  ▼
+Destination
+  ├── GitHub Actions    → direct API upload
+  └── everything else  → print CLI commands for you to review and run
+```
+
+Nothing is written or uploaded until filtering and transformation are complete. This means `--dry-run` can show you the exact filtered, renamed key list before any external call is made.
+
+---
+
+## Stage 1 — Load
+
+evnx reads secrets from one of two sources.
+
+**`env-file`** (default) — parses a `.env` file using the same parser that powers `evnx validate` and `evnx convert`. Comments, quoted values, and multi-line values are all handled.
+
+**`environment`** — reads from the current process environment. A built-in list of common operating-system variables (`PATH`, `HOME`, `SHELL`, `USER`, `PWD`, `LANG`, and a few others) is automatically excluded so you don't accidentally migrate system state.
+
+---
+
+## Stage 2 — Filter
+
+Filtering lets you migrate a subset of your secrets without editing the `.env` file itself.
+
+**`--include "PATTERN,..."`** — keep only keys that match at least one glob. Applied first.
+
+**`--exclude "PATTERN,..."`** — drop keys matching any glob. Applied after include.
+
+The glob syntax is intentionally minimal: `*` matches any sequence of characters, `?` matches any single character, everything else is literal. Patterns are case-sensitive.
+
+```bash
+# Migrate only database and AWS credentials
+evnx migrate --to aws --include "DB_*,AWS_*"
+
+# Migrate everything except local-only overrides
+evnx migrate --to doppler --exclude "*_LOCAL,*_TEST,*_DEV"
+
+# Combine both
+evnx migrate --to github-actions \
+  --include "DB_*,STRIPE_*" \
+  --exclude "*_TEST"
+```
+
+---
+
+## Stage 3 — Transform
+
+Key names can be rewritten before they reach the destination.
+
+**`--strip-prefix PREFIX`** — remove a leading string from every surviving key. Useful when your `.env` uses an application prefix that the secret manager does not need.
+
+**`--add-prefix PREFIX`** — prepend a string to every key. Useful for namespacing secrets when multiple applications share one secret store.
+
+Both transforms can be combined: strip first, then add.
+
+```bash
+# APP_DB_URL → DB_URL → PROD_DB_URL
+evnx migrate --to aws \
+  --secret-name prod/myapp \
+  --strip-prefix "APP_" \
+  --add-prefix  "PROD_"
+```
+
+---
+
+## Stage 4 — Destination
+
+This is where the two modes of evnx migrate diverge.
+
+### Direct upload (GitHub Actions only)
+
+GitHub Actions is the only destination where evnx uploads secrets for you. It:
+
+1. Fetches the repository's public key from the GitHub REST API
+2. Encrypts each secret value with that key (libsodium sealed box)
+3. Calls `PUT /repos/{owner}/{repo}/actions/secrets/{name}` for each secret
+4. Shows a progress bar and a per-secret success/failure line
+
+This requires the `migrate` feature flag and a GitHub Personal Access Token with the `secrets:write` permission.
+
+### Command generation (all other destinations)
+
+For every other destination, evnx **prints ready-to-run CLI commands** to your terminal. You review them and run them yourself. This approach means:
+
+- No credentials for the target platform are ever needed by evnx
+- You can pipe the output into a file, diff it, or run it in a controlled environment
+- The commands are idempotent — running them twice has the same result as running once
+
+The specific command format per destination:
+
+| Destination | Output format |
+|-------------|--------------|
+| AWS Secrets Manager | `aws secretsmanager create-secret` / `update-secret` with full JSON payload |
+| Doppler | One `doppler secrets set KEY='value'` per secret |
+| Infisical | One `infisical secrets set KEY='value'` per secret |
+| GCP Secret Manager | One `gcloud secrets create` pipe block per secret |
+| Azure Key Vault | One `az keyvault secret set` per secret (keys converted `_` → `-`) |
+| Vercel | One `vercel env add` per secret |
+| Heroku | Single bulk `heroku config:set KEY='v' KEY2='v2' …` (one dyno restart) |
+| Railway | Single `railway variables set KEY='v' KEY2='v2' …` |
+
+---
+
+## Dry-run mode
+
+`--dry-run` stops the pipeline before Stage 4. It shows:
+
+- How many secrets were loaded
+- How many remain after filtering
+- What the destination and configuration would be
+- For GitHub Actions specifically: which secrets exist already, which would be added, which skipped
+
+No file is written, no command is printed, no API call is made.
+
+```bash
+evnx migrate \
+  --to aws \
+  --secret-name prod/myapp/config \
+  --include "DB_*" \
+  --dry-run
+```
+
+---
+
+## Conflict resolution (GitHub Actions only)
+
+When migrating to GitHub Actions, evnx checks which secrets already exist in the repository before uploading. For each conflict you get three choices controlled by flags:
+
+| Situation | Default behaviour | Override |
+|-----------|------------------|----------|
+| Secret already exists | Interactive prompt: overwrite? | `--skip-existing` to skip all / `--overwrite` to overwrite all |
+| Secret does not exist | Upload | — |
+
+For all command-generation destinations there is no conflict detection — the printed commands are idempotent by design (`create-secret` vs `update-secret`, `secrets set` replaces in place, etc.).
+
+---
+
+## Using evnx commands together for a safe migration
+
+A production migration is more than a single command. Here is a recommended sequence using evnx tools:
+
+<Step title="Scan for real secrets first">
+Before migrating, confirm you are not accidentally including test keys or placeholders.
+
+```bash
+evnx scan --format pretty
+```
+
+Fix any issues `scan` reports before proceeding.
+</Step>
+
+<Step title="Validate the .env file">
+Confirm the file parses cleanly and has no placeholder values still in place.
+
+```bash
+evnx validate --strict
+```
+</Step>
+
+<Step title="Preview the migration">
+Run with `--dry-run` and `--include`/`--exclude` until the filtered list is exactly what you want.
+
+```bash
+evnx migrate \
+  --to aws-secrets-manager \
+  --secret-name prod/myapp/config \
+  --exclude "*_LOCAL,*_TEST" \
+  --dry-run
+```
+</Step>
+
+<Step title="Run the migration">
+Remove `--dry-run`. For command-generation destinations, pipe the output to a file so you can review it before running.
+
+```bash
+# Command-generation destination: review first
+evnx migrate --to aws --secret-name prod/myapp/config \
+  --exclude "*_LOCAL,*_TEST" > upload-commands.sh
+
+cat upload-commands.sh   # review
+bash upload-commands.sh  # run
+```
+
+```bash
+# GitHub Actions: direct upload
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --github-token "$GITHUB_TOKEN" \
+  --exclude "*_LOCAL"
+```
+</Step>
+
+<Step title="Verify and clean up">
+Confirm secrets landed correctly in the target platform, then remove or encrypt the local `.env`.
+
+```bash
+evnx backup .env --output .env.backup.enc
+rm .env
+```
+</Step>
+
+---
+
+## migrate vs convert
+
+`evnx migrate` and `evnx convert` overlap slightly but serve different purposes:
+
+| | `evnx convert` | `evnx migrate` |
+|--|----------------|----------------|
+| Output | Static config file (YAML, JSON, shell script, etc.) | Live CLI commands or direct API upload |
+| Use case | Generate a file to commit or deploy | Actually set secrets in a running platform |
+| GCP | Generates a shell script | Prints individual `gcloud` commands |
+| AWS | Generates JSON or CLI snippets | Prints `aws secretsmanager` commands with full JSON |
+| Interaction | No prompts | Interactive conflict resolution (GitHub), or command review |
+
+For GCP specifically, `evnx convert --to gcp-secrets > upload.sh && bash upload.sh` is an equivalent alternative to `evnx migrate --to gcp` — both are mentioned in the tool output.
