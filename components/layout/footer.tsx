@@ -37,7 +37,7 @@ const LINKS: Record<string, NavLink[]> = {
     { href: NPM_URL, label: "NPM", external: true },
     { href: PYPI_URL, label: "PyPI", external: true },
     { href: AGENT_SKILLS_URL, label: "Agent Skills", external: true },
-    { href: "/pricing", label: "Pricing", external: false },
+    // { href: "/pricing", label: "Pricing", external: false },
     { href: "/install", label: "Install", external: false },
   ],
 };
