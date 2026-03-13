@@ -170,7 +170,7 @@ const features = [
     title: "Cloud Migration",
     description:
       "Push directly to AWS Secrets Manager, Doppler, Infisical, or GitHub Actions secrets.",
-    badge: null,
+    badge: "EXPERIMENTAL",
   },
   {
     icon: BarChart3,
@@ -205,7 +205,7 @@ const features = [
     title: "Zero Config",
     description:
       "Works out of the box in any project. .evnx.toml unlocks team-level customization.",
-    badge: null,
+    badge: "FUTURE",
   },
 ];
 
@@ -260,6 +260,7 @@ const commands = [
     description: "Push secrets to a cloud manager",
     example: "evnx migrate --to aws-secrets-manager",
     link: "/guides/commands/migrate",
+    badge: "EXPERIMENTAL",
   },
   {
     name: "diff",
@@ -1011,7 +1012,7 @@ RUN evnx validate --strict \
 
           <div className="flex flex-wrap gap-4 justify-center mb-12">
             <a
-              href="#install"
+              href="install"
               className="flex items-center gap-2 font-mono text-sm bg-brand-500 text-black px-6 py-3 rounded-lg hover:bg-brand-400 transition-colors font-bold"
             >
               Install evnx — it's free
