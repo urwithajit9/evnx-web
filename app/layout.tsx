@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Fraunces } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -76,6 +77,13 @@ export default function RootLayout({
         {/* <SearchModal /> */}
         <main className="flex-1">{children}</main>
         <Footer />
+
+        {/* Umami Analytics */}
+        <Script
+          src="/stats/script.js"
+          data-website-id="b50850fb-0a46-4863-bfbb-75c67d04b312"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
