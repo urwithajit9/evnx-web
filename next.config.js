@@ -34,6 +34,16 @@ const nextConfig = {
       },
     ];
   },
+
+  // Umami analytics proxy (ad-blocker bypass)
+  async rewrites() {
+    return [
+      {
+        source: "/stats/:match*",
+        destination: "https://analytics.dotenv.space/:match*",
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
