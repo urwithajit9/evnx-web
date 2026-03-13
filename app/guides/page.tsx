@@ -17,7 +17,7 @@ import {
   type GuideSection,
 } from "@/lib/content";
 import type { Metadata } from "next";
-
+import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
 export const metadata: Metadata = {
   title: "Guides",
   description:
@@ -201,7 +201,7 @@ export default function GuidesPage() {
             <span>·</span>
             <span>{GUIDE_SECTIONS.length} sections</span>
             <span>·</span>
-            <span className="text-success">evnx v0.2.0</span>
+            <span className="text-success">evnx {EVNX_VERSION}</span>
           </div>
         </div>
       </section>
