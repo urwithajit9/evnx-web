@@ -2,6 +2,56 @@ import { Badge } from '@/components/ui/badge-status';
 
 const releases = [
   {
+    version: "0.3.5",
+    date: "2026-03-16",
+    type: "patch",
+    highlights: [
+      "FIX: PyPI Linux wheel build matrix reduced to x86_64 only due to cross-compilation failures with ARM targets",
+      "FIX: Removed aarch64 and armv7 PyPI builds — ring crate assembly fails in manylinux cross-compilation environment",
+      "INFO: ARM Linux users should install via curl script or cargo (`--features full`) instead",
+    ],
+  },
+  {
+    version: "0.3.4",
+    date: "2026-03-16",
+    type: "patch",
+    highlights: [
+      "FIX: Switched reqwest to native-tls, removing ring from dependency tree",
+    ],
+  },
+  {
+    version: "0.3.3",
+    date: "2026-03-16",
+    type: "patch",
+    highlights: [
+      "FIX: PyPI aarch64 wheel build failure caused by ring crate assembly cross-compilation error",
+      "FIX: Added RING_PREGENERATE_ASM=1 to maturin build job to stabilize Linux builds",
+      "CHANGE: Switched reqwest to rustls-tls-native-roots to avoid ring during cross-compilation",
+      "TESTING: Increased npm smoke test timing to handle registry replication delays",
+    ],
+  },
+  {
+    version: "0.3.2",
+    date: "2026-03-16",
+    type: "patch",
+    highlights: [
+      "FIX: Added `features=[\"full\"]` to pyproject.toml so PyPI wheels include migrate, backup, and restore commands",
+    ],
+  },
+  {
+    version: "0.3.1",
+    date: "2026-03-16",
+    type: "patch",
+    highlights: [
+      "FIX: PyPI wheels now include full feature set (`migrate`, `backup`, `restore`)",
+      "FIX: Corrected GitHub Actions workflow — `update-homebrew-tap` job now executes properly",
+      "FIX: Homebrew Formula install block updated for reliable per-platform binary resolution",
+      "FEATURE: Added Homebrew tap support (`brew install urwithajit9/evnx/evnx`)",
+      "DOCS: README installation section restructured with OS-specific pipx guidance",
+      "DOCS: Release notes template updated with Homebrew install instructions",
+    ],
+  },  
+  {
     version: "0.3.0",
     date: "2026-03-17",
     type: "major",
