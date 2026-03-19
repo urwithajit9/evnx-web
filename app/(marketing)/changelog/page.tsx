@@ -2,6 +2,31 @@ import { Badge } from '@/components/ui/badge-status';
 
 const releases = [
   {
+    version: "0.3.6",
+    date: "2026-03-19",
+    type: "patch",
+    highlights: [
+      "FEATURE: Windows package manager support via Scoop (`scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx && scoop install evnx`) and Winget (`winget install urwithajit9.evnx`) — both auto-update on every `v*` tag release",
+      "FEATURE: `evnx pre-commit` subcommand for Git pre-commit hook integration — supports validation, secret scanning, and format checks before commit; example hook script provided in `scripts/`",
+      "FEATURE: All CLI `--help` outputs now include a link to the corresponding docs page at `https://www.evnx.dev/guides/<command>`; error messages also link to relevant docs pages",
+      "DOCS: Windows installation guide added at https://www.evnx.dev/guides/install/windows",
+      "DOCS: Pre-commit integration guide added at https://www.evnx.dev/guides/pre-commit",
+      "FIX: Scan command panic — resolved `thread 'main' panicked at 'index out of bounds'` when scanning empty or malformed `.env` files (#142)",
+      "FIX: Secret detection false positives — common placeholder values such as `your_key_here`, `CHANGEME`, and `***` are no longer flagged",
+      "FIX: Windows path resolution — `.evnx.toml` config lookup now resolves correctly on Windows systems",
+      "FIX: SHA256 validation — fixed checksum verification for cross-platform tarball downloads",
+      "FIX: Release workflow — `.zip` and `.zip.sha256` artifacts are now correctly copied into GitHub Release assets (previously caused 404s for Scoop and Winget installer URLs)",
+      "FIX: Scoop manifest — corrected `bin` field from `evnx.exe` to `evnx-x86_64-pc-windows-msvc.exe` with alias mapping to `evnx` command",
+      "FIX: Scoop workflow commit step — replaced undefined bare `$VERSION` variable with `${{ steps.version.outputs.VERSION }}`",
+      "FIX: Scoop workflow hash source — corrected manifest to fetch `.zip.sha256` instead of `.tar.gz.sha256` for the Windows ZIP installer",
+      "CHANGE: Release workflow now produces `.zip` and `.zip.sha256` alongside `.tar.gz` for the Windows target",
+      "CHANGE: Binary size reduced by approximately 12% using `cargo build --release --strip`",
+      "CHANGE: Error messages improved with actionable suggestions and direct links to docs",
+      "CHANGE: Secret scanning patterns updated to detect current AWS, Azure, and GitHub token formats",
+      "CHANGE: Pre-commit hooks run in an isolated subprocess to prevent environment leakage",
+    ],
+  },
+  {
     version: "0.3.5",
     date: "2026-03-16",
     type: "patch",
@@ -35,7 +60,7 @@ const releases = [
     date: "2026-03-16",
     type: "patch",
     highlights: [
-      "FIX: Added `features=[\"full\"]` to pyproject.toml so PyPI wheels include migrate, backup, and restore commands",
+      'FIX: Added `features=["full"]` to pyproject.toml so PyPI wheels include migrate, backup, and restore commands',
     ],
   },
   {
@@ -50,7 +75,7 @@ const releases = [
       "DOCS: README installation section restructured with OS-specific pipx guidance",
       "DOCS: Release notes template updated with Homebrew install instructions",
     ],
-  },  
+  },
   {
     version: "0.3.0",
     date: "2026-03-17",
