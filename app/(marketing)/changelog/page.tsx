@@ -34,7 +34,7 @@ interface Release {
 // -----------------------------
 
 
-const releases = [
+const releases: Release[]  = [
   {
     version: "0.3.7",
     date: "2026-03-20",
