@@ -114,12 +114,16 @@ export async function search(
     })
 
     // Pagefind lazily fetches result data — hydrate up to `limit` results
-    const hydrated = await Promise.all(
-      response.results.slice(0, limit).map(async r => {
-        const data = await r.data()
-        return { ...data, score: r.score }
-      })
-    )
+const hydrated = await Promise.all(
+  response.results.slice(0, limit).map(async r => {
+    const data = await r.data()
+    return {
+      ...data,
+      url: data.url.replace(/\.html$/, ''), // ← add this line
+      score: r.score,
+    }
+  })
+)
 
     return hydrated
   } catch (err) {

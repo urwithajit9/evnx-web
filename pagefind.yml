@@ -1,0 +1,5 @@
+# pagefind.yml
+site: .next/server/app
+output_path: public/pagefind
+strip_suffixes:
+  - .html
