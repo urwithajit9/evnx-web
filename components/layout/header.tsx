@@ -125,6 +125,7 @@ export function Header() {
           </nav>
         )}
       </div>
+      <SearchModal/>
     </header>
   );
 }
