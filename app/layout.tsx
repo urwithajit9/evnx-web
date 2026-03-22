@@ -38,7 +38,10 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
-    images: [{ url: "/og.png", width: 1200, height: 630 }],
+      url: SITE_URL,          
+  title: `${SITE_NAME} — .env management CLI`,  
+  description: SITE_DESCRIPTION,               
+    images: [{ url: "/og.png", width: 1200, height: 630 , alt: "evnx CLI" }],
   },
   twitter: {
     card: "summary_large_image",
