@@ -47,6 +47,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     creator: TWITTER_HANDLE,
     site: TWITTER_HANDLE,
+     images: [{ url: "/og.png", alt: "evnx — .env management CLI" }],
   },
   keywords: [
     "env management",
@@ -76,8 +77,11 @@ export default function RootLayout({
       className={`${ibmPlexMono.variable} ${fraunces.variable} dark`}
     >
       <body className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] font-mono antialiased">
+          <a href="#main-content" className="sr-only focus:not-sr-only">
+    Skip to content
+  </a>
         <Header />
-        {/* <SearchModal /> */}
+        <SearchModal />
         <main className="flex-1">{children}</main>
         <Footer />
 

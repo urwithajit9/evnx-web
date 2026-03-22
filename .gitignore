@@ -34,3 +34,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Pagefind index is a build artifact — generated at build time, not source code
+public/pagefind/
