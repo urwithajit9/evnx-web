@@ -19,7 +19,7 @@ const NAV_LINKS = [
 export function Header() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  <SearchTrigger />
+
 
   return (
     <header className="sticky top-0 z-50 bg-bg-base/90 backdrop-blur-sm border-b border-border-subtle">
@@ -59,6 +59,7 @@ export function Header() {
 
           {/* Right actions */}
           <div className="flex items-center gap-3">
+            <SearchTrigger /> 
             <a
               href={GITHUB_URL}
               target="_blank"
