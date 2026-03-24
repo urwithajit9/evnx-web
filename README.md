@@ -4,6 +4,8 @@ The official website for **[evnx](https://github.com/urwithajit9/evnx)** — a R
 
 Live at [evnx.dev](https://evnx.dev) · Built with Next.js 15, TypeScript, Tailwind CSS, MDX.
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-evnx--action-blue?logo=github)](https://github.com/marketplace/actions/evnx-env-security-validation)
+
 ---
 
 ## Table of Contents
