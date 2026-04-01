@@ -1,10 +1,10 @@
 ---
 title: "Why I Built evnx: The AWS Incident I Can't Forget"
 slug: why-i-built-evnx
-publishedAt: "2026-03-05"
-excerpt: "I pushed AWS credentials to a public GitHub repo. Three services went down. Here's the full story — and what I built so you never have to explain that incident to your lead."
+publishedAt: "2026-04-01"
+excerpt: "I pushed AWS credentials to a public GitHub repo. Three services went down. A poorly formatted LLM prompt pointed me toward a solution. Here's the full story — and what I built so you never have to explain that incident to your lead."
 author: ajit
-tags: ["security", "origin-story", "rust", "devops","envx"]
+tags: ["security", "origin-story", "rust", "devops", "cli", "opensource"]
 category: opinion
 featured: true
 draft: false
@@ -34,43 +34,91 @@ The key had been automatically revoked by AWS. Which is why our three services w
 
 ---
 
+## Some Context That Made It Worse
+
+This wasn't a greenfield project. It was an Apache Airflow system I had been working on for over a year — 10+ DAGs, dozens of helper files, scrapers and ETL tasks that had started as independent experiments and graduated into the DAG over time. Each one had been tested individually in its own folder, with its own `.env` file.
+
+That's how you end up with nested `.env` files across a monorepo. Not through carelessness — through organic growth.
+
+The root `.gitignore` covered the root `.env`. It didn't cover `packages/api/.env`. I had never updated it when I added the new service directory. The project had no pre-commit hooks at the time. I was tired. It was a hotfix.
+
+That's the full picture.
+
+---
+
 ## The Conversation I Don't Recommend Having
 
 The next morning I had to explain what happened. Not just *what* — the technical part is easy: I committed a file I shouldn't have. The hard part is explaining *why*.
 
-Why didn't I have `.env` in `.gitignore`? (I did. In the root. The project had a monorepo structure I hadn't updated correctly.)
+Why didn't I have `.env` in `.gitignore`? *(I did. In the root. The monorepo structure wasn't covered.)*
 
-Why didn't I check before pushing? (I was tired. It was a hotfix. I was careless.)
+Why didn't I check before pushing? *(I was tired. It was a hotfix. I was careless.)*
 
-Why didn't I use a secret manager? (I meant to set it up. Never got around to it.)
+Why didn't I use a secret manager? *(I meant to set it up. Never got around to it.)*
 
 That conversation was more uncomfortable than the $847 AWS bill.
 
 ---
 
-## What Existed. What Was Missing.
+## The Pain That Came Before — And Kept Coming After
 
-I looked for a tool that could:
+I added a pre-commit hook with secret scanning and moved on. But the incident had surfaced a problem I had been living with for years across 7–8 projects — I just hadn't named it clearly until then.
 
-- **Scan** `.env` files for leaked secrets before they left my machine
-- **Validate** common mistakes like `localhost` in a production value, `true` instead of `True` for Python booleans, placeholder values like `your-api-key-here`
-- **Convert** `.env` files to Kubernetes secrets, Doppler configs, GitHub Actions secrets without copying and pasting by hand
-- **Enforce** that `.env.example` stayed in sync with `.env` (the real file)
-- **Run** in CI/CD as a gate, not just a suggestion
+Working across frontend and backend projects at my previous job, plus personal and consulting work, I kept running into the same friction points around `.env` files regardless of the stack, the team size, or the deployment target.
 
-Some of these tools existed separately. None did all of them. None were fast enough to run as a pre-commit hook without annoying developers into disabling it.
+**The `.env` vs `.env.example` drift.** The idea is simple: commit an example file with all the keys but no real values so teammates know what they need. In practice, over months, keys get added to `.env` and never make it into `.env.example`. New developers clone the repo, fill out the example file, and hit cryptic runtime errors because the example was out of date. A one-line discipline problem that compounds into real onboarding pain.
 
-So I started writing one. In Rust.
+**Sharing and syncing across a distributed team.** Every team member needs a working `.env.local`, `.env.staging`, or environment-specific variant. Add remote part-timers with high turnover — which was my situation — and you have a constant cycle of sharing, revoking, rotating, and re-syncing. Managing this was one of the most draining non-coding tasks in the workflow.
+
+**The wild west of `.env` formats.** There is no formal specification. `python-dotenv` happily parses `KEY="value"` and strips the quotes. Docker's `--env-file` parser is stricter and chokes on the same syntax during image builds. Secret managers each want their own format: for one project I had to convert 30+ variables into a JSON file for AWS Secrets Manager. For another, I had to manually copy each variable into GitHub Actions secrets one by one — a focused, tedious, error-prone process that nobody should be doing by hand.
+
+All of it — the drift, the syncing, the format fragmentation — was death by a thousand cuts. Manageable individually. Maddening collectively. Sitting quietly in the back of my mind.
 
 ---
 
-## Three Years Later
+## The Poorly Written Prompt That Started Everything
 
-<Callout type="tip" title="Current version">
-evnx v0.2.0 is live. It handles everything below, plus cloud migration, encrypted backups, and a new `add` command for managing variables without touching the file directly.
-</Callout>
+About a year after the incident, sitting with all of these accumulated frustrations, I did what many developers do: I opened an LLM and started typing.
 
-Here's what evnx catches now that would have saved me that incident:
+I wanted a comprehensive resource — a tutorial covering what `.env` files are, how to use them correctly, their limitations, and how different languages and ecosystems handle them.
+
+My mistake: I forgot to specify the output format. I assumed Markdown.
+
+The LLM returned a beautifully structured HTML document.
+
+I read through it. It was actually quite good. And in a moment of "well, it's just one file," I decided to host it. Bought a domain, deployed the page. That became [dotenv.space](https://dotenv.space).
+
+I added analytics mostly out of curiosity. Within days, organic search traffic was arriving. The data made one thing clear: there was genuine demand for better `.env` tooling, not just documentation.
+
+That weekend, I decided to build a CLI.
+
+---
+
+## Three Iterations of Rust
+
+I dusted off about a year of on-and-off Rust learning and started building. The first working version came together in three to four days, with LLM assistance bridging the gaps in my Rust knowledge. I iterated on it, fixed bugs, used it on real projects, then did something that revealed the real state of the code: I read it line by line.
+
+Even as a beginner, I could see the problems. The structure wasn't right. The abstractions were leaking. So I started over — not from scratch, but from understanding. The second iteration was better. The third was something I felt good enough to ship.
+
+That third iteration is what you see now.
+
+---
+
+## Why It's Called evnx
+
+The name came from distribution. I wanted the tool available everywhere developers already were: Cargo, pip, npm, Homebrew, Scoop, winget, and GitHub Actions. Working through each distribution channel — each with its own packaging conventions, its own review process — was an education in itself.
+
+When it came to naming, the name I originally had in mind was already taken across channels. I needed something close.
+
+The solution: **evnx**. Phonetically adjacent, practically distinct, and backronymed into something that meant something:
+
+> **E**nvironment **V**ariables **N**e**x**t Generation
+
+---
+
+## What evnx Catches Now
+
+Here's what evnx does today that would have stopped the incident entirely — and the dozens of smaller problems that came before it.
 
 ```bash
 # Would have stopped me before the push
@@ -97,6 +145,20 @@ evnx doctor
 ```
 
 The `doctor` command is what I actually needed most. Not the scanner — I knew the key was sensitive. I didn't know my `.gitignore` wasn't covering that directory.
+
+```bash
+# No more manual copy-paste into GitHub Actions or AWS Secrets Manager
+evnx migrate --from .env --to github-actions
+evnx migrate --from .env --to aws-secrets-manager
+evnx migrate --from .env --to kubernetes
+
+# Validate .env.example is in sync before a PR merge
+evnx diff .env .env.example
+```
+
+<Callout type="tip" title="Current version">
+evnx v0.2.0 is live. It handles scanning, validation, format conversion, `.env.example` sync, cloud migration, encrypted backups, and a new `add` command for managing variables without touching the file directly.
+</Callout>
 
 ---
 
@@ -128,9 +190,40 @@ Install the pre-commit hook. Even if you're careful. Especially if you're tired.
 </Callout>
 
 ```bash
-curl -fsSL https://dotenv.space/install.sh | bash
-evnx doctor  # Start here
+# Install (pick your package manager)
+cargo install evnx
+pip install evnx
+npm install -g @evnx/cli
+
+# Or use the install script
+curl -fsSL https://evnx.dev/install.sh | bash
+
+# Start here
+evnx doctor
 ```
+
+---
+
+## Get Involved
+
+evnx is open source and actively maintained. Everything below is a good next step depending on where you are:
+
+| What you want | Where to go |
+|---|---|
+| Install and get started | [evnx.dev](https://evnx.dev) |
+| Read the source, file issues, contribute | [github.com/urwithajit9/evnx](https://github.com/urwithajit9/evnx) |
+| Try commands against real `.env` fixtures | [github.com/urwithajit9/evnx-test](https://github.com/urwithajit9/evnx-test) |
+| Add evnx to your CI/CD pipeline | [github.com/urwithajit9/evnx-action](https://github.com/urwithajit9/evnx-action) |
+| Install via Homebrew (macOS / Linux) | [github.com/urwithajit9/homebrew-evnx](https://github.com/urwithajit9/homebrew-evnx) |
+| Install via Scoop (Windows) | [github.com/urwithajit9/scoop-evnx](https://github.com/urwithajit9/scoop-evnx) |
+
+[![CI](https://github.com/urwithajit9/evnx/workflows/CI/badge.svg)](https://github.com/urwithajit9/evnx/actions)
+[![Release](https://img.shields.io/github/v/release/urwithajit9/evnx)](https://github.com/urwithajit9/evnx/releases)
+[![crates.io](https://img.shields.io/crates/v/evnx.svg)](https://crates.io/crates/evnx)
+[![PyPI](https://img.shields.io/pypi/v/evnx.svg)](https://pypi.org/project/evnx/)
+[![npm](https://img.shields.io/npm/v/@evnx/cli.svg)](https://www.npmjs.com/package/@evnx/cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-evnx--action-blue?logo=github)](https://github.com/marketplace/actions/evnx-env-security-validation)
 
 ---
 
