@@ -59,8 +59,6 @@ draft: false
 
 ---
 
-
-
 It was 11:47 PM on a Thursday.
 
 I was pushing a hotfix to a side project — the kind of push you make when you're tired and just want the thing to work. I typed `git add .`, wrote a commit message like "fix: finally works," and hit enter.
@@ -79,9 +77,13 @@ I didn't read it. I was already asleep.
 
 **12:04 AM** — My phone rings. My development lead. At midnight.
 
-**12:09 AM** — I find the email. The `.env` file had been public for exactly 22 minutes. In those 22 minutes, an automated scanner had found the `AWS_SECRET_ACCESS_KEY`, spun up EC2 instances in three regions, and started mining cryptocurrency.
+**12:09 AM** — I find the email.
 
-The key had been automatically revoked by AWS. Which is why our three services were down.
+GitHub's secret scanning had caught the `AWS_SECRET_ACCESS_KEY` almost immediately after the push. AWS had already responded: they applied a managed policy called `AWSCompromisedKeyQuarantineV3` directly to the IAM user. That policy blocks access to high-risk actions across the account as a protective measure. It doesn't ask. It doesn't wait. It just locks things down.
+
+Which is exactly why three services were down.
+
+The automated systems had worked perfectly. I was the one who had made the mistake, and now I had to prove the account was clean before anything could be restored.
 
 ---
 

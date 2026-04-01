@@ -1,7 +1,7 @@
 // ─── evnx Single Source of Truth ──────────────────────────────────────────────
 // Never hardcode version numbers or URLs elsewhere. Pull from here.
 
-export const EVNX_VERSION = "0.3.7";
+export const EVNX_VERSION = "0.3.8";
 export const EVNX_MIN_VERSION = "0.1.0";
 
 export const GITHUB_REPO = "urwithajit9/evnx";

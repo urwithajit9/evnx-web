@@ -1,0 +1,715 @@
+---
+slug: "publishing-cli-to-winget"
+title: "Publishing Your First CLI Tool to winget: A Complete Hands-On Guide"
+publishedAt: "2026-03-23"
+excerpt: "Everything you need to know about getting your CLI tool into the Windows Package Manager — including the ZIP trap, the silent cascade trigger bug, the Defender false positive, and how to automate every release after the first."
+coverImage: "/images/blog/winget-cover.png"
+author: "ajit"
+  
+tags:
+  - "winget"
+  - "windows"
+  - "cli"
+  - "github-actions"
+  - "packaging"
+  - "devops"
+  - "rust"
+  - "open-source"
+category: "devops"
+readTime: 18
+featured: true
+draft: false
+canonical: "https://www.evnx.dev/blog/publishing-cli-to-winget"
+relatedSlugs:
+  - "publishing-to-homebrew"
+  - "evnx-secret-scanning"
+---
+
+You built a CLI tool. It's already on Homebrew, Cargo, PyPI, or npm. Windows developers keep asking how to install it. This guide walks through the **entire process** of getting into `microsoft/winget-pkgs` — using the real journey of publishing [evnx](https://github.com/urwithajit9/evnx) — with every mistake, every unexpected error, and every fix documented exactly as it happened.
+
+<Prerequisites>
+  <Prerequisite>Your CLI tool has a GitHub repository with tagged releases</Prerequisite>
+  <Prerequisite>Releases publish a Windows binary as a `.zip` file (not just `.tar.gz` — more on this below)</Prerequisite>
+  <Prerequisite>A GitHub classic PAT with `public_repo` scope (fine-grained tokens do not work)</Prerequisite>
+  <Prerequisite>Brief access to a Windows environment — a real machine or a GitHub Actions Windows runner</Prerequisite>
+</Prerequisites>
+
+---
+
+## Why winget matters for your CLI tool
+
+Without a winget package, Windows developers must download a ZIP manually, extract it somewhere, add it to `PATH` by hand, and remember to update manually. That friction is real — many will move on to a tool that is easier to install.
+
+winget changes that to a single command:
+
+```powershell
+winget install urwithajit9.evnx
+```
+
+And updates become:
+
+```powershell
+winget upgrade urwithajit9.evnx
+```
+
+<Callout type="tip">
+  **Enterprise reach.** Many Windows shops block direct executable downloads but allow winget installs from the official Microsoft repository. Being in `microsoft/winget-pkgs` is effectively a security endorsement for enterprise adoption.
+</Callout>
+
+### Why evnx specifically benefits from winget
+
+evnx is a security tool — it scans `.env` files for secrets before they reach version control. The value proposition is highest at the point of commit, which means it needs to be installed everywhere a developer works, including Windows machines. A tool that catches AWS keys before they hit GitHub needs zero-friction installation on every platform.
+
+---
+
+## Overview of the process
+
+Here is the full picture before diving in:
+
+<Step number={1} title="Build and publish a Windows ZIP to GitHub Releases" />
+<Step number={2} title="Write three YAML manifest files describing your package" />
+<Step number={3} title="Submit those files as a pull request to microsoft/winget-pkgs" />
+<Step number={4} title="Sign Microsoft's Contributor License Agreement" />
+<Step number={5} title="Pass automated validation" />
+<Step number={6} title="Wait for a human reviewer to merge (1–5 business days)" />
+<Step number={7} title="Automate all future releases with wingetcreate update in GitHub Actions" />
+
+The first submission requires some manual steps. Every release after that is fully automated.
+
+---
+
+## Part 1 — Getting the release artifact right
+
+### The ZIP requirement
+
+winget requires a `.zip` for portable executables. `.tar.gz` is not supported. This seems obvious, but it caused our first real problem.
+
+The `release.yml` workflow was building the Windows binary and packaging it correctly into a ZIP — but the "Prepare release assets" step only copied `.tar.gz` files into the actual GitHub Release. The ZIP existed in build artifacts but was never published.
+
+<DiffBlock>
+```yaml
+# before — ZIP never made it into the published release
+- name: Prepare release assets
+  run: |
+    mkdir release-assets
+    find artifacts -name "*.tar.gz*" -exec cp {} release-assets/ \;
+```
+```yaml
+# after — one line fix
+- name: Prepare release assets
+  run: |
+    mkdir release-assets
+    find artifacts -name "*.tar.gz*" -exec cp {} release-assets/ \;
+    find artifacts -name "*.zip*"    -exec cp {} release-assets/ \;
+```
+</DiffBlock>
+
+One line. Two hours of debugging. Always verify your release page actually contains the `.zip` before moving on.
+
+### Verifying your release asset exists
+
+After tagging and pushing, confirm the ZIP is live:
+
+```bash
+VERSION="0.3.7"
+curl -I "https://github.com/YOUR_USER/YOUR_REPO/releases/download/v${VERSION}/your-tool-x86_64-pc-windows-msvc.zip"
+# Expect: HTTP/2 302 (redirect to asset). 404 means it was never uploaded.
+```
+
+Also verify the SHA256 file is present:
+
+```bash
+curl -fsSL "https://github.com/YOUR_USER/YOUR_REPO/releases/download/v${VERSION}/your-tool-x86_64-pc-windows-msvc.zip.sha256"
+# Should print a 64-character hex string followed by a filename
+```
+
+---
+
+## Part 2 — Understanding `wingetcreate`
+
+`wingetcreate` is Microsoft's tool for generating and submitting winget manifests. There are two commands and understanding the difference is critical.
+
+### `wingetcreate new` — interactive only, not automatable
+
+This is a guided wizard. You run it, it downloads your installer, extracts metadata, and walks you through the fields interactively. It is **not scriptable**.
+
+<Callout type="warning">
+  **This tripped us up.** The original CI job tried to pass flags to `wingetcreate new`. Every single flag was rejected.
+</Callout>
+
+<TerminalOutput>
+Windows Package Manager Manifest Creator v1.12.8.0
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+ Option 'version' is unknown.
+ Option 'publisher' is unknown.
+ Option 'license' is unknown.
+ Option 'package-name' is unknown.
+ Option 'short-description' is unknown.
+ Option 'submit' is unknown.
+Error: Process completed with exit code 1.
+</TerminalOutput>
+
+`wingetcreate new` accepts **no flags** beyond the installer URL and `--out`. Those flags simply do not exist on the `new` subcommand. **The first submission must be done manually.** This is a one-time process.
+
+### `wingetcreate update` — fully automatable
+
+Once your package exists in `microsoft/winget-pkgs`, this handles all future releases non-interactively:
+
+```powershell
+.\wingetcreate.exe update urwithajit9.evnx `
+  --version $version `
+  --urls $installerUrl `
+  --submit `
+  --token $env:GITHUB_TOKEN
+```
+
+This fetches the installer, computes the SHA256, generates updated manifests, and opens a PR in `microsoft/winget-pkgs` automatically — no human intervention needed.
+
+---
+
+## Part 3 — The three manifest files
+
+A winget package is described by three YAML files in a specific folder structure inside `microsoft/winget-pkgs`:
+
+<FileTree>
+  {`manifests/
+└── u/
+    └── urwithajit9/
+        └── evnx/
+            └── 0.3.7/
+                ├── urwithajit9.evnx.yaml
+                ├── urwithajit9.evnx.installer.yaml
+                └── urwithajit9.evnx.locale.en-US.yaml`}
+</FileTree>
+
+The path pattern is `manifests/<first-letter-of-publisher>/<publisher>/<package-name>/<version>/`.
+
+### Version manifest
+
+```yaml
+# urwithajit9.evnx.yaml
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+
+PackageIdentifier: urwithajit9.evnx
+PackageVersion: 0.3.7
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0
+```
+
+### Installer manifest
+
+```yaml
+# urwithajit9.evnx.installer.yaml
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+PackageIdentifier: urwithajit9.evnx
+PackageVersion: 0.3.7
+InstallerLocale: en-US
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: evnx-x86_64-pc-windows-msvc.exe
+    PortableCommandAlias: evnx
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/urwithajit9/evnx/releases/download/v0.3.7/evnx-x86_64-pc-windows-msvc.zip
+    InstallerSha256: c690c954fe64f41e7edae9d66cc0eb6bc22793056be3c07380cc925f9aa1213b
+ManifestType: installer
+ManifestVersion: 1.6.0
+```
+
+A few critical fields to get right:
+
+<OptionTable>
+  <Option flag="InstallerType" type="enum" default="zip" options="zip,exe,msi,portable">
+    Use `zip` for a portable binary distributed as a ZIP archive. Pair with `NestedInstallerType: portable` — this tells winget to extract the archive and add the binary to PATH with no install step.
+  </Option>
+  <Option flag="NestedInstallerType" type="enum" default="portable" options="portable,msi,exe">
+    Must be `portable` for a single-binary Rust CLI. winget extracts the ZIP and registers the binary via `PortableCommandAlias`.
+  </Option>
+  <Option flag="RelativeFilePath" type="string" default="">
+    Exact filename of the binary inside the ZIP — including the full cross-compilation suffix (e.g. `evnx-x86_64-pc-windows-msvc.exe`). Getting this wrong means winget extracts the archive and then cannot find the binary.
+  </Option>
+  <Option flag="PortableCommandAlias" type="string" default="">
+    The command name users actually type in their terminal. Set this to `evnx` so users type `evnx` even though the on-disk binary is `evnx-x86_64-pc-windows-msvc.exe`.
+  </Option>
+  <Option flag="InstallerSha256" type="string" default="" required>
+    SHA256 hash of the ZIP file — not the extracted binary. Compute with `shasum -a 256` (macOS) or `sha256sum` (Linux) before filling in this field.
+  </Option>
+</OptionTable>
+
+Compute the SHA256:
+
+```bash
+# macOS
+shasum -a 256 evnx-x86_64-pc-windows-msvc.zip
+
+# Linux
+sha256sum evnx-x86_64-pc-windows-msvc.zip
+```
+
+### Locale manifest
+
+```yaml
+# urwithajit9.evnx.locale.en-US.yaml
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: urwithajit9.evnx
+PackageVersion: 0.3.7
+PackageLocale: en-US
+Publisher: Ajit Kumar
+PublisherUrl: https://github.com/urwithajit9
+PackageName: evnx
+PackageUrl: https://www.evnx.dev
+License: MIT
+LicenseUrl: https://github.com/urwithajit9/evnx/blob/main/LICENSE
+ShortDescription: CLI tool for managing .env files — validation, secret scanning, format conversion
+Description: evnx is a local-first CLI tool that validates .env files, detects committed secrets, converts environment files to 14+ deployment formats, and migrates secrets to cloud providers.
+Tags:
+  - cli
+  - dotenv
+  - env
+  - secrets
+  - security
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
+```
+
+---
+
+## Part 4 — A note on ManifestVersion
+
+The PR checklist in `microsoft/winget-pkgs` asks: *"Does your manifest conform to the 1.12 schema?"*
+
+This is confusing because the manifests generated by `wingetcreate 1.12.8.0` use `ManifestVersion: 1.6.0`. These refer to two different things:
+
+| Field | Value | What it refers to |
+|---|---|---|
+| wingetcreate tool version | `1.12.8.0` | The version of the tool that generated the files |
+| `ManifestVersion` in YAML | `1.6.0` | The manifest schema version |
+
+The checklist item refers to the **tool version** — meaning "did you use a recent version of wingetcreate?" — not a `1.12.0` manifest schema (which does not exist). `ManifestVersion: 1.6.0` is correct and current. Do not change it.
+
+---
+
+## Part 5 — The GitHub Actions cascade trigger problem
+
+This is the most subtle issue in the entire setup and it is not documented anywhere obvious.
+
+<AuthorNote>
+  This one cost the most time. The architecture looked completely logical on paper, which is exactly why it was so hard to debug.
+</AuthorNote>
+
+The original setup had three separate workflow files:
+
+- `release.yml` — builds and publishes the GitHub Release
+- `scoop-update.yml` — triggered by `on: release: published`
+- `winget-publish.yml` — triggered by `on: release: published`
+
+This seems logical. Publish a release, the downstream workflows trigger. But it does not work.
+
+**Why:** GitHub intentionally suppresses `release: published` events when the release is created by a workflow using `GITHUB_TOKEN`. This is a deliberate security design to prevent infinite workflow loops. The result is that both downstream workflows silently never run — no error, no warning, just nothing.
+
+<Callout type="warning">
+  There is no error message. The workflows simply do not appear in the Actions tab. If you structure your pipelines this way, you will spend a long time wondering why nothing happened.
+</Callout>
+
+The fix is to move all downstream jobs directly into `release.yml` under `needs: release`:
+
+```yaml
+# release.yml — all four jobs in one workflow
+jobs:
+  build:
+    # ... build matrix
+
+  release:
+    needs: build
+    # ... creates the GitHub Release
+
+  update-scoop-bucket:
+    needs: release          # runs after release job completes
+    runs-on: ubuntu-latest
+    # ...
+
+  publish-winget:
+    needs: release          # runs after release job completes
+    runs-on: windows-latest
+    # ...
+```
+
+All jobs run in the same workflow, triggered by `push: tags: v*`. The `release: published` event is never involved.
+
+---
+
+## Part 6 — The first manual submission
+
+Because `wingetcreate new` is interactive-only, the initial submission must be done manually once. Here is how to do it without a Windows machine, using a GitHub Actions Windows runner.
+
+<Step number={1} title="Write the manifest files">
+
+Create the three files locally (any OS) using the templates from Part 3. Get the SHA256 of your ZIP first:
+
+```bash
+VERSION="0.3.7"
+curl -fsSL \
+  "https://github.com/YOUR_USER/YOUR_REPO/releases/download/v${VERSION}/your-tool-windows.zip" \
+  -o tool.zip
+shasum -a 256 tool.zip   # macOS
+sha256sum tool.zip        # Linux
+```
+
+</Step>
+
+<Step number={2} title="Commit the manifest files to your repo">
+
+```bash
+git add manifests/
+git commit -m "chore: add winget manifest for v0.3.7"
+git push origin main
+```
+
+</Step>
+
+<Step number={3} title="Create a one-time dispatch workflow">
+
+```yaml
+# .github/workflows/winget-first-submit.yml
+name: Winget first submission (run once)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  submit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wingetcreate
+        run: Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "wingetcreate.exe"
+
+      - name: Submit manifest PR to winget-pkgs
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGETCREATE_TOKEN }}
+        run: |
+          .\wingetcreate.exe submit manifests/u/urwithajit9/evnx/0.3.7 `
+            --token $env:GITHUB_TOKEN
+```
+
+Push this file, then go to Actions → "Winget first submission" → **Run workflow**.
+
+</Step>
+
+<Step number={4} title="Clean up after the PR merges">
+
+```bash
+git rm -r manifests/
+git rm .github/workflows/winget-first-submit.yml
+git commit -m "chore: remove winget first-submission artifacts"
+git push origin main
+```
+
+</Step>
+
+---
+
+## Part 7 — The pull request and what happens next
+
+When `wingetcreate submit` runs, it opens a PR against `microsoft/winget-pkgs`. Two things happen immediately.
+
+### Signing the CLA
+
+Within minutes, `microsoft-github-policy-service` bot posts the full CLA text. Sign it with a single comment:
+
+```
+@microsoft-github-policy-service agree
+```
+
+If submitting as an individual (not on behalf of an employer), this is the only form needed. Once posted, the validation pipeline starts.
+
+### The validation pipeline
+
+`wingetbot` posts a link to an Azure DevOps pipeline run. It runs five checks in sequence:
+
+1. **Schema validation** — all three YAML files conform to the manifest schema
+2. **URL check** — the installer URL returns a file, not a 404
+3. **Hash verification** — downloads the ZIP and compares SHA256 to your manifest
+4. **Silent install** — runs `winget install` on a clean Windows runner
+5. **Command alias** — confirms the `PortableCommandAlias` resolves correctly after install
+
+If all five pass, `wingetbot` applies the `New-Package` label and the PR moves to the human review queue. A maintainer typically merges within 1–5 business days.
+
+---
+
+## Part 8 — Automating future releases
+
+After the first PR merges, add this job to your `release.yml`:
+
+```yaml
+publish-winget:
+  name: Publish to Winget
+  needs: release
+  runs-on: windows-latest
+  steps:
+    - name: Extract version
+      id: version
+      shell: bash
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Download wingetcreate
+      run: Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "wingetcreate.exe"
+
+    - name: Submit update to winget-pkgs
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ secrets.WINGETCREATE_TOKEN }}
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $installerUrl = "https://github.com/urwithajit9/evnx/releases/download/v$version/evnx-x86_64-pc-windows-msvc.zip"
+
+        .\wingetcreate.exe update urwithajit9.evnx `
+          --version $version `
+          --urls $installerUrl `
+          --submit `
+          --token $env:GITHUB_TOKEN
+```
+
+Every `v*` tag push now automatically opens a PR in `microsoft/winget-pkgs`. Update PRs are typically reviewed and merged within a day — faster than first submissions.
+
+<Callout type="warning">
+  **The secret must be a classic PAT.** Add a GitHub personal access token as a repository secret named `WINGETCREATE_TOKEN`. Go to Settings → Secrets and variables → Actions. It must have `public_repo` scope. Fine-grained tokens do not work with `wingetcreate submit`.
+</Callout>
+
+---
+
+## Part 9 — The Defender false positive
+
+<Callout type="warning">
+  **No guide warns you about this.** It is the most likely blocker for any security-related CLI tool built in Rust, and it is entirely outside your control.
+</Callout>
+
+The day after the first validation passed, `stephengillie` (a winget-pkgs maintainer) ran manual validation:
+
+<TerminalOutput>
+Manual Validation ended with:
+2026-03-20 11:55:14.170 [FAIL] Installer failed security check.
+Url: https://github.com/urwithajit9/evnx/releases/download/v0.3.7/evnx-x86_64-pc-windows-msvc.zip
+Result: 0x80004005
+Detection: Trojan:Win32/Sprisky.U!cl
+Defender Security Intelligence version: 1.445.591.0
+</TerminalOutput>
+
+`wingetbot` removed `New-Package`, added `Validation-Installation-Error`, and reassigned the PR back to the author.
+
+### Why this happens to Rust security tools
+
+`Trojan:Win32/Sprisky.U!cl` is a **heuristic detection**, not a signature match. Defender's ML model flags binaries that exhibit certain behavioral patterns. evnx does all of the following, each of which raises the heuristic score:
+
+- Traverses directories recursively (the `scan` command)
+- Analyses byte entropy across files (secret detection)
+- Spawns subprocesses (pre-commit hook integration)
+- Is a freshly compiled, unsigned executable downloaded from the internet
+
+None of these are malicious. But the combination looks suspicious to a classifier that has never seen this binary before. This is a well-known issue in the Rust CLI community — especially for tools that do file scanning, process management, or cryptographic operations.
+
+### Confirming the false positive locally
+
+```powershell
+# Update to latest intelligence first
+Update-MpSignature
+
+# Scan the binary directly
+& "C:\Program Files\Windows Defender\MpCmdRun.exe" `
+  -Scan -ScanType 3 `
+  -File "C:\path\to\evnx-x86_64-pc-windows-msvc.exe"
+```
+
+The local machine confirmed the same detection. The binary worked correctly once Defender was temporarily bypassed — the tool itself was fine. The problem was purely the Defender classification.
+
+### Submitting the false positive report
+
+Go to `https://www.microsoft.com/en-us/wdsi/filesubmission` and upload the `.exe` (not the ZIP — extract it first).
+
+Fill in:
+- **Submission type**: My file was incorrectly detected as malware
+- **Detection name**: `Trojan:Win32/Sprisky.U!cl`
+- **Additional information**: Include the open source repository URL, the SHA256 hash, and a brief description of what the tool does
+
+The response:
+
+<TerminalOutput>
+Submission ID: f94c936a-41f3-4168-bcd1-67a52cc49c4b
+Status: Completed
+
+Our scanners show no positive detection, and we have no telemetry
+indicators for the file(s) submitted either. As such, this submission
+will be closed with no further action pending.
+
+Before proceeding with the next step, we will need to ensure that
+Microsoft Defender is running the latest Security Intelligence Updates
+before detection is replicated on the machine, and then providing us
+with Microsoft Defender diagnostic data from the machine that reported
+detection.
+</TerminalOutput>
+
+Microsoft's cloud scanners no longer detected it — meaning the detection had already been cleared in their backend — but they needed diagnostic data from a machine still running the older intelligence version (`1.445.591.0`).
+
+### Collecting and submitting diagnostic data
+
+```powershell
+# From an elevated PowerShell prompt
+cd "C:\Program Files\Windows Defender"
+.\MpCmdRun.exe -GetFiles
+# Creates: C:\ProgramData\Microsoft\Windows Defender\Support\MPSupportFiles.cab
+```
+
+Upload `MPSupportFiles.cab` to `https://aka.ms/wdsi` with a note referencing the original submission ID and the **specific intelligence version from the winget pipeline log**:
+
+```
+Reference submission ID: f94c936a-41f3-4168-bcd1-67a52cc49c4b
+Detection: Trojan:Win32/Sprisky.U!cl
+Defender Security Intelligence version: 1.445.591.0 (from winget validation pipeline)
+Requesting intelligence update to clear this detection for open source
+project: https://github.com/urwithajit9/evnx
+```
+
+<Callout type="tip">
+  Including the exact intelligence version number from the pipeline log is the key detail — it tells the Microsoft team precisely which database version contains the bad signature.
+</Callout>
+
+### Retriggering the validation pipeline
+
+While waiting, push an empty commit to the PR branch to queue a fresh validation run. This works from any OS — it is just a git operation:
+
+```bash
+# Clone your fork of winget-pkgs (not microsoft/winget-pkgs)
+git clone https://github.com/urwithajit9/winget-pkgs
+cd winget-pkgs
+
+git checkout urwithajit9.evnx-0.3.7-504cb484-36bd-44a4-bc82-cdd3993f1676
+
+git commit --allow-empty -m "retrigger validation - false positive reported to Microsoft, submission ID f94c936a"
+
+git push origin urwithajit9.evnx-0.3.7-504cb484-36bd-44a4-bc82-cdd3993f1676
+```
+
+The pipeline runs on whatever Defender intelligence version is current at the time. If the intelligence has been updated since the last run, the detection will not appear.
+
+### The clean run
+
+<TerminalOutput>
+Validation Pipeline Run WinGetSvc-Validation-136-350273-20260321-1
+
+wingetbot unassigned urwithajit9
+microsoft-github-policy-service bot removed Needs-Author-Feedback New-Package labels
+microsoft-github-policy-service bot removed the Validation-Installation-Error label
+wingetbot added New-Package Azure-Pipeline-Passed Validation-Completed labels
+</TerminalOutput>
+
+`Validation-Installation-Error` removed. `Azure-Pipeline-Passed` and `Validation-Completed` added. All five automated checks passed with no retries. The PR moved back to the human review queue with all labels green.
+
+---
+
+## Part 10 — Merge and publish
+
+Two days after the clean validation run:
+
+<TerminalOutput>
+stephengillie approved these changes
+microsoft-github-policy-service bot merged commit be8d6d8 into microsoft:master
+microsoft-github-policy-service bot added the Moderator-Approved label
+</TerminalOutput>
+
+And five hours after merge:
+
+<TerminalOutput>
+Publish pipeline succeeded for this Pull Request.
+Once you refresh your index, this change should be present.
+microsoft-github-policy-service bot added the Publish-Pipeline-Succeeded label
+</TerminalOutput>
+
+`Publish-Pipeline-Succeeded` is the final confirmation that the package is live.
+
+### Verifying the live install
+
+```powershell
+# Refresh the winget index
+winget source update
+
+# Confirm the package appears
+winget search urwithajit9.evnx
+
+# Install it
+winget install urwithajit9.evnx
+
+# Verify
+evnx --version
+# evnx 0.3.7
+```
+
+---
+
+## Complete timeline
+
+| Date | Event |
+|---|---|
+| Mar 20 | First CI attempt — `wingetcreate new` flags not recognised |
+| Mar 20 | Discovered `release: published` cascade trigger limitation |
+| Mar 20 | Fixed workflows, manual first submission via `wingetcreate submit` |
+| Mar 20 | PR #350273 opened, CLA signed |
+| Mar 20 | First validation run passed automated checks |
+| Mar 20 | Manual validation failed — `Trojan:Win32/Sprisky.U!cl` false positive (intelligence `1.445.591.0`) |
+| Mar 21 | False positive report submitted to Microsoft with diagnostic data |
+| Mar 21 | Empty commit pushed to retrigger validation pipeline |
+| Mar 21 | Second validation run passed — Defender intelligence updated on pipeline runner |
+| Mar 23 | `stephengillie` approved the PR |
+| Mar 23 | Merged into `microsoft:master` |
+| Mar 23 | Publish pipeline succeeded — package live on winget CDN |
+
+Three days from first attempt to live on winget. The false positive added one day of delay.
+
+---
+
+## Quick reference checklist
+
+```
+Pre-submission
+  [ ] Windows ZIP is present in GitHub Release assets
+  [ ] ZIP SHA256 matches the hash in your installer manifest
+  [ ] Binary filename in RelativeFilePath matches what is inside the ZIP
+  [ ] PortableCommandAlias set to the command name users will type
+  [ ] WINGETCREATE_TOKEN secret is a classic PAT with public_repo scope
+  [ ] All three manifest files present: version, installer, locale
+
+Submission
+  [ ] wingetcreate submit run successfully
+  [ ] PR opened in microsoft/winget-pkgs
+  [ ] @microsoft-github-policy-service agree comment posted
+
+If Defender flags the binary
+  [ ] Note the exact intelligence version from the pipeline log
+  [ ] Submit false positive to microsoft.com/en-us/wdsi/filesubmission
+  [ ] Collect MPSupportFiles.cab and upload with submission ID + version
+  [ ] Push empty commit to retrigger validation daily until Azure-Pipeline-Passed appears
+
+After merge
+  [ ] Run winget source update && winget install to verify
+  [ ] Delete manifests/ folder from your repo
+  [ ] Delete winget-first-submit.yml workflow
+  [ ] Confirm publish-winget job uses wingetcreate update
+  [ ] Tag a test release and verify the update PR opens automatically
+```
+
+---
+
+## Resources
+
+- [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) — the central repository where all packages live
+- [wingetcreate releases](https://github.com/microsoft/winget-create/releases) — the manifest creation tool
+- [Manifest schema documentation](https://github.com/microsoft/winget-pkgs/tree/master/doc/manifest/schema/1.6.0) — field reference for all three manifest types
+- [Authoring and validation guide](https://github.com/microsoft/winget-pkgs/blob/master/doc/Authoring.md) — official guide from the winget-pkgs maintainers
+- [Microsoft false positive submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission)
+- [SignPath Foundation](https://signpath.org/program/free-signing-for-open-source) — free Authenticode code signing for open source projects
+- [evnx repository](https://github.com/urwithajit9/evnx)
