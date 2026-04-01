@@ -22,7 +22,7 @@ import { OptionTable, Option } from "./option-table";
 import { FileTree } from "./file-tree";
 import { AuthorNote } from "./author-note";
 import { CommandRef } from "./command-ref";
-
+import { ExternalBadge } from './external-badge'
 // ── Inline code ───────────────────────────────────────────────────────────────
 function InlineCode({ children }: { children?: React.ReactNode }) {
   return (
@@ -274,4 +274,5 @@ export const mdxComponents: MDXComponents = {
   FileTree,
   AuthorNote,
   CommandRef,
+  ExternalBadge
 };
