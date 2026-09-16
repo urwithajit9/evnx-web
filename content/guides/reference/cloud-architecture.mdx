@@ -1,0 +1,204 @@
+---
+title: "Cloud Architecture"
+slug: cloud-architecture
+section: reference
+order: 6
+publishedAt: "2026-09-16"
+excerpt: "How the CLI, evnx-crypto and evnx-server fit together — what each component holds, what crosses the wire, and which guarantees are structural rather than promised."
+difficulty: advanced
+timeToComplete: "15 minutes"
+tags: ["architecture", "cryptography", "reference", "zero-knowledge", "evnx"]
+evnxVersion: "0.4.0"
+prerequisites:
+  - reference/concepts-security-model
+draft: false
+---
+
+Three components, one guarantee: **the server cannot read your secrets.** This page is about the mechanics that make that structural rather than aspirational.
+
+<Prerequisites>
+  <Prerequisite href="/guides/reference/concepts-security-model">The evnx security model</Prerequisite>
+</Prerequisites>
+
+---
+
+## The three pieces
+
+| Component | Is | Holds |
+|---|---|---|
+| **evnx CLI** | The client | Your password, briefly, in memory |
+| **evnx-crypto** | A published Rust crate | All primitives. Linked by CLI, server and browser |
+| **evnx-server** | Axum + Postgres + object storage | Ciphertext, wrapped keys, metadata |
+
+evnx-crypto is separate for a reason that only shows up later: **a browser client must agree with the CLI exactly.** Two implementations of one protocol drift, and the symptom is a blob one client wrote that the other cannot open. One crate, compiled native and to WebAssembly, removes that class of bug entirely.
+
+---
+
+## The key hierarchy
+
+Everything follows from this chain:
+
+```
+Master password  (never leaves your machine)
+  │
+  ├── Argon2id(password, argon2_salt)  ──► Master key
+  │      64 MiB · t=3 · p=4                 unwraps vault keys
+  │
+  └── Argon2id(password, srp_salt)     ──► SRP password
+         64 MiB · t=3 · p=4                 proves identity
+
+Master key
+  └── XChaCha20-Poly1305 wraps ──► Vault key  (random 256-bit, one per vault)
+                                      │
+                                      └── AES-256-GCM encrypts ──► the blob
+```
+
+**A login runs Argon2id twice.** The two derivations use different salts *and* different domain separators, which is the load-bearing detail: the server necessarily stores something derived from your SRP password, because that is how authentication works. With separate salts, compromising that stored value is a step toward nothing — your master key is not recoverable from the SRP side at any price.
+
+---
+
+## What crosses the wire
+
+<CodeTabs defaultTab="Registration">
+  <Tab label="Registration">
+```
+Client computes locally:
+  srp_verifier           from Argon2id(password, srp_salt)
+  argon2_salt, srp_salt  random
+  ed25519 / x25519 pubkeys
+  encrypted_private_key  sealed under the master key
+
+Sent to server: all of the above
+Never sent:     the password, the master key, the private key in the clear
+```
+  </Tab>
+  <Tab label="Login (SRP-6a)">
+```
+POST /auth/srp/init    → session_id, both salts, server public B
+POST /auth/srp/verify  → client proof M1
+                       ← server proof M2 + access/refresh tokens
+
+The client verifies M2. A server that cannot produce a valid one — because
+it was replaced, or is a proxy — is refused before any session is stored.
+```
+  </Tab>
+  <Tab label="Push">
+```
+Client:  aad  = vault_aad(vault_id, base_version + 1)
+         blob = AES-256-GCM(plaintext, vault_key, aad)
+
+Sent:    nonce, ciphertext, blake3(ciphertext), key_names[], base_version
+Never:   vault_key, master key, or any secret value
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+## What the server holds
+
+| Held | Not held |
+|---|---|
+| SRP verifier, both salts | The password, in any form |
+| Private key **already sealed** | The master key |
+| **Wrapped** vault key, per member | The unwrapped vault key |
+| Encrypted blobs | Any plaintext |
+| **Key names** — `DATABASE_URL` | Key **values** |
+| BLAKE3 hashes, versions, timestamps | Anything revealing content |
+
+Key *names* are deliberate — a dashboard can list a vault's contents without decrypting. It is a real trade-off, worth knowing rather than discovering.
+
+---
+
+## Associated data, and why a 409 is not retryable
+
+Every blob is sealed with associated data derived from `(vault_id, version)`:
+
+```rust
+let aad = vault_aad(vault_id, base_version + 1);
+let blob = encrypt_vault(env_bytes, &vault_key, &aad)?;
+```
+
+The AAD is never transmitted — both ends reconstruct it from context.
+
+<Callout type="danger" title="This is why a conflict requires re-encryption">
+A blob sealed as version 8 is cryptographically bound to *being* version 8. If the server has moved on to 9, that blob cannot become version 9: decrypting it as 9 fails by design.
+
+So resending the same bytes after a 409 cannot work. Pull the new version, reconcile, push again — which re-encrypts against the new number.
+
+What it buys: **a server cannot replay an old version as current.** It cannot relabel version 3 as version 12 to roll you back to rotated credentials, because version 3's ciphertext is sealed to the number 3. Without this, a compromised server could hand you stale secrets and you would have no way to notice.
+</Callout>
+
+---
+
+## Two wrap modes, and why only one is safe forever
+
+Every vault member holds their own wrapped copy of the vault key, wrapped one of two ways:
+
+| Whose copy | Method | `eph_pub_key` | Post-quantum |
+|---|---|---|---|
+| **Yours, as creator** | XChaCha20-Poly1305 under an HKDF subkey of your master key | `NULL` | ✅ symmetric only |
+| A member's, when shared | X25519 ECDH to their public key | the ephemeral | ❌ Shor breaks X25519 |
+
+Your own copy is symmetric, so the only quantum threat is Grover — which halves effective strength, leaving 128 bits. Not a concern.
+
+Sharing rides on X25519, and Shor breaks that outright, which means a shared vault is exposed to harvest-now-decrypt-later. **This is why `evnx vault share` has not shipped.** A hybrid X25519 + ML-KEM-768 wrap lands in evnx-crypto 0.2.0 first.
+
+<Callout type="info" title="An API that made the wrong choice easy">
+`CreateVaultRequest.eph_pub_key` was once a required field documented as "ECDH-wrapped vault key for the owner". Followed literally, that routes *every* vault through X25519 and quietly makes solo vaults vulnerable. It is now optional and `NULL` for the creator — matching what the database column always allowed.
+</Callout>
+
+---
+
+## Why a token cannot decrypt
+
+The single most common misunderstanding, so stated as a chain:
+
+1. An API token authenticates you to the **server**
+2. The server holds only the **wrapped** vault key
+3. That wrapping is under a key derived from your **master password**
+4. The server does not have your master password
+5. Therefore no credential the server can issue decrypts anything
+
+A pipeline needing plaintext needs the master password. If it were otherwise, the server could decrypt your vaults itself.
+
+---
+
+## Storage is provider-agnostic on purpose
+
+```
+STORAGE_BACKEND = s3 | gcs | azure | local   # explicit, never inferred
+```
+
+An earlier version detected the provider by sniffing the endpoint hostname, and silently misconfigured anything it did not recognise — the worst failure mode available, because it looks like it works.
+
+`local` is refused outside development and the server will not boot: the filesystem is not shared between instances, so a multi-instance deployment would serve blobs that exist on only one node.
+
+---
+
+## The operational fact that matters most
+
+<Callout type="danger" title="Postgres holds the only copy of every wrapped vault key">
+The CLI does not cache it — it fetches and unwraps per command.
+
+So losing that database does not lose metadata. It makes **every blob in object storage cryptographically unrecoverable, including by the owner who knows their master password.** Object storage does not save you: it holds the ciphertext, Postgres holds the key that opens it.
+
+If you self-host, this is the sentence to take away.
+</Callout>
+
+---
+
+## What this does not protect against
+
+- **A compromised client.** Malware on the machine doing the decryption sees plaintext. Zero-knowledge is a claim about the *server*.
+- **A weak master password.** The server holds an SRP verifier; someone who steals the database can attack it offline with no rate limiting. Argon2id at 64 MiB makes that expensive, not impossible.
+- **Losing your password.** There is nothing to recover with. That is the cost, stated honestly.
+- **Shared vaults, against a future quantum adversary.** See above.
+
+---
+
+## Related
+
+- [Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee)
+- [What evnx-server Is](/blog/what-evnx-server-is-and-why-it-is-a-separate-thing)
+- [evnx cloud](/guides/commands/cloud) · [API tokens in CI](/guides/integrations/ci-cd-cloud-tokens)
