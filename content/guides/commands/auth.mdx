@@ -1,0 +1,181 @@
+---
+title: "evnx auth"
+slug: auth
+section: commands
+order: 7
+publishedAt: "2026-09-16"
+excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, enable two-factor authentication and manage sessions — without your password ever leaving the machine."
+difficulty: intermediate
+timeToComplete: "10 minutes"
+tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
+evnxVersion: "0.4.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx auth` is the front door to evnx cloud. It creates your account, signs you in, mints tokens for CI, and manages two-factor authentication and sessions.
+
+The thing worth understanding before you run any of it: **your master password never leaves this machine.** Not hashed, not salted, not encrypted-in-transit-then-decrypted. Never sent.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/reference/concepts-security-model">Understand the evnx security model</Prerequisite>
+</Prerequisites>
+
+---
+
+## Commands
+
+<CommandSignature>
+evnx auth [SUBCOMMAND]
+evnx auth register --email you@example.com
+evnx auth login
+evnx auth status
+</CommandSignature>
+
+| Subcommand | What it does |
+|---|---|
+| `register` | Create an account |
+| `login` | Sign in (SRP-6a, plus TOTP when enabled) |
+| `logout` | Sign out and delete the local session |
+| `status` | Show your account as the **server** sees it |
+| `token` | Mint, list and revoke API tokens for CI |
+| `totp` | Enable, disable and re-issue recovery codes for 2FA |
+| `sessions` | List and revoke active sessions |
+
+---
+
+## Registering
+
+```bash
+evnx auth register --email you@example.com
+```
+
+You are prompted for a master password twice. Then evnx does a lot of work locally before a single byte goes out:
+
+<Step number={1} title="Derive two independent keys from your password">
+Argon2id runs **twice**, with two different salts and two different domain separators — once for your master key, once for the SRP password. Separate salts mean that compromising the value the server stores tells an attacker nothing about your master key.
+</Step>
+
+<Step number={2} title="Generate your keypair">
+An Ed25519 signing key and an X25519 key-agreement key are generated on this machine. The private key is sealed under your master key before it is sent.
+</Step>
+
+<Step number={3} title="Send only what the server can safely hold">
+The server receives an SRP verifier, two salts, two public keys, and your private key already encrypted. It cannot derive your password from any of it without an offline attack against Argon2id at 64 MiB.
+</Step>
+
+<Callout type="warning" title="There is no password reset">
+This is the cost of zero knowledge, stated plainly. Your master password decrypts your vault keys, and the server does not hold anything that can substitute for it. Lose the password and the ciphertext stays ciphertext — for you, for us, for everyone. Put it in a password manager before you continue.
+</Callout>
+
+Registration sends a verification email. The link in it activates the account.
+
+<Callout type="tip" title="Lost the verification email?">
+`POST /api/v1/auth/resend-verification` will issue a new one and expire the old. Every previous link stops working the moment a new one is sent.
+</Callout>
+
+---
+
+## Logging in
+
+```bash
+evnx auth login --email you@example.com
+```
+
+Login runs the **SRP-6a** exchange. Both sides prove what they know without either sending it:
+
+- You prove you know the password without transmitting it
+- The server proves it holds your verifier before the CLI stores any session
+
+That second half matters more than it sounds. A server that has been replaced — or a proxy pretending to be one — cannot produce a valid proof, so the CLI refuses it rather than handing over a session.
+
+<OptionTable>
+  <Option flag="--email" type="string">Email address. Prompted for when omitted.</Option>
+  <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting. For scripts and test harnesses.</Option>
+  <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `.evnx.toml`.</Option>
+</OptionTable>
+
+<Callout type="warning" title="--password-stdin is for automation, not convenience">
+It takes everything up to the first newline, so passphrases with spaces work. But a password on stdin usually comes from somewhere — a file, a variable, a here-string — and all three are readable or recoverable. Prefer an API token for anything unattended.
+</Callout>
+
+---
+
+## API tokens for CI
+
+Your master password is the one thing that must never reach a build runner. It derives your master key, which unwraps every vault key you own. An API token is deliberately weaker:
+
+```bash
+evnx auth token create --name ci-deploy
+evnx auth token list
+evnx auth token revoke ci-deploy
+```
+
+<Callout type="danger" title="A token is shown once">
+`create` prints the token exactly once. There is no command that shows it again — the server keeps only a BLAKE3 hash. If you lose it, revoke it and mint another.
+</Callout>
+
+Two limits are enforced centrally on the server, not by each endpoint:
+
+- **Read-only tokens cannot mutate.** Anything other than GET, HEAD or OPTIONS is refused. It is written as "this is not a safe read" rather than as a list of banned verbs, so a route added later is refused by default instead of accidentally allowed.
+- **A vault-scoped token reaches only that vault.** Routes without a vault in the path — listing vaults, creating one — are refused outright, because enumerating your account is outside what a deploy token was issued for.
+
+**A token cannot mint another token.** Token creation requires a real logged-in session, so a leaked CI token cannot quietly issue itself a longer-lived, wider-scoped replacement and survive revocation of the original.
+
+---
+
+## Two-factor authentication
+
+```bash
+evnx auth totp enable
+evnx auth totp recovery-codes
+evnx auth totp disable
+```
+
+`enable` prints a QR code and a base32 secret, then asks for a code to confirm before anything is stored. Confirming returns **ten single-use recovery codes**, shown once.
+
+<Callout type="warning" title="Recovery codes are the only way back in">
+With 2FA on and your authenticator gone, a recovery code is the sole route to your account — and, through it, to your vault keys. Store them somewhere other than the device running the authenticator.
+</Callout>
+
+Both `disable` and `recovery-codes` require a valid second factor. That is deliberate: a stolen session should not be able to strip 2FA off the account it stole.
+
+---
+
+## Sessions
+
+```bash
+evnx auth sessions list
+evnx auth sessions revoke <ID>
+evnx auth sessions revoke-others
+```
+
+Revocation is immediate, not eventual. It kills the refresh token **and** blocklists the session, so the 15-minute access token dies at once rather than lingering until it expires. `revoke-others` is what you want after losing a laptop — it clears every session except the one you are typing in.
+
+---
+
+## Checking state
+
+```bash
+evnx auth status
+```
+
+This asks the **server**, so it answers "is this credential actually still good?" rather than "is there a file on disk?" It reports your email, whether it is verified, whether 2FA is on, and whether the stored session still works.
+
+<Callout type="info" title="Two different status commands">
+`evnx auth status` is about your **account**. `evnx cloud status` is about **this machine** — whether it has credentials, whether the directory is bound to a vault, and which server it will talk to.
+</Callout>
+
+---
+
+## Where credentials live
+
+`~/.config/evnx/` — a file, mode `0600`, the same model as `~/.aws/credentials` and `~/.docker/config.json`.
+
+<Callout type="info" title="Why a file and not the system keyring">
+A keyring costs roughly thirty extra dependencies, including a second async runtime, and still needs a file fallback for CI where no keyring daemon is running. The file is the honest default; keyring support can be added later as its own opt-in feature.
+</Callout>
+
+**Nothing sensitive is ever written to `.evnx.toml`.** That file is project-level, searched from the working directory upward, and meant to be committed. A vault *binding* may live there, because a vault name is not a secret. Credentials never do.

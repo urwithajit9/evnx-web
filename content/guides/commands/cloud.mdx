@@ -1,0 +1,200 @@
+---
+title: "evnx cloud"
+slug: cloud
+section: commands
+order: 9
+publishedAt: "2026-09-16"
+excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
+difficulty: intermediate
+timeToComplete: "12 minutes"
+tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
+evnxVersion: "0.4.0"
+prerequisites:
+  - commands/auth
+  - commands/vault
+draft: false
+---
+
+`evnx cloud` is the sync itself: encrypt a `.env` here, upload the ciphertext, pull it down somewhere else and decrypt it there.
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/auth">Sign in with evnx auth</Prerequisite>
+  <Prerequisite href="/guides/commands/vault">Create a vault</Prerequisite>
+</Prerequisites>
+
+---
+
+## Commands
+
+<CommandSignature>
+evnx cloud [SUBCOMMAND]
+evnx cloud link my-api/production
+evnx cloud push
+evnx cloud pull
+evnx cloud history
+</CommandSignature>
+
+| Subcommand | What it does |
+|---|---|
+| `push` | Encrypt a `.env` and upload it as a new version |
+| `pull` | Download a version and decrypt it |
+| `history` | List a vault's versions, newest first |
+| `link` | Bind this directory to a vault |
+| `unlink` | Remove the binding |
+| `status` | Show whether this machine is set up for sync |
+
+---
+
+## Binding a directory
+
+```bash
+evnx cloud link my-api/production
+```
+
+This writes `[cloud] vault` into `.evnx.toml`, preserving everything else already in the file. After it, `push` and `pull` need no `--vault`.
+
+<Callout type="tip" title="Safe to commit">
+`.evnx.toml` is project-level and meant to be committed — a vault name is not a secret. Credentials never go there; they live in `~/.config/evnx/` at mode 0600.
+</Callout>
+
+`evnx cloud unlink` removes the binding and touches nothing else.
+
+---
+
+## Pushing
+
+```bash
+evnx cloud push
+evnx cloud push --vault my-api/staging --file .env.staging
+```
+
+<OptionTable>
+  <Option flag="--vault" type="string">Vault to push to: `name`, `name/environment`, or an id. Optional in a bound directory.</Option>
+  <Option flag="--file" type="path" default=".env">File to push.</Option>
+  <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
+  <Option flag="--server" type="url">Server to talk to. Plain `http://` is refused for anything but loopback.</Option>
+</OptionTable>
+
+The file is encrypted **byte for byte**. Comments, blank lines, ordering and quoting all survive the round trip, because evnx encrypts the file rather than a parsed representation of it.
+
+Only the key *names* are sent in the clear, so a dashboard can list what a vault holds without decrypting anything.
+
+---
+
+## Pulling
+
+```bash
+evnx cloud pull
+evnx cloud pull --version 7 --file .env.restored
+```
+
+<OptionTable>
+  <Option flag="--vault" type="string">Vault to pull from. Optional in a bound directory.</Option>
+  <Option flag="--file" type="path" default=".env">Where to write the decrypted file.</Option>
+  <Option flag="--version" type="number" default="latest">Version to pull.</Option>
+  <Option flag="--force" type="flag">Overwrite the target without asking.</Option>
+  <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
+</OptionTable>
+
+<Callout type="warning" title="--version here means the vault version">
+Because `pull` takes a `--version` of its own, clap's automatic `--version` flag is disabled on this subcommand. For the program version use `evnx --version`.
+</Callout>
+
+---
+
+## Version history
+
+```bash
+evnx cloud history
+evnx cloud history --vault my-api/production --limit 50
+```
+
+<TerminalOutput title="evnx cloud history">
+VERSION   PUSHED BY          KEYS   WHEN
+12        you@example.com    14     2 hours ago
+11        ci-deploy          14     yesterday
+10        you@example.com    13     3 days ago
+</TerminalOutput>
+
+`history` is **read-only in the strongest sense**: no password prompt, no decryption, no blob download. It reads metadata the server already holds in the clear, which is why it is safe to run from a script or a read-only token.
+
+---
+
+## Conflicts, and why a retry is not enough
+
+Every push carries the version it was based on. If someone else pushed in between, the server answers **409 Conflict**.
+
+<Callout type="danger" title="A 409 requires re-encryption, not a retry">
+This is the single most important thing to understand about evnx cloud, and it is not how most sync tools behave.
+
+The version number is **authenticated into the ciphertext** as associated data. A blob sealed as "version 8" is cryptographically bound to being version 8. If the server has moved on to 9, that blob cannot become version 9 — decryption of it as 9 fails by design.
+
+So resending the same bytes does not work and is not supposed to. Pull the new version, reconcile the change, and push again — which re-encrypts against the new number.
+</Callout>
+
+This is not bureaucracy. It is what stops a malicious or compromised server replaying an old version as the current one: it cannot relabel version 3 as version 12, because version 3's ciphertext is sealed to the number 3.
+
+---
+
+## Machine status
+
+```bash
+evnx cloud status
+```
+
+Reports whether this machine has credentials, whether the directory is bound, and which server it will reach. Compare with `evnx auth status`, which asks the server about your **account**.
+
+---
+
+## Using it in CI
+
+Never put your master password in a pipeline. Use a token, scoped as narrowly as the job needs:
+
+```bash
+evnx auth token create --name ci-deploy
+```
+
+<CodeTabs defaultTab="GitHub Actions">
+  <Tab label="GitHub Actions">
+```yaml
+- name: Fetch secrets
+  env:
+    EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
+  run: |
+    evnx cloud pull --vault my-api/production --file .env --force
+```
+  </Tab>
+  <Tab label="GitLab CI">
+```yaml
+fetch-secrets:
+  script:
+    - evnx cloud pull --vault my-api/production --file .env --force
+  variables:
+    EVNX_TOKEN: $EVNX_TOKEN
+```
+  </Tab>
+</CodeTabs>
+
+<Callout type="warning" title="A read-only token cannot pull">
+Pulling is a GET, so a read-only token handles deploys perfectly. Give a job a read-write token only when it genuinely pushes — a rotation job, say. Scope it to one vault while you are there.
+</Callout>
+
+<Callout type="info" title="Pulling still needs the master password">
+A token authenticates you to the server. It does not decrypt anything — the vault key is wrapped under your master key, and only your master password unwraps it.
+
+For unattended pipelines this is the real constraint, and it is the honest consequence of zero knowledge: some secret has to reach the runner for decryption to be possible. Supply the master password via `--password-stdin` from your CI's own secret store, and understand exactly what you have granted that runner.
+</Callout>
+
+---
+
+## What survives a round trip
+
+Push then pull on another machine and you get the same file back, byte for byte. Verified as part of the release, not assumed:
+
+```bash
+sha256sum .env
+# 08677f2b...  .env      (before push, machine A)
+# 08677f2b...  .env      (after pull, machine B)
+```
+
+Comments, ordering, quoting, trailing newlines — all preserved, because the encryption input is the file itself.

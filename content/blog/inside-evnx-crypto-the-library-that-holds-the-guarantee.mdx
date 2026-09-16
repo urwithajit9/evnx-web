@@ -1,0 +1,150 @@
+---
+title: "Inside evnx-crypto: The Library That Holds the Guarantee"
+slug: "inside-evnx-crypto-the-library-that-holds-the-guarantee"
+publishedAt: "2026-09-16"
+excerpt: "Zero-knowledge is a claim until something enforces it. evnx-crypto is the ~2,000 lines that do — and the design decisions inside it are more opinionated than the primitives suggest."
+author: "ajit"
+category: "deep-dive"
+tags: ["cryptography", "rust", "argon2", "srp", "zero-knowledge", "evnx", "wasm"]
+featured: true
+draft: false
+relatedSlugs:
+  - "zero-knowledge-cloud-sync-architecture-of-secure-env-storage"
+---
+
+"The server cannot read your secrets" is a marketing sentence until something in the codebase makes it true. In evnx that something is **evnx-crypto** — a separate crate, published on crates.io, that every client links against.
+
+This post is about what is inside it and, more usefully, *why*. The primitives are boring on purpose. The decisions around them are not.
+
+## Why it is a separate crate at all
+
+The obvious move is to put the crypto in the CLI and be done. evnx-crypto exists as its own crate for one reason that only becomes visible later: **the CLI is not going to be the only client.**
+
+A browser dashboard has to do the same Argon2id derivation, the same SRP-6a exchange, the same AES-GCM sealing — and it has to agree with the CLI *exactly*, down to the byte. Two implementations of the same protocol drift. They drift quietly, and the symptom is a blob one client wrote that the other cannot open.
+
+One crate, compiled twice — native for the CLI and server, WebAssembly for the browser — removes that entire class of bug. It is audited once and runs everywhere.
+
+There was a practical forcing function too. `cargo publish` rejects git dependencies outright, and accepts a path dependency only if it also carries an already-published version. So the CLI's cloud feature could not ship to crates.io at all until evnx-crypto was a real published crate. The architecture and the packaging pointed the same way.
+
+## The shape of it
+
+Seven modules, and the split matters:
+
+| Module | Holds |
+|---|---|
+| `kdf` | Argon2id derivation, `MasterKey`, salt handling |
+| `vault` | `VaultKey`, blob encryption, key wrapping, associated data |
+| `srp` | SRP-6a client half — verifier, ephemerals, proofs |
+| `keypair` | Ed25519 and X25519 generation, private-key sealing |
+| `encoding` | base64 and hex wire formats |
+| `zeroize` | `SecretArray`, `SecretBytes`, `SecretString` |
+| `errors` | One error type, deliberately vague at the boundary |
+
+## Argon2id, twice, and why
+
+Every login runs Argon2id **twice** — with 64 MiB of memory, three iterations, four lanes, each time.
+
+That sounds wasteful until you see what the two outputs are for:
+
+- `derive_master_key` produces the key that unwraps your vault keys. **It never leaves the machine.**
+- `derive_srp_password` produces the input to the SRP exchange. It is what proves who you are.
+
+They use **different salts and different domain separators**. This is the load-bearing detail. The server necessarily stores something derived from your SRP password — that is how authentication works at all. If both values came from one derivation, then compromising the server's copy would be a step toward your master key. With separate salts, it is a step toward nothing: the master key is not recoverable from the SRP side at any price.
+
+Two derivations is the cost of that separation. It is worth it.
+
+## Two ways to wrap a vault key, and only one is safe forever
+
+This is the decision I would most want a reviewer to check.
+
+A vault key is random and 256-bit. Every member of a vault holds their own wrapped copy of it, and there are two wrapping paths:
+
+| Whose copy | How it is wrapped | Post-quantum |
+|---|---|---|
+| **Yours, as creator** | XChaCha20-Poly1305 under an HKDF subkey of your master key | ✅ Safe — symmetric only |
+| A teammate's, when shared | X25519 ECDH to their public key | ❌ Shor breaks X25519 |
+
+Your own copy is symmetric, so the only quantum threat is Grover, which halves effective strength — 256 bits becomes 128, which is not a concern. A shared copy rides on X25519, and Shor's algorithm breaks that outright. An adversary recording traffic today could decrypt it later.
+
+The API originally made this mistake easy to commit. `CreateVaultRequest.eph_pub_key` was a required field whose documentation said "ECDH-wrapped vault key for the owner" — which, followed literally, would have routed *every* vault through X25519 and quietly made solo vaults vulnerable to harvest-now-decrypt-later. It is now optional, and `NULL` for the creator, matching what the database column always allowed.
+
+This is also why `evnx vault share` has not shipped. A hybrid X25519 + ML-KEM-768 wrap lands first. Shipping sharing on X25519 alone would mean promising a guarantee the maths does not support.
+
+## Associated data: the part people skip
+
+`encrypt_vault` and `decrypt_vault` both take an `aad` argument, and it must match on both sides or decryption fails.
+
+```rust
+// push — the server will assign base_version + 1
+let aad = vault_aad(vault_id, base_version + 1);
+let blob = encrypt_vault(env_bytes, &vault_key, &aad)?;
+
+// pull
+let aad = vault_aad(vault_id, version_num);
+let plaintext = decrypt_vault(&blob, &vault_key, &aad)?;
+```
+
+`vault_aad` builds an unambiguous, length-prefixed encoding of `(vault_id, version)`. The result is never transmitted — both ends reconstruct it from context.
+
+What it buys: **a server cannot replay an old version as the current one.** It cannot relabel version 3 as version 12, because version 3's ciphertext is cryptographically sealed to the number 3. Without this, a malicious or compromised server could roll you back to a stale set of credentials — old API keys, a rotated database password — and you would have no way to notice.
+
+The consequence is one that surprises people: **a 409 conflict requires re-encryption, not a retry.** The bytes you already built are bound to a version number that is no longer correct. Resending them cannot work, and that is the feature.
+
+Passing `b""` disables the protection entirely. That is the one way to use this API wrong, which is why it is an explicit argument rather than an optional parameter with a default.
+
+## Key bytes are private, and that is enforced
+
+`MasterKey`, `VaultKey` and `SecretArray` expose their contents only through `.expose()`, and they cannot be constructed from arbitrary bytes outside the crate. A `VaultKey` comes from exactly two places: `generate()`, or an authenticated unwrap.
+
+There *is* a `from_bytes_for_test` constructor, and it sits behind a `test-utils` feature that the crate's own documentation tells you never to enable in a dependent. When the WebAssembly bindings were written, that constructor was the convenient way to accept a key from JavaScript — and using it would have punched a hole straight through the invariant. The bindings hand out opaque handles instead.
+
+Everything carries `ZeroizeOnDrop`, and `Debug` is implemented to print `VaultKey(<redacted>)` rather than the bytes. That second one prevents a genuinely common accident: a `dbg!` or a `tracing::debug!` on a struct that happens to contain a key.
+
+## Compiling it to the browser
+
+The dashboard needs all of this in a browser tab, which raised the real question: does memory-hard key derivation survive there?
+
+Getting it to compile took **one line**. `getrandom` refuses to build for `wasm32-unknown-unknown` unless told where entropy comes from, because the target has no ambient OS RNG:
+
+```toml
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+```
+
+After that the whole crate compiled — Argon2id, AES-GCM, XChaCha20-Poly1305, X25519, Ed25519, SRP, BLAKE3. Nothing else needed changing.
+
+The measurements, in Chromium on a sixteen-core desktop:
+
+| | Native | Browser | Ratio |
+|---|---|---|---|
+| `derive_master_key` | 146 ms | 434 ms | 3.0× |
+| `derive_srp_password` | 158 ms | 431 ms | 2.7× |
+| **A login runs both** | 304 ms | **865 ms** | |
+
+The compiled module is 111 KB raw, **45 KB gzipped**.
+
+Roughly three times slower than native, which for a memory-hard function in a sandbox is a good result. It does mean the derivation has to run in a Web Worker — on the main thread it is a visible 434 ms freeze. Measured in a Worker, the main thread's worst event-loop gap was **4.7 ms against 5.0 ms idle**: no impact at all.
+
+The browser bindings return **opaque handles**, never byte arrays. Once key bytes cross into JavaScript they live in a garbage-collected heap with no `ZeroizeOnDrop` equivalent, where the engine may copy the buffer while compacting and nothing says when the original is released. Handles keep the guarantee the CLI already makes — and they make "keys in memory only" *checkable* rather than aspirational, because there is no API that yields raw key bytes for a front-end mistake to put in `localStorage`.
+
+## What it does not do
+
+Worth stating plainly, because the boundaries are the interesting part:
+
+- **No password recovery.** There is nothing to recover with. Lose the master password and the ciphertext stays ciphertext.
+- **No protection against a compromised client.** Malware on the machine doing the decryption sees plaintext. Zero-knowledge is about the *server*.
+- **Key names are not secret.** They are sent in the clear so a dashboard can list a vault's contents. If your key names are themselves sensitive, know this rather than discover it.
+- **Shared vaults are not post-quantum safe yet.** See above.
+
+## Using it
+
+```toml
+[dependencies]
+evnx-crypto = "0.1"
+```
+
+MIT licensed, MSRV 1.85 — verified by building on it rather than assumed. It is the same crate the CLI and the server both link against, which is the whole point.
+
+---
+
+*If you want the protocol-level view — threat model, why zero-knowledge rather than server-side encryption, and where it sits against the alternatives — start with [Zero-Knowledge Cloud Sync: Architecture of Secure Env Storage](/blog/zero-knowledge-cloud-sync-architecture-of-secure-env-storage). This post is the implementation underneath it.*

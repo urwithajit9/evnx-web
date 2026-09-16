@@ -2,6 +2,7 @@
 title: "Zero-Knowledge Cloud Sync: Architecture of Secure Env Storage"
 slug: "zero-knowledge-cloud-sync-architecture-of-secure-env-storage"
 publishedAt: "2026-03-10"
+updatedAt: "2026-09-16"
 excerpt: "A deep dive into client-side encryption, key derivation, and how evnx cloud implements zero-knowledge architecture for environment variables."
 author: "ajit"
 category: "deep-dive"
@@ -16,7 +17,13 @@ We've all been there. It's 2 AM, production is down, and you need to share an AP
 
 In modern development, secret management is often the weakest link in the security chain. Traditional solutions often rely on **server-side encryption**, where the provider holds the keys. If the provider is compromised, your secrets are too.
 
-This post explores the architecture behind **Zero-Knowledge Cloud Sync**, specifically how tools like `evnx cloud` and `dotenv.space` implement client-side encryption to ensure the server **never** sees your plaintext secrets. We'll break down the cryptography, the key derivation, and the practical implementation details.
+This post explores the architecture behind **Zero-Knowledge Cloud Sync** — how `evnx cloud` implements client-side encryption so the server **never** sees your plaintext secrets. We'll break down the cryptography, the key derivation, and the practical implementation details.
+
+<Callout type="info" title="Updated for the shipped implementation">
+This post was written before `evnx cloud` shipped. It has been corrected against the released code — most importantly the section on which cipher does what, which described an earlier design.
+
+For the implementation itself, see **[Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee)**. For the backend, **[What evnx-server Is](/blog/what-evnx-server-is-and-why-it-is-a-separate-thing)**. To use it, **[Cloud Sync in 10 Minutes](/guides/getting-started/cloud-sync-quickstart)**.
+</Callout>
 
 ## The Problem: Why Zero-Knowledge?
 
@@ -45,17 +52,26 @@ In a Zero-Knowledge architecture, encryption happens **before** the data leaves 
 
 To build a secure zero-knowledge system, we need two specific cryptographic primitives: a secure encryption algorithm and a robust key derivation function.
 
-### Encryption: XChaCha20-Poly1305
+### Encryption: two ciphers, at two different layers
 
-While AES-GCM is the industry standard, it requires careful nonce management. If a nonce is ever repeated with the same key, security collapses.
+The shipped implementation uses **both** AES-256-GCM and XChaCha20-Poly1305, and which one appears where is not arbitrary — it follows from nonce budgets.
 
-For client-side encryption where nonces might be generated in diverse environments (browser, CLI, mobile), we prefer **XChaCha20**.
+| Layer | Cipher | Nonce |
+|---|---|---|
+| The vault blob — your `.env` | **AES-256-GCM** | 96-bit, random per encryption |
+| Wrapping the vault key under your master key | **XChaCha20-Poly1305** | 192-bit, random |
 
-- **XChaCha20:** A variant of ChaCha20 with an extended nonce (192-bit vs 96-bit). This makes random nonce generation safe without complex state tracking.
-- **Poly1305:** Provides authentication (MAC) to ensure the ciphertext hasn't been tampered with.
+The concern with AES-GCM is real: a repeated nonce under the same key collapses its security. With a 96-bit random nonce, distinct messages collide with probability around 2⁻³² after 2³² encryptions.
+
+What makes it safe here is that **one encryption is one `evnx cloud push`**. Reaching 4 billion pushes of a single vault is not a scenario; the bound is unreachable in practice, and the guidance is to rotate the vault key rather than approach it.
+
+Key *wrapping* is where the extended nonce earns its place. XChaCha20's 192-bit nonce makes random generation safe without any state tracking at all — which matters precisely because wrapping happens in diverse environments: a CLI, a browser via WebAssembly, and eventually mobile.
+
+- **XChaCha20:** ChaCha20 with a 192-bit nonce instead of 96. Random nonces need no coordination.
+- **Poly1305 / GCM:** Both provide authentication, so tampering is detected rather than silently decrypted.
 
 <Callout type="tip">
-  XChaCha20 is particularly well-suited for JavaScript/TypeScript environments (via WebAssembly) because it avoids timing attacks common in software-based AES implementations.
+AES-256-GCM also carries its own 128-bit authentication tag inside the ciphertext. That is why evnx does **not** add a separate integrity hash to the blob — it would be redundant and, worse, invite someone to slice it back out of the wrong offset.
 </Callout>
 
 ### Key Derivation: Argon2id
@@ -308,10 +324,21 @@ Security is not a product; it's a process. Moving to a zero-knowledge architectu
 </Step>
 
 <Step number={3} title="Explore further">
-  - Read the [libsodium documentation](https://libsodium.gitbook.io/) to understand the underlying crypto primitives.
-  - Check out our follow-up guide: <CommandRef command="evnx share" /> for implementing secret sharing with ECIES.
-  - Review the <CommandSignature>evnx rotate [--force]</CommandSignature> command for key rotation workflows.
+  - **[Cloud Sync in 10 Minutes](/guides/getting-started/cloud-sync-quickstart)** — account to byte-identical round trip on a second machine.
+  - **[Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee)** — the library that enforces all of the above, including why a login runs Argon2id twice.
+  - **[What evnx-server Is](/blog/what-evnx-server-is-and-why-it-is-a-separate-thing)** — what the backend stores, what it refuses to hold, and how to run your own.
+  - **[evnx cloud](/guides/commands/cloud)** — every subcommand and flag.
 </Step>
+
+<Callout type="warning" title="Two commands this post originally promised do not exist">
+Earlier versions of this article pointed at `evnx share` and `evnx rotate`. Neither shipped, and the reasons are worth stating rather than quietly deleting:
+
+**Sharing** is blocked on post-quantum work, not on effort. Sharing a vault wraps its key with X25519 ECDH to the recipient's public key, and Shor's algorithm breaks X25519 — so a shared vault recorded today could be decrypted by a future adversary. A hybrid X25519 + ML-KEM-768 wrap lands in evnx-crypto 0.2.0 first. Your **own** copy of a vault key is wrapped symmetrically and is unaffected.
+
+**Key rotation** is genuinely harder than it looks in a zero-knowledge system, for the reason the section above describes: rotating a master key means re-wrapping every vault key that depends on it, atomically. It is planned, it is not shipped, and pretending otherwise would be the wrong kind of documentation.
+
+What exists today is in **[evnx cloud](/guides/commands/cloud)**.
+</Callout>
 
 By shifting encryption to the client, we reclaim sovereignty over our data. In an era of frequent breaches, zero-knowledge isn't just a feature—it's the future of secure development.
 

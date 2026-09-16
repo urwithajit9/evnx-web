@@ -1,0 +1,166 @@
+---
+title: "Cloud Sync in 10 Minutes"
+slug: cloud-sync-quickstart
+section: getting-started
+order: 6
+publishedAt: "2026-09-16"
+excerpt: "From no account to a .env pulled byte-identical on a second machine. Every encryption step happens locally — the server only ever holds ciphertext."
+difficulty: beginner
+timeToComplete: "10 minutes"
+tags: ["cloud", "sync", "getting-started", "encryption", "evnx"]
+evnxVersion: "0.4.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+By the end of this you will have a `.env` encrypted on one machine and decrypted byte-for-byte on another, with the server unable to read it at any point.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+<Callout type="info" title="Do you already have the cloud commands?">
+Run `evnx cloud --help`. Every prebuilt binary — Homebrew, Scoop, npm, PyPI, winget, the GitHub Release — includes them.
+
+Only `cargo install` needs the feature flag, because it builds from source with no features on by default:
+
+```bash
+cargo install evnx --features cloud
+```
+
+Note that `--features full` is **not** enough: `full` is `migrate` plus `backup`, and deliberately excludes `cloud`.
+</Callout>
+
+---
+
+<Step number={1} title="Create an account">
+
+```bash
+evnx auth register --email you@example.com
+```
+
+You are asked for a master password twice. Then evnx derives your keys locally and sends the server an SRP verifier, two salts, two public keys, and your private key already sealed under your master key.
+
+Your password itself is never transmitted.
+
+<Callout type="danger" title="Write the password down before continuing">
+There is no reset. Your master password unwraps your vault keys, and the server holds nothing that substitutes for it. Lose it and the ciphertext stays ciphertext, permanently. Put it in a password manager now rather than after you have secrets in there.
+</Callout>
+
+</Step>
+
+<Step number={2} title="Verify your email">
+
+Check your inbox and click the link. The account exists before this, but vault operations require a verified address.
+
+Lost it? A new one can be requested — and sending a new one expires every previous link.
+
+</Step>
+
+<Step number={3} title="Log in">
+
+```bash
+evnx auth login --email you@example.com
+```
+
+This runs the SRP-6a exchange. You prove you know the password without sending it, and the server proves it holds your verifier before the CLI stores any session.
+
+Confirm it worked:
+
+```bash
+evnx auth status
+```
+
+This asks the server, so it tells you whether the credential is genuinely still good — not merely whether a file exists on disk.
+
+</Step>
+
+<Step number={4} title="Create a vault">
+
+```bash
+evnx vault create my-api --env production
+```
+
+A fresh 256-bit key is generated on this machine and wrapped under your master key before it goes anywhere. The server stores only the wrapped form.
+
+Name and environment together identify a vault, so `my-api/production` and `my-api/staging` are two vaults with two independent keys.
+
+</Step>
+
+<Step number={5} title="Bind the directory">
+
+```bash
+cd ~/projects/my-api
+evnx cloud link my-api/production
+```
+
+This writes `[cloud] vault` into `.evnx.toml` so `push` and `pull` need no `--vault`. It is safe to commit — a vault name is not a secret, and credentials never go in that file.
+
+</Step>
+
+<Step number={6} title="Push">
+
+```bash
+evnx cloud push
+```
+
+Your `.env` is encrypted here, then uploaded. Comments, ordering, blank lines and quoting all survive, because evnx encrypts the file itself rather than a parsed version of it.
+
+Only the key *names* are sent in the clear, so a dashboard can list what a vault holds without decrypting it.
+
+</Step>
+
+<Step number={7} title="Pull it somewhere else">
+
+On a second machine, after `evnx auth login`:
+
+```bash
+cd ~/projects/my-api
+evnx cloud pull --vault my-api/production
+```
+
+Prove it round-tripped:
+
+<TerminalOutput title="Verifying the round trip">
+machine-a $ sha256sum .env
+08677f2b4c1a9e...  .env
+
+machine-b $ sha256sum .env
+08677f2b4c1a9e...  .env
+</TerminalOutput>
+
+Byte-identical. Same hash, both ends.
+
+</Step>
+
+---
+
+## Seeing what changed
+
+```bash
+evnx cloud history
+```
+
+Read-only in the strongest sense: no password prompt, no decryption, no blob download. It reads metadata the server already holds in the clear.
+
+---
+
+## When two people push
+
+Every push carries the version it was based on. If someone else pushed first, you get **409 Conflict**.
+
+<Callout type="warning" title="Pull, reconcile, push — do not just retry">
+Version numbers are authenticated into the ciphertext. A blob sealed as version 8 is cryptographically bound to being version 8, so it cannot be re-sent as version 9 — that is what stops a compromised server replaying an old version as current.
+
+The practical consequence: resending the same bytes cannot work. Pull the new version, merge the change, push again.
+</Callout>
+
+---
+
+## Next steps
+
+- [evnx auth](/guides/commands/auth) — API tokens for CI, two-factor, session management
+- [evnx vault](/guides/commands/vault) — how to split vaults, and what deleting one destroys
+- [evnx cloud](/guides/commands/cloud) — every flag, and using it in a pipeline
+- [Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee) — what is actually protecting this

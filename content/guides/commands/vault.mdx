@@ -1,0 +1,130 @@
+---
+title: "evnx vault"
+slug: vault
+section: commands
+order: 8
+publishedAt: "2026-09-16"
+excerpt: "Create, list and delete encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
+difficulty: intermediate
+timeToComplete: "6 minutes"
+tags: ["cloud", "vault", "encryption", "key-management", "evnx"]
+evnxVersion: "0.4.0"
+prerequisites:
+  - commands/auth
+draft: false
+---
+
+A **vault** is one encrypted `.env` file plus its full version history. It has a name, an environment, and its own 256-bit key.
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/auth">Sign in with evnx auth</Prerequisite>
+</Prerequisites>
+
+---
+
+## Commands
+
+<CommandSignature>
+evnx vault [SUBCOMMAND]
+evnx vault create my-api --env production
+evnx vault list
+evnx vault delete my-api/production
+</CommandSignature>
+
+---
+
+## Creating a vault
+
+```bash
+evnx vault create my-api --env production
+```
+
+<OptionTable>
+  <Option flag="NAME" type="string" required>Vault name — letters, digits and hyphens.</Option>
+  <Option flag="--env" type="enum" default="development" options="production, staging, development, test">Which environment this vault holds.</Option>
+  <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
+  <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `.evnx.toml`.</Option>
+</OptionTable>
+
+What happens, in order:
+
+<Step number={1} title="A fresh 256-bit key is generated here">
+Not on the server, and not derived from anything. Every vault gets an independent random key, so compromising one vault key tells an attacker nothing about any other.
+</Step>
+
+<Step number={2} title="That key is wrapped under your master key">
+XChaCha20-Poly1305, under an HKDF subkey of your master key. The server receives only the wrapped form and has no way to open it.
+</Step>
+
+<Step number={3} title="The server stores the wrapped key and nothing else">
+It knows a vault exists, who owns it, and what it is called. It does not know the key, and cannot obtain it.
+</Step>
+
+<Callout type="info" title="Why your own copy is post-quantum safe">
+Your copy of a vault key is wrapped **symmetrically** — XChaCha20 under a key derived from your password. Grover's algorithm halves a symmetric key's effective strength, which for 256 bits leaves 128: still out of reach.
+
+Sharing a vault with a teammate is different. That path uses X25519 ECDH to their public key, and Shor's algorithm breaks X25519 outright — which means a shared vault is exposed to harvest-now-decrypt-later. This is exactly why `evnx vault share` has not shipped: a hybrid X25519 + ML-KEM-768 wrap lands first.
+</Callout>
+
+---
+
+## Listing vaults
+
+```bash
+evnx vault list
+```
+
+<TerminalOutput title="evnx vault list">
+NAME              ENVIRONMENT    VERSIONS   UPDATED
+my-api            production     12         2 hours ago
+my-api            staging        4          3 days ago
+internal-tools    development    1          last week
+</TerminalOutput>
+
+Names are scoped by environment, so `my-api/production` and `my-api/staging` are two separate vaults with two separate keys. Anywhere a vault is accepted you can write `name`, `name/environment`, or the raw id.
+
+<Callout type="info" title="A vault-scoped API token cannot run this">
+`vault list` has no vault in its path, so a token issued for one vault is refused rather than being allowed to enumerate your account. That is by design, not a gap.
+</Callout>
+
+---
+
+## Deleting a vault
+
+```bash
+evnx vault delete my-api/production
+```
+
+This removes the vault and **every version in it**. You are asked to confirm.
+
+<Callout type="danger" title="Deleting a vault destroys the only copy of its key">
+Your wrapped vault key lives in one place: the server's database. The CLI does not cache it — it fetches and unwraps it on each command.
+
+So deleting a vault does not merely hide the blobs. It destroys the wrapped key that opens them, and the ciphertext becomes unrecoverable **even by you, even with the right master password**. Pull anything you still want before you delete.
+</Callout>
+
+---
+
+## Choosing how to split vaults
+
+One vault per `.env` file per environment is the grain that works. Some guidance that follows from how keys work rather than from taste:
+
+- **Split by environment, always.** Separate vaults mean separate keys, so a production key never has to travel to anyone who only needs staging.
+- **Split by blast radius, not by convenience.** Members are granted access per vault. Anything you might one day want to share with a narrower group belongs in its own vault from the start, because moving secrets later means re-encrypting them.
+- **Don't split per developer.** Vaults are for secrets that differ, not for people who differ.
+
+---
+
+## What the server knows
+
+Worth being precise, because "zero knowledge" is often used loosely:
+
+| The server holds | The server does **not** hold |
+|---|---|
+| Vault name and environment | Any secret value |
+| The wrapped vault key | The unwrapped vault key |
+| Version numbers, timestamps, sizes | Your master password or master key |
+| **Key names** — `DATABASE_URL`, `STRIPE_KEY` | Key **values** |
+| BLAKE3 hash of each ciphertext | Anything that reveals the plaintext |
+
+Key *names* are sent deliberately, so a dashboard can show what a vault holds without decrypting it. If your key names are themselves sensitive, that is a real trade-off to know about rather than discover.

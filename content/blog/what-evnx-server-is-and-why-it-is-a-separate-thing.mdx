@@ -1,0 +1,136 @@
+---
+title: "What evnx-server Is, and Why It's a Separate Thing"
+slug: "what-evnx-server-is-and-why-it-is-a-separate-thing"
+publishedAt: "2026-09-16"
+excerpt: "A secrets backend that is structurally unable to read your secrets. What evnx-server stores, what it refuses to hold, and why it ships as its own repository you can run yourself."
+author: "ajit"
+category: "deep-dive"
+tags: ["architecture", "rust", "axum", "self-hosting", "security", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "inside-evnx-crypto-the-library-that-holds-the-guarantee"
+  - "zero-knowledge-cloud-sync-architecture-of-secure-env-storage"
+---
+
+**evnx-server** is the backend behind `evnx cloud` — an Axum service in Rust, backed by PostgreSQL, Valkey and object storage. It runs at `api.evnx.dev`, and it is its own repository under the MIT licence so you can run your own instead.
+
+The interesting thing about it is not what it does. It is what it is structurally prevented from doing.
+
+## It never sees a secret, and that is architectural
+
+A blob arrives already encrypted. The server stores it, versions it, and hands it back. At no point does it hold a key that opens it.
+
+This is not a policy or a promise to behave. There is no code path from what the server holds to your plaintext, because the material that would make one — your master key — is derived from a password that never leaves your machine.
+
+Which means the honest version of the sales pitch is: *breaching this server gets you ciphertext.* Not "gets you encrypted data we would decrypt only with a warrant." Ciphertext, and no key.
+
+## What it actually holds
+
+| Stored | Not stored |
+|---|---|
+| SRP verifier and two salts | Your password, in any form |
+| Your private key, **already sealed** under your master key | Your master key |
+| The **wrapped** vault key, one per member | The unwrapped vault key |
+| Encrypted blobs in object storage | Any plaintext secret |
+| **Key names** — `DATABASE_URL`, `STRIPE_KEY` | Key **values** |
+| BLAKE3 hashes, version numbers, timestamps | Anything that reveals content |
+
+Key *names* are deliberate: a dashboard can show what a vault holds without decrypting it. It is a real trade-off and worth knowing rather than discovering.
+
+## Why a separate repository
+
+Three reasons, in increasing order of how much they matter.
+
+**Different release cadence.** The CLI publishes to eight channels on a version tag. The server is a container image. Coupling them would mean a server patch dragging a CLI release behind it.
+
+**Self-hosting has to be real, not theoretical.** A zero-knowledge tool asking you to trust a hosted service has a credibility problem it can only solve one way: by making the service replaceable. `evnx --server https://evnx.internal.example.com` is a first-class path, not a footnote. That only works if the server is a thing you can actually obtain and run.
+
+**It forces the API to be honest.** When client and server live in one codebase, it gets easy to smuggle assumptions across the boundary — a shared struct here, an internal detail leaking there. Two repositories talking over documented JSON means the contract is the contract. The same discipline that lets a browser client interoperate with the CLI came out of this.
+
+## SRP-6a, and why not just send a hash
+
+Most login flows send *something* derived from the password. SRP-6a sends nothing. Both sides prove what they know without either transmitting it.
+
+```
+POST /auth/srp/init     → session_id, salts, server public B
+POST /auth/srp/verify   → M1 proof → M2 proof + tokens
+```
+
+The half that gets overlooked: **the server also has to prove itself.** It returns M2, and the client verifies it. A server that has been replaced — or a proxy pretending to be one — cannot produce a valid M2, so the client refuses rather than handing over a session.
+
+This is covered by integration tests that drive the real exchange with evnx-crypto as the client. Nothing stubbed: genuine verifier, genuine ephemerals, genuine proofs, and the client checks M2 — so a broken M2 fails the test rather than passing unnoticed.
+
+## Three guards, and why that number
+
+Every protected route sits behind exactly one of three middleware guards:
+
+| Guard | Accepts | Used for |
+|---|---|---|
+| `require_auth` | session or API token | `/auth/me`, public-key lookup |
+| `require_verified` | session or API token, **scope enforced** | everything under `/vaults` |
+| `require_user_session` | session **only** | logout, TOTP, token management |
+
+The third one is the one that earns its place. An API token that could reach `/auth/totp/setup` could enrol its own authenticator on your account. A token that could reach `/auth/tokens` could mint itself a longer-lived replacement and survive revocation of the original. Both are refused with **403** — deliberately distinct from 401, because the credential is recognised, it is just the wrong *kind*.
+
+Token scope is enforced in the guard rather than in each handler. Centralising it means no handler has to remember, and forgetting exactly that is what caused the worst bug this codebase has had: handlers expecting an auth extension that no middleware was inserting, so every one of them returned **500 instead of 401**. Discovered by running the server and calling the routes — not by reading the code, which looked correct.
+
+Two limits ride along with it:
+
+- **Read-only tokens cannot mutate**, expressed as "this is not a safe read" rather than a denylist of verbs. A route added next year is refused by default instead of accidentally permitted.
+- **A vault-scoped token reaches only that vault.** Routes with no vault in the path are refused outright, because enumerating an account is outside what a deploy token was issued for.
+
+## Storage is deliberately provider-agnostic
+
+The server runs on S3, GCS, Azure Blob, R2, MinIO, or a local filesystem for tests, through the `object_store` crate.
+
+```
+STORAGE_BACKEND = s3 | gcs | azure | local   # explicit, never inferred
+```
+
+That "never inferred" is a scar. An earlier version detected the provider by sniffing the endpoint hostname, and silently misconfigured anything it did not recognise — the worst failure mode available, because it looked like it worked.
+
+`local` is refused outside development, and the server will not boot if you try. The filesystem is not shared between instances, so a multi-instance deployment would serve blobs that exist on only one node. A startup check makes that structurally impossible rather than leaving a comment asking someone to remember.
+
+The same pattern guards email: a development-only `log` transport prints live verification tokens, so the server hard-fails if you select it outside development.
+
+## The operational fact that matters most
+
+Postgres holds the **only** copy of every wrapped vault key. The CLI does not cache it — it fetches and unwraps it per command.
+
+So losing that database does not lose metadata. It makes **every blob in object storage cryptographically unrecoverable, including by the owner who knows their master password.** Object storage does not save you: R2 holds the ciphertext, Postgres holds the key that opens it.
+
+If you self-host, this is the sentence to take away. Backups are not a nice-to-have; they are the difference between a service and a very secure way to lose your secrets. The repository ships a backup script, a systemd timer, and an `OnFailure` handler that emails you — because a nightly backup that fails silently is indistinguishable from having none, and you find out at the exact moment you needed it.
+
+## Running your own
+
+```bash
+git clone https://github.com/urwithajit9/evnx-server
+cd evnx-server && cp .env.example .env
+docker compose up postgres valkey -d
+cargo run
+```
+
+Point a client at it:
+
+```bash
+evnx auth login --server https://evnx.internal.example.com
+```
+
+Or set `EVNX_SERVER`. The deployment runbook in `docs/DEPLOYMENT.md` covers TLS, object storage and the backup setup.
+
+<Callout type="danger" title="Never run docker-compose.yml on a public host">
+The development compose file binds Postgres to `0.0.0.0:5432` and Valkey to `0.0.0.0:6379`. Production uses `docker-compose.prod.yml`, where only the reverse proxy publishes ports.
+
+Worth knowing regardless of this project: Docker writes its own iptables rules and bypasses ufw, so a published port is reachable from the internet even when your firewall appears to deny it.
+</Callout>
+
+## What it does not protect you from
+
+- **A compromised client.** Malware on the machine doing the decryption sees plaintext. Zero-knowledge is a claim about the server.
+- **A weak master password.** The server holds an SRP verifier. Someone who steals the database can attack it offline, with no rate limiting and no lockout. Argon2id at 64 MiB makes that expensive, not impossible — use a long passphrase.
+- **Shared vaults, against a future quantum adversary.** Those use X25519, which Shor breaks. Solo vaults are symmetric and unaffected. The hybrid ML-KEM wrap lands before sharing ships.
+
+---
+
+*For the cryptography underneath all of this, see [Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee). For the commands, [evnx cloud](/guides/commands/cloud).*
