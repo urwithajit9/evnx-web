@@ -395,6 +395,7 @@ function InstallTabs() {
     { key: "macos", label: "macOS" },
     { key: "linux", label: "Linux" },
     { key: "windows", label: "Windows" },
+    { key: "npm", label: "npm" },
     { key: "cargo", label: "Cargo" },
   ];
 

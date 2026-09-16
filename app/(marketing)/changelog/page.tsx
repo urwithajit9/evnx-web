@@ -36,6 +36,62 @@ interface Release {
 
 const releases: Release[]  = [
   {
+    version: "0.4.0",
+    date: "2026-09-15",
+    type: "minor",
+    links: {
+      github: "https://github.com/urwithajit9/evnx/compare/v0.3.8...v0.4.0",
+    },
+    highlights: [
+      {
+        type: "feature",
+        text: "evnx cloud — zero-knowledge encrypted sync for .env files. Push and pull secrets across machines and CI, with the server mathematically unable to read them",
+      },
+      {
+        type: "feature",
+        text: "evnx auth — register, log in, log out and check status against api.evnx.dev. SRP-6a means your password never leaves your machine, not even hashed",
+      },
+      {
+        type: "feature",
+        text: "evnx vault — create, list and delete encrypted vaults. Each gets its own key, wrapped under a key derived from your password with Argon2id",
+      },
+      {
+        type: "feature",
+        text: "API tokens for CI — evnx auth token create/list/revoke, scoped read-only or to a single vault",
+      },
+      {
+        type: "feature",
+        text: "Two-factor authentication — TOTP enrolment, recovery codes and session management from the CLI",
+      },
+      {
+        type: "info",
+        text: "Cloud commands ship enabled in every prebuilt binary (Homebrew, Scoop, npm, PyPI, winget, GitHub Release). From crates.io they need cargo install evnx --features cloud, because the source build defaults to no features",
+      },
+      {
+        type: "breaking",
+        text: "Minimum supported Rust version is now 1.85, declared via rust-version. Only affects building from source",
+      },
+    ],
+  },
+  {
+    version: "0.3.8",
+    date: "2026-03-30",
+    type: "patch",
+    links: {
+      github: "https://github.com/urwithajit9/evnx/compare/v0.3.7...v0.3.8",
+    },
+    highlights: [
+      {
+        type: "improvement",
+        text: "Release pipeline hardening across all publishing channels",
+      },
+      {
+        type: "fix",
+        text: "Windows binary cleared with Microsoft Defender after a false-positive heuristic detection blocked winget validation",
+      },
+    ],
+  },
+  {
     version: "0.3.7",
     date: "2026-03-20",
     type: "patch",
