@@ -121,7 +121,9 @@ The measurements, in Chromium on a sixteen-core desktop:
 | `derive_srp_password` | 158 ms | ≈147 ms | 0.9× |
 | **A login runs both** | 304 ms | **≈296 ms** | parity |
 
-The compiled module is 111 KB raw, **45 KB gzipped**.
+The compiled module was 111 KB raw, **45 KB gzipped** — at the time this was written. It has since grown, and the reason is worth stating rather than quietly updating: that build held only the KDF and vault encryption. Adding SRP-6a and the Ed25519/X25519 keypair, so a browser could actually log in, took it to 275 KB / **123 KB gzipped**. A BLAKE3 export for the push path added 10 KB more.
+
+So the honest figure today is **286 KB raw, 126 KB gzipped** — for a build that does the entire protocol, not just the expensive part of it.
 
 **Essentially parity with native**, which for a memory-hard function inside a sandbox is a better result than I expected.
 
