@@ -47,11 +47,29 @@ Treat the master password in CI as a decision with a blast radius, not a config 
 
 ## Minting a token
 
+<CodeTabs defaultTab="CLI">
+  <Tab label="CLI">
 ```bash
-evnx auth token create --name ci-deploy
+evnx auth token create ci-deploy --scope read --vault my-api/production --expires-in-days 90
 evnx auth token list
 evnx auth token revoke ci-deploy
 ```
+
+The name is **positional**. `--scope` is `read` or `read_write`; omitting `--expires-in-days`
+mints a token that never expires.
+  </Tab>
+  <Tab label="Dashboard">
+**[app.evnx.dev](https://app.evnx.dev)** → Settings → API tokens → New token.
+
+Name, scope, vault and an expiry in days — the same four inputs as the CLI flags, hitting
+the same endpoint and producing the same credential. The expiry field defaults to 90 days;
+blank or `0` means never.
+
+The list view adds one thing the CLI shows too but is easier to scan here: a **last-used**
+timestamp per token, which is how you find the credential that has been sitting unused in a
+retired pipeline.
+  </Tab>
+</CodeTabs>
 
 <Callout type="warning" title="Shown once">
 `create` prints the token exactly once. The server stores only a BLAKE3 hash, so there is no command that shows it again. Lose it and you revoke and re-mint.
@@ -162,7 +180,7 @@ evnx cloud pull --vault my-api/production --file .env --force --password-stdin
 
 ```bash
 evnx auth token revoke ci-deploy
-evnx auth token create --name ci-deploy-2026-09
+evnx auth token create ci-deploy-2026-09 --scope read --vault my-api/production
 ```
 
 Revocation takes effect immediately — the server checks the hash on every request, so there is no cache to wait out.
@@ -199,3 +217,4 @@ It rotates the key that wraps every vault key, so every wrapped copy has to be r
 - [evnx cloud](/guides/commands/cloud) — push, pull, history
 - [Cloud Architecture](/guides/reference/cloud-architecture) — why a token cannot decrypt
 - [GitHub Actions](/guides/integrations/github-actions) — scanning and validation in CI
+- [API Tokens for CI](/blog/api-tokens-ci-what-they-unlock) — the same ground as a walkthrough, with the trade-off stated plainly

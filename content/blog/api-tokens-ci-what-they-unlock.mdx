@@ -1,0 +1,257 @@
+---
+title: "API Tokens for CI: What They Unlock, and What They Deliberately Don't"
+slug: "api-tokens-ci-what-they-unlock"
+publishedAt: "2026-09-18"
+excerpt: "A walkthrough of minting an evnx API token — in the CLI or the new dashboard — wiring it into a pipeline, and understanding the one thing a token is designed never to do."
+author: "ajit"
+category: "tutorial"
+tags: ["ci-cd", "tokens", "cloud", "security", "github-actions", "evnx"]
+featured: false
+draft: false
+---
+
+# API Tokens for CI: What They Unlock, and What They Deliberately Don't
+
+Most secret managers give your CI pipeline a token, the pipeline calls the API, and plaintext secrets come back. One credential, one request, done.
+
+evnx cannot do that, and the reason is the whole point of the product.
+
+This post walks through minting a token, scoping it, and wiring it into a real pipeline — including the part that is genuinely awkward, which most write-ups on this subject quietly skip.
+
+---
+
+## Start with what a token is not
+
+<Callout type="danger" title="A token authenticates. It does not decrypt.">
+An evnx API token proves to the server *who you are*. It does not open anything.
+
+Your vault key is wrapped under a key derived from your master password, and **only that password unwraps it**. The server holds ciphertext and a wrapped key it cannot use. That is not a limitation of the token system — it is the guarantee.
+
+So a pipeline that needs plaintext needs the master password too. There is no arrangement in which the server hands a runner usable secrets on a token alone. If there were, the server could decrypt your vaults itself, and zero-knowledge would be marketing copy.
+</Callout>
+
+It is worth sitting with the consequence for a moment, because it reframes what you are configuring:
+
+| | What it controls | What it costs if leaked |
+|---|---|---|
+| **The API token** | Which vault, and whether writes are allowed | Scoped, revocable, immediate to rotate |
+| **The master password** | Nothing — it is not scopeable | Every vault you own, permanently |
+
+A token is the part you can be relaxed about. The password is not. Most of the practical advice later in this post is really about reducing how often the password needs to exist on a runner at all.
+
+---
+
+## Two ways to mint one
+
+Until recently there was one: the CLI. As of the `app.evnx.dev` dashboard there are two, and they hit the same endpoint and produce the same credential.
+
+<CodeTabs defaultTab="Dashboard">
+  <Tab label="Dashboard">
+Sign in at **[app.evnx.dev](https://app.evnx.dev)** → **Settings** → **API tokens** → **New token**.
+
+Four fields:
+
+- **Name** — for you, not the server. It is how you will recognise this token in the list when deciding whether to revoke it.
+- **Scope** — `read` (pull only) or `read_write` (pull and push).
+- **Vault** — one vault, or all of them.
+- **Expires in (days)** — defaults to 90. Blank or `0` never expires.
+
+The token appears once, with a copy button and a download. Then it is gone.
+  </Tab>
+  <Tab label="CLI">
+```bash
+evnx auth token create ci-deploy \
+  --scope read \
+  --vault my-api/production \
+  --expires-in-days 90
+```
+
+`ci-deploy` is a **positional** argument, not `--name`. The flags are `--scope`, `--vault` and `--expires-in-days`; omitting `--expires-in-days` mints a token that never expires.
+
+```bash
+evnx auth token list
+evnx auth token revoke ci-deploy
+```
+  </Tab>
+</CodeTabs>
+
+<Callout type="warning" title="Shown once, and once means once">
+The server stores a BLAKE3 hash, not the token. There is no command and no page that shows it again — not because the feature is missing, but because there is nothing to show. Lose it and you revoke and re-mint.
+
+Paste it straight into your CI provider's secret store. Do not park it in a scratch file "for a minute".
+</Callout>
+
+**Which one should you use?** The CLI if you are already in a terminal; the dashboard if you are setting up a pipeline from the GitHub UI anyway and would rather not context-switch. There is no capability difference — the dashboard form exists because switching to a terminal to mint a credential you are about to paste into a browser is a silly thing to have to do.
+
+<Callout type="info" title="Minting always requires a real login">
+Token creation sits behind a session-only guard on the server. **An API token cannot mint another API token** — not a longer-lived one, not a wider-scoped one, not one that would survive revocation of the original.
+
+This is the property that makes rotation meaningful. Without it, a leaked token's first move would be to issue itself a replacement, and revoking the original would accomplish nothing.
+</Callout>
+
+---
+
+## Scope it down
+
+Two limits are enforced in the server's auth middleware — centrally, not in each handler. That distinction matters more than it sounds: a rule implemented per-handler is a rule that gets forgotten the next time someone adds a route.
+
+<Step number={1} title="Read-only unless the job genuinely writes">
+Anything that is not GET, HEAD or OPTIONS is refused for a `read` token.
+
+It is written as an allow-list — "is this a safe read?" — rather than a list of banned verbs. A method added to the router next year is refused by default instead of accidentally permitted. Deploys only pull, so `read` covers them. Reserve `read_write` for a job that actually pushes, like a scheduled rotation task.
+</Step>
+
+<Step number={2} title="One vault, not the account">
+A vault-scoped token reaches only that vault. Routes with no vault in the path — listing vaults, creating one — are refused **outright** for such a token.
+
+That last part is easy to miss and is deliberate: enumerating your account is outside what a deploy token was issued for. A leaked token scoped to `my-api/production` cannot even tell an attacker what else you have.
+</Step>
+
+<Callout type="info" title="Why a refusal is 403 and not 401">
+A token that reaches an account-management route gets **403**, deliberately distinct from **401**.
+
+The credential was recognised; it is the wrong *kind*. That distinction is the difference between "your scope is too narrow" and "your token is dead", and you want to be able to tell those apart at 3am.
+</Callout>
+
+---
+
+## A pipeline, end to end
+
+Here is a deploy job that pulls `.env` and runs.
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Fetch secrets
+        env:
+          EVNX_TOKEN:    ${{ secrets.EVNX_TOKEN }}
+          EVNX_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+        run: |
+          trap 'rm -f .env' EXIT
+          printf '%s' "$EVNX_PASSWORD" \
+            | evnx cloud pull --vault my-api/production --file .env --force --password-stdin
+          ./deploy.sh
+```
+
+Three details in there are doing real work.
+
+<Callout type="tip" title="printf, not echo">
+`printf '%s'` writes the password with no trailing newline and no interpretation of backslashes.
+
+`echo` varies between shells on both counts. A passphrase containing a backslash becomes a *different password* under some of them, and you get an authentication failure that looks like a server problem.
+</Callout>
+
+**`trap ... EXIT` in the same step as the deploy.** On a container runner the filesystem is discarded anyway, so this looks like ceremony. On a self-hosted runner it is not — the workspace persists, and `.env` sitting there between jobs is exactly the file you spent all this effort not committing to git.
+
+Note that the pull and the deploy are one step. Splitting them across steps would mean the file has to survive between them, which means the trap has to move to the job level, which means a longer window. Keep the plaintext's lifetime as short as the job allows.
+
+**And never `cat` the file.** A `.env` echoed into a build log is a `.env` in your CI provider's log retention, readable by everyone with repository access, for as long as that retention lasts.
+
+---
+
+## The job that needs no password at all
+
+This is the most underused thing in the whole system.
+
+```yaml
+- name: Check what changed
+  env:
+    EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
+  run: evnx cloud history --vault my-api/production --limit 5
+```
+
+No `EVNX_PASSWORD`. No prompt. No decryption. No blob download.
+
+`evnx cloud history` reads metadata — version numbers, timestamps, who pushed, which *key names* changed. Key names, not values. **This job cannot leak a secret even if the runner is fully compromised**, because no secret is ever present in it.
+
+Drift checks, audit steps, "did production config change without a PR" alarms — all of these can run on a read-only token and nothing else. If you are reaching for the master password, first check whether metadata answers your question.
+
+---
+
+## Rotation
+
+```bash
+evnx auth token revoke ci-deploy
+evnx auth token create ci-deploy-2026-09 --scope read --vault my-api/production
+```
+
+Revocation is immediate, not eventual. The server checks the hash on every request; there is no cache to wait out and no propagation delay.
+
+Two habits worth forming:
+
+**Date the name.** `evnx auth token list` — or the Settings page, which shows the same thing with last-used timestamps — then tells you at a glance which credential has been sitting in a pipeline for eighteen months.
+
+**One token per pipeline.** Revoking one does not break the others, and the audit trail tells you which pipeline did what. A single shared token means every rotation is a coordinated outage.
+
+<Callout type="tip" title="Set an expiry even though you will forget it">
+An expiry is the one control that still works when a token leaks and nobody notices. That is the case you are defending against — not the leak you catch, the one you don't.
+
+90 days is a reasonable default. The failure mode is a broken pipeline and a two-minute fix, which is a much better Tuesday than the alternative.
+</Callout>
+
+---
+
+## When something leaks
+
+In order, and the order matters:
+
+<Step number={1} title="Revoke the token">
+`evnx auth token revoke <name>`, or Revoke in Settings. Immediate. This stops further access with that credential and costs you nothing.
+</Step>
+
+<Step number={2} title="Decide whether the master password leaked too">
+If the runner had `EVNX_PASSWORD` in its environment, assume it did. A token is scoped; the password is not. It opens every vault you own.
+</Step>
+
+<Step number={3} title="Rotate the secrets themselves">
+This is the step people skip, and it is the only one that actually matters.
+
+Revoking evnx credentials stops *future* reads. It does nothing whatsoever about the database password that was already pulled and is now sitting in someone's terminal history. Rotate the underlying secrets at their source, push the new values, and treat the old ones as public — because they are.
+</Step>
+
+<Callout type="warning" title="Changing your master password is not currently a recovery step">
+It rotates the key that wraps every vault key, so every wrapped copy has to be re-wrapped atomically, for every vault and every member. That is a planned feature, not a shipped one.
+
+Today, plan your recovery around rotating the **secrets**, not the password. If that sounds unsatisfying — it is, and it is honest.
+</Callout>
+
+---
+
+## What this design buys you
+
+It is worth naming the trade plainly, because a token that cannot decrypt is objectively less convenient than one that can.
+
+What you give up: a pipeline cannot fetch secrets with one scoped, revocable credential. The master password has to reach the runner for any job that needs plaintext.
+
+What you get: **a breach of evnx's server does not expose your secrets.** Not the database, not the blob storage, not both together. The operator cannot read them, a subpoena cannot compel them, and an attacker who takes the whole box gets ciphertext and wrapped keys that no amount of server-side access unwraps.
+
+Every secret manager that hands your pipeline plaintext on a token alone is, necessarily, one that can read your secrets itself. That is not an accusation — it is arithmetic. If the server can produce plaintext for your runner, it can produce plaintext.
+
+The convenience is real, and so is what it costs.
+
+<AuthorNote>
+The awkward part — the master password on the runner — is the thing I would most like to fix, and the honest answer is that fixing it properly means per-runner keypairs and wrapping the vault key to a workload identity rather than a human. That is real work, not a config option, and it sits behind the ML-KEM hybrid wrap on the roadmap. I would rather ship the uncomfortable version and say so than paper over it.
+</AuthorNote>
+
+---
+
+## Related
+
+- [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens) — the reference version of this, with GitLab and audit-only recipes
+- [evnx auth](/guides/commands/auth) — tokens, 2FA, sessions
+- [evnx cloud](/guides/commands/cloud) — push, pull, history
+- [Zero-Knowledge Cloud Sync](/blog/zero-knowledge-cloud-sync-architecture-of-secure-env-storage) — why the server cannot help you here
+- [Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee) — the wrapping, in code

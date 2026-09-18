@@ -148,11 +148,18 @@ Reports whether this machine has credentials, whether the directory is bound, an
 
 ## Using it in CI
 
-Never put your master password in a pipeline. Use a token, scoped as narrowly as the job needs:
+Never put your master password in a pipeline unless the job genuinely needs plaintext.
+Use a token, scoped as narrowly as the job needs:
 
 ```bash
-evnx auth token create --name ci-deploy
+evnx auth token create ci-deploy --scope read --vault my-api/production
 ```
+
+<Callout type="tip" title="Or mint it in the dashboard">
+**[app.evnx.dev](https://app.evnx.dev)** → Settings → API tokens does the same thing in a
+form, which is less of a context switch when you are already in a browser pasting the
+result into your CI provider's secret store.
+</Callout>
 
 <CodeTabs defaultTab="GitHub Actions">
   <Tab label="GitHub Actions">

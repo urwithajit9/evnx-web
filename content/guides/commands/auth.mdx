@@ -16,6 +16,8 @@ draft: false
 
 `evnx auth` is the front door to evnx cloud. It creates your account, signs you in, mints tokens for CI, and manages two-factor authentication and sessions.
 
+There is a second front door — the dashboard at **[app.evnx.dev](https://app.evnx.dev)** — and it is the *same account*. Register here and sign in there, or the reverse; the browser runs the identical SRP-6a exchange and the identical encryption, compiled from this CLI's crypto crate to WebAssembly. Nothing is CLI-only and nothing is dashboard-only except where this page says so.
+
 The thing worth understanding before you run any of it: **your master password never leaves this machine.** Not hashed, not salted, not encrypted-in-transit-then-decrypted. Never sent.
 
 <Prerequisites>
@@ -108,10 +110,21 @@ It takes everything up to the first newline, so passphrases with spaces work. Bu
 Your master password is the one thing that must never reach a build runner. It derives your master key, which unwraps every vault key you own. An API token is deliberately weaker:
 
 ```bash
-evnx auth token create --name ci-deploy
+evnx auth token create ci-deploy --scope read --vault my-api/production
 evnx auth token list
 evnx auth token revoke ci-deploy
 ```
+
+The name is a **positional** argument. `--scope` takes `read` or `read_write`, `--vault`
+restricts the token to one vault, and `--expires-in-days` sets an expiry — omit it and the
+token never expires.
+
+<Callout type="tip" title="Or mint it in the dashboard">
+The same tokens are listed and created at **[app.evnx.dev](https://app.evnx.dev)** →
+Settings → API tokens. Same endpoint, same credential, and the list shows a last-used
+timestamp — which is the quickest way to find the token that has been sitting in a
+pipeline since last year.
+</Callout>
 
 <Callout type="danger" title="A token is shown once">
 `create` prints the token exactly once. There is no command that shows it again — the server keeps only a BLAKE3 hash. If you lose it, revoke it and mint another.
