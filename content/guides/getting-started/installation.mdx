@@ -145,11 +145,18 @@ repos:
     hooks:
       - id: evnx-scan
         name: evnx secret scan
-        entry: evnx scan --exit-code
+        entry: evnx scan
         language: system
         files: '\.env'
         pass_filenames: false
 ```
+
+<Callout type="warning">
+Both hooks above used to pass `--exit-code`. **That flag does not exist** — the command
+failed with an argument error, so the hook blocked **every** commit, clean or not, while
+printing "secrets detected". `evnx scan` already exits non-zero when it reports something,
+which is all a hook needs.
+</Callout>
 
 Then install:
 
@@ -163,8 +170,7 @@ pre-commit install
 # Create the hook file
 cat > .git/hooks/pre-commit << 'EOF'
 #!/bin/bash
-evnx scan --exit-code
-if [ $? -ne 0 ]; then
+if ! evnx scan; then
   echo "evnx: secrets detected. Commit blocked."
   exit 1
 fi

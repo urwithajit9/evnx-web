@@ -8,7 +8,7 @@ excerpt: "Run evnx scan and validate in your GitHub Actions CI pipeline. Block P
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["github-actions", "ci-cd", "sarif", "security", "pull-requests"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
   - commands/scan
@@ -65,15 +65,14 @@ jobs:
         run: |
           evnx scan \
             --format github \
-            --severity high \
-            --exit-code
+            --severity high
 
       - name: Generate SARIF report
         if: always()   # Run even when scan finds issues
         run: |
           evnx scan \
             --format sarif \
-            --output evnx-results.sarif
+            --exit-zero > evnx-results.sarif
 
       - name: Upload SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
@@ -152,7 +151,7 @@ For reproducible builds where you need to pin an exact version:
   uses: dtolnay/rust-toolchain@stable
 
 - name: Install evnx
-  run: cargo install evnx --version 0.2.0 --locked
+  run: cargo install evnx --locked
 ```
 
 <Callout type="warning" title="Compile time">
@@ -161,9 +160,18 @@ For reproducible builds where you need to pin an exact version:
 
 ---
 
+<Callout type="warning">
+Steps on this page previously used `--exit-code` and `--output`. **Neither flag exists** —
+both fail with an argument error, so the step failed regardless of what was in the repo.
+`--format github` was documented before it was implemented, and until **v0.5.0** it
+silently produced human-readable output and exited `0`: a gate that looked configured and
+checked nothing. SARIF is produced by redirecting stdout.
+</Callout>
+
 ## PR annotations in action
 
-When `--format github` is used, findings appear as inline annotations on pull request file diffs:
+`--format github` needs **v0.5.0+**. Findings appear as inline annotations on pull request
+file diffs:
 
 ```
 evnx scan --format github
@@ -172,9 +180,13 @@ evnx scan --format github
 Outputs:
 
 ```
-::error file=.env,line=8,title=Secret detected (high)::AWS_SECRET_ACCESS_KEY matches pattern aws_secret_access_key
-::warning file=config/.env.staging,line=3,title=Possible secret::STRIPE_SECRET_KEY may be a live Stripe key
+::error file=./.env,line=8,title=Secret detected (high)::AWS_SECRET_ACCESS_KEY matches AWS Secret Access Key. Rotate it at https://console.aws.amazon.com/iam
+::warning file=./config/.env.staging,line=3,title=Secret detected (medium)::STRIPE_SECRET_KEY matches Stripe Secret Key (LIVE). Rotate it at https://dashboard.stripe.com/apikeys
 ```
+
+The value is never included — only the variable name and the matched pattern. Annotations
+appear on the PR and persist in the workflow log, so putting the credential in one would
+be the scanner doing the leaking.
 
 GitHub Actions renders these as annotations directly on the PR diff — reviewers see the exact line flagged without reading the workflow log.
 
@@ -221,11 +233,11 @@ jobs:
       - run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Scan (PR annotations)
-        run: evnx scan --format github --exit-code
+        run: evnx scan --format github --severity high
 
       - name: Scan (SARIF report)
         if: always()
-        run: evnx scan --format sarif --output evnx.sarif
+        run: evnx scan --format sarif --exit-zero > evnx.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3

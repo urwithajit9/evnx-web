@@ -8,7 +8,7 @@ excerpt: "Scan .env files for secrets, high-entropy strings, and known credentia
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions","evnx"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -32,12 +32,21 @@ evnx scan [OPTIONS] [PATH]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--path` | `string` | `.` | Directory or file to scan |
-| `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format |
+| `[PATH]...` | positional | `.` | Files or directories to scan. Repeatable: `evnx scan .env config/` |
+| `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format. **An unrecognised value is an error** — it used to fall back to `pretty` silently |
+| `--severity` | `high\|medium\|low` (`all` = `low`) | `low` | **v0.5.0+** — lowest confidence worth reporting. Filters the findings, the counts and the exit code together |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (advisory mode) |
-| `--severity` | `high\|medium\|low\|all` | `all` | Minimum severity to report |
-| `--ignore` | `string[]` | `[]` | Patterns or keys to ignore |
-| `--include-example` | `bool` | `false` | Also scan `.env.example` files |
+| `--exclude` | `string[]` | `[]` | Glob or substring patterns to skip |
+| `--ignore-placeholders` | `bool` | `false` | Skip values that look like placeholders (`changeme`, `your_key_here`) |
+
+<Callout type="warning">
+`--path`, `--recursive`, `--ignore`, `--include-example`, `--output` and `--exit-code`
+have appeared on this page in the past. **None of them exist.** Paths are positional,
+scanning is already recursive, and the advisory flag is `--exit-zero`. `--pattern` is
+accepted by the parser but currently does nothing — it is reserved and has no effect.
+
+Redirect instead of `--output`: `evnx scan --format sarif > results.sarif`.
+</Callout>
 
 ---
 
@@ -60,12 +69,18 @@ TWILIO_AUTH_TOKEN     — /[0-9a-f]{32}/
 
 ### High-entropy detection
 
-Beyond known patterns, `evnx scan` flags any value with Shannon entropy above a configurable threshold. This catches:
+Beyond known patterns, `evnx scan` flags any value of 32 characters or more whose Shannon entropy exceeds 4.8. This catches:
 
 - Custom API keys that don't match a known format
 - Base64-encoded secrets embedded in `.env`
 - JWTs (which contain base64-encoded payloads)
 - Private keys accidentally pasted as values
+
+<Callout type="warning">
+The threshold is **not configurable**. This page and the `.evnx.toml` reference both
+described `entropy_threshold` as a setting; no such setting is read by anything. 4.8 for
+the generic check, and 4.5 for the gate on AWS secret keys, are compiled in.
+</Callout>
 
 <Callout type="info" title="Why entropy matters">
 A string like `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` scores high on Shannon entropy because its characters are distributed almost uniformly — a property of cryptographically random strings. Human-readable values like `my-app-name` score low.
@@ -108,60 +123,86 @@ evnx scan --format json
 
 ```json
 {
-  "scan_time": "2024-03-15T10:23:41Z",
-  "file": ".env",
+  "files_scanned": 1,
+  "secrets_found": 2,
   "findings": [
     {
-      "key": "AWS_SECRET_ACCESS_KEY",
-      "severity": "high",
-      "pattern": "aws_secret_access_key",
+      "pattern": "AWS Secret Access Key",
       "confidence": "high",
-      "line": 8,
-      "message": "AWS secret access key detected"
+      "value_preview": "wJalrXUt...KEYab",
+      "location": "./.env:1 (AWS_SECRET_ACCESS_KEY)",
+      "variable": "AWS_SECRET_ACCESS_KEY",
+      "action_url": "https://console.aws.amazon.com/iam"
     },
     {
-      "key": "STRIPE_SECRET_KEY",
-      "severity": "medium",
-      "pattern": "stripe_live_key",
-      "confidence": "medium",
-      "line": 12,
-      "message": "Stripe live key detected — may be placeholder"
+      "pattern": "Stripe Secret Key (LIVE)",
+      "confidence": "high",
+      "value_preview": "sk_live_...defXY",
+      "location": "./.env:2 (STRIPE_SECRET_KEY)",
+      "variable": "STRIPE_SECRET_KEY",
+      "action_url": "https://dashboard.stripe.com/apikeys"
     }
   ],
-  "summary": {
-    "errors": 1,
-    "warnings": 1,
-    "total_scanned": 15
-  }
+  "high_confidence": 2,
+  "medium_confidence": 0,
+  "low_confidence": 0,
+  "summary": { "total": 2, "high": 2, "medium": 0, "low": 0, "files_scanned": 1 }
 }
 ```
+
+<Callout type="warning">
+⚠️ **The recipes on this page used to name fields that do not exist.** A finding carries
+`confidence` and `variable`, not `severity` and `key`, so the documented filter
+
+```bash
+jq '[.findings[] | select(.severity == "high") | .key]'   # ← returns []
+```
+
+returned an **empty list over a live AWS key** — a CI gate built on it reported clean on a
+repo with a committed credential. `summary` did not exist at all before **v0.5.0**, so
+`jq -e '.summary.errors == 0'` failed builds that had nothing wrong with them.
+
+The corrected recipes are below. If you copied any of the old ones, they are worth
+re-checking.
+</Callout>
+
+`confidence` is deliberately not called `severity`: it answers *"how sure are we this is a
+real credential"*, not *"how bad is it"*.
 
 Useful with `jq`:
 
 ```bash
-# List only high-severity findings
-evnx scan --format json | jq '[.findings[] | select(.severity == "high") | .key]'
+# List the variables holding high-confidence findings
+evnx scan --format json | jq -r '[.findings[] | select(.confidence == "high") | .variable] | join(", ")'
 
-# Count total findings
-evnx scan --format json | jq '.summary.errors + .summary.warnings'
+# Count everything reported
+evnx scan --format json | jq '.summary.total'
 
-# Exit non-zero if any high-severity
-evnx scan --format json | jq -e '.summary.errors == 0'
+# Exit non-zero if anything was found
+evnx scan --format json | jq -e '.summary.total == 0'
+
+# Where to revoke each one
+evnx scan --format json | jq -r '.findings[] | "\(.variable): \(.action_url // "rotate at source")"'
 ```
+
+<Callout type="info">
+Simpler than any of these: `evnx scan --severity high` already exits `1` when there is a
+high-confidence finding and `0` when there is not, so a gate usually needs no `jq` at all.
+</Callout>
 
 ### SARIF (GitHub Security tab)
 
 SARIF (Static Analysis Results Interchange Format) is the standard format for security tools integrating with GitHub's Security tab:
 
 ```bash
-evnx scan --format sarif --output results.sarif
+evnx scan --format sarif --exit-zero > results.sarif
 ```
 
 In GitHub Actions, upload as a security artifact:
 
 ```yaml
 - name: Scan for secrets
-  run: evnx scan --format sarif --output results.sarif
+  run: evnx scan --format sarif --exit-zero > results.sarif
 
 - name: Upload SARIF results
   uses: github/codeql-action/upload-sarif@v3
@@ -198,13 +239,22 @@ repos:
     hooks:
       - id: evnx-scan
         name: evnx — scan for secrets
-        entry: evnx scan --exit-code --severity high
+        entry: evnx scan --severity high
         language: system
         files: '\.env'
         pass_filenames: false
 ```
 
-`--severity high` means only high-severity findings block the commit. Medium findings are reported but don't fail.
+`--severity high` means only high-confidence findings block the commit; anything below is
+neither reported nor counted. `scan` already exits `1` when it reports something, so no
+extra flag is needed to make the hook fail.
+
+<Callout type="warning">
+This hook used to read `evnx scan --exit-code --severity high`. **`--exit-code` does not
+exist**, so the hook failed with a clap argument error on *every* commit — clean or not —
+and the message said "secrets detected". `--severity` needs **v0.5.0+**; on earlier
+versions drop it and the hook blocks on any finding.
+</Callout>
 
 ### GitHub Actions — block PRs
 
@@ -226,8 +276,14 @@ jobs:
       - name: Install evnx
         run: curl -fsSL https://dotenv.space/install.sh | bash
 
+      # Annotations land on the PR diff. Fails the job on any finding.
       - name: Scan .env files
-        run: evnx scan --exit-code --format github
+        run: evnx scan --format github
+
+      # SARIF must be redirected — there is no --output flag.
+      - name: Generate SARIF
+        if: always()
+        run: evnx scan --format sarif --exit-zero > results.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -236,58 +292,79 @@ jobs:
         if: always()
 ```
 
+The SARIF step carries `--exit-zero` deliberately: it exists to produce the file, and the
+preceding step is what fails the build.
+
 ---
 
 ## Ignoring false positives
 
-Some values look like secrets but aren't (e.g. example values in `.env.example`, test fixtures).
+Some values look like secrets but are not — test fixtures, sample values, generated
+tokens in a seed file.
 
-### Inline ignore comment
+<Callout type="warning">
+⚠️ **Inline `# evnx-ignore` comments and `.evnx.toml` `[scan]` keys do not work.** This
+page has documented both; neither is read by anything, and `.evnx.toml` as a whole is not
+loaded by any command except the cloud vault binding. A value marked
+`# evnx-ignore: test fixture` is still reported.
+
+The two mechanisms below are the ones that exist.
+</Callout>
+
+### Skip files and paths — `--exclude`
+
+Glob or substring; repeatable.
 
 ```bash
-# .env
-TEST_API_KEY=AKIAIOSFODNN7EXAMPLE  # evnx-ignore: test fixture
+evnx scan --exclude 'fixtures/*' --exclude '*.test.js'
 ```
 
-### Ignore specific keys in config
+`.git/`, `node_modules/`, `target/`, `dist/`, `build/`, `.env.example`, `.env.sample`,
+`.env.template` and `evnx backup` output are excluded already.
 
-```toml
-# .evnx.toml
-[scan]
-ignore_keys = [
-  "TEST_API_KEY",
-  "EXAMPLE_SECRET",
-  "DUMMY_*",          # glob patterns supported
-]
+### Skip obvious placeholders — `--ignore-placeholders`
+
+Drops values evnx recognises as filler — `changeme`, `your_api_key_here`, `xxx`, and the
+like — before they are reported.
+
+```bash
+evnx scan --ignore-placeholders
 ```
 
-### Ignore a specific file
+### Raise the bar — `--severity` (v0.5.0+)
 
-```toml
-# .evnx.toml
-[scan]
-ignore_files = [
-  ".env.test",
-  ".env.example",
-]
+Usually the better answer for a noisy first run: report only what evnx is confident about,
+rather than enumerating exceptions.
+
+```bash
+evnx scan --severity high
 ```
 
 ---
 
 ## Scanning a whole project
 
-By default, `evnx scan` looks for `.env` files in the current directory. Scan recursively:
+`evnx scan` is **already recursive**, and it scans every text file it recognises — not
+only `.env` files. Paths are positional:
 
 ```bash
-# Scan all .env files in all subdirectories
-evnx scan --path . --recursive
+# The default: this directory and everything under it
+evnx scan
 
-# Scan a specific file
-evnx scan --path ./config/.env.production
+# One file
+evnx scan config/.env.production
 
-# Scan multiple files
-evnx scan --path .env --path config/.env
+# Several paths
+evnx scan .env config/ src/
 ```
+
+`.git/`, `node_modules/`, `target/`, `dist/`, `build/`, the `.env.example` family and
+`evnx backup` output are always skipped.
+
+<Callout type="warning">
+⚠️ A path that does not exist is reported as **clean**, exit `0` — `evnx scan ./typo`
+prints "No secrets detected". Check your paths in CI.
+</Callout>
 
 ---
 
@@ -295,9 +372,19 @@ evnx scan --path .env --path config/.env
 
 | Code | Meaning |
 |------|---------|
-| `0` | No findings (or `--exit-zero` set) |
-| `1` | High-severity findings detected |
-| `2` | Scan error (file not found, permission denied, etc.) |
+| `0` | Nothing reported — no findings at or above `--severity`, or `--exit-zero` was set |
+| `1` | Findings reported, **or** the command failed (bad `--format`, bad `--severity`) |
+
+<Callout type="warning">
+This table previously claimed `1` meant *high-severity* findings and `2` meant a scan
+error. Neither was true: **any** reported finding exits `1`, and errors exit `1` as well —
+`scan` never returns `2`.
+
+To block only on high-confidence findings, say so: `evnx scan --severity high`.
+
+⚠️ A path that does not exist is currently reported as **clean**, with exit `0`:
+`evnx scan ./typo` prints "No secrets detected". Check your paths.
+</Callout>
 
 <Callout type="tip" title="Advisory mode">
 Use `--exit-zero` in environments where you want to report findings without blocking the pipeline. Good for first-pass onboarding when a codebase has known issues you're working through.

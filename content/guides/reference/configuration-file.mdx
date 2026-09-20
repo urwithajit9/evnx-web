@@ -255,16 +255,20 @@ check_updates = true
 
 ### CI-only config (override via environment variable)
 
-You can override `.evnx.toml` settings with environment variables in CI:
+<Callout type="warning">
+⚠️ **There is no `EVNX_<SECTION>_<KEY>` mechanism.** The variables evnx actually reads are
+`EVNX_AUTO_FIX`, `EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`, `EVNX_SERVER` and
+`EVNX_TOKEN` — nothing else. `EVNX_SCAN_MIN_SEVERITY` and friends are ignored, and the
+commands they were shown with (`scan --exit-code`, `scan --output`) do not exist either.
+
+Pass the flags directly:
 
 ```bash
-# In GitHub Actions
-EVNX_SCAN_MIN_SEVERITY=high evnx scan --exit-code
-EVNX_VALIDATE_STRICT=true evnx validate
-EVNX_OUTPUT_FORMAT=sarif evnx scan --output results.sarif
+evnx scan --severity high          # v0.5.0+
+evnx validate --strict
+evnx scan --format sarif --exit-zero > results.sarif
 ```
-
-Environment variable names follow the pattern `EVNX_<SECTION>_<KEY>` in uppercase.
+</Callout>
 
 ---
 
