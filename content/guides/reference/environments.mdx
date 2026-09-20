@@ -1,0 +1,144 @@
+---
+slug: "reference-environments"
+section: "reference"
+order: 6
+title: "Environment files"
+publishedAt: "2026-09-21"
+updatedAt: "2026-09-21"
+excerpt: "How evnx addresses .env.production, .env.staging and friends — the --env-name flag, what gets gitignored, and why there is no layered loading."
+difficulty: "intermediate"
+timeToComplete: "10 minutes"
+tags: ["environments", "reference", "env-name", "gitignore", "multi-environment"]
+evnxVersion: "0.5.0"
+prerequisites:
+  - commands/init
+  - commands/validate
+draft: false
+---
+
+# Environment files
+
+Most projects keep more than one `.env`. Since **v0.5.0** evnx can address all of them.
+
+---
+
+## The convention
+
+The layered-`.env` convention is settled across Next.js, Vite, Create React App, Rails,
+Laravel, `dotenv-flow` and `direnv`. They differ in details; the shape is the same:
+
+| File | Role | Committed? |
+|------|------|------------|
+| `.env` | defaults shared by everyone | sometimes |
+| `.env.example` | the documented contract, no real values | ✅ always |
+| `.env.local` | **personal** overrides for this machine | ❌ never |
+| `.env.development` · `.env.test` · `.env.staging` · `.env.production` | per-environment values | ❌ not for a secrets tool |
+| `.env.<env>.local` | personal overrides for one environment | ❌ never |
+
+---
+
+## `--env-name`
+
+Every command that takes an env file accepts it:
+
+```bash
+evnx validate --env-name production      # .env.production
+evnx scan                                # already reads every .env*
+evnx sync --env-name staging --check
+evnx convert --env-name production --to json
+evnx backup --env-name production
+evnx cloud push --env-name production
+```
+
+`--env-name` and `--env` answer the same question, so passing both is an error rather than
+one silently winning.
+
+Names are not restricted to the four above — `.env.ci` and `.env.prod` resolve fine. What
+validates a name is that the file exists.
+
+### A name that resolves to nothing is an error
+
+```bash
+$ evnx validate --env-name prod
+Error: .env.prod does not exist — did you mean 'production'?
+
+Available: production, staging
+```
+
+This is deliberate. Falling back to `.env` would mean operating on the wrong file while
+reporting success, which is the failure mode this tool exists to prevent.
+
+<Callout type="info">
+**`evnx cloud push` and `pull` are the one exception**, and they go the other way: they
+*derive* `.env.<environment>` from the vault rather than being told, so a missing file
+falls back to `.env`. Most projects genuinely have only `.env`, and refusing would break
+the common case. What makes it safe is that both commands **print the file they chose**
+every time.
+</Callout>
+
+---
+
+## What gets gitignored
+
+`evnx init` writes:
+
+```gitignore
+# ── evnx generated ─────────────────────────────────────────
+# Written by evnx. These files may contain secrets — do not commit.
+.env*
+!.env.example
+!.env.sample
+!.env.template
+```
+
+One pattern covering every environment file, with the three template names carved back
+out. The order matters: a negation placed before the pattern it negates does nothing.
+
+<Callout type="warning">
+**Before v0.5.0 this was `.env`, `.env.local`, `.env.*.local`.** That is the Next.js
+convention, which assumes `.env.production` holds *non-secret defaults*. For a secrets tool
+the assumption is backwards — it left `.env.production`, `.env.staging` and `.env.test`
+committable, and `evnx doctor` reported the project as healthy.
+
+If you ran `evnx init` on an older version, `EVNX_AUTO_FIX=1 evnx doctor` rewrites the
+block.
+</Callout>
+
+`evnx doctor` checks **every** `.env*` on disk against `.gitignore`, not just `.env`.
+
+---
+
+## There is no layered loading
+
+evnx does **not** merge `.env` + `.env.local` + `.env.<mode>` the way a runtime loader
+does. Each command operates on exactly one named file.
+
+That is a deliberate limit, not a gap. `evnx scan` reporting a finding at
+`.env.production:12` has to mean that line is in that file — a merged view would cite
+positions in a file that does not exist. The same goes for a backup you will later restore,
+and for a diff you are about to act on.
+
+If you need the merged result, that is your framework's job at runtime. evnx works on the
+files as they are on disk.
+
+---
+
+## Comparing two environments
+
+The most useful diff is between two real files:
+
+```bash
+evnx diff --env-name production --against staging
+```
+
+Comparing against `.env.example` — the default — reports every correctly filled-in value
+as "different", because the template holds placeholders by construction.
+
+---
+
+## Related
+
+- **[evnx init](/guides/commands/init)** — what gets written, and what gets ignored
+- **[evnx doctor](/guides/commands/doctor)** — checks every env file is protected
+- **[evnx sync](/guides/commands/sync)** — keeping a template in step with any environment
+- **[evnx cloud](/guides/commands/cloud)** — how push and pull derive the file from the vault
