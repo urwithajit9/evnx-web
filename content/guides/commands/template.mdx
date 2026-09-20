@@ -9,7 +9,7 @@ excerpt: "Reference documentation for the evnx template command: generate config
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["template", "reference", "cli", "config", "env", "gitignore"]
-evnxVersion: "0.2.2"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
   - guides/advanced/env-file-syntax
@@ -41,20 +41,26 @@ evnx template --input <TEMPLATE> --output <OUTPUT> [--env <ENV_FILE>] [--verbose
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `--input`, `-i` | `path` | Path to the template file (e.g., `config.yaml.template`) |
-| `--output`, `-o` | `path` | Path where the generated configuration file will be written |
+| `--input` | `path` | Path to the template file (e.g., `config.yaml.template`) |
+| `--output` | `path` | Path where the generated configuration file will be written |
 
 ### Optional options
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--env`, `-e` | `path` | `.env` | Path to the environment file containing variable definitions |
+| `--env` | `path` | `.env` | Path to the environment file containing variable definitions |
+| `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--gitignore` | `bool` | `false` | Automatically add the output file to `.gitignore`. No prompt. Mutually exclusive with `--no-gitignore` |
 | `--no-gitignore` | `bool` | `false` | Skip all `.gitignore` checks and warnings. Mutually exclusive with `--gitignore` |
 | `--verbose`, `-v` | `bool` | `false` | Enable detailed progress output to stderr |
 | `--help`, `-h` | `bool` | `false` | Display help information |
 
 ---
+
+<Callout type="warning">
+`-i`, `-o` and `-e` have been listed on this page as short forms for `--input`,
+`--output` and `--env`. **None of them exist** — `template` has no short forms of its own.
+</Callout>
 
 ## Gitignore protection
 

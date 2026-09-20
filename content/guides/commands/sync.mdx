@@ -41,10 +41,19 @@ Keep `.env` and `.env.example` in perfect synchronization with bidirectional syn
 evnx sync [OPTIONS]
 ```
 
+<Callout type="warning">
+**Before v0.5.0, `sync` could not be pointed at a file at all.** `.env` and `.env.example`
+were hardcoded, so keeping a template in step with `.env.production` was not expressible.
+`--env`, `--example` and `--env-name` are all new in v0.5.0.
+</Callout>
+
 ### Options reference
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--env` | `path` | `.env` | **v0.5.0+** — the environment file to sync from (forward) or into (reverse) |
+| `--example` | `path` | `.env.example` | **v0.5.0+** — the template to sync into (forward) or from (reverse) |
+| `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--direction`, `-d` | `enum` | `forward` | Sync direction: `forward` (`.env` → `.env.example`) or `reverse` (`.env.example` → `.env`) |
 | `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when adding new variables (ignored in `--force` mode, which always uses placeholders for safety) |
 | `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files. Always exits `0`, whatever it finds |

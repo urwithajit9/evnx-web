@@ -9,7 +9,7 @@ excerpt: "Create an encrypted, portable backup of your .env file using AES-256-G
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["backup", "encryption", "security", "disaster-recovery", "evnx"]
-evnxVersion: "0.3.8"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -34,7 +34,8 @@ evnx backup [OPTIONS]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--env` | `string` | `.env` | Path to the `.env` file to back up |
+| `[ENV]` | positional | `.env` | The file to back up — `evnx backup .env.production` |
+| `--env-name` | `string` | — | **v0.5.0+** — back up `.env.<NAME>`. env |
 | `--output` | `string` | `<env>.backup` | Destination path for the encrypted backup |
 | `--key-file` | `path` | — | Use a file as the encryption key instead of a password prompt |
 | `--keep` | `number` | `3` | Number of previous backups to retain alongside the new one |
@@ -42,6 +43,17 @@ evnx backup [OPTIONS]
 | `--verbose` | `bool` | `false` | Print diagnostic information at each pipeline stage |
 
 ---
+
+<Callout type="warning">
+**`--env` does not exist and never has.** This page documented
+`evnx backup --env .env.production`, which fails with an argument error. The file is
+**positional**:
+
+```bash
+evnx backup .env.production                  # any version
+evnx backup --env-name production            # v0.5.0+
+```
+</Callout>
 
 ## How encryption works
 

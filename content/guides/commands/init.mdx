@@ -9,7 +9,7 @@ excerpt: "Reference documentation for the evnx init command: modes, options, and
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["init", "reference", "cli", "setup"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -100,7 +100,28 @@ evnx init --yes --path /app/config --verbose
 |------|---------|-------------------|
 | `.env.example` | Team template with placeholders + docs | Always updated |
 | `.env` | Local secrets (gitignored) | Created only if missing |
-| `.gitignore` | Auto-appends `.env*` patterns | Appends if patterns missing |
+| `.gitignore` | Appends `.env*` with the template family exempted | Appends if missing |
+
+The exact block written:
+
+```gitignore
+# ── evnx generated ─────────────────────────────────────────
+# Written by evnx. These files may contain secrets — do not commit.
+.env*
+!.env.example
+!.env.sample
+!.env.template
+```
+
+<Callout type="warning">
+**Before v0.5.0 this was `.env`, `.env.local`, `.env.*.local`** — the Next.js convention,
+which assumes `.env.production` holds non-secret defaults. For a secrets tool that
+assumption is backwards: `.env.production`, `.env.staging` and `.env.test` were all left
+committable, and `evnx doctor` reported the setup as healthy.
+
+The order matters. A negation placed *before* the pattern it carves out of does nothing in
+gitignore, so `!.env.example` has to follow `.env*`.
+</Callout>
 
 ---
 

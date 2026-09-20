@@ -9,7 +9,7 @@ excerpt: "Command reference for evnx convert — flags, supported formats, trans
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["convert", "reference", "cli", "env", "formats"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -46,6 +46,7 @@ All flags are optional. Omitting `--to` launches interactive mode.
 | Flag | Short | Type | Default | Description |
 |------|-------|------|---------|-------------|
 | `--env` | — | `path` | `.env` | Path to input `.env` file |
+| `--env-name` | — | `string` | — | **v0.5.0+** — use `.env.<NAME>` instead. Conflicts with `--env` |
 | `--to` | — | `string` | — | Target output format (omit for interactive selection) |
 | `--output` | `-o` | `path` | — | Write output to file instead of stdout |
 | `--include` | — | `glob` | — | Include only variables matching this pattern |

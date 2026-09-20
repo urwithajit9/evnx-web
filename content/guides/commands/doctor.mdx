@@ -8,7 +8,7 @@ excerpt: "Diagnose environment setup issues including .env configuration, Git tr
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -56,10 +56,18 @@ evnx doctor [OPTIONS] [PATH]
 
 | Check | Description | Severity if Failed |
 |-------|-------------|-------------------|
-| File exists | Verifies `.env` is present in project | ⚠️ Warning |
-| Git ignored | Ensures `.env` is in `.gitignore` | 🚨 **Error** |
+| File exists | Verifies at least one `.env*` file is present | ⚠️ Warning |
+| Git ignored | Ensures **every** `.env*` file is in `.gitignore` | 🚨 **Error** |
 | Secure permissions | Checks for `600`/`400` on Unix | ⚠️ Warning |
 | Valid syntax | Validates `KEY=VALUE` format | ⚠️ Warning |
+
+<Callout type="warning">
+**Before v0.5.0 this checked `.env` and nothing else.** A project whose `.gitignore`
+carried only `.env` — which is what older `evnx init` wrote — got a green tick while
+`.env.production` sat committable. Every `.env*` is checked now, except the
+`.env.example` / `.env.sample` / `.env.template` family, which is *meant* to be
+committed, and `evnx backup` output, which is ciphertext.
+</Callout>
 
 <Callout type="danger" title="Security critical">
 A `.env` file committed to Git can expose API keys, database credentials, and other secrets. The "NOT in .gitignore" check fails with **Error** severity because this is a critical security risk.
@@ -234,7 +242,7 @@ EVNX_AUTO_FIX=1 evnx doctor --verbose
 
 | Issue | Fix Applied | Platform |
 |-------|------------|----------|
-| `.env` not in `.gitignore` | Appends `.env` to `.gitignore` | All |
+| Any `.env*` not in `.gitignore` | Appends `.env*` plus `!.env.example`, `!.env.sample`, `!.env.template` | All |
 | `.env` has insecure permissions | Sets mode to `600` | Unix only |
 | `.env.example` not Git-tracked | Reports manual command | All |
 

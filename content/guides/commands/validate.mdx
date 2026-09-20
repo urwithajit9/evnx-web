@@ -8,7 +8,7 @@ excerpt: "Validate .env against .env.example — catch missing variables, placeh
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -33,6 +33,7 @@ evnx validate [OPTIONS]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--env` | `string` | `.env` | Path to your environment file |
+| `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--example` | `string` | `.env.example` | Path to your example/template file |
 | `--strict` | `bool` | `false` | Warn about extra variables not in `.env.example` |
 | `--fix` | `bool` | `false` | Auto-fix common issues (placeholders, booleans, weak secrets) |
@@ -40,10 +41,23 @@ evnx validate [OPTIONS]
 | `--exit-zero` | `bool` | `false` | Always exit 0 (useful for CI) |
 | `--ignore` | `string[]` | `[]` | Comma-separated issue types to suppress |
 | `--validate-formats` | `bool` | `false` | Enable URL/port/email format validation |
-| `--pattern` | `string` | `None` | Use `.env.*` files like `.env.production`, `.env.local` |
+
 | `-v, --verbose` | `bool` | `false` | Enable verbose output |
 
 ---
+
+<Callout type="warning">
+**`--pattern` was removed in v0.5.0.** Its entire implementation was a
+`starts_with(".env.")` test: any other value printed "Pattern 'x' not recognized, using
+default" and validated `.env` instead, exit `0` — so a CI job that typo'd the pattern
+silently checked the wrong file and passed. Use `--env-name`, which errors on a name that
+resolves to nothing.
+
+```bash
+evnx validate --pattern .env.production    # gone
+evnx validate --env-name production        # v0.5.0+
+```
+</Callout>
 
 ## Validation checks
 

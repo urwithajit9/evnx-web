@@ -8,7 +8,7 @@ excerpt: "Push and pull encrypted .env files across machines and CI. Encryption 
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-evnxVersion: "0.4.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - commands/auth
   - commands/vault
@@ -65,12 +65,37 @@ This writes `[cloud] vault` into `.evnx.toml`, preserving everything else alread
 
 ```bash
 evnx cloud push
+evnx cloud push --vault my-api/staging                 # picks up .env.staging
+evnx cloud push --vault my-api/staging --env-name staging
 evnx cloud push --vault my-api/staging --file .env.staging
 ```
 
+### Which file gets pushed — **v0.5.0+**
+
+`push` derives the file from the vault's environment: pushing `my-api/production` uses
+`.env.production` when that file exists, and `.env` otherwise. **The file chosen is
+printed every time:**
+
+```
+  file      .env.production (matched the vault environment)
+  file      .env (default)
+```
+
+<Callout type="warning">
+Before v0.5.0 `--file` defaulted to `.env` whatever the vault was, and nothing said which
+file had been read — so `evnx cloud push --vault app/production` with a forgotten flag
+pushed **local development secrets into the production vault**, encrypted, versioned and
+shared with everyone holding a key.
+
+A derived name that does not exist is not an error, because most projects genuinely have
+only `.env`. What makes that safe is the reporting. Pairing a production vault with a
+plain `.env` also prints a warning.
+</Callout>
+
 <OptionTable>
   <Option flag="--vault" type="string">Vault to push to: `name`, `name/environment`, or an id. Optional in a bound directory.</Option>
-  <Option flag="--file" type="path" default=".env">File to push.</Option>
+  <Option flag="--file" type="path">File to push. Defaults to `.env.&lt;environment&gt;` when the vault names one and that file exists, otherwise `.env`.</Option>
+  <Option flag="--env-name" type="string">**v0.5.0+** — push `.env.&lt;NAME&gt;`. Conflicts with `--file`; a name whose file does not exist is an error.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
   <Option flag="--server" type="url">Server to talk to. Plain `http://` is refused for anything but loopback.</Option>
 </OptionTable>
@@ -85,8 +110,15 @@ Only the key *names* are sent in the clear, so a dashboard can list what a vault
 
 ```bash
 evnx cloud pull
+evnx cloud pull --vault my-api/production              # writes .env.production if it exists
+evnx cloud pull --env-name production
 evnx cloud pull --version 7 --file .env.restored
 ```
+
+`pull` derives the same way, with one difference: it only uses `.env.<environment>` when
+that file **already exists**, so a first pull into a fresh checkout still writes `.env`
+rather than inventing a convention the project does not have. Name it explicitly to create
+one. The file written is always printed.
 
 <OptionTable>
   <Option flag="--vault" type="string">Vault to pull from. Optional in a bound directory.</Option>

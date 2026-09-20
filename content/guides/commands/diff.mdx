@@ -9,7 +9,7 @@ excerpt: "Reference documentation for the evnx diff command: compare .env and .e
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["diff", "reference", "cli", "env", "security", "ci-cd"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -35,15 +35,35 @@ Compare `.env` and `.env.example` files to identify missing, extra, and mismatch
 evnx diff [OPTIONS]
 ```
 
-### Options reference
+<Callout type="info">
+**Comparing two real environments** is usually the diff you want:
+
+```bash
+evnx diff --env-name production --against staging
+```
+
+The default compares `.env` against `.env.example`, where every correctly filled-in value
+shows as "different" — the template holds placeholders by construction, so that column is
+noise. Needs **v0.5.0+**.
+</Callout>
+
+<Callout type="warning">
+`-e`, `-f` and `-r` have been listed on this page as short forms for `--env`, `--format`
+and `--reverse`. **They do not exist** — `-i` for `--interactive` is the only short form
+`diff` has.
+</Callout>
+
+## Options reference
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--env`, `-e` | `path` | `.env` | Path to the active environment file to compare |
-| `--example` | `path` | `.env.example` | Path to the example/template file to compare against |
+| `--env` | `path` | `.env` | Path to the active environment file to compare |
+| `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
+| `--example` | `path` | `.env.example` | Path to the file to compare against |
+| `--against` | `string` | — | **v0.5.0+** — compare against `.env.<NAME>`. Conflicts with `--example` |
 | `--show-values` | `bool` | `false` | Display variable values in output (⚠️ may expose sensitive data) |
-| `--format`, `-f` | `enum` | `pretty` | Output format: `pretty` (colored terminal), `json` (machine-readable), or `patch` (unified diff) |
-| `--reverse`, `-r` | `bool` | `false` | Reverse comparison direction: compare example → env instead of env → example |
+| `--format` | `enum` | `pretty` | Output format: `pretty` (colored terminal), `json` (machine-readable), or `patch` (unified diff) |
+| `--reverse` | `bool` | `false` | Reverse comparison direction: compare example → env instead of env → example |
 | `--ignore-keys` | `list` | `[]` | Comma-separated list of keys to exclude from comparison (e.g., `DATABASE_URL,REDIS_URL`) |
 | `--with-stats` | `bool` | `false` | Include extended statistics in JSON output (`similarity_percent`, `overlap_count`, etc.) |
 | `--interactive`, `-i` | `bool` | `false` | Enable interactive merge mode (only applies when `--format patch` is used) |
