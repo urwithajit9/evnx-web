@@ -9,7 +9,7 @@ excerpt: "Real-world patterns for using evnx sync with multiple developers, onbo
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["sync", "team", "collaboration", "workflow", "onboarding"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/sync-basics
   - commands/sync
@@ -287,9 +287,9 @@ Questions? Reply here or ping @env-team.
 **Prevention:**
 
 ```bash
-# Add to pre-commit hook or CI:
-evnx sync --direction forward --dry-run --force
-if ! git diff --quiet .env.example; then
+# Add to pre-commit hook or CI (evnx v0.5.0+):
+# --check writes nothing and exits 1 when the template is stale, 2 on error.
+if ! evnx sync --direction forward --check; then
   echo "⚠️  .env.example needs updates!"
   echo "Run: evnx sync --direction forward"
   exit 1
@@ -350,8 +350,8 @@ Commit `.evnx/placeholders.json` so every teammate gets the same placeholder pat
 Run this monthly or when onboarding:
 
 ```bash
-# 1. Verify .env.example is up to date
-evnx sync --direction forward --dry-run --force
+# 1. Verify .env.example is up to date (exits 1 if stale, v0.5.0+)
+evnx sync --direction forward --check
 
 # 2. Check for secrets in template
 grep -iE "(sk_live|password|secret)" .env.example | grep -v "YOUR_\|placeholder\|demo" && echo "⚠️  Potential secrets found!"

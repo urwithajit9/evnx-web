@@ -9,7 +9,7 @@ excerpt: "Reference documentation for the evnx sync command: bidirectional sync,
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["sync", "reference", "cli", "env", "security"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -47,7 +47,8 @@ evnx sync [OPTIONS]
 |------|------|---------|-------------|
 | `--direction`, `-d` | `enum` | `forward` | Sync direction: `forward` (`.env` → `.env.example`) or `reverse` (`.env.example` → `.env`) |
 | `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when adding new variables (ignored in `--force` mode, which always uses placeholders for safety) |
-| `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files |
+| `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files. Always exits `0`, whatever it finds |
+| `--check` | `bool` | `false` | **v0.5.0+** — report whether the files are in step through the [exit code](#exit-codes). Implies `--dry-run`; never writes |
 | `--force`, `-f` | `bool` | `false` | Skip interactive prompts; auto-use placeholders (safe for CI/CD) |
 | `--template-config` | `path` | — | Path to custom placeholder JSON config for regex-based pattern matching |
 | `--naming-policy` | `enum` | `warn` | Handle non-standard variable names: `warn`, `error`, or `ignore` |
@@ -90,11 +91,50 @@ When adding variables with placeholders, evnx uses these built-in heuristics (cu
 
 ## Exit codes
 
-| Code | Meaning | Use case |
-|------|---------|----------|
-| `0` | ✅ Sync completed successfully | Success in scripts/CI |
-| `1` | 🚨 Sync failed (missing files, validation errors, user abort) | Fail pipeline on issues |
-| `2+` | ⚠️ Runtime errors (IO failures, parsing errors, permission issues) | Debug tooling or environment issues |
+There are two contracts. Which one applies depends on whether you pass `--check`.
+
+### Default — `evnx sync`, `evnx sync --dry-run`
+
+| Code | Meaning |
+|------|---------|
+| `0` | The command completed. **This includes a `--dry-run` that found pending changes** |
+| `1` | The command failed — a missing source file, an unparseable file, a user abort |
+
+`--dry-run` is a *preview*: the output is the product, and the exit code only says
+whether evnx ran. It will not fail your pipeline when `.env.example` is stale, which is
+why it is the wrong tool for a CI gate.
+
+<Callout type="warning">
+An earlier version of this page listed `2+` for runtime errors. That was never true —
+every failure exited `1`. The table above is what the CLI actually does.
+</Callout>
+
+### With `--check` — **v0.5.0+**
+
+| Code | Meaning | What to do |
+|------|---------|------------|
+| `0` | ✅ In sync | nothing |
+| `1` | ⚠️ **Out of sync** | run `evnx sync` and commit the result |
+| `2` | 🚨 **Error** — a source file is missing, or a file will not parse | fix the repo or the evnx invocation |
+
+Three codes rather than two, because a pipeline needs to tell *"your template is stale"*
+from *"evnx could not run"*. They follow the shape `diff` and `grep` use:
+
+```text
+diff   same → 0    different → 1    trouble → 2
+grep   match → 0   no match  → 1    trouble → 2
+```
+
+The contract is **opt-in**. Without `--check`, exit codes are exactly as they were —
+adding `--check` is how you ask for the detailed answer, the same way
+`terraform plan -detailed-exitcode` works.
+
+<Callout type="info">
+**Absent target vs absent source.** If `.env.example` does not exist, `--check` returns
+`1` — running `evnx sync` would create it, so the files are simply out of step. If `.env`
+does not exist, it returns `2`: there is nothing to sync *from*, so no verdict is
+possible. Reverse direction, reversed roles.
+</Callout>
 
 ---
 
@@ -118,6 +158,7 @@ evnx sync --direction reverse
 ```bash
 # See what would change before applying
 # Shows 🔒 for placeholders, ⚠️ for actual values
+# Exits 0 whether or not there are changes — use --check to gate on them
 evnx sync --dry-run
 ```
 
@@ -126,6 +167,24 @@ evnx sync --dry-run
 # Skip prompts, always use placeholders, fail on naming issues
 # Actual values option is disabled for security
 evnx sync --force --naming-policy error
+```
+
+### Gate a pipeline on a stale template — **v0.5.0+**
+```bash
+# Exits 1 if .env.example is missing variables, 2 if evnx could not check.
+# Writes nothing.
+evnx sync --check
+```
+
+Handling all three answers:
+
+```bash
+evnx sync --check
+case $? in
+  0) echo "in sync" ;;
+  1) echo "::error::.env.example is stale — run 'evnx sync' and commit"; exit 1 ;;
+  2) echo "::error::evnx could not check the files"; exit 1 ;;
+esac
 ```
 
 ### Custom placeholder config

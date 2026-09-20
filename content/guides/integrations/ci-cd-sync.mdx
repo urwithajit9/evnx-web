@@ -9,7 +9,7 @@ excerpt: "Automate evnx sync validation in GitHub Actions, GitLab CI, and pre-co
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["sync", "ci-cd", "github-actions", "gitlab", "automation", "validation"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - commands/sync
   - getting-started/sync-basics
@@ -39,16 +39,39 @@ When using `evnx sync` in CI/CD, always include these flags:
 
 | Flag | Purpose | Example |
 |------|---------|---------|
+| `--check` | **v0.5.0+** — write nothing, and report the verdict through the exit code | `--check` |
 | `--force` | Skip interactive prompts | `--force` |
-| `--dry-run` | Don't modify files in CI | `--dry-run` |
+| `--dry-run` | Preview without writing. ⚠️ Always exits `0` — not a gate | `--dry-run` |
 | `--naming-policy error` | Fail on non-standard names | `--naming-policy error` |
 | `--template-config` | Use team placeholder config | `--template-config .evnx/placeholders.json` |
 
-**Base command for CI:**
+**Base command for CI — v0.5.0+:**
 
 ```bash
-evnx sync --direction forward --force --dry-run --naming-policy error
+evnx sync --direction forward --check --naming-policy error
 ```
+
+`--check` implies `--dry-run`, so `--force` is no longer needed to get past the interactive
+prompt.
+
+<Callout type="warning">
+**If you are on v0.4.0 or earlier, there is no working gate.** The command this page used
+to recommend — `evnx sync --direction forward --force --dry-run --naming-policy error` —
+exits `0` whether or not `.env.example` is stale, so any `if !` around it can never fire.
+Upgrade to v0.5.0 for `--check`; until then, treat sync validation as advisory and read the
+output rather than the exit code.
+</Callout>
+
+### Exit codes under `--check`
+
+| Code | Meaning |
+|------|---------|
+| `0` | In sync |
+| `1` | Out of sync — run `evnx sync` and commit the result |
+| `2` | Error — a source file is missing, or a file will not parse |
+
+Three rather than two, so a pipeline can distinguish a stale template from a broken run.
+Full detail in the [`evnx sync` reference](/guides/commands/sync#exit-codes).
 
 ---
 
@@ -79,16 +102,26 @@ jobs:
         run: |
           evnx sync \
             --direction forward \
-            --force \
-            --dry-run \
+            --check \
             --naming-policy error \
             --template-config .evnx/placeholders.json
+```
 
-          if ! git diff --quiet .env.example; then
-            echo "::error ::.env.example needs updates!"
-            echo "Run 'evnx sync --direction forward' locally and commit."
-            exit 1
-          fi
+`--check` fails the step by itself, so no `git diff` afterwards is needed — and the old
+version of this example could not have worked: `--dry-run` writes nothing, so
+`git diff --quiet .env.example` was always quiet and the gate never fired.
+
+To report the two failure modes differently:
+
+```yaml
+      - name: Check .env.example is up to date
+        run: |
+          evnx sync --direction forward --check --naming-policy error
+          case $? in
+            0) ;;
+            1) echo "::error::.env.example is stale — run 'evnx sync' and commit"; exit 1 ;;
+            2) echo "::error::evnx could not check the files"; exit 1 ;;
+          esac
 ```
 
 ### Block secrets in .env.example
@@ -183,7 +216,7 @@ if git diff --cached --name-only | grep -qE "^(\.env|\.env\.example)"; then
   if git diff --cached --name-only | grep -q "^\.env\.example$"; then
     echo "🔍 Validating .env.example changes..."
 
-    if ! evnx sync --direction forward --dry-run --force 2>/dev/null; then
+    if ! evnx sync --direction forward --check 2>/dev/null; then
       echo "⚠️  Sync validation failed. Run:"
       echo "  evnx sync --direction forward"
       exit 1
@@ -203,7 +236,7 @@ repos:
     hooks:
       - id: env-sync-check
         name: Environment Sync Validation
-        entry: bash -c 'evnx sync --direction forward --dry-run --force --naming-policy error'
+        entry: bash -c 'evnx sync --direction forward --check --naming-policy error'
         language: system
         pass_filenames: false
         files: '^(\.env\.example|\.evnx/placeholders\.json)$'
@@ -213,13 +246,17 @@ repos:
 
 ## JSON output for advanced parsing
 
-Use `EVNX_OUTPUT_JSON=1` for machine-readable results:
+<Callout type="warning">
+**Not implemented.** `EVNX_OUTPUT_JSON=1` is honoured by `evnx doctor` only. Setting it on
+`evnx sync` changes nothing, so the `jq` recipes this section used to carry —
+`EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq '.changes | length'` — pipe
+human-readable text into `jq` and fail with a parse error.
 
-```bash
-EVNX_OUTPUT_JSON=1 evnx sync --direction forward --dry-run --force
-```
+The envelope below is kept as the intended shape, not as something you can use today.
+Until it exists, **`--check`'s exit code is the supported machine interface** for sync.
+</Callout>
 
-**Example output:**
+The planned output:
 
 ```json
 {
@@ -239,24 +276,22 @@ EVNX_OUTPUT_JSON=1 evnx sync --direction forward --dry-run --force
 }
 ```
 
-### Parse with jq in CI
+### What to use instead, today
 
 ```bash
-# Count pending changes
-CHANGES=$(EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq '.changes | length')
+evnx sync --direction forward --check
+case $? in
+  0) echo "in sync" ;;
+  1) echo "stale — run 'evnx sync --direction forward' and commit" ; exit 1 ;;
+  2) echo "evnx could not check the files" ; exit 1 ;;
+esac
+```
 
-if [ "$CHANGES" -gt 0 ]; then
-  echo "⚠️  $CHANGES pending sync changes"
-  EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq -r '.changes[].variables[].key'
-  exit 1
-fi
+`evnx doctor` does support the JSON envelope, if you need machine-readable output for the
+surrounding checks:
 
-# Check for warnings
-WARNINGS=$(EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq '.warnings | length')
-if [ "$WARNINGS" -gt 0 ]; then
-  echo "⚠️  $WARNINGS warnings (non-blocking)"
-  EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq -r '.warnings[]'
-fi
+```bash
+EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
 ```
 
 ---
@@ -266,7 +301,7 @@ fi
 ### Blocking mode (fail pipeline on issues)
 
 ```bash
-evnx sync --force --dry-run --naming-policy error
+evnx sync --check --naming-policy error
 ```
 
 Pipeline fails if `.env.example` is out of sync.
@@ -274,13 +309,13 @@ Pipeline fails if `.env.example` is out of sync.
 ### Advisory mode (report but don't fail)
 
 ```bash
-evnx sync --force --dry-run --naming-policy error || true
+evnx sync --check --naming-policy error || true
 ```
 
 Or filter output for logging only:
 
 ```bash
-evnx sync --force --dry-run 2>&1 | grep -E "✗|⚠️" >> deploy-log.txt
+evnx sync --dry-run 2>&1 | grep -E "✗|⚠️" >> deploy-log.txt
 ```
 
 <Callout type="tip" title="When to use advisory mode">
@@ -301,7 +336,7 @@ For monorepos with multiple services:
 ```bash
 for dir in services/*/; do
   echo "🔍 Checking $dir..."
-  (cd "$dir" && evnx sync --direction forward --dry-run --force) || \
+  (cd "$dir" && evnx sync --direction forward --check) || \
     echo "❌ Issues in $dir" >> sync-errors.txt
 done
 
@@ -320,7 +355,7 @@ fi
           ERRORS=0
           for dir in services/*/; do
             echo "Checking $dir..."
-            (cd "$dir" && evnx sync --direction forward --dry-run --force) || ERRORS=$((ERRORS+1))
+            (cd "$dir" && evnx sync --direction forward --check) || ERRORS=$((ERRORS+1))
           done
           if [ $ERRORS -gt 0 ]; then
             echo "::error ::$ERRORS service(s) failed sync validation"
@@ -364,16 +399,16 @@ Or use a pre-built binary:
     fi
 ```
 
-### JSON parsing errors
+### `jq` reports a parse error on sync output
 
-**Fix:** Suppress stderr when parsing JSON:
+**Cause:** `evnx sync` does not emit JSON. `EVNX_OUTPUT_JSON=1` is read by `evnx doctor`
+only, so the pipe carries human-readable text and `jq` chokes on the first line.
+
+**Fix:** use `--check`'s exit code for sync, and `evnx doctor` when you need JSON:
 
 ```bash
-# Wrong (stderr interferes with JSON)
-EVNX_OUTPUT_JSON=1 evnx sync | jq .
-
-# Correct (redirect stderr)
-EVNX_OUTPUT_JSON=1 evnx sync 2>/dev/null | jq .
+evnx sync --direction forward --check   # 0 in sync · 1 stale · 2 error
+EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
 ```
 
 ### Permission denied on .env

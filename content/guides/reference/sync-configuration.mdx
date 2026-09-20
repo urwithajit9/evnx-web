@@ -9,7 +9,7 @@ excerpt: "Advanced configuration for evnx sync: placeholder JSON schema, pattern
 difficulty: "advanced"
 timeToComplete: "25 minutes"
 tags: ["sync", "reference", "configuration", "json-schema", "advanced"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - commands/sync
   - getting-started/sync-basics
@@ -298,9 +298,9 @@ if git diff --quiet HEAD -- .env; then
 fi
 
 echo "🔄 .env changed, updating template..."
-evnx sync --direction forward --dry-run --force
-
-if ! git diff --quiet .env.example; then
+# --check writes nothing and reports the verdict through the exit code (v0.5.0+).
+# `git diff` cannot be used here: --dry-run never writes, so it is always quiet.
+if ! evnx sync --direction forward --check; then
   echo "⚠️  .env.example needs updates"
   echo "Run: evnx sync --direction forward"
   exit 1
@@ -309,15 +309,19 @@ fi
 
 ### Sync with custom error handling
 
-```bash
-output=$(EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force 2>/dev/null)
-errors=$(echo "$output" | jq -r '.errors | length')
+<Callout type="warning">
+`evnx sync` does not emit JSON — `EVNX_OUTPUT_JSON=1` is read by `evnx doctor` only, so the
+recipe that used to sit here piped human-readable text into `jq`. Use `--check`'s exit code
+instead; it distinguishes the two failures that mattered.
+</Callout>
 
-if [ "$errors" -gt 0 ]; then
-  echo "🚫 Sync validation failed:"
-  echo "$output" | jq -r '.errors[]'
-  exit 1
-fi
+```bash
+evnx sync --direction forward --check
+case $? in
+  0) echo "✓ in sync" ;;
+  1) echo "🚫 .env.example is stale — run 'evnx sync --direction forward'" ; exit 1 ;;
+  2) echo "🚫 evnx could not check the files" ; exit 1 ;;
+esac
 
 warnings=$(echo "$output" | jq -r '.warnings | length')
 if [ "$warnings" -gt 0 ]; then
