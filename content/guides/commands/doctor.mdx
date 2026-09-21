@@ -38,8 +38,31 @@ evnx doctor [OPTIONS] [PATH]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--fix` | `bool` | `false` | **v0.5.0+** — repair what can be repaired, instead of only reporting it |
+| `--strict` | `bool` | `false` | **v0.5.0+** — count warnings as problems, so they affect the exit code |
+| `--path <PATH>` | `string` | `.` | **v0.5.0+** — same as the positional argument; giving both is an error |
 | `--verbose`, `-v` | `bool` | `false` | Show detailed diagnostic output |
 | `--help`, `-h` | `bool` | `false` | Display help information |
+
+### `--fix`
+
+Repairs are conservative and local:
+
+- `.gitignore` gains the `.env*` entries `evnx init` writes, with `!.env.example` and friends carved back out
+- a `.env` readable by anyone is `chmod`'d to `0600`
+
+Nothing is deleted, nothing is committed, and **no file holding secrets is edited**. In
+particular `--fix` will not `git add` your `.env.example` for you — staging content for a
+commit is not a diagnostic tool's call. It tells you the command instead.
+
+```bash
+evnx doctor --fix
+```
+
+<Callout type="info">
+`EVNX_AUTO_FIX=1` does the same thing and still works — it shipped first and is documented.
+Either one saying yes is enough; a flag can turn repair on, never off.
+</Callout>
 
 **Environment Variables:**
 
@@ -347,22 +370,37 @@ evnx doctor 2>&1 | grep -E "✗|⚠️|🚨" >> deploy-log.txt
 
 ## Exit codes
 
-| Code | Meaning | Use Case |
-|------|---------|----------|
-| `0` | ✅ All checks passed or only warnings | Success in CI |
-| `1` | 🚨 One or more critical errors | Fail pipeline on security issues |
-| `2+` | ⚠️ Runtime errors (IO, Git failures) | Debug tooling issues |
+| Code | Meaning |
+|------|---------|
+| `0` | Healthy — no errors, and no warnings when `--strict` is given |
+| `1` | Problems found |
+| `2` | **v0.5.0+** — doctor could not run, so there is no verdict |
+
+**`2` is not a louder `1`.** A directory that cannot be read and a directory that is merely
+unhealthy are different answers. Before v0.5.0, `evnx doctor ./typo` diagnosed the missing
+directory as a project with no `.env` — a finding about your code rather than about your
+path, which is how a CI step passes on an empty checkout.
+
+Warnings exit `0` unless you ask otherwise. A missing `.env.example` is worth saying and is
+not worth failing a build that never asked about it — add `--strict` when it is.
+
+```bash
+evnx doctor
+case $? in
+  0) echo "healthy" ;;
+  1) echo "problems — see the report" ;;
+  2) echo "doctor did not run — fix the path" ;;
+esac
+```
 
 <Callout type="tip" title="Testing exit codes locally">
 ```bash
-evnx doctor
-echo $?  # Should be 0 if no critical issues
+evnx doctor; echo $?          # 0 when healthy
 
-# Force an error to test
-echo "BADLINE" > .env
-evnx doctor
-echo $?  # Should be 1
-rm .env
+rm .gitignore                 # now .env is committable
+evnx doctor; echo $?          # 1
+
+evnx doctor ./no-such-dir; echo $?   # 2
 ```
 </Callout>
 

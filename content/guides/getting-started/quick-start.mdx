@@ -74,12 +74,17 @@ evnx doctor
 [TIP] Run `evnx doctor --fix` to auto-fix gitignore issues
 ```
 
-Fix the gitignore automatically:
+Fix the gitignore automatically (**v0.5.0+**):
 
 ```bash
 evnx doctor --fix
-# [FIX] Added .env to .gitignore
+# [FIX] Added .env* to .gitignore (keeping .env.example committable)
 ```
+
+`--fix` writes the same four lines `evnx init` does — `.env*` plus `!.env.example`,
+`!.env.sample` and `!.env.template` — rather than a bare `.env`, which would leave
+`.env.production` committable. It also tightens a world-readable `.env` to `0600`. It will
+not stage or commit anything.
 
 ---
 

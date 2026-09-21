@@ -194,9 +194,15 @@ curl -fsSL https://dotenv.space/install.sh | bash
 # If installed via cargo
 cargo install evnx --force
 
-# Check for updates
-evnx doctor --check-updates
+# Check which version you are on
+evnx --version
 ```
+
+<Callout type="warning">
+Corrected September 2026: this block ended with `evnx doctor --check-updates`, which does
+not exist — `doctor` diagnoses a project and never reaches the network. Compare
+`evnx --version` against the [latest release](https://github.com/urwithajit9/evnx/releases).
+</Callout>
 
 ---
 
