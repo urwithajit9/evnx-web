@@ -52,8 +52,45 @@ evnx template --input <TEMPLATE> --output <OUTPUT> [--env <ENV_FILE>] [--verbose
 | `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--gitignore` | `bool` | `false` | Automatically add the output file to `.gitignore`. No prompt. Mutually exclusive with `--no-gitignore` |
 | `--no-gitignore` | `bool` | `false` | Skip all `.gitignore` checks and warnings. Mutually exclusive with `--gitignore` |
+| `--strict` | `bool` | `false` | **v0.5.0+** — refuse to write when a placeholder has no value |
 | `--verbose`, `-v` | `bool` | `false` | Enable detailed progress output to stderr |
 | `--help`, `-h` | `bool` | `false` | Display help information |
+
+### `--strict`
+
+Without it, a placeholder with no value is **copied through literally** and the command
+exits `0`:
+
+```text
+# in.tmpl
+database_url = {{DATABASE_URL}}
+```
+
+```bash
+evnx template --input in.tmpl --output app.conf   # exit 0
+cat app.conf
+# database_url = {{DATABASE_URL}}
+```
+
+That file is no longer a template — it is a config file whose `database_url` is the
+seven-character string `{{DATABASE_URL}}`, and whatever reads it next treats that as the
+setting. `--strict` makes it an error:
+
+```bash
+evnx template --input in.tmpl --output app.conf --strict
+# Error: 1 variable referenced in in.tmpl has no value in .env: DATABASE_URL
+#
+# Define it there, or give it a fallback with {{NAME|default:value}}.
+# Nothing was written to app.conf.
+```
+
+<Callout type="info">
+The refusal happens **before** the output is written, so a failed run leaves no
+half-built config behind for the next step in your pipeline to pick up.
+
+A placeholder with a `|default:` is not undefined, so `--strict` accepts it. That is how you
+keep a variable optional under a strict build.
+</Callout>
 
 ---
 
@@ -140,6 +177,24 @@ Apply transformations to variable values using the pipe (`|`) operator within do
 
 <Callout type="warning">
   <strong>Filters are not chainable.</strong> Each filter is applied independently — <code>{"|int"}</code> and <code>{"|default:value"}</code> cannot be combined on the same variable reference. Use separate template variables or validate values in your <code>.env</code> file before templating.
+</Callout>
+
+<Callout type="info" title="Whitespace inside a placeholder">
+**v0.5.0+** — spaces around the name and the pipe are allowed, so all of these are the same
+placeholder:
+
+```text
+{{PORT}}    {{ PORT }}    ${PORT}    ${ PORT }
+{{APP_ENV|upper}}    {{ APP_ENV | upper }}
+```
+
+Before v0.5.0 only the tight forms were recognised. A spaced one matched nothing and was
+written into the output file as literal text, with no warning and a zero exit code.
+
+Also fixed in v0.5.0: **`|default:` now applies when the variable is genuinely absent.** It
+previously fired only when the variable already had a value — the one case a fallback is not
+needed — so `{{NOPE|default:1234}}` rendered as itself. If you worked around this by defining
+every variable in `.env`, nothing changes for you.
 </Callout>
 
 ### JSON filter example
@@ -254,14 +309,17 @@ evnx template \
 
 ```
 ⚠️ Variable 'MISSING_VAR' referenced in template but not defined in .env
-ℹ️ Tip: Define 1 undefined variable to avoid runtime issues
+ℹ️ 1 placeholder was left unresolved and written through literally. Use --strict to make this an error.
 ```
 
-**Solution**: Add the missing variable to your `.env` file, or use the `|default:value` filter to provide a fallback:
+**Solution**: Add the missing variable to your `.env` file, or give it a fallback:
 
 ```text
 {{MISSING_VAR|default:fallback_value}}
 ```
+
+In CI, add `--strict` so this fails the build instead of producing a config file with
+`{{MISSING_VAR}}` in it.
 
 ### Filter transformation errors
 
