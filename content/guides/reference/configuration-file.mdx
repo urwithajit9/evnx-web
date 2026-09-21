@@ -170,18 +170,19 @@ overridden by `--env-name`, and by an explicit `--env` path.
 | `exclude` | list of strings | `[]` | Paths this project never scans |
 | `ignore_placeholders` | bool | `false` | Skip values that look like filler |
 
-<Callout type="warning">
-**`exclude` entries are matched as substrings, unless they contain `*`.**
+<Callout type="info">
+**`exclude` entries without `*` are substrings; entries with `*` are globs.**
 
 A pattern with no `*` matches anywhere in the path, so `"fixtures"` excludes
-`./fixtures/.env` and `./test/fixtures/.env` alike. That is almost always what you want.
+`./fixtures/.env` and `./test/fixtures/.env` alike.
 
-A pattern containing `*` is treated as a glob matched against the **whole** path as walked,
-including its leading `./` — so `"fixtures/**"` matches nothing, while `"./fixtures/**"` and
-`"*fixtures*"` work. Prefer the plain substring form and avoid the trap.
+A pattern containing `*` is tried against the path as walked, the path relative to the scan
+root, and the file name — so `"fixtures/**"`, `"./fixtures/**"`, `"*fixtures*"` and
+`"*.log"` all work.
 
-A pattern that fails to match makes evnx scan *more* than you intended, never less, so this
-fails safe. It is still surprising, and it is on the list to fix.
+⚠️ Before v0.5.0 a glob was matched only against the whole path *including* its leading
+`./`, so `"fixtures/**"` matched nothing and said nothing about it. Patterns written around
+that limitation still behave identically.
 </Callout>
 
 ### `[validate]`

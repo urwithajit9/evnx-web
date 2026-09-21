@@ -313,11 +313,24 @@ The two mechanisms below are the ones that exist.
 
 ### Skip files and paths — `--exclude`
 
-Glob or substring; repeatable.
+Glob or substring; repeatable. Combines with `[scan] exclude` from `.evnx.toml` rather than
+replacing it — the config holds the project's standing exclusions, the flag is this run's.
 
 ```bash
-evnx scan --exclude 'fixtures/*' --exclude '*.test.js'
+evnx scan --exclude 'fixtures/**' --exclude '*.test.js'
 ```
+
+A pattern **without** `*` matches anywhere in the path, so `fixtures` skips
+`./fixtures/.env` and `./test/fixtures/.env` alike. A pattern **with** `*` is a glob, and is
+tried against the path as walked, the path relative to the scan root, and the file name —
+so `fixtures/**`, `./fixtures/**`, `*fixtures*` and `*.log` all work.
+
+<Callout type="warning">
+**v0.5.0+.** Before this, a glob was only ever matched against the whole path *including*
+its leading `./`, so `fixtures/**` and `*.log` matched nothing and did so silently. If you
+worked around that with `*fixtures*` or a bare substring, those still behave exactly as they
+did — the matching was widened, never redefined.
+</Callout>
 
 `.git/`, `node_modules/`, `target/`, `dist/`, `build/`, `.env.example`, `.env.sample`,
 `.env.template` and `evnx backup` output are excluded already.
@@ -361,9 +374,10 @@ evnx scan .env config/ src/
 `.git/`, `node_modules/`, `target/`, `dist/`, `build/`, the `.env.example` family and
 `evnx backup` output are always skipped.
 
-<Callout type="warning">
-⚠️ A path that does not exist is reported as **clean**, exit `0` — `evnx scan ./typo`
-prints "No secrets detected". Check your paths in CI.
+<Callout type="success">
+**v0.5.0+** — a path that cannot be scanned is an error, exit `2`, not a clean result.
+`evnx scan ./typo` used to print "No secrets detected" and exit `0`; it now names every
+path it could not read and says plainly that there is no verdict.
 </Callout>
 
 ---
@@ -372,18 +386,33 @@ prints "No secrets detected". Check your paths in CI.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Nothing reported — no findings at or above `--severity`, or `--exit-zero` was set |
-| `1` | Findings reported, **or** the command failed (bad `--format`, bad `--severity`) |
+| `0` | Clean — nothing at or above `--severity`, or `--exit-zero` was set |
+| `1` | Findings reported |
+| `2` | **v0.5.0+** — the scan could not be completed, so there is no verdict |
+
+**`2` is not a louder `1`.** "I found nothing" and "I could not look" are different
+answers, and collapsing them is what let `evnx scan ./typo` report success. A gate written
+as `evnx scan .` still fails on either; one that branches on the code can now tell a
+finding from a broken setup.
+
+```bash
+evnx scan .
+case $? in
+  0) echo "clean" ;;
+  1) echo "secrets found — blocking" ;;
+  2) echo "scan did not run — fix the setup" ;;
+esac
+```
 
 <Callout type="warning">
-This table previously claimed `1` meant *high-severity* findings and `2` meant a scan
-error. Neither was true: **any** reported finding exits `1`, and errors exit `1` as well —
-`scan` never returns `2`.
+**`--exit-zero` suppresses `1` only.** Trouble still exits `2`: the flag means "do not fail
+my build over findings", not "never tell me the scan was impossible".
+
+Before v0.5.0 the table here claimed `1` meant *high-severity* findings and `2` meant a
+scan error. Neither was true then — **any** finding exited `1`, errors exited `1` too, and
+`scan` never returned `2`. It does now, and only for trouble.
 
 To block only on high-confidence findings, say so: `evnx scan --severity high`.
-
-⚠️ A path that does not exist is currently reported as **clean**, with exit `0`:
-`evnx scan ./typo` prints "No secrets detected". Check your paths.
 </Callout>
 
 <Callout type="tip" title="Advisory mode">
