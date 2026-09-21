@@ -4,291 +4,365 @@ slug: configuration-file
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-excerpt: "Complete reference for .evnx.toml — the optional project-level config file for evnx. Covers scan rules, validation settings, output formats, and ignore patterns."
+updatedAt: "2026-09-21"
+excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["configuration", "toml", "reference", "scan", "validate"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
+prerequisites:
+  - commands/scan
+  - commands/validate
 draft: false
 ---
 
-evnx works out of the box with zero configuration. `.evnx.toml` is an optional project-level config file for teams that need custom rules, ignore patterns, or non-default behavior.
+evnx works with no configuration at all. `.evnx.toml` is optional, and exists for settings
+that are **true of the project** and would otherwise be retyped on every invocation and in
+every CI job.
 
-Place `.evnx.toml` in your project root (next to `.env`). It's committed to the repo so everyone on the team gets the same behavior.
-
----
-
-## File discovery
-
-evnx looks for `.evnx.toml` by walking up the directory tree from the current working directory, stopping at the first match or the filesystem root. This means a monorepo can have one root `.evnx.toml` covering all packages, with optional per-package overrides.
-
-```
-my-monorepo/
-├── .evnx.toml          ← root config, applies everywhere
-├── packages/
-│   ├── api/
-│   │   ├── .evnx.toml  ← overrides root config for packages/api only
-│   │   └── .env
-│   └── web/
-│       └── .env        ← uses root config
-```
-
----
-
-## Full reference
-
-```toml
-# .evnx.toml
-# All fields are optional. Omit any section you don't need.
-
-# ─── Project metadata ────────────────────────────────────────────────────────
-
-[project]
-name    = "my-app"          # Used in output headers and report filenames
-version = "1.0.0"           # Your project version (not evnx version)
-
-# ─── Scan configuration ──────────────────────────────────────────────────────
-
-[scan]
-
-# Files to scan (glob patterns, relative to config file location)
-# Default: all .env files in the current directory
-include = [
-  ".env",
-  ".env.*",
-  "config/.env",
-]
-
-# Files to always skip
-ignore_files = [
-  ".env.example",
-  ".env.test",
-  ".env.ci",
-  "fixtures/**/.env",
-]
-
-# Specific variable keys to never flag
-ignore_keys = [
-  "EXAMPLE_*",
-  "TEST_API_KEY",
-  "DUMMY_SECRET",
-]
-
-# Minimum Shannon entropy to flag as high-entropy secret
-# Default: 4.5 (scale 0–8). Lower = more sensitive, more false positives
-entropy_threshold = 4.5
-
-# Minimum severity to include in output
-# Options: "high" | "medium" | "low" | "all"
-# Default: "all"
-min_severity = "all"
-
-# Also scan .env.example files
-# Default: false (example files are usually safe to scan but excluded by default)
-include_example_files = false
-
-# Scan recursively through subdirectories
-# Default: false
-recursive = true
-
-# ─── Validate configuration ──────────────────────────────────────────────────
-
-[validate]
-
-# Promote all warnings to errors (same as --strict flag)
-# Default: false
-strict = false
-
-# Variables that MUST be present (validation fails if missing)
-required = [
-  "DATABASE_URL",
-  "APP_SECRET_KEY",
-  "APP_ENV",
-]
-
-# Expected environment value (used to validate localhost-in-prod rules)
-# Options: "development" | "staging" | "production" | "test"
-# Default: auto-detected from APP_ENV or NODE_ENV if present
-environment = "production"
-
-# Minimum length for values flagged as "secret" or "key" in their name
-# Default: 32
-min_secret_length = 32
-
-# Flag boolean strings that might cause issues
-# e.g. DEBUG=true in Python reads as str "true", not bool True
-# Default: true
-check_boolean_traps = true
-
-# ─── Output configuration ────────────────────────────────────────────────────
-
-[output]
-
-# Default output format
-# Options: "pretty" | "json" | "sarif" | "github"
-# Default: "pretty"
-format = "pretty"
-
-# Default output file (omit to write to stdout)
-# file = "evnx-report.json"
-
-# Show line numbers in pretty output
-# Default: true
-show_line_numbers = true
-
-# Include remediation suggestions in output
-# Default: true
-show_suggestions = true
-
-# ─── Convert configuration ───────────────────────────────────────────────────
-
-[convert]
-
-# Default output format for `evnx convert`
-# Options: json, yaml, kubernetes, terraform, github-actions, doppler,
-#          infisical, heroku, vercel, netlify, railway, fly, render, chamber
-default_target = "kubernetes"
-
-# Kubernetes secret name used in convert --to kubernetes
-# Default: project.name or "app-secrets"
-kubernetes_secret_name = "my-app-secrets"
-
-# Kubernetes namespace
-# Default: "default"
-kubernetes_namespace = "production"
-
-# Variable name transformation for Kubernetes
-# Options: "preserve" | "lowercase" | "uppercase"
-kubernetes_key_transform = "preserve"
-
-# ─── Backup configuration ────────────────────────────────────────────────────
-
-[backup]
-
-# Where to store backups
-# Default: ~/.evnx/backups
-directory = ".evnx-backups"
-
-# Maximum number of backups to retain per file
-# Default: 10
-max_backups = 10
-
-# Encryption: evnx always uses AES-256-GCM + Argon2
-# Set a default key derivation cost (higher = slower but more secure)
-# Options: "interactive" | "moderate" | "sensitive"
-# Default: "interactive" (fast, suitable for developer machines)
-argon2_preset = "interactive"
-
-# ─── Doctor configuration ────────────────────────────────────────────────────
-
-[doctor]
-
-# Additional checks to run
-check_gitignore     = true   # Is .env in .gitignore?
-check_permissions   = true   # Is .env readable only by owner (600)?
-check_example_sync  = true   # Is .env.example in sync with .env?
-check_updates       = false  # Check for evnx updates (makes a network request)
-
-# ─── Custom secret patterns ──────────────────────────────────────────────────
-# Add your own patterns for internal credentials, custom API key formats, etc.
-
-[[scan.custom_patterns]]
-name        = "internal-api-key"
-pattern     = "INT-[A-Z0-9]{32}"
-severity    = "high"
-description = "Internal API key format"
-keys        = ["INTERNAL_*", "INT_API_*"]   # Only check these key names
-
-[[scan.custom_patterns]]
-name        = "legacy-token"
-pattern     = "tok_[a-f0-9]{40}"
-severity    = "medium"
-description = "Legacy authentication token"
-```
-
----
-
-## Common configurations
-
-### Minimal config for a solo project
-
-```toml
-# .evnx.toml
-[scan]
-ignore_files = [".env.example", ".env.test"]
-recursive    = true
-
-[validate]
-required = ["DATABASE_URL", "APP_SECRET_KEY"]
-```
-
-### Team config with strict validation
-
-```toml
-# .evnx.toml
-[project]
-name = "my-saas-app"
-
-[scan]
-ignore_files      = [".env.example", ".env.*.local", "**/*.test.env"]
-entropy_threshold = 4.0
-recursive         = true
-
-[validate]
-strict          = true
-environment     = "production"
-min_secret_length = 32
-required = [
-  "DATABASE_URL",
-  "REDIS_URL",
-  "APP_SECRET_KEY",
-  "STRIPE_SECRET_KEY",
-]
-
-[output]
-format           = "pretty"
-show_suggestions = true
-
-[doctor]
-check_updates = true
-```
-
-### CI-only config (override via environment variable)
+Put it in your project root, next to `.env`, and commit it — that is the point. Everyone who
+clones the repository gets the same policy.
 
 <Callout type="warning">
-⚠️ **There is no `EVNX_<SECTION>_<KEY>` mechanism.** The variables evnx actually reads are
-`EVNX_AUTO_FIX`, `EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`, `EVNX_SERVER` and
-`EVNX_TOKEN` — nothing else. `EVNX_SCAN_MIN_SEVERITY` and friends are ignored, and the
-commands they were shown with (`scan --exit-code`, `scan --output`) do not exist either.
+**This page was rewritten for v0.5.0, and most of what it used to describe never existed.**
 
-Pass the flags directly:
+Before v0.5.0, `.evnx.toml` was documented here, defined in the CLI's source, and **read by
+no command** — the only key with any effect was `[cloud] vault`, written by
+`evnx cloud link`. The old version of this page listed `[project]`, `[output]`, `[convert]`,
+`[doctor]` and `[[scan.custom_patterns]]`, along with keys like `scan.entropy_threshold` and
+`validate.required`. None of them were ever read.
+
+The sections below are the whole schema. If you copied a config from the old page, evnx will
+now tell you which keys it does not recognise rather than pretending to honour them.
+</Callout>
+
+---
+
+## What belongs in it
+
+A setting belongs in `.evnx.toml` if it describes **the project**. It does not belong there
+if it describes **this particular run**.
+
+| Belongs in the file | Stays on the command line |
+|---|---|
+| `[scan] severity` — this repo's reporting floor | `--exit-zero` — how *this* CI step should behave |
+| `[validate] strict` — the standard this repo holds itself to | `--fix` — change the files *now* |
+| `[defaults] env_name` — which environment this project means | `--format json` — what *this* invocation should emit |
+
+That rule is what keeps the schema decidable as commands are added, rather than a matter of
+taste each time.
+
+---
+
+## Where evnx looks for it
+
+Walking **up** from the working directory, stopping once it has examined a directory
+containing `.git`.
+
+```
+my-repo/
+├── .git/
+├── .evnx.toml          ← found from anywhere in the repo
+└── packages/
+    └── api/
+        └── .env        ← `evnx validate` here uses the root config
+```
+
+Two consequences worth knowing:
+
+**A config above your repository is never used.** Walking further would let a file in a
+parent directory — or in `$HOME` — silently apply to every project on the machine, and
+`scan.exclude` is exactly the setting you would least want to leak that way.
+
+**The first file found wins; configs do not merge.** A `.evnx.toml` in `packages/api/`
+replaces the root one for commands run there rather than layering on top of it.
+
+<Callout type="info">
+The filename is `.evnx.toml` exactly. Bare `evnx.toml` is not accepted — two spellings would
+need a rule about which one wins, for no gain.
+</Callout>
+
+---
+
+## How config combines with flags
+
+**Precedence is flag > config > built-in default**, with three different rules depending on
+what kind of setting it is.
+
+| Kind | Rule | Example |
+|---|---|---|
+| Values | The flag wins outright | `--severity low` overrides `[scan] severity = "high"` |
+| Booleans | Either one saying `true` wins | `--strict` turns strict on even if config says `false` |
+| Lists | The two are **combined** | `--exclude dist` scans with `dist` *and* the project's excludes |
+
+Booleans can be tightened by a flag but never loosened. There is no `--no-strict`, so "off"
+and "unspecified" arrive identically, and evnx resolves that ambiguity toward the stricter
+reading — these booleans are all guards.
+
+Lists combine because `[scan] exclude` is the project's standing exclusions and `--exclude`
+is this run's. A flag silently discarding the project's list would be a surprising way to
+widen a scan.
+
+<Callout type="warning">
+**If you are on v0.4.x, `.evnx.toml` does nothing.** The loader existed but nothing called
+it, so a project with `[validate] strict = true` validated non-strictly and said nothing.
+Upgrade to 0.5.0 before relying on any of this.
+</Callout>
+
+---
+
+## Every section
+
+All sections and all keys are optional. Omit anything you do not need.
+
+```toml
+# .evnx.toml
+
+# ─── Cross-command defaults ──────────────────────────────────────────────────
+[defaults]
+env_name = "production"        # which .env.<name> commands operate on
+example  = ".env.template"     # the template path, if not .env.example
+
+# ─── evnx scan ───────────────────────────────────────────────────────────────
+[scan]
+severity            = "high"        # "high" | "medium" | "low"
+exclude             = ["fixtures"]  # paths this project never scans
+ignore_placeholders = true          # skip values that look like filler
+
+# ─── evnx validate ───────────────────────────────────────────────────────────
+[validate]
+strict           = true
+validate_formats = true
+ignore           = ["boolean_trap"] # issue types to suppress
+
+# ─── evnx sync ───────────────────────────────────────────────────────────────
+[sync]
+naming_policy = "warn"         # "warn" | "error" | "ignore"
+
+# ─── evnx diff ───────────────────────────────────────────────────────────────
+[diff]
+ignore_keys = ["BUILD_ID"]     # keys that always differ here
+
+# ─── evnx backup ─────────────────────────────────────────────────────────────
+[backup]
+keep = 3                       # previous backups to retain
+
+# ─── evnx cloud ──────────────────────────────────────────────────────────────
+[cloud]
+vault = "my-app/production"    # written by `evnx cloud link` — see below
+```
+
+### `[defaults]`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `env_name` | string | — | Resolves to `.env.<name>` for every command that takes `--env`. The file must exist; a name that resolves to nothing is an error, not a quiet fall back to `.env` |
+| `example` | string | `.env.example` | The template `validate`, `sync` and `diff` compare against |
+
+`env_name` is the one to reach for in a project whose real file is `.env.production`. It is
+overridden by `--env-name`, and by an explicit `--env` path.
+
+### `[scan]`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `severity` | `"high"` \| `"medium"` \| `"low"` | `"low"` | Lowest confidence worth reporting. `"high"` reports only detections matching a known provider format |
+| `exclude` | list of strings | `[]` | Paths this project never scans |
+| `ignore_placeholders` | bool | `false` | Skip values that look like filler |
+
+<Callout type="warning">
+**`exclude` entries are matched as substrings, unless they contain `*`.**
+
+A pattern with no `*` matches anywhere in the path, so `"fixtures"` excludes
+`./fixtures/.env` and `./test/fixtures/.env` alike. That is almost always what you want.
+
+A pattern containing `*` is treated as a glob matched against the **whole** path as walked,
+including its leading `./` — so `"fixtures/**"` matches nothing, while `"./fixtures/**"` and
+`"*fixtures*"` work. Prefer the plain substring form and avoid the trap.
+
+A pattern that fails to match makes evnx scan *more* than you intended, never less, so this
+fails safe. It is still surprising, and it is on the list to fix.
+</Callout>
+
+### `[validate]`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `strict` | bool | `false` | Also report variables present in `.env` but absent from the example file |
+| `validate_formats` | bool | `false` | Check URL, port and email values parse |
+| `ignore` | list of strings | `[]` | Issue types to suppress |
+
+Valid `ignore` entries: `missing_variable`, `extra_variable`, `placeholder_value`,
+`boolean_trap`, `weak_secret`, `localhost_in_docker`, `invalid_url`, `invalid_port`,
+`invalid_email`.
+
+### `[sync]`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `naming_policy` | `"warn"` \| `"error"` \| `"ignore"` | `"warn"` | How `evnx sync` treats variable names outside `SCREAMING_SNAKE_CASE` |
+
+### `[diff]`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `ignore_keys` | list of strings | `[]` | Keys not worth reporting — build IDs, timestamps, anything expected to differ |
+
+### `[backup]`
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `keep` | integer | `3` | Previous backups retained alongside the new one. Files beyond the limit are warned about, never deleted. `0` disables rotation |
+
+### `[cloud]`
+
+| Key | Type | Effect |
+|---|---|---|
+| `vault` | string | The vault this directory is bound to, as `name/environment` |
+
+<Callout type="tip">
+You do not write this one by hand. `evnx cloud link` writes it for you, preserving your
+comments, key order, and any keys it does not recognise.
+</Callout>
+
+---
+
+## evnx tells you when a config is in force
+
+A run that loads a config says so, on **stderr**:
 
 ```bash
-evnx scan --severity high          # v0.5.0+
+$ evnx scan .
+  config    .evnx.toml (scan.severity=high, scan.exclude=1 patterns)
+```
+
+Run from a subdirectory, the path shows where the policy came from:
+
+```bash
+$ cd packages/api && evnx validate
+  config    ../../.evnx.toml (scan.severity=high)
+```
+
+**This is not decoration.** `[scan] severity` and `[scan] exclude` can *weaken* what the
+scanner reports, and the file is committed — so one commit could otherwise narrow scanning
+for everyone who clones the repository, with nothing on the command line to show it.
+
+Configurability is not the problem; silence is. A team genuinely needs to exclude its
+fixtures. So the file is allowed to change the default and obliged to say so. Only the
+settings that loosen a security default are listed in the parentheses; a config that sets
+`[defaults] env_name` and nothing else announces itself plainly.
+
+<Callout type="info">
+The banner and all warnings go to stderr, never stdout, so
+`evnx convert --to json > out.json` stays machine-readable. `--quiet` suppresses both.
+</Callout>
+
+---
+
+## Unknown keys warn; they never fail
+
+```bash
+$ evnx validate
+  config    .evnx.toml
+⚠ /home/you/my-repo/.evnx.toml: unknown key `scan.entropy_threshold` (ignored)
+```
+
+The file is committed and teams run mixed versions, so a config written for a later evnx
+must keep working on an earlier one. That means unknown keys cannot be fatal — but a typo
+must not be silent either, so the warning names the key and gives the full path to the file
+to edit.
+
+The schema is **additive only**: keys are added, never repurposed or removed.
+
+A file that is not valid TOML *is* an error. Quietly ignoring a config someone wrote on
+purpose would mean running with a policy they believe is in force.
+
+---
+
+## Worked examples
+
+### A project whose real file is `.env.production`
+
+```toml
+[defaults]
+env_name = "production"
+```
+
+`evnx validate`, `evnx diff`, `evnx convert` and `evnx backup` now all operate on
+`.env.production` with no flags. `evnx validate --env .env` still reads `.env` — an explicit
+flag always wins.
+
+### A blocking CI gate
+
+```toml
+[scan]
+severity = "high"
+exclude  = ["fixtures", "testdata"]
+
+[validate]
+strict           = true
+validate_formats = true
+```
+
+Then the CI step is just:
+
+```bash
+evnx scan .
+evnx validate
+```
+
+Reporting only high-confidence detections is the usual choice for a gate that blocks a
+merge. Both exclusions are substring patterns, so they cover those directories at any depth.
+
+### A monorepo with one strict package
+
+```toml
+# my-repo/.evnx.toml — the baseline
+[scan]
+severity = "medium"
+```
+
+```toml
+# my-repo/packages/payments/.evnx.toml — replaces the root config here
+[scan]
+severity = "high"
+
+[validate]
+strict = true
+```
+
+Remember that the nested file **replaces** the root one rather than merging with it, so
+repeat anything you still want.
+
+---
+
+## What there is no config for
+
+<Callout type="warning">
+**There is no `EVNX_<SECTION>_<KEY>` environment-variable mechanism.** The variables evnx
+reads are `EVNX_AUTO_FIX`, `EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`,
+`EVNX_SERVER` and `EVNX_TOKEN` — nothing else. Pass flags directly instead:
+
+```bash
+evnx scan --severity high
 evnx validate --strict
 evnx scan --format sarif --exit-zero > results.sarif
 ```
 </Callout>
 
----
+There is also **no user-level config**. `~/.config/evnx/` holds credentials and cloud
+settings, and those are deliberately separate: a policy file in your home directory would
+apply to every project on the machine without being visible in any of them.
 
-## Schema validation
-
-evnx validates `.evnx.toml` on load and reports errors clearly:
-
-```bash
-evnx doctor --check-config
-
-# [CONFIG] Validating .evnx.toml...
-# [ERROR] scan.entropy_threshold must be between 0.0 and 8.0, got: 10.0
-# [ERROR] validate.environment must be one of: development, staging, production, test
-# [OK] All other fields valid
-```
+Custom secret patterns, entropy thresholds, required-variable lists and per-command output
+defaults are all **not configurable**. They were described on this page for a long time and
+were never implemented.
 
 ---
 
 ## Related
 
-- **[evnx scan reference](/guides/commands/scan)** — scan flags and output formats
-- **[evnx validate reference](/guides/commands/validate)** — validation rules
-- **[evnx doctor reference](/guides/commands/doctor)** — health check details
+- **[Environment files](/guides/reference/environments)** — how `--env-name` and `[defaults] env_name` resolve
+- **[evnx scan](/guides/commands/scan)** — scan flags, severity levels and output formats
+- **[evnx validate](/guides/commands/validate)** — validation rules and issue types
+- **[evnx cloud](/guides/commands/cloud)** — what `evnx cloud link` writes to `[cloud]`
