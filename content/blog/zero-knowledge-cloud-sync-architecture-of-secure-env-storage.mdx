@@ -167,7 +167,7 @@ Let's walk through the exact lifecycle of a secret within the `evnx` ecosystem. 
   </Figure>
 
   <TerminalOutput>
-  $ evnx push --project=prod-api
+  $ evnx cloud push --vault prod-api
   ✔ Encrypting 24 variables with XChaCha20-Poly1305
   ✔ Uploading encrypted payload (4.2 KB)
   ✔ Sync complete — server stores ciphertext only
@@ -312,8 +312,9 @@ Security is not a product; it's a process. Moving to a zero-knowledge architectu
 
 <Step number={2} title="Initialize your project">
   ```bash
-  evnx login
-  evnx init --zero-knowledge
+  evnx auth login
+  evnx vault create myapp --env production
+  evnx cloud push --vault myapp/production
   ```
 
   <TerminalOutput>
@@ -321,6 +322,9 @@ Security is not a product; it's a process. Moving to a zero-knowledge architectu
   ✔ Created local master key (derived from password)
   ✔ Encrypted and synced .env to cloud
   </TerminalOutput>
+
+  There is no `--zero-knowledge` flag, and there was never a need for one: the encryption
+  described above is the only mode evnx has. A flag would imply a weaker mode exists.
 </Step>
 
 <Step number={3} title="Explore further">
@@ -330,14 +334,33 @@ Security is not a product; it's a process. Moving to a zero-knowledge architectu
   - **[evnx cloud](/guides/commands/cloud)** — every subcommand and flag.
 </Step>
 
-<Callout type="warning" title="Two commands this post originally promised do not exist">
-Earlier versions of this article pointed at `evnx share` and `evnx rotate`. Neither shipped, and the reasons are worth stating rather than quietly deleting:
+<Callout type="success" title="Sharing has since shipped — this note is updated, not deleted">
+Earlier versions of this article pointed at `evnx share` and `evnx rotate`, neither of which
+existed. The names were wrong in both cases, and one of the two capabilities has since been
+built. Keeping the history visible is the point of this box.
 
-**Sharing** is blocked on post-quantum work, not on effort. Sharing a vault wraps its key with X25519 ECDH to the recipient's public key, and Shor's algorithm breaks X25519 — so a shared vault recorded today could be decrypted by a future adversary. A hybrid X25519 + ML-KEM-768 wrap lands in evnx-crypto 0.2.0 first. Your **own** copy of a vault key is wrapped symmetrically and is unaffected.
+**Sharing shipped** as `evnx vault share`, and the post-quantum objection that was holding
+it back is resolved rather than waived. The wrap is hybrid X25519 + ML-KEM-768, derived over
+both shared secrets plus the transcript, so it holds if either primitive survives. There is
+no X25519-only path anywhere — not in the crate, not in the CLI, and not in the database,
+where a CHECK constraint makes half a wrap unstorable. Sharing with an account that has no
+ML-KEM key on file is refused rather than downgraded.
 
-**Key rotation** is genuinely harder than it looks in a zero-knowledge system, for the reason the section above describes: rotating a master key means re-wrapping every vault key that depends on it, atomically. It is planned, it is not shipped, and pretending otherwise would be the wrong kind of documentation.
+⚠️ One caveat that sharing introduces and is worth stating plainly: **the recipient's
+public keys come from the server.** A malicious server could substitute its own and read
+what you share. Out-of-band fingerprint verification is not built, so "the server cannot
+read your secrets" becomes "…cannot read them *passively*" the moment you share.
 
-What exists today is in **[evnx cloud](/guides/commands/cloud)**.
+**Vault key rotation shipped too**, as part of revocation: `evnx vault revoke` re-encrypts
+every version under a fresh key and re-wraps it for everyone who stays. What it cannot do is
+recall what a removed member already read — rotate those secrets at their source.
+
+**Master key rotation is still not built.** That is the genuinely hard one the section above
+describes: rotating a master key means re-wrapping every vault key that depends on it,
+atomically. It is planned and it is not shipped.
+
+What exists today is in **[evnx cloud](/guides/commands/cloud)** and
+**[evnx vault](/guides/commands/vault)**.
 </Callout>
 
 By shifting encryption to the client, we reclaim sovereignty over our data. In an era of frequent breaches, zero-knowledge isn't just a feature—it's the future of secure development.

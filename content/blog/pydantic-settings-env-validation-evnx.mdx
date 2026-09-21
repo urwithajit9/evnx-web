@@ -679,22 +679,30 @@ evnx scan
 # [TIP]   Use `evnx migrate --to aws-secrets-manager` to move secrets safely.
 ```
 
-### Step 4: Install the pre-commit hook (do this once per repo)
+### Step 4: Add the pre-commit hook (do this once per repo)
 
 ```bash
-evnx install-hook
-
-# [HOOK] Installing pre-commit hook to .git/hooks/pre-commit
-# [OK]   Hook installed. evnx scan will run on every commit.
-# [INFO] Average scan time: ~180ms
+printf '#!/bin/sh\nevnx scan --severity high || exit 1\n' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
 ```
+
+`--severity high` blocks only on detections matching a known provider format. A hook that
+fires on anything is a hook people disable. The `||` also catches exit code 2, which means
+the scan could not run — you want that to fail too, rather than pass silently.
+
+<Callout type="warning">
+Corrected September 2026: this step previously ran `evnx install-hook` and quoted a ~180ms
+average. There is no such command, and the number was invented. evnx deliberately does not
+write to `.git/hooks` — that directory is yours, it is not version-controlled, and a tool
+that silently installs itself there is hard to audit and harder to remove.
+</Callout>
 
 Now you can't accidentally commit `.env` with real secrets.
 
 ### Step 5: Sync .env.example for your teammates
 
 ```bash
-evnx sync --to .env.example
+evnx sync --direction forward
 
 # [SYNC] Comparing .env with .env.example...
 # [ADD]  REDIS_URL → added to .env.example as REDIS_URL=
@@ -868,7 +876,7 @@ evnx migrate --to github-actions
 
 ```bash
 # Create an encrypted backup before migration
-evnx backup --encrypt --output .env.backup.enc
+evnx backup --output .env.backup.enc
 
 # [BACKUP] Creating encrypted backup...
 # [OK]  Written to .env.backup.enc (AES-256)
@@ -899,7 +907,7 @@ jobs:
         run: curl -fsSL https://dotenv.space/install.sh | bash
 
       - name: Check .env.example is committed and complete
-        run: evnx doctor --check-example-only --fail-on-warning
+        run: evnx doctor
 
       - name: Validate pydantic-settings schema against .env.example
         run: |
@@ -947,10 +955,16 @@ repos:
       - id: evnx-doctor
         name: evnx env health check
         language: system
-        entry: evnx doctor --fail-on-warning
+        entry: evnx doctor
         pass_filenames: false
         always_run: true
 ```
+
+<Callout type="warning">
+Corrected September 2026: the second hook previously passed `--fail-on-warning`, which does
+not exist — `evnx doctor` takes an optional path and nothing else. It already exits non-zero
+on a failed check, so the flag was not needed to make the hook work.
+</Callout>
 
 ---
 

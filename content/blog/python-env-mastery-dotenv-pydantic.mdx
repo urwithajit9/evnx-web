@@ -256,9 +256,9 @@ jobs:
       - name: Install evnx
         run: curl -fsSL https://dotenv.space/install.sh | bash
       - name: Validate .env against schema
-        run: evnx validate --schema config_schema.json --env .env.production
+        run: evnx validate --env-name production --strict
       - name: Check for leaked secrets
-        run: evnx scan --pre-commit
+        run: evnx scan --severity high
 ```
 
 **Sample `config_schema.json` for evnx:**

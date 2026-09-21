@@ -345,7 +345,7 @@ jobs:
 ```bash
 # .husky/pre-commit
 #!/bin/sh
-npx evnx scan --block-on-secrets  # Block commits with potential secrets
+npx evnx scan --severity high     # Exits 1 on a high-confidence detection
 npx evnx sync --check            # Block if .env.example is outdated
 ```
 
@@ -429,9 +429,16 @@ PayFlow implemented a new configuration management policy:
 ✅ Local development uses `evnx` to sync .env.example
 ✅ Pre-commit hooks block commits with high-entropy strings
 ✅ CI/CD validates environment completeness before deploy
-✅ Weekly `evnx audit` runs to detect configuration drift
-✅ New team members run `evnx onboarding` to set up local env
+✅ Weekly `evnx diff` runs to detect configuration drift
+✅ New team members run `evnx init` to set up local env
 ```
+
+<Callout type="warning">
+Corrected September 2026: this policy listed `evnx audit` and `evnx onboarding`. Neither
+command exists. Drift detection against a committed template is `evnx diff` — or
+`evnx sync --check`, which is the one built for a CI gate and exits 1 when the two files are
+out of step. Onboarding a new machine is `evnx init`.
+</Callout>
 
 **Result**: Zero configuration-related incidents in the 18 months since implementation.
 

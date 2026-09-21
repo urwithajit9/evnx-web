@@ -764,21 +764,27 @@ evnx scan
 evnx diff .env .env.production
 
 # Convert to GitHub Actions secrets format
-evnx convert --format github-actions
+evnx convert --to github-actions
 
 # Convert to Kubernetes secret manifest
-evnx convert --format k8s-secret
+evnx convert --to kubernetes
 
 # Migrate to AWS Secrets Manager
-evnx migrate --to aws
+evnx migrate --to aws-secrets-manager
 ```
+
+<Callout type="warning">
+Corrected September 2026: these examples used `evnx convert --format` and
+`evnx migrate --to aws`. The flag is `--to` for both, and the AWS destination is named
+`aws-secrets-manager`. `k8s-secret` is spelled `kubernetes`.
+</Callout>
 
 ### The 14 conversion formats
 
 One of evnx's most practical features for teams bridging the `.env` world and CI/CD infrastructure:
 
 ```bash
-evnx convert --format [format]
+evnx convert --to [format]
 ```
 
 Available formats: `github-actions`, `gitlab-ci`, `k8s-secret`, `k8s-configmap`, `docker-compose`, `heroku`, `terraform`, `aws-ssm`, `aws-secrets-manager`, `doppler`, `vercel`, `json`, `yaml`, `shell`.
@@ -827,11 +833,11 @@ Here's how the tools described in this post map to each phase of the development
 
 **Pre-commit:** `evnx scan` (detect secrets before they're committed) + `evnx validate` (verify all required variables are present)
 
-**CI/CD setup:** `evnx convert --format github-actions` (convert .env.example to CI secrets format)
+**CI/CD setup:** `evnx convert --to github-actions` (convert .env.example to CI secrets format)
 
 **PR review:** `evnx diff .env.example .env.example.new` (review new variables being added)
 
-**Production:** `evnx migrate --to aws` (migrate from .env to secrets manager) or dotenvx encrypt (encrypt .env for committed storage)
+**Production:** `evnx migrate --to aws-secrets-manager` (migrate from .env to secrets manager) or dotenvx encrypt (encrypt .env for committed storage)
 
 **Type safety at runtime:** pydantic-settings (Python) / T3 Env (TypeScript) / envy + dotenvy (Rust) / envconfig (Go)
 
