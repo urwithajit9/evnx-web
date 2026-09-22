@@ -55,6 +55,20 @@ Two derivations is the cost of that separation. It is worth it.
 
 ## Two ways to wrap a vault key, and only one is safe forever
 
+<Callout type="warning" title="Correction — September 2026">
+**This section is out of date, and in the direction that matters.** It was written before
+evnx-crypto 0.2.0, when the shared wrap really was X25519 alone.
+
+Since 0.2.0 the shared wrap is **hybrid X25519 + ML-KEM-768** — the wrap key is an HKDF
+over both shared secrets plus the transcript, so it holds if either primitive survives.
+The ❌ in the table below is no longer accurate, and neither is the closing line: `evnx
+vault share` **has** shipped, and there is no X25519-only path left in the crate, the CLI
+or the database.
+
+The section is left standing because the reasoning is what produced the fix. See
+[evnx vault](/guides/commands/vault) for the current behaviour.
+</Callout>
+
 This is the decision I would most want a reviewer to check.
 
 A vault key is random and 256-bit. Every member of a vault holds their own wrapped copy of it, and there are two wrapping paths:
@@ -68,7 +82,10 @@ Your own copy is symmetric, so the only quantum threat is Grover, which halves e
 
 The API originally made this mistake easy to commit. `CreateVaultRequest.eph_pub_key` was a required field whose documentation said "ECDH-wrapped vault key for the owner" — which, followed literally, would have routed *every* vault through X25519 and quietly made solo vaults vulnerable to harvest-now-decrypt-later. It is now optional, and `NULL` for the creator, matching what the database column always allowed.
 
-This is also why `evnx vault share` has not shipped. A hybrid X25519 + ML-KEM-768 wrap lands first. Shipping sharing on X25519 alone would mean promising a guarantee the maths does not support.
+This is also why `evnx vault share` had not shipped at the time of writing. A hybrid
+X25519 + ML-KEM-768 wrap landed first — shipping sharing on X25519 alone would have meant
+promising a guarantee the maths does not support. That wrap is now in evnx-crypto 0.2.0,
+and sharing shipped with it.
 
 ## Associated data: the part people skip
 

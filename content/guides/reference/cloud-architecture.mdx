@@ -131,18 +131,32 @@ What it buys: **a server cannot replay an old version as current.** It cannot re
 
 ---
 
-## Two wrap modes, and why only one is safe forever
+## Two wrap modes, and why the distinction is load-bearing
 
 Every vault member holds their own wrapped copy of the vault key, wrapped one of two ways:
 
-| Whose copy | Method | `eph_pub_key` | Post-quantum |
-|---|---|---|---|
-| **Yours, as creator** | XChaCha20-Poly1305 under an HKDF subkey of your master key | `NULL` | ✅ symmetric only |
-| A member's, when shared | X25519 ECDH to their public key | the ephemeral | ❌ Shor breaks X25519 |
+| Whose copy | Method | `eph_pub_key` | `mlkem_ciphertext` | Post-quantum |
+|---|---|---|---|---|
+| **Yours, as creator** | XChaCha20-Poly1305 under an HKDF subkey of your master key | `NULL` | `NULL` | ✅ symmetric only |
+| A member's, when shared | **hybrid X25519 ECDH + ML-KEM-768** | the ephemeral | the KEM ciphertext | ✅ holds if either primitive does |
 
 Your own copy is symmetric, so the only quantum threat is Grover — which halves effective strength, leaving 128 bits. Not a concern.
 
-Sharing rides on X25519, and Shor breaks that outright, which means a shared vault is exposed to harvest-now-decrypt-later. **This is why `evnx vault share` has not shipped.** A hybrid X25519 + ML-KEM-768 wrap lands in evnx-crypto 0.2.0 first.
+A shared copy derives its wrap key from **both** an X25519 exchange and an ML-KEM-768 encapsulation, mixed together with the transcript. Shor breaks X25519 outright, so the ML-KEM half is what carries the guarantee against an adversary recording the wrap today.
+
+<Callout type="warning" title="Corrected — this section said sharing was unsafe">
+Until evnx-crypto 0.2.0 the shared wrap **was** X25519 alone, and this page said so: *"Sharing rides on X25519 … this is why `evnx vault share` has not shipped."*
+
+Both halves of that are now wrong. The hybrid wrap shipped in 0.2.0, `evnx vault share` shipped with it, and there is **no X25519-only path left** — not in the crate, not in the CLI, and not in the database, where a `CHECK` constraint makes a row carrying one key-agreement column without the other unstorable.
+
+The two columns move together: both `NULL` for your own copy, both present for a share. A row with one and not the other is a wrap Shor opens, so it cannot be stored.
+</Callout>
+
+<Callout type="warning" title="What the hybrid wrap does not cover">
+The recipient's public keys are fetched **from the server**. A malicious server could substitute its own and read what you share. There is no third party to check them against, and out-of-band fingerprint verification is not built.
+
+So for a shared vault, "the server cannot read your secrets" narrows to "cannot read them *passively*". A vault you never share is unaffected — its key never goes near a key exchange.
+</Callout>
 
 <Callout type="info" title="An API that made the wrong choice easy">
 `CreateVaultRequest.eph_pub_key` was once a required field documented as "ECDH-wrapped vault key for the owner". Followed literally, that routes *every* vault through X25519 and quietly makes solo vaults vulnerable. It is now optional and `NULL` for the creator — matching what the database column always allowed.
