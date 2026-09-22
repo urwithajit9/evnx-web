@@ -4,12 +4,12 @@ section: "commands"
 order: 6
 title: "evnx migrate"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-09"
-excerpt: "Reference documentation for the evnx migrate command: move secrets from .env files to cloud secret managers and CI/CD platforms."
+updatedAt: "2026-09-22"
+excerpt: "Generate the commands that move your .env into a cloud secret manager. evnx writes them out; you run them. GitHub Actions is the one destination it uploads to directly."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["migrate", "reference", "cli", "secrets", "cloud"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -17,20 +17,64 @@ draft: false
 
 # evnx migrate — Command Reference
 
-Move secrets from your `.env` file into cloud secret managers and CI/CD platforms. Supports nine destinations with dry-run previews, key filtering, and prefix transforms.
+`evnx migrate` reads your `.env`, applies any filtering and prefix rules you ask
+for, and **writes out the commands** that would load those variables into a cloud
+secret manager or CI platform. You review them and run them.
+
+<Callout type="warning">
+**It does not upload — with one exception.** Eight of the nine destinations never
+contact the platform at all. They print `aws secretsmanager create-secret …`,
+`doppler secrets set …`, `heroku config:set …` and so on, for you to run under
+your own already-authenticated CLI.
+
+`github-actions` is the exception: it encrypts each secret with the repository's
+public key and PUTs it to the GitHub REST API. That one really does transfer.
+
+This is a deliberate design, not a gap — see
+[Why it works this way](#why-it-works-this-way). Before v0.5.0 the summary line
+reported `✓ N uploaded` for every destination, which made it easy to believe the
+transfer had happened. It now says what it did.
+</Callout>
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/getting-started/sync-basics">Understand .env basics</Prerequisite>
+  <Prerequisite href="/guides/getting-started/sync-basic">Understand .env basics</Prerequisite>
 </Prerequisites>
 
-<Callout type="warning">
-  <strong>Feature flag required.</strong> The migrate command is not included in the default evnx build. Install with the <code>migrate</code> feature to enable it:
-  <ul>
-    <li><code>cargo install evnx --features migrate</code></li>
-    <li>Or from source: <code>cargo build --features migrate</code></li>
-  </ul>
+<Callout type="info">
+**Feature flag — only if you build from source.** `migrate` is behind a Cargo
+feature, but the prebuilt binaries are built with `--all-features`, so Homebrew,
+Scoop, winget, npm, PyPI and the GitHub Release all have it.
+
+Only `cargo install evnx` needs the flag, because it compiles from source with no
+default features:
+
+```bash
+cargo install evnx --features migrate
+```
+
+Run `evnx migrate --help`. If it prints help, you have it.
 </Callout>
+
+---
+
+## What it does, step by step
+
+<Step number={1} title="Reads the source">
+A `.env` file, or the current process environment with common system variables filtered out.
+</Step>
+
+<Step number={2} title="Applies your filters">
+`--include`, then `--exclude`, then `--strip-prefix`, then `--add-prefix`. In that order.
+</Step>
+
+<Step number={3} title="Renders the destination's commands">
+Each destination knows its platform's syntax, quoting and naming rules. Azure, for instance, rewrites underscores to hyphens because Key Vault will not accept them.
+</Step>
+
+<Step number={4} title="Prints them, and stops">
+Except `github-actions`, which uploads. Nothing else leaves your machine.
+</Step>
 
 ---
 
@@ -40,7 +84,12 @@ Move secrets from your `.env` file into cloud secret managers and CI/CD platform
 evnx migrate [OPTIONS]
 ```
 
-Running `evnx migrate` with no flags opens an interactive menu to pick a source and destination. Every option can also be supplied as a flag for scripted or CI use.
+Run it with no flags for an interactive picker. In a script, name the source and
+destination:
+
+```bash
+evnx migrate --to doppler --project my-app --doppler-config prd
+```
 
 ---
 
@@ -49,26 +98,134 @@ Running `evnx migrate` with no flags opens an interactive menu to pick a source 
 | Value | Description |
 |-------|-------------|
 | `env-file` | Read secrets from a `.env` file (default) |
-| `environment` | Read from the current process environment variables (common system variables are filtered out automatically) |
+| `environment` | Read from the current process environment; common system variables are filtered out automatically |
 
 ---
 
 ## Destinations
 
-| Value | Aliases | How evnx helps |
-|-------|---------|---------------|
-| `github-actions` | `github` | Uploads secrets directly via the GitHub REST API |
-| `aws-secrets-manager` | `aws` | Prints ready-to-run `aws secretsmanager` CLI commands |
-| `doppler` | — | Prints `doppler secrets set` commands; requires Doppler CLI |
-| `infisical` | — | Prints `infisical secrets set` commands; requires Infisical CLI |
-| `gcp-secret-manager` | `gcp` | Prints `gcloud secrets create` commands |
-| `azure-keyvault` | `azure` | Prints `az keyvault secret set` commands |
-| `vercel` | — | Prints `vercel env add` commands; requires Vercel CLI |
-| `heroku` | — | Prints a single bulk `heroku config:set` command |
-| `railway` | — | Prints a `railway variables set` command; requires Railway CLI |
+| Value | Aliases | What evnx produces | Transfers? |
+|-------|---------|--------------------|------------|
+| `github-actions` | `github` | Encrypts each secret and PUTs it to the GitHub REST API | **Yes** |
+| `aws-secrets-manager` | `aws` | One `aws secretsmanager create-secret` / `update-secret` pair, all variables in a single JSON secret | No |
+| `gcp-secret-manager` | `gcp` | One `gcloud secrets create` per variable, reading values from your shell | No |
+| `azure-keyvault` | `azure` | One `az keyvault secret set` per variable, with `_` rewritten to `-` | No |
+| `doppler` | — | One `doppler secrets set` per variable. Checks the Doppler CLI is installed | No |
+| `infisical` | — | One `infisical secrets set` per variable. Checks the Infisical CLI is installed | No |
+| `vercel` | — | One `vercel env add` per variable, piped from `echo` | No |
+| `heroku` | — | A single bulk `heroku config:set`, so the dyno restarts once rather than once per variable | No |
+| `railway` | — | A single bulk `railway variables set`. Checks the Railway CLI is installed | No |
 
-<Callout type="info">
-  GitHub Actions is the only destination where evnx uploads secrets directly. All other destinations print CLI commands for you to review and run.
+### `aws-secrets-manager`
+
+All variables go into **one** secret as a JSON document — the Secrets Manager
+idiom — rather than one secret per variable.
+
+```bash
+evnx migrate --to aws --secret-name prod/myapp/config
+```
+
+```text
+# Create a new secret:
+aws secretsmanager create-secret \
+  --name prod/myapp/config \
+  --secret-string '{
+  "DATABASE_URL": "postgres://user:pw@db/app",
+  "API_KEY": "sk_live_abc123"
+}'
+
+# Or update an existing secret:
+aws secretsmanager update-secret \
+  --secret-id prod/myapp/config \
+  --secret-string '{ … }'
+```
+
+Both are printed because evnx cannot know whether the secret exists — it never
+talks to AWS. Pick the one that applies. `--aws-profile` adds `--profile` to both.
+
+### `gcp-secret-manager`
+
+One secret per variable. Note the values are **not** in the printed command — it
+reads them from your shell environment:
+
+```text
+echo -n "${DATABASE_URL}" | \
+  gcloud secrets create DATABASE_URL \
+    --data-file=- --replication-policy=automatic
+```
+
+So you must have those variables exported when you run it. The command also
+suggests `evnx convert --to gcp-secrets > upload.sh`, which writes a script with
+the values inlined and the names lowercased.
+
+### `azure-keyvault`
+
+Key Vault does not permit underscores in secret names, so evnx rewrites them and
+prints a rename log rather than changing names silently:
+
+```text
+az keyvault secret set --vault-name my-vault --name DATABASE-URL --value "postgres://user:pw@db/app"
+
+Key renames applied:
+  DATABASE_URL → DATABASE-URL (underscores → hyphens)
+```
+
+⚠️ Your application has to read the new names. This is the one destination where
+migrating changes what your code must ask for.
+
+### `heroku`
+
+A single bulk command, deliberately:
+
+```text
+heroku config:set --app my-app \
+  DATABASE_URL='postgres://user:pw@db/app' \
+  API_KEY='sk_live_abc123'
+```
+
+`heroku config:set` restarts the dyno. One bulk call restarts it once; a loop
+would restart it once per variable.
+
+### `doppler`, `infisical`, `railway`, `vercel`
+
+These print one command per variable (Railway bulks into one) and **check that
+the platform's CLI is installed** before printing, failing with an install link
+if not. That check is the only thing they execute — evnx runs
+`doppler --version`, not `doppler secrets set`.
+
+### `github-actions`
+
+The only destination that transfers. It fetches the repository's public key,
+seals each value with it, and PUTs the result — so GitHub receives ciphertext it
+can open and evnx never posts a plaintext secret.
+
+```bash
+evnx migrate --to github --repo owner/repo
+```
+
+`--github-token` is read from `$GITHUB_TOKEN` when not passed, which is what makes
+it usable inside an Actions job without extra configuration. The token needs
+`secrets:write`.
+
+---
+
+## Your secrets are in the printed commands
+
+<Callout type="danger">
+**Most destinations print secret values in plaintext**, because that is what the
+command needs to contain. Anything you copy into a terminal lands in your shell
+history, and a `--secret-string '{…}'` line carries every variable at once.
+
+Mitigations, in order of preference:
+
+1. **Write to a file instead of scrolling**, then run and delete it:
+   `evnx migrate --to aws --secret-name prod/app > /tmp/up.sh` — review, `bash /tmp/up.sh`, `shred -u /tmp/up.sh`.
+2. **Prefix the command with a space** if your shell is configured with
+   `HISTCONTROL=ignorespace`, so it is not recorded.
+3. **Use `gcp`**, which references `${VAR}` rather than inlining values — the
+   only destination whose output is safe to paste anywhere.
+
+`--dry-run` is not a mitigation. It still previews values.
 </Callout>
 
 ---
@@ -79,86 +236,68 @@ Running `evnx migrate` with no flags opens an interactive menu to pick a source 
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--from` | `string` | — | Source: `env-file` or `environment`. Interactive if omitted. |
+| `--from` | `string` | — | Source: `env-file` or `environment`. Interactive if omitted |
 | `--source-file` | `path` | `.env` | Path to the source `.env` file (only used when `--from env-file`) |
-| `--to` | `string` | — | Destination slug. Interactive if omitted. |
-| `--dry-run` | `bool` | `false` | Preview what would be migrated without uploading or printing commands |
-| `--skip-existing` | `bool` | `false` | Silently skip secrets that already exist at the destination |
-| `--overwrite` | `bool` | `false` | Silently overwrite secrets that already exist without prompting |
+| `--to` | `string` | — | Destination slug. Interactive if omitted |
+| `--dry-run` | `bool` | `false` | Preview the variable set and where it would go, without printing the commands themselves |
+| `--skip-existing` | `bool` | `false` | Skip secrets that already exist. **Only `github-actions` can honour this** — the others never ask the platform what exists |
+| `--overwrite` | `bool` | `false` | Overwrite without prompting. Same caveat as above |
 | `--verbose`, `-v` | `bool` | `false` | Print diagnostic output during the run |
+
+<Callout type="info">
+**v0.5.0 — `--dry-run` no longer needs a terminal.** The prompt for a secret
+name, vault name or app name used to run before `--dry-run` was consulted, so
+`evnx migrate --to aws --dry-run` inside CI failed with `IO error: not a
+terminal`. All nine destinations now dry-run unattended; a missing identifier
+shows as `<--secret-name not set>` in the preview.
+
+Outside `--dry-run`, a missing identifier with no terminal attached is an error
+that **names the flag you need** rather than reporting the absent terminal.
+</Callout>
 
 ### Filtering options
 
-Applied before any secret reaches the destination. Filtering runs in this order: include → exclude → strip prefix → add prefix.
+Applied before any secret reaches the destination, in this order:
+include → exclude → strip prefix → add prefix.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--include` | `glob,...` | — | Comma-separated glob patterns. Only keys matching at least one pattern are migrated. Example: `"DB_*,AWS_*"` |
-| `--exclude` | `glob,...` | — | Comma-separated glob patterns. Keys matching any pattern are dropped. Example: `"*_LOCAL,*_TEST"` |
-| `--strip-prefix` | `string` | — | Remove a leading prefix from every key before uploading. Example: `APP_` turns `APP_DB_URL` into `DB_URL` |
-| `--add-prefix` | `string` | — | Prepend a prefix to every key before uploading. Example: `PROD_` turns `DB_URL` into `PROD_DB_URL` |
+| `--include` | `glob,...` | — | Only keys matching at least one pattern are migrated. Example: `"DB_*,AWS_*"` |
+| `--exclude` | `glob,...` | — | Keys matching any pattern are dropped. Example: `"*_LOCAL,*_TEST"` |
+| `--strip-prefix` | `string` | — | Remove a leading prefix from every key. `APP_` turns `APP_DB_URL` into `DB_URL` |
+| `--add-prefix` | `string` | — | Prepend a prefix to every key. `PROD_` turns `DB_URL` into `PROD_DB_URL` |
 
-### GitHub Actions options
+<Callout type="warning">
+**A filter that matches nothing exits `0`.** `evnx migrate --to gcp --include
+'DB_ *'` — note the typo — prints *"All secrets were filtered out — nothing to
+migrate"* and succeeds. In a pipeline that reads as a completed migration.
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--repo` | `string` | — | Repository in `owner/repo` format. Interactive if omitted. |
-| `--github-token` | `string` | `$GITHUB_TOKEN` | Personal Access Token with `secrets:write` scope. Reads from the environment if not supplied. |
-
-### AWS Secrets Manager options
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--secret-name` | `string` | — | Secret name in Secrets Manager, e.g. `prod/myapp/config`. Interactive if omitted. |
-| `--aws-profile` | `string` | — | Named AWS CLI profile to include in the printed commands |
-
-### Doppler options
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--project` | `string` | — | Doppler project slug. Omit to use the CLI's currently selected project. |
-| `--doppler-config` | `string` | — | Doppler config name, e.g. `dev`, `staging`, `prd` |
-
-### Infisical options
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--project` | `string` | — | Infisical project ID |
-| `--infisical-env` | `string` | — | Infisical environment name, e.g. `dev`, `staging`, `prod` |
-
-### Azure Key Vault options
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--vault-name` | `string` | — | Azure Key Vault name. Interactive if omitted. |
-
-<Callout type="info">
-  Azure Key Vault does not allow underscores in secret names. evnx automatically converts every underscore in a key name to a hyphen — <code>DB_URL</code> becomes <code>DB-URL</code> — and prints a rename log so nothing is lost silently.
+Check the count before trusting it, or run without `--to` first to see what
+survives filtering.
 </Callout>
 
-### Heroku options
+### Destination options
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--heroku-app` | `string` | — | Heroku application name. Interactive if omitted. |
+| Flag | Applies to | Description |
+|------|-----------|-------------|
+| `--repo` | `github-actions` | Repository as `owner/repo` |
+| `--github-token` | `github-actions` | PAT with `secrets:write`. Falls back to `$GITHUB_TOKEN` |
+| `--secret-name` | `aws` | Secret name, e.g. `prod/myapp/config` |
+| `--aws-profile` | `aws` | Named AWS CLI profile, added to the printed commands |
+| `--project` | `doppler`, `infisical` | Project slug or ID |
+| `--doppler-config` | `doppler` | Config name, e.g. `dev`, `staging`, `prd` |
+| `--infisical-env` | `infisical` | Environment name, e.g. `dev`, `staging`, `prod` |
+| `--vault-name` | `azure` | Azure Key Vault name |
+| `--heroku-app` | `heroku` | Heroku application name |
+| `--vercel-project` | `vercel` | Vercel project ID or name |
+| `--railway-project` | `railway` | Railway project ID |
 
-### Vercel options
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--vercel-project` | `string` | — | Vercel project ID or name |
-
-### Railway options
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--railway-project` | `string` | — | Railway project ID |
+Each destination's own identifier is prompted for when omitted and a terminal is
+attached. See the `--dry-run` callout above for what happens when there isn't one.
 
 ---
 
 ## Glob pattern syntax
-
-The `--include` and `--exclude` flags use a simple glob syntax:
 
 | Pattern | Matches |
 |---------|---------|
@@ -168,7 +307,7 @@ The `--include` and `--exclude` flags use a simple glob syntax:
 | `DATABASE_URL` | Exact match only |
 | `*` | Every key |
 
-Patterns are case-sensitive. Multiple patterns are comma-separated: `--include "DB_*,AWS_*"`.
+Patterns are case-sensitive. Multiple patterns are comma-separated.
 
 ---
 
@@ -176,16 +315,57 @@ Patterns are case-sensitive. Multiple patterns are comma-separated: `--include "
 
 | Code | Meaning |
 |------|---------|
-| `0` | Migration completed (or dry-run completed) |
-| `1` | Migration failed — missing files, API errors, user cancelled |
+| `0` | Completed — commands generated, or an upload finished. **Also returned when filtering left nothing to do** |
+| `1` | Failed — unknown destination, missing source file, a required platform CLI not installed, a missing identifier with no terminal, or an API error |
+| `2` | Argument error (unknown flag, bad value) |
+
+---
+
+## Why it works this way
+
+Generating commands instead of uploading is a trade, and it is worth knowing
+which side you are on.
+
+**What it buys you.** evnx never needs credentials for the destination. There is
+no AWS key, no GCP service account and no Azure client secret for it to ask for,
+hold, or leak. The command runs under the CLI you have already authenticated,
+with exactly your permissions and your audit trail. For a tool whose premise is
+that it cannot read your secrets, not collecting nine more sets of cloud
+credentials is the consistent choice.
+
+It also means the output is reviewable. You see precisely what would be created
+before anything is, which for a one-time operation against production is worth
+more than saving a copy-paste.
+
+**What it costs you.** It is not automatable — you cannot put `evnx migrate --to
+aws` in a pipeline and have secrets appear. `--skip-existing` and `--overwrite`
+cannot work, because evnx never asks the platform what is already there. And the
+values pass through your terminal.
+
+`github-actions` is uploaded because it can be done without holding a long-lived
+cloud credential: the token is usually the one the Actions job already has, and
+the values are sealed to the repository's public key before they are sent.
+
+<Callout type="info">
+**Wider upload support is not currently planned.** The cheap cases — Doppler,
+Infisical, Vercel and Heroku are all token-and-REST — would be a few hundred
+lines each. AWS, GCP and Azure would each need their own cloud authentication
+flow, which is the part that carries real risk.
+
+The reason it is parked is leverage rather than difficulty: migration happens
+roughly once per project, while
+[`evnx cloud run`](/guides/commands/cloud) — injecting secrets into a subprocess
+with no file on disk — is a daily operation and does not exist yet. If you want
+upload support for a specific destination, saying which one is genuinely useful.
+</Callout>
 
 ---
 
 ## See also
 
-- [Migration concepts](/guides/concepts/migrate-intro) — Understand the migration pipeline before running commands
-- [GitHub Actions migration](/guides/use-cases/github-actions-use-cases) — Step-by-step guide
-- [AWS Secrets Manager migration](/guides/use-cases/aws-use-cases) — Step-by-step guide
-- [GCP Secret Manager migration](/guides/use-cases/gcp-use-cases) — Step-by-step guide
-- [`evnx scan`](/guides/commands/scan) — Detect real secrets before migrating
-- [`evnx convert`](/guides/commands/convert) — Generate static config files instead of uploading
+- [Migration concepts](/guides/reference/concepts-migrate-intro) — the pipeline, before you run commands
+- [GitHub Actions](/guides/use-cases/use-cases-github-actions) — step-by-step
+- [AWS Secrets Manager](/guides/use-cases/use-cases-aws) — step-by-step
+- [GCP Secret Manager](/guides/use-cases/use-cases-gcp) — step-by-step
+- [`evnx scan`](/guides/commands/scan) — find real secrets before migrating
+- [`evnx convert`](/guides/commands/convert) — `--to gcp-secrets` writes an upload script
