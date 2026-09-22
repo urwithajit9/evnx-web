@@ -4,11 +4,11 @@ slug: vault
 section: commands
 order: 8
 publishedAt: "2026-09-16"
-excerpt: "Create, list and delete encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
+excerpt: "Create, share and revoke encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
 difficulty: intermediate
-timeToComplete: "6 minutes"
-tags: ["cloud", "vault", "encryption", "key-management", "evnx"]
-evnxVersion: "0.4.0"
+timeToComplete: "10 minutes"
+tags: ["cloud", "vault", "encryption", "key-management", "sharing", "rbac", "evnx"]
+evnxVersion: "0.5.0"
 prerequisites:
   - commands/auth
 draft: false
@@ -28,6 +28,10 @@ A **vault** is one encrypted `.env` file plus its full version history. It has a
 evnx vault [SUBCOMMAND]
 evnx vault create my-api --env production
 evnx vault list
+evnx vault share my-api/production --with alice@example.com
+evnx vault members my-api/production
+evnx vault role my-api/production --user alice@example.com --role admin
+evnx vault revoke my-api/production --user bob@example.com
 evnx vault delete my-api/production
 </CommandSignature>
 
@@ -105,6 +109,237 @@ Names are scoped by environment, so `my-api/production` and `my-api/staging` are
 
 <Callout type="info" title="A vault-scoped API token cannot run this">
 `vault list` has no vault in its path, so a token issued for one vault is refused rather than being allowed to enumerate your account. That is by design, not a gap.
+</Callout>
+
+---
+
+## Roles
+
+**v0.5.0+.** Every member of a vault holds one of four roles. They form a ladder,
+and permission is a **minimum rank** rather than a list — so a role added later
+slots into the ladder instead of being quietly missing from checks written before
+it existed.
+
+| Role | Can |
+|---|---|
+| `viewer` | Pull, list versions, read history, see who else is a member |
+| `developer` | Everything a viewer can, **plus push** |
+| `admin` | Everything a developer can, plus share, change roles, and revoke with a re-key |
+| `owner` | Everything, plus **delete the vault**. Exactly one per vault |
+
+Mapped onto the commands you actually run:
+
+| Command | Minimum role |
+|---|---|
+| `evnx cloud pull`, `evnx cloud history` | `viewer` |
+| `evnx vault members` | `viewer` |
+| `evnx cloud push` | `developer` |
+| `evnx vault share` | `admin` |
+| `evnx vault role` | `admin` |
+| `evnx vault revoke` | `admin` |
+| `evnx vault delete` | `owner` |
+
+<Callout type="info" title="Two rules that fall out of the ladder">
+**Removing someone requires outranking them, not merely being an admin.** The
+check is a rank comparison, and `admin > admin` is false — so two admins cannot
+evict each other, and a disagreement between them is resolved by the owner.
+
+**The owner cannot be removed by anyone, including themselves.** A vault with no
+owner has nobody who can delete it or promote a replacement, and there is no
+transfer-ownership command yet. `owner` is also not assignable through
+`evnx vault role`; it is set once, by whoever created the vault.
+</Callout>
+
+---
+
+## Sharing a vault
+
+```bash
+evnx vault share my-api/production --with alice@example.com
+```
+
+```text
+  ✓ shared my-api/production with alice@example.com as developer
+
+  They can pull it with:  evnx cloud pull --vault my-api/production
+```
+
+The role defaults to `developer`. Pass `--role viewer` for read-only access, or
+`--role admin` to let them manage members too.
+
+| Flag | Description |
+|---|---|
+| `--with <EMAIL>` | **Required.** The evnx account to share with |
+| `--role <ROLE>` | `viewer`, `developer` or `admin`. Default `developer` |
+| `--password-stdin` | Read the master password from stdin instead of prompting |
+| `--server <URL>` | Override the server for this command |
+
+Your master password opens the vault key **on your machine**, and it is re-wrapped
+to the recipient's public keys before it leaves. The server never sees it
+unwrapped and cannot grant access by itself.
+
+<Callout type="warning" title="The recipient has to exist, and has to have signed in recently">
+Sharing wraps the vault key to the recipient's **public keys**, so there must be
+an account holding them. Two refusals you may hit, both deliberate:
+
+- *"no evnx account for …"* — they have not registered. There are no invitations
+  for non-registered users, because a person who has not registered has no public
+  key to wrap to.
+- *"… has no post-quantum sharing key yet"* — they registered before v0.5.0.
+  Signing in once with evnx 0.5 or later, or at `app.evnx.dev`, registers it
+  automatically.
+
+Both are checked **before** the master-password prompt, so a share that cannot
+work fails without asking you for anything.
+
+evnx does not fall back to an X25519-only wrap in either case. That wrap would be
+one a quantum computer opens, including from a recording made today, and it would
+stay that way for as long as the row exists.
+</Callout>
+
+---
+
+## Listing members
+
+```bash
+evnx vault members my-api/production
+```
+
+```text
+  my-api/production — 3 member(s)
+
+  owner      you@example.com (you)
+  admin      alice@example.com
+  developer  bob@example.com
+             no post-quantum key — they must sign in once before the vault can be re-keyed
+```
+
+Any member can run this, including a `viewer`. That is deliberate: seeing who
+else holds a key to a vault you hold a key to is how you notice a grant that
+should not be there.
+
+`--verbose` adds each member's user id and when they were granted access.
+
+The *no post-quantum key* line is worth acting on before you need it — that
+member cannot be re-wrapped to, so `evnx vault revoke` will refuse to run on this
+vault until they sign in once.
+
+---
+
+## Changing a role
+
+```bash
+evnx vault role my-api/production --user alice@example.com --role admin
+```
+
+```text
+  ✓ alice@example.com is now admin on my-api/production
+```
+
+| Flag | Description |
+|---|---|
+| `--user <EMAIL>` | **Required.** The member whose role is changing |
+| `--role <ROLE>` | **Required.** `viewer`, `developer` or `admin` |
+
+You can only set a role below your own, and only for someone you already outrank.
+So an admin moves people between `viewer` and `developer`, and only the owner
+makes or unmakes an admin.
+
+Setting the role someone already has is not an error — it says so and changes
+nothing.
+
+---
+
+## Revoking access
+
+```bash
+evnx vault revoke my-api/production --user bob@example.com
+```
+
+This is the expensive one, and the only command here that touches every version:
+
+<Step number={1} title="Your copy of the current vault key is opened">
+Locally, with your master password. Nothing has changed on the server yet.
+</Step>
+
+<Step number={2} title="A fresh vault key is generated">
+Also locally.
+</Step>
+
+<Step number={3} title="Every version is re-encrypted under it">
+Downloaded, decrypted, re-encrypted preserving that version's associated data, and staged on the server. Still nothing swapped.
+</Step>
+
+<Step number={4} title="The new key is wrapped for everyone who stays">
+Symmetrically for your own copy; hybrid X25519 + ML-KEM-768 for everyone else's.
+</Step>
+
+<Step number={5} title="One request swaps all of it and removes the member">
+Atomically. This is the first point at which anything changes.
+</Step>
+
+```text
+  About to remove bob@example.com from my-api/production.
+  Every version will be re-encrypted under a fresh key and re-wrapped
+  for the 2 remaining member(s).
+
+  This stops them reading anything pushed from now on. It cannot
+  recall copies of what they could already read — rotate those
+  secrets at their source.
+? Remove bob@example.com from my-api/production? (y/N)
+
+  Re-encrypting 12 version(s)…
+  Re-wrapping for 2 member(s)…
+
+  ✓ removed bob@example.com from my-api/production and rotated the vault key
+  12 version(s) re-encrypted, 2 member(s) re-wrapped
+```
+
+| Flag | Description |
+|---|---|
+| `--user <EMAIL>` | **Required.** The member to remove |
+| `--yes`, `-y` | Skip the confirmation prompt |
+| `--no-rekey` | Remove them **without** rotating the key — see below |
+| `--password-stdin` | Read the master password from stdin instead of prompting |
+
+<Callout type="danger" title="What rotation achieves, and what it cannot">
+Re-keying stops the removed member reading anything pushed **from now on**.
+
+It cannot recall copies of what they could already read. If they had access to a
+secret, treat that secret as theirs and **rotate it at its source** — the same
+advice that applies to a leaked API token, and the step people skip because the
+`✓` looks like completion.
+
+This is also why evnx does **not** delete the old blobs. Doing so would throw away
+version history for every remaining member in order to punish one departure, and
+it would not un-ring the bell: the person being removed could already read those
+versions.
+</Callout>
+
+<Callout type="warning" title="--no-rekey removes the member and nothing else">
+`--no-rekey` skips steps 1–4 entirely. It is fast, and it leaves the removed
+member able to decrypt **every version they already had access to, including ones
+pushed after the revocation** — because the key never changed.
+
+Use it only when you are re-keying separately, or when the member never held the
+key. The confirmation prompt and the success message both say so, in yellow,
+rather than reporting a revocation that did not revoke.
+</Callout>
+
+<Callout type="info" title="Two things revoke refuses to do">
+**It will not run if a remaining member has no post-quantum key.** They could not
+receive the new vault key, so re-keying would lock them out of the vault
+entirely. Checked *before* any work and before the password prompt, so you are
+not told after fifty versions have been re-encrypted. `evnx vault members` shows
+who is affected.
+
+**You cannot remove yourself.** Re-keying a vault you can no longer open cannot
+work, so `revoke` refuses and tells you to ask an admin.
+
+⚠️ Note this also means **there is currently no way to leave a vault from the
+CLI**, even with `--no-rekey`, where re-keying is not involved and self-removal
+would be safe. The API allows it; the CLI does not expose it. Ask an admin to
+remove you.
 </Callout>
 
 ---
