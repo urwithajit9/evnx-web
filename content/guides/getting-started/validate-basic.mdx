@@ -4,11 +4,12 @@ slug: validate-basic
 section: guides
 order: 12
 publishedAt: "2026-03-09"
+updatedAt: "2026-09-22"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["validate", "tutorial", "best-practices", "ci-cd", "evnx"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
   - commands/validate
@@ -60,27 +61,20 @@ These issues might work locally but fail in production. `evnx validate` catches 
 evnx validate
 ```
 
-```
-┌─ evnx validate ────────────────────────────────────────────┐
-│ Check environment configuration                           │
-└───────────────────────────────────────────────────────────┘
+```text
+  evnx validate  Check environment configuration
 
-📋 Preview:
+  ✗  Missing required variable: STRIPE_SECRET_KEY
+     .env
+     →  Add STRIPE_SECRET_KEY=<value> to .env
+     ·  fixable with --fix
 
-⚠️ Issues Found:
-  1. 🚨 Missing required variable: STRIPE_SECRET_KEY
-     → Add STRIPE_SECRET_KEY=<value> to .env
-     💡 Auto-fixable with --fix
-     📍 .env:?
+  ✗  DEBUG is set to "yes" (string, not boolean)
+     .env
+     →  Use true or false for proper boolean handling
+     ·  fixable with --fix
 
-  2. ⚠️ DEBUG is set to "True" (string, not boolean)
-     → Use true or 0 for proper boolean handling
-     💡 Auto-fixable with --fix
-     📍 .env:?
-
-┌─ Summary ─────────────────────────────────────────────────┐
-│ Errors: 1  |  Warnings: 1  |  Fixed: 0                   │
-└──────────────────────────────────────────────────────────┘
+  2 errors
 ```
 
 **Fix it**:
@@ -162,7 +156,7 @@ jobs:
         run: evnx validate --format github-actions --strict
 
       - name: Validate production config
-        run: evnx validate --pattern .env.production --validate-formats --format json
+        run: evnx validate --env-name production --validate-formats --format json
 ```
 
 **Result**: Inline annotations appear on PR diffs:
@@ -192,16 +186,29 @@ echo "✅ Environment validation passed"
 
 **What**: Validate each environment with appropriate strictness
 
+<Callout type="warning">
+**`--pattern` was removed in v0.5.0 — this page used it eleven times.** Use
+`--env-name`, which takes the name rather than the filename:
+`--env-name production` resolves `.env.production`.
+
+The replacement is not cosmetic. `--pattern`'s whole implementation was a
+`starts_with(".env.")` test — anything else printed *"Pattern 'x' not
+recognized, using default"* and validated `.env` instead, **exiting `0`**. So a
+CI job with a typo'd pattern silently checked the wrong file and passed.
+`--env-name` errors on a name that resolves to nothing, and lists the
+environments that do exist.
+</Callout>
+
 ```bash
 # Development: lenient, skip Docker warnings
-evnx validate --pattern .env.local --ignore localhost_in_docker
+evnx validate --env-name local --ignore localhost_in_docker
 
 # Staging: moderate checks
-evnx validate --pattern .env.staging --validate-formats
+evnx validate --env-name staging --validate-formats
 
 # Production: strictest validation
 evnx validate \
-  --pattern .env.production \
+  --env-name production \
   --strict \
   --validate-formats \
   --format json | tee validation-report.json
@@ -213,13 +220,13 @@ evnx validate \
 .PHONY: validate-dev validate-staging validate-prod validate-all
 
 validate-dev:
-	evnx validate --pattern .env.local --ignore localhost_in_docker
+	evnx validate --env-name local --ignore localhost_in_docker
 
 validate-staging:
-	evnx validate --pattern .env.staging --validate-formats
+	evnx validate --env-name staging --validate-formats
 
 validate-prod:
-	evnx validate --pattern .env.production --strict --validate-formats
+	evnx validate --env-name production --strict --validate-formats
 
 validate-all: validate-dev validate-staging validate-prod
 ```
@@ -429,7 +436,7 @@ evnx validate --validate-formats
 evnx validate --ignore boolean_trap
 
 # Use environment patterns
-evnx validate --pattern .env.production
+evnx validate --env-name production
 ```
 
 ---
@@ -469,9 +476,9 @@ evnx validate --strict --exit-zero     # Warnings OK, errors fail
 # ─────────────────────────────────────
 # Multi-Environment
 # ─────────────────────────────────────
-evnx validate --pattern .env.local         # Dev
-evnx validate --pattern .env.staging       # Staging
-evnx validate --pattern .env.production --validate-formats  # Prod
+evnx validate --env-name local         # Dev
+evnx validate --env-name staging       # Staging
+evnx validate --env-name production --validate-formats  # Prod
 
 # ─────────────────────────────────────
 # Security & Auditing
