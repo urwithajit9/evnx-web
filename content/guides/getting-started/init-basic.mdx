@@ -9,7 +9,7 @@ excerpt: "Learn how to use evnx init to generate .env.example and .env files. Pe
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["init", "tutorial", "beginner", "setup", "env"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -85,7 +85,17 @@ evnx init
 ```
 
 <Callout type="tip" title="Non-interactive default">
-Running `evnx init --yes` skips prompts and uses the first available Blueprint. Perfect for CI/CD or scripting.
+`evnx init --yes` skips every prompt and creates a **blank** setup — an empty
+`.env.example`, a `.env`, and the `.gitignore` entries. Deterministic, which is
+what CI and scripting need.
+</Callout>
+
+<Callout type="warning">
+**This page said `--yes` "uses the first available Blueprint".** It did, and that
+was the bug: the blueprint list came from a hash map, so the stack it picked
+changed between runs. Two CI jobs on the same commit could scaffold different
+variables. `--yes` has meant blank since v0.5.0 — pass `--blueprint <name>` to
+choose one deliberately, or `--with django,postgres` to name components.
 </Callout>
 
 ### Architect Mode — Build your custom stack
@@ -241,9 +251,9 @@ Blank mode creates empty templates. For stacks with 10+ variables, Blueprint or 
 
 Now that you've initialized your project:
 
-1. **[Add Custom Variables](/guides/getting-started/add-variables)** — Extend your template
-2. **[Sync Basics](/guides/getting-started/sync-basics)** — Keep files in sync with your team
-3. **[Blueprint Catalog](/guides/reference/blueprints)** — Explore all pre-configured stacks
+1. **[Add Custom Variables](/guides/getting-started/add-basic)** — Extend your template
+2. **[Sync Basics](/guides/getting-started/sync-basic)** — Keep files in sync with your team
+3. **[Blueprint Catalog](/guides/commands/init)** — Explore all pre-configured stacks
 4. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share `.env.example` safely
 
 <Callout type="success" title="You're ready!">

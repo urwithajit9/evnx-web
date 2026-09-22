@@ -9,7 +9,7 @@ excerpt: "Learn how to use evnx sync to keep your .env and .env.example files sy
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["sync", "tutorial", "beginner", "env", "template"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
   - getting-started/your-first-project
@@ -28,7 +28,7 @@ In this tutorial, you'll learn how to use `evnx sync` to:
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/getting-started/your-first-project">Complete your first project</Prerequisite>
+  <Prerequisite href="/guides/getting-started/quick-start">Complete your first project</Prerequisite>
 </Prerequisites>
 
 ---
@@ -166,11 +166,16 @@ Always use `--dry-run` to see what would change:
 
 ```bash
 evnx sync --dry-run
+```
 
-📋 Preview:
+```text
+Preview:
 Target: .env.example (action: Add)
-  🔒 NEW_API_KEY = YOUR_KEY_HERE
-  🔒 FEATURE_BETA = true
+
+  · NEW_API_KEY = YOUR_KEY_HERE
+  · FEATURE_BETA = YOUR_VALUE_HERE
+
+! Remember to replace placeholders with real values
 
 (dry-run: no files were modified)
 ```

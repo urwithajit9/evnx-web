@@ -9,7 +9,7 @@ excerpt: "Configuration options for evnx init: schema customization, CLI flags, 
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["init", "reference", "configuration", "schema", "setup"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - commands/init
   - getting-started/init-basics
@@ -24,7 +24,7 @@ Unlike `evnx sync`, the `init` command does **not** support runtime configuratio
 
 <Prerequisites>
   <Prerequisite href="/guides/commands/init">Review init command reference</Prerequisite>
-  <Prerequisite href="/guides/getting-started/init-basics">Understand init basics</Prerequisite>
+  <Prerequisite href="/guides/getting-started/init-basic">Understand init basics</Prerequisite>
 </Prerequisites>
 
 ---
@@ -118,10 +118,18 @@ Currently, `schema.json` is embedded via `include_str!`. To customize, you must 
 - Does **not** validate if path is writable until write time
 
 #### `--yes` (non-interactive mode)
-- Defaults to **Blueprint mode** (first available blueprint)
-- Auto-selects first option at each step in Architect mode
+- Creates a **blank** setup: an empty `.env.example`, a `.env`, and the
+  `.gitignore` entries
 - Skips preview and confirmation prompts
+- Deterministic — the same commit scaffolds the same files every time
 - Ideal for CI/CD, Docker builds, or scripting
+
+<Callout type="warning">
+**Corrected for v0.5.0.** This said `--yes` defaults to "Blueprint mode (first
+available blueprint)", which was the non-determinism bug: the list came from a
+hash map, so the chosen stack varied between runs. Use `--blueprint <name>` to
+pick one, or `--with <components>` to name them.
+</Callout>
 
 #### `--verbose`
 - Prints selection summary:
@@ -234,7 +242,7 @@ If your team needs custom placeholders, document them in your `CONTRIBUTING.md` 
 
 | File | Created by | Overwrite policy |
 |------|-----------|-----------------|
-| `.env.example` | Always | Always updated with latest schema |
+| `.env.example` | Only if missing | **Refused if it exists** — pass `--force` to replace it |
 | `.env` | Only if missing | Never overwritten (protects local secrets) |
 | `.gitignore` | Appended if patterns missing | Safe append; no duplicate entries |
 

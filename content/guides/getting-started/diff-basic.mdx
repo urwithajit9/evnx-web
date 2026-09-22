@@ -9,7 +9,7 @@ excerpt: "Learn how to use evnx diff to compare .env and .env.example files. Det
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["diff", "tutorial", "beginner", "env", "comparison"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -27,7 +27,7 @@ In this tutorial, you'll learn how to use `evnx diff` to:
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/getting-started/init-basics">Initialize a project</Prerequisite>
+  <Prerequisite href="/guides/getting-started/init-basic">Initialize a project</Prerequisite>
 </Prerequisites>
 
 ---
@@ -61,9 +61,8 @@ evnx diff
 
 **Step 2: Read the output**
 
-```
-┌─ Comparing .env ↔ .env.example ─────────────────────┐
-└──────────────────────────────────────────────────────┘
+```text
+  evnx diff  .env ↔ .env.example
 
 Missing from .env (present in .env.example):
   + NEW_FEATURE_FLAG
@@ -73,14 +72,15 @@ Extra in .env (not in .env.example):
 
 Different values:
   ~ DATABASE_URL
-    .env.example: postgresql://localhost:5432/dev
-    .env: postgresql://prod-server:5432/prod
 
-Summary:
-  + 1 missing (add to .env)
-  - 1 extra (consider removing or adding to .env.example)
-  ~ 1 different values
+  1 missing from .env  ·  1 not in .env.example  ·  1 different value
 ```
+
+<Callout type="info">
+**Values are not shown by default.** `~ DATABASE_URL` tells you the two files
+disagree, not what they say — pass `--show-values` if you want the values, and
+only where it is safe to have them on screen.
+</Callout>
 
 **Step 3: Take action**
 
@@ -399,10 +399,10 @@ evnx diff --format patch --interactive  # Prompts appear
 
 Now that you can compare environment files:
 
-1. **[Sync Basics](/guides/getting-started/sync-basics)** — Automatically reconcile differences instead of just detecting them
+1. **[Sync Basics](/guides/getting-started/sync-basic)** — Automatically reconcile differences instead of just detecting them
 2. **[Validate Command](/commands/validate)** — Check for security issues and common mistakes
 3. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share `.env.example` safely with your team
-4. **[CI/CD Integration](/guides/integrations/ci-cd-diff)** — Enforce environment consistency in pipelines
+4. **[CI/CD Integration](/guides/integrations/ci-cd-sync)** — Enforce environment consistency in pipelines
 
 <Callout type="success" title="You're ready!">
 You now know how to detect and understand environment drift. Run <code>evnx diff</code> before commits, after pulls, and in CI to keep your project secure and consistent.

@@ -9,7 +9,7 @@ excerpt: "Generate ready-to-run AWS CLI commands to store your .env secrets in A
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "aws", "secrets-manager", "cli"]
-evnxVersion: "0.2.1"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
   - concepts/migrate-intro
@@ -22,7 +22,7 @@ draft: false
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/concepts/migrate-intro">Understand the migration pipeline</Prerequisite>
+  <Prerequisite href="/guides/reference/concepts-migrate-intro">Understand the migration pipeline</Prerequisite>
 </Prerequisites>
 
 ---
@@ -230,6 +230,6 @@ For applications reading secrets at runtime, add `secretsmanager:GetSecretValue`
 
 ## Next steps
 
-- [Migration concepts](/guides/concepts/migrate-intro) — filtering and transform details
-- [GCP Secret Manager migration](/guides/use-cases/gcp-use-cases)
+- [Migration concepts](/guides/reference/concepts-migrate-intro) — filtering and transform details
+- [GCP Secret Manager migration](/guides/use-cases/use-cases-gcp)
 - [`evnx convert --to aws-secrets`](/guides/commands/convert) — generate a static JSON file without CLI commands
