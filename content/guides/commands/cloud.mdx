@@ -176,6 +176,42 @@ evnx cloud status
 
 Reports whether this machine has credentials, whether the directory is bound, and which server it will reach. Compare with `evnx auth status`, which asks the server about your **account**.
 
+By default this reads local files only, so it works offline and never touches the
+network.
+
+### `--ping` — use it as a health check
+
+**v0.5.0+.** Adding `--ping` also checks that the server answers:
+
+```bash
+evnx cloud status --ping
+```
+
+```text
+evnx cloud
+  server    https://api.evnx.dev
+  account   you@example.com
+  status    signed in
+  token     expired — renewed automatically on the next command
+
+  reachable yes (server ok v0.1.0)
+```
+
+The command exits non-zero when the server cannot be reached, which is what makes
+it usable as a health check in a script:
+
+```bash
+evnx cloud status --ping || echo "evnx cloud is unreachable"
+```
+
+<Callout type="warning">
+**A non-zero exit does not always mean "unreachable".** `status` checks your
+credentials first, so pointing `--server` at somewhere you have never signed in
+exits `1` with *"No credentials for this server"* without ever pinging it. When
+you are scripting a reachability check, make sure the credential for that server
+already exists — otherwise you are testing your credential store, not the server.
+</Callout>
+
 ---
 
 ## Using it in CI

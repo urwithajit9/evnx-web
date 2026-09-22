@@ -63,7 +63,27 @@ It knows a vault exists, who owns it, and what it is called. It does not know th
 <Callout type="info" title="Why your own copy is post-quantum safe">
 Your copy of a vault key is wrapped **symmetrically** — XChaCha20 under a key derived from your password. Grover's algorithm halves a symmetric key's effective strength, which for 256 bits leaves 128: still out of reach.
 
-Sharing a vault with a teammate is different. That path uses X25519 ECDH to their public key, and Shor's algorithm breaks X25519 outright — which means a shared vault is exposed to harvest-now-decrypt-later. This is exactly why `evnx vault share` has not shipped: a hybrid X25519 + ML-KEM-768 wrap lands first.
+Sharing a vault with a teammate is **also** post-quantum safe, as of the hybrid
+wrap. `evnx vault share` (**v0.5.0+**) re-wraps the vault key under a key derived from an
+X25519 exchange *and* an ML-KEM-768 encapsulation together, so the wrap holds as
+long as **either** primitive does. Shor's algorithm breaks X25519 outright, which
+is why the ML-KEM half is there.
+
+There is no X25519-only path left — not in the crate, not in the CLI, and not in
+the database, where a constraint makes a half-formed wrap unstorable. Sharing
+with an account that has no ML-KEM key on file is refused rather than quietly
+downgraded; that account registers one on its next sign-in.
+</Callout>
+
+<Callout type="warning" title="Sharing weakens the guarantee from active attack">
+The recipient's public keys are fetched **from the server**. A malicious server
+could hand you its own keys instead and read what you share. There is no third
+party to check them against, and out-of-band fingerprint verification is not
+built yet.
+
+So for a vault you share, "the server cannot read your secrets" narrows to
+"cannot read them *passively*". A vault you never share is unaffected — its key
+never goes near a key exchange.
 </Callout>
 
 ---

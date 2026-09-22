@@ -35,61 +35,181 @@ evnx init [OPTIONS]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--path`, `-p` | `string` | `.` | Output directory for generated files |
-| `--yes`, `-y` | `bool` | `false` | Skip prompts, use defaults (non-interactive) |
-| `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
-| `--help`, `-h` | `bool` | `false` | Display help information |
+| `--with <LIST>` | `string[]` | — | **v0.5.0+** — name the components directly, e.g. `nextjs,postgresql,stripe`. Repeatable |
+| `--detect` | `bool` | `false` | **v0.5.0+** — accept what the project declares, without asking |
+| `--from-source` | `bool` | `false` | **v0.5.0+** — build the template from the variables the code reads |
+| `--list-components` | `bool` | `false` | **v0.5.0+** — print every name `--with` accepts, and exit |
+| `--blueprint <ID>` | `string` | — | generate from a named stack, e.g. `t3_modern` |
+| `--force` | `bool` | `false` | replace an existing `.env.example`. `.env` is never overwritten |
+| `--path`, `-p` | `string` | `.` | output directory for generated files |
+| `--yes`, `-y` | `bool` | `false` | skip prompts and write blank files |
+| `--verbose`, `-v` | `bool` | `false` | detailed debug output |
+| `--help`, `-h` | `bool` | `false` | display help information |
 
-### Initialization modes
+<Callout type="warning">
+**`--yes` means blank, not "pick a stack for me".**
 
-| Mode | Trigger | Behavior | Best for |
-|------|---------|----------|----------|
-| **Blank** | Interactive → Select | Creates minimal `.env` templates | New projects, manual config |
-| **Blueprint** | Interactive → Select / `--yes` default | Pre-configured stack (e.g., T3, FastAPI) | Quick start with known stacks |
-| **Architect** | Interactive → Select | Step-by-step: language → framework → services → infra | Custom stack composition |
+Before v0.5.0 it selected a blueprint — and the list came out of a hash map, so
+**which stack you got changed between runs of the same command**. It now writes
+blank `.env` and `.env.example`, deterministically, which is what makes it safe in
+CI. Name a stack with `--blueprint` or components with `--with` when you want one.
+</Callout>
+
+### How `init` decides what to generate
+
+| What you pass | What happens |
+|---|---|
+| `--with a,b,c` | exactly those components |
+| `--blueprint <ID>` | that stack — a shorthand for a component list |
+| `--from-source` | the variables your code reads |
+| `--detect` | what the project declares, accepted without asking |
+| nothing, interactively | detects and proposes; falls back to the menu if it finds nothing |
+| `--yes` | blank files |
+
+An explicit `--with` or `--blueprint` **suppresses detection** — proposing something
+over what you already named would be worse than not detecting at all.
+
+---
+
+## Naming components — `--with`
+
+Ten fixed blueprints cannot span the stacks people have. `--with` names the pieces:
+
+```bash
+evnx init --with nextjs,postgresql,stripe
+evnx init --with django,kafka,clerk        # no blueprint offers this
+evnx init --with postgresql --with redis   # repeatable, same as a comma list
+```
+
+There are **51 components** — frameworks, services and infrastructure. See them all:
+
+```bash
+evnx init --list-components
+```
+
+An unknown name is an error that suggests near matches rather than sending you to
+the docs:
+
+```
+unknown component 'postgres'
+
+Did you mean: postgresql
+
+Run `evnx init --list-components` for the full list.
+```
+
+<Callout type="info">
+A blueprint **is** a component list. `t3_modern` is
+`nextjs, postgresql, clerk, aws_s3, stripe, github_actions, vercel`, and both
+routes produce byte-identical files — a test asserts it for every blueprint.
+</Callout>
+
+---
+
+## Detection — the one-keystroke path
+
+Run interactively with no flags and `init` reads `package.json`,
+`docker-compose.yml`, `pyproject.toml`, `requirements.txt`, `Cargo.toml`, `go.mod`,
+`composer.json` and `Gemfile`, then proposes what it finds:
+
+```
+  Detected
+  ✓  Clerk            @clerk/nextjs           package.json
+  ✓  Next.js          next                    package.json
+  ✓  Stripe           stripe                  package.json
+  ✓  PostgreSQL       postgres:16             docker-compose.yml
+  ✓  Redis            valkey/valkey:9-alpine  docker-compose.yml
+  ✓  GitHub Actions   .github/workflows       .github/workflows
+
+  23 variables from 6 components
+```
+
+The evidence sits beside every component so you can check the proposal rather than
+take it on faith.
+
+<Callout type="warning">
+**Detection is a heuristic, and it proposes rather than applies.** A `stripe`
+dependency in a test fixture looks exactly like one in a checkout flow, and the
+package table is wrong the week a framework renames itself.
+
+Wrong here means *missing*, not *incorrect* — an unrecognised dependency proposes
+nothing and you reach for `--with`.
+</Callout>
+
+In CI there is nobody to confirm with, so `init` says what to do instead of failing
+obscurely:
+
+```
+detected 6 components but there is nobody to confirm with.
+
+Accept them:   evnx init --detect
+Name them:     evnx init --with <a,b,c>
+Skip them:     evnx init --yes      (writes blank files)
+```
+
+---
+
+## Reading the code — `--from-source`
+
+```bash
+evnx init --from-source
+```
+
+Scans the project's source for the variables it actually reads, and compares them
+to `.env.example` — so it finds both what is missing and **what is declared but
+named nowhere**. That second half is something no other evnx command can tell you:
+they all treat `.env.example` as the definition of "required", which is circular.
+
+⚠️ **It appends; it never replaces.** These are the variables your template is
+missing, so an existing `.env.example` keeps everything it already had. Running it
+twice changes nothing the second time.
+
+<Callout type="warning">
+Variables consumed entirely inside a library — `RUST_LOG` reaching
+`tracing_subscriber`, say — and dynamic access like `process.env[key]` are
+invisible to this in principle. It finds what your code names.
+
+A variable reported as unused is a **question, not a verdict**: it is never removed
+for you.
+</Callout>
 
 ---
 
 ## Exit codes
 
-| Code | Meaning | Use case |
-|------|---------|----------|
-| `0` | ✅ Initialization completed successfully | Success in scripts/CI |
-| `1` | 🚨 Init failed (schema error, write failure) | Fail pipeline on setup issues |
-| `2+` | ⚠️ Runtime errors (IO, parsing, validation) | Debug tooling or schema issues |
+| Code | Meaning |
+|------|---------|
+| `0` | files generated |
+| `1` | refused or failed — an existing `.env.example`, an unknown component or blueprint, a write error |
+
+`.env.example` is a tracked, hand-maintained file, so `init` refuses to replace one
+rather than clobbering it. Pass `--force` when you mean it. **`.env` is never
+overwritten, with or without `--force`.**
 
 ---
 
 ## Basic usage examples
 
-### Interactive setup (recommended)
+### Let it read the project
 ```bash
-# Launch mode selector with guided prompts
-evnx init
+evnx init                 # detects and proposes; one keystroke to accept
 ```
 
-### Non-interactive default (Blueprint mode)
+### Name the stack
 ```bash
-# Skip prompts, use first available blueprint
-evnx init --yes
+evnx init --with nextjs,postgresql,stripe
+evnx init --blueprint t3_modern
 ```
 
-### Custom output path
+### In CI
 ```bash
-# Generate files in ./config directory
-evnx init --path ./config --yes
+evnx init --yes                      # blank, deterministic
+evnx init --detect --path /app       # accept detection without prompting
 ```
 
-### Verbose debugging
+### Build from the code
 ```bash
-# Show selection summary and resolution steps
-evnx init -v
-```
-
-### Combine flags for CI/CD
-```bash
-# Silent init with custom path for automation
-evnx init --yes --path /app/config --verbose
+evnx init --from-source
 ```
 
 ---
@@ -98,8 +218,8 @@ evnx init --yes --path /app/config --verbose
 
 | File | Purpose | Overwrite behavior |
 |------|---------|-------------------|
-| `.env.example` | Team template with placeholders + docs | Always updated |
-| `.env` | Local secrets (gitignored) | Created only if missing |
+| `.env.example` | Team template with placeholders + docs | **Refused** if it exists — `--force` to replace |
+| `.env` | Local secrets (gitignored) | Created only if missing. **Never** overwritten, even with `--force` |
 | `.gitignore` | Appends `.env*` with the template family exempted | Appends if missing |
 
 The exact block written:
@@ -129,14 +249,25 @@ gitignore, so `!.env.example` has to follow `.env*`.
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive defaults |
+| `NO_COLOR` | any value | unset | Disable coloured output ([no-color.org](https://no-color.org/)) |
+
+<Callout type="warning">
+This table used to list `CI`, described as auto-enabling non-interactive defaults.
+**evnx never read it.** The variables evnx actually reads are `EVNX_AUTO_FIX`,
+`EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`, `EVNX_SERVER` and
+`EVNX_TOKEN` — and none of them affects `init`.
+
+`init` decides interactivity by asking whether stdin is a terminal, so it does the
+right thing in CI without being told. Pass `--yes`, `--detect` or `--with` to be
+explicit.
+</Callout>
 
 ---
 
 ## See also
 
-- [Init Basics Tutorial](/guides/getting-started/init-basics) — Step-by-step setup guide
-- [Blueprint Catalog](/guides/reference/blueprints) — Available pre-configured stacks
-- [Schema Reference](/guides/reference/schema) — Extend languages, services, and vars
+- [Init Basics](/guides/getting-started/init-basic) — step-by-step setup
+- [Init Configuration](/guides/reference/init-configuration) — blueprints and the component schema
+- [Environment files](/guides/reference/environments) — `.env.production` and friends
+- [evnx add](/guides/commands/add) — adding components to a project that already exists
 - [Team Collaboration](/guides/use-cases/team-collaboration) — Share `.env.example` safely

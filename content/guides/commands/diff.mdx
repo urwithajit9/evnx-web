@@ -70,6 +70,31 @@ and `--reverse`. **They do not exist** — `-i` for `--interactive` is the only 
 | `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output to stderr |
 | `--help`, `-h` | `bool` | `false` | Display help information |
 
+<Callout type="info">
+**v0.5.0+ — the JSON carries a `summary`.** A gate no longer has to fetch three
+arrays and add up their lengths:
+
+```bash
+evnx diff --format json | jq -e '.summary.missing == 0 and .summary.extra == 0'
+```
+
+The counts are derived from the arrays beside them at output time, so they
+cannot disagree with them.
+</Callout>
+
+<Callout type="warning">
+**Gate on `missing` and `extra` — not on `total`.** `total` folds in
+`different`, and against a template every filled-in value *is* different by
+construction: `.env.example` holds empty placeholders and `.env` holds real
+values. So `summary.total` reaches `0` only when the two files carry identical
+values, which a real pair never does.
+
+The same arithmetic drives the exit code, so **`evnx diff` exits `1` on a
+perfectly healthy project** — see [Exit codes](#exit-codes) below. Use
+`--env-name production --against staging` when you want `different` to carry
+meaning, or gate on the two structural counts as above.
+</Callout>
+
 ### Format values
 
 | Value | Output style | Best for |
@@ -84,13 +109,33 @@ and `--reverse`. **They do not exist** — `-i` for `--interactive` is the only 
 
 | Code | Meaning | Use case |
 |------|---------|----------|
-| `0` | ✅ Files are identical (no differences detected) | Success in scripts; proceed with deployment |
-| `1` | ⚠️ Differences found (missing, extra, or mismatched values) | Fail CI/CD pipeline when drift detected |
-| `2+` | ❌ Runtime error (file not found, parse error, permission denied) | Debug tooling or environment issues |
+| `0` | ✅ No differences at all — same keys **and** same values | Success in scripts |
+| `1` | ⚠️ Differences found (missing, extra, **or** mismatched values) | See the caveat below before gating on this |
+| `2` | ❌ Runtime error — file not found via `--env`/`--example`, parse failure, unknown flag | Debug tooling or environment issues |
 
 <Callout type="warning">
-  <strong>CI/CD Integration:</strong> By default, <code>evnx diff</code> exits with code <code>1</code> when any differences are found. Use this behavior in CI pipelines to enforce environment file consistency:
-  <pre><code>evnx diff && echo "✅ Env files in sync" || echo "❌ Drift detected"</code></pre>
+**Do not gate CI on `evnx diff`'s exit code.** Code `1` means *any* difference,
+including the value differences a template guarantees — so a healthy project
+where `.env` is fully populated from `.env.example` exits `1`, every time. The
+idiom this page used to recommend,
+`evnx diff && echo "in sync" || echo "drift detected"`, reports drift on every
+correctly configured repository.
+
+Two things that do work:
+
+```bash
+# structural drift only — keys present or absent, values ignored
+evnx diff --format json | jq -e '.summary.missing == 0 and .summary.extra == 0'
+
+# or use the command built for gating, which has a three-state contract
+evnx sync --check
+```
+
+⚠️ **Two further edges.** A non-existent `--env-name` / `--against` target is a
+real error but exits `1`, not `2` — indistinguishable from drift by exit code
+alone. And on that path `--format json` writes **nothing** to stdout, so a `jq`
+consumer receives empty input rather than an error object. Check the JSON
+parsed before trusting the verdict.
 </Callout>
 
 ---
@@ -144,6 +189,12 @@ Machine-readable output for programmatic consumption:
     "total_keys_example": 13,
     "overlap_count": 11,
     "similarity_percent": 84.62
+  },
+  "summary": {
+    "missing": 1,
+    "extra": 1,
+    "different": 1,
+    "total": 3
   }
 }
 ```
@@ -313,8 +364,8 @@ Similarity interpretation:
 
 ## See also
 
-- [Diff Basics Tutorial](/guides/getting-started/diff-basics) — Step-by-step comparison workflows
-- [Security Best Practices](/guides/security/env-file-security) — Managing secrets in environment files
-- [CI/CD Integration](/guides/integrations/ci-cd-diff) — Enforcing environment consistency in pipelines
-- [Configuration Reference](/guides/reference/parser-configuration) — Advanced `.env` parsing options
+- [Diff Basics](/guides/getting-started/diff-basic) — Step-by-step comparison workflows
+- [Preventing Secret Leaks](/guides/use-cases/prevent-secret-leaks) — Managing secrets in environment files
+- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Enforcing environment consistency in pipelines
+- [Configuration File](/guides/reference/configuration-file) — Project-level `.evnx.toml` settings
 - [Sync Command](/commands/sync) — Automatically reconcile differences instead of just detecting them

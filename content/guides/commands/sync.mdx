@@ -58,6 +58,7 @@ were hardcoded, so keeping a template in step with `.env.production` was not exp
 | `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when adding new variables (ignored in `--force` mode, which always uses placeholders for safety) |
 | `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files. Always exits `0`, whatever it finds |
 | `--check` | `bool` | `false` | **v0.5.0+** — report whether the files are in step through the [exit code](#exit-codes). Implies `--dry-run`; never writes |
+| `--format` | `enum` | `pretty` | **v0.5.0+** — `json` reports *what* drifted, not only that something did. Requires `--check` |
 | `--force`, `-f` | `bool` | `false` | Skip interactive prompts; auto-use placeholders (safe for CI/CD) |
 | `--template-config` | `path` | — | Path to custom placeholder JSON config for regex-based pattern matching |
 | `--naming-policy` | `enum` | `warn` | Handle non-standard variable names: `warn`, `error`, or `ignore` |
@@ -101,6 +102,41 @@ When adding variables with placeholders, evnx uses these built-in heuristics (cu
 ## Exit codes
 
 There are two contracts. Which one applies depends on whether you pass `--check`.
+
+### Machine-readable — `--check --format json`
+
+```bash
+evnx sync --check --format json
+```
+
+```json
+{
+  "in_sync": false,
+  "direction": "forward",
+  "env": ".env",
+  "example": ".env.example",
+  "missing": ["DATABASE_URL", "REDIS_URL"],
+  "summary": { "missing": 2 }
+}
+```
+
+The exit code is unchanged — `0`, `1` or `2` exactly as below — so an existing gate
+keeps working and the JSON only adds detail. Keys are sorted, so two reports can be
+diffed meaningfully.
+
+```bash
+evnx sync --check --format json > drift.json || true
+jq -r '.missing[]' drift.json        # which keys, for a PR comment
+```
+
+<Callout type="warning">
+`--format json` **requires `--check`**. Without it `sync` edits files, and a
+machine-readable report of an edit already made is worth less than the edit.
+
+An unreadable `.env.example` still exits `2`, not `1` — a broken file is a different
+answer from a stale one, and a pipeline branching on the code must not confuse them.
+</Callout>
+
 
 ### Default — `evnx sync`, `evnx sync --dry-run`
 
@@ -354,11 +390,11 @@ If a variable like `DATABASE_URL` gets `YOUR_URL_HERE` instead of a PostgreSQL t
 
 ## See also
 
-- [Sync Basics Tutorial](/guides/getting-started/sync-basics) — Learn sync step-by-step with examples
+- [Sync Basics](/guides/getting-started/sync-basic) — Learn sync step-by-step with examples
 - [Team Collaboration](/guides/use-cases/team-collaboration) — Multi-developer workflows and merge strategies
 - [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automation setup for GitHub Actions, GitLab CI, etc.
 - [Configuration Reference](/guides/reference/sync-configuration) — Advanced placeholder config and pattern syntax
-- [Security Best Practices](/guides/security/env-file-security) — Protecting secrets in environment files
+- [Preventing Secret Leaks](/guides/use-cases/prevent-secret-leaks) — Protecting secrets in environment files
 
 
 

@@ -9,7 +9,7 @@ excerpt: "Reference documentation for the evnx add command: subcommands, options
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
 tags: ["add", "reference", "cli", "environment-variables"]
-evnxVersion: "0.2.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
   - commands-init
@@ -113,17 +113,51 @@ evnx add service postgresql --path ./backend --yes
 
 | File | Action | Notes |
 |------|--------|-------|
-| `.env.example` | ✅ Appends new variables | Preserves existing content; adds section header |
-| `.env` | ✅ Appends `# TODO:` placeholders | Only if file exists; never overwrites real values |
-| `.gitignore` | ⚪ No changes | Managed by `evnx init` only |
+| `.env.example` | ✅ Appends new variables | Preserves existing content; adds a section header |
+| `.env` | ✅ Appends `# TODO:` placeholders | Only if the file exists; never overwrites real values |
+| `.gitignore` | ⚠️ Checked, never written | **v0.5.0+** — warns if the `.env` it just wrote to is committable |
 
 ### Section formatting
-Added variables are grouped with markdown-style headers:
+
+Variables are grouped by category, using the same headers `evnx init` writes:
+
 ```env
-# ── Service: postgresql ──
-DATABASE_URL=postgres://localhost/db
-DB_USER=your_username
+# ── Database ──
+# Full connection string (overrides individual DB_* vars)
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+DB_HOST=localhost
 ```
+
+<Callout type="warning">
+**v0.5.0 changed this format.** `add` used to write `# [ADDED] Database` while
+`init` wrote `# ── Database ──` — into the same file. One `.env.example` could
+carry both, and which header a section got recorded nothing except which command
+the author happened to type.
+
+Both now use one formatter, so **upgrading and running `evnx add` shows a format
+change in your diff**. `add` also gained the curated category order and the
+`# (required)` markers it had been silently dropping.
+
+A `# Added by evnx add on <date>` line still records when something arrived.
+</Callout>
+
+### `.gitignore` is checked, not written
+
+```
+! .env is not covered by .gitignore — it can be committed
+     →  evnx doctor --fix
+```
+
+⚠️ Before v0.5.0, `add` appended to `.env` without ever looking — so in an
+unprotected repository evnx itself added lines to a file holding live credentials,
+on its way into a commit, silently.
+
+It warns rather than writing, because `add` runs in a project that already exists
+where `.gitignore` is somebody's considered file. `evnx init` writes those entries;
+`evnx doctor --fix` repairs them.
+
+The check asks git, so the `.env*` that `evnx init` writes counts as protection —
+it will not nag about a project evnx set up correctly.
 
 ---
 
@@ -143,15 +177,18 @@ DB_USER=your_username
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive defaults |
+| `NO_COLOR` | any value | unset | Disable coloured output ([no-color.org](https://no-color.org/)) |
+
+<Callout type="warning">
+This table used to list `CI`. **evnx never read it** — interactivity is decided by
+asking whether stdin is a terminal, so `add` behaves correctly in CI without being
+told. Pass `--yes` to be explicit.
+</Callout>
 
 ---
 
 ## See also
 
-- [Adding Variables Tutorial](/guides/getting-started/adding-variables) — Walkthrough for common workflows
-- [Service Catalog](/guides/reference/services) — Available infrastructure services
-- [Framework Catalog](/guides/reference/frameworks) — Supported languages and frameworks
-- [Blueprint Catalog](/guides/reference/blueprints) — Pre-combined stack templates
-- [Conflict Resolution Guide](/guides/advanced/conflict-handling) — Managing variable collisions
+- [Add Basics](/guides/getting-started/add-basic) — Walkthrough for common workflows
+- [Adding Production Variables](/guides/use-cases/use-cases-add-production) — Environment-specific values
+- [evnx init](/guides/commands/init) — `--list-components` prints the same catalogue `add` draws on

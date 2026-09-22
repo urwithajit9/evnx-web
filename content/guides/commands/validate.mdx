@@ -189,7 +189,7 @@ evnx validate --fix
 evnx validate --strict --format json
 
 # Validate production config with format checks
-evnx validate --pattern .env.production --validate-formats
+evnx validate --env-name production --validate-formats
 
 # Suppress specific warnings
 evnx validate --ignore boolean_trap,localhost_in_docker
