@@ -8,7 +8,7 @@ excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, ena
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
-evnxVersion: "0.4.0"
+evnxVersion: "0.5.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -102,6 +102,37 @@ That second half matters more than it sounds. A server that has been replaced �
 <Callout type="warning" title="--password-stdin is for automation, not convenience">
 It takes everything up to the first newline, so passphrases with spaces work. But a password on stdin usually comes from somewhere — a file, a variable, a here-string — and all three are readable or recoverable. Prefer an API token for anything unattended.
 </Callout>
+
+---
+
+## Signing out
+
+```bash
+evnx auth logout
+```
+
+Two things happen: the server is told to revoke the session, and the local
+credentials are deleted from `~/.config/evnx/`.
+
+<Callout type="warning" title="An offline logout is only half a logout">
+If the server cannot be reached, evnx still removes your local credentials and
+says so plainly:
+
+```text
+  ✓ local credentials removed
+  warning: the server was not told: …
+  The session may still be usable until it expires. Revoke it from
+  another signed-in machine with `evnx auth sessions`.
+```
+
+This is deliberate. Refusing to log out because the network is down would leave
+credentials on a machine you are trying to walk away from. But the session lives
+on server-side until it expires, so on a machine you no longer control, follow up
+with [`evnx auth sessions revoke`](#sessions) from somewhere else.
+</Callout>
+
+Logging out when you are not signed in is not an error — it says there is nothing
+to do and exits `0`.
 
 ---
 
