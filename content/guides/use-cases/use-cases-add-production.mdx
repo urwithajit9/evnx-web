@@ -300,8 +300,7 @@ Is this variable required? No
 FEATURE_NEW_CHECKOUT=true
 
 # Team can now:
-# - Filter vars by category: evnx validate --category "Feature Flags"
-# - See which flags are optional vs required
+# - See which flags are optional vs required, from the comments
 # - Avoid merge conflicts with structured section headers
 ```
 
@@ -310,7 +309,14 @@ FEATURE_NEW_CHECKOUT=true
 - ✅ Category metadata enables filtering and auditing
 - ✅ Descriptions document flag purpose directly in config
 - ✅ Section headers reduce git merge conflicts
-- ✅ `evnx validate --category` checks specific flag groups
+
+<Callout type="warning">
+**`evnx validate --category` does not exist**, and neither does
+`evnx validate --recursive` further down this page. Both were listed here as
+shipped features. The section headers and `[Category]` comments are real —
+`evnx add` writes them and they survive a round trip — but nothing filters or
+validates by them. They are documentation for humans and for `git diff`.
+</Callout>
 
 <Callout type="tip" title="Feature flag workflow">
 Use `evnx add custom` for experimental flags, then promote to schema-defined services when flags become permanent. This keeps your schema evolving with your product.
@@ -357,11 +363,11 @@ for dir in ./services/*/; do
   evnx add blueprint shared_observability --path "$dir" --yes
 done
 
-# Validate all services at once:
-evnx validate --recursive
-✓ services/api: 18 variables valid
-✓ services/worker: 14 variables valid
-✓ services/frontend: 12 variables valid
+# Validate all services — loop, since validate takes one file at a time:
+for dir in ./services/*/; do
+  echo "== $dir"
+  evnx validate --env "$dir/.env" --example "$dir/.env.example" || exit 1
+done
 ```
 
 **Benefits:**

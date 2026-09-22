@@ -192,22 +192,36 @@ evnx convert --to terraform   # Terraform variables file
 ## Step 6 — Keep .env and .env.example in sync
 
 ```bash
-# Generate .env.example from your .env (values redacted)
-evnx sync --generate-example
+# Generate .env.example from your .env, with values replaced by placeholders
+evnx sync --placeholder
 
 cat .env.example
-# APP_NAME=
-# APP_ENV=
-# DEBUG=
-# DATABASE_URL=
-# AWS_ACCESS_KEY_ID=
-# AWS_SECRET_ACCESS_KEY=
-# STRIPE_SECRET_KEY=
-# SENDGRID_API_KEY=
-# JWT_SECRET=
+# Generated from .env
+# Replace all placeholder values with real credentials
+
+# APP_NAME=YOUR_VALUE_HERE
+# DATABASE_URL=YOUR_URL_HERE
+# AWS_ACCESS_KEY_ID=YOUR_KEY_HERE
+# STRIPE_SECRET_KEY=YOUR_KEY_HERE
+# JWT_SECRET=YOUR_SECRET_HERE
 ```
 
 Now commit `.env.example` to your repo — it tells teammates what variables are needed without exposing values.
+
+<Callout type="danger" title="Use --placeholder. Plain `evnx sync` copies your real values">
+This step used to read `evnx sync --generate-example`, a flag that does not exist,
+described as redacting values. Both halves were wrong, and the second is the
+dangerous one.
+
+When `.env.example` does **not** yet exist — which is exactly this step — plain
+`evnx sync` creates it by copying `.env` **verbatim**, secrets included, prints
+`✓ Created .env.example`, and then advises you to commit it. There is no prompt
+on that path: the "add with placeholder values / add with actual values —
+SECURITY RISK" choice only appears when the file already exists.
+
+`--placeholder` is what makes the output safe to commit. `--force` also implies
+it, which is the safer default for CI.
+</Callout>
 
 Check if they drift:
 

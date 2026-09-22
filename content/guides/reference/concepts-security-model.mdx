@@ -407,7 +407,7 @@ rustc --version  # Should be >= 1.75.0 for latest crypto crate compatibility
 ```bash
 # 4. Test backup/restore roundtrip
 echo "TEST_SECRET=super_secret_value" > .env.test
-evnx backup --env .env.test --output test.backup  # Interactive password
+evnx backup --env-name test --output test.backup  # Interactive password
 evnx restore test.backup --output .env.test.restored --dry-run  # Verify metadata
 
 # 5. Verify file permissions
@@ -528,7 +528,7 @@ cat /dev/random | head -c 32 | base64  # Should produce output without error
 
 **Cause**: `dialoguer` requires a TTY; CI environments often lack one.
 
-**Solution**: Use `--password` flag with secure secret injection:
+**Solution**: Use `--password-file` with secure secret injection:
 
 ```yaml
 # GitHub Actions example
@@ -536,13 +536,18 @@ cat /dev/random | head -c 32 | base64  # Should produce output without error
   env:
     ENV_PASSWORD: ${{ secrets.ENV_BACKUP_PASSWORD }}
   run: |
-    # Use --password ONLY with secrets manager injection
-    evnx restore backup.env --password "$ENV_PASSWORD"
+    # `restore` reads the password from a FILE, never from an argument —
+    # a command line is visible in `ps` and in CI logs.
+    printf '%s' "$ENV_PASSWORD" > "$RUNNER_TEMP/pw"
+    evnx restore backup.env --password-file "$RUNNER_TEMP/pw"
+    shred -u "$RUNNER_TEMP/pw"
 ```
 
 <Callout type="warning" title="Never hardcode passwords">
-❌ Bad: `evnx restore backup --password "my_secret_123"`
-✅ Good: `evnx restore backup --password "$VAULT_READ_ENV_PASSWORD"`
+❌ Bad: a password as an argument — `--password` does not exist, and would be
+visible in `ps` and in CI logs if it did.
+✅ Good: `evnx restore backup --password-file "$RUNNER_TEMP/pw"`, with the file
+written from a secret and removed afterwards.
 
 Hardcoded passwords in scripts or CI configs are a critical security risk.
 </Callout>
