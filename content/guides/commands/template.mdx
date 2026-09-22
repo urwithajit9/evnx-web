@@ -22,7 +22,7 @@ Generate configuration files from templates using `.env` variables, with support
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/advanced/env-file-syntax">Understanding .env syntax</Prerequisite>
+  <Prerequisite href="/guides/reference/configuration-file">Understanding .env syntax</Prerequisite>
 </Prerequisites>
 
 <Callout type="info">
@@ -399,9 +399,9 @@ If `DESCRIPTION = hello "world"`, the output will be:
 
 ## See also
 
-- [Template Syntax Guide](/guides/advanced/template-syntax) — Deep dive into substitution patterns and filter reference
-- [Gitignore Protection](/guides/security/gitignore-protection) — How evnx detects git roots, writes entries, and handles edge cases
-- [Configuration Management](/guides/use-cases/config-management) — Strategies for managing configs across environments
-- [CI/CD Integration](/guides/integrations/ci-cd-template) — Automating config generation in pipelines
-- [Security Best Practices](/guides/security/template-secrets) — Safely handling sensitive values in templates
+- [Template Syntax Guide](/guides/commands/template) — Deep dive into substitution patterns and filter reference
+- [Gitignore Protection](/guides/use-cases/prevent-secret-leaks) — How evnx detects git roots, writes entries, and handles edge cases
+- [Configuration Management](/guides/use-cases/use-case-template-to-config) — Strategies for managing configs across environments
+- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automating config generation in pipelines
+- [Security Best Practices](/guides/use-cases/prevent-secret-leaks) — Safely handling sensitive values in templates
 - [evnx sync](/commands/sync) — Keep `.env` and `.env.example` synchronized before templating

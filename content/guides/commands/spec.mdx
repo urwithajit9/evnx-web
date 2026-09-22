@@ -250,6 +250,139 @@ about a variable; the template shows what one *looks like*.
 
 ---
 
+## What `scan` does with it
+
+**v0.5.0+.** `evnx scan` guesses at secrecy from a variable's name and the shape
+of its value. Both guesses fail, in opposite directions, and only the project
+knows which:
+
+| Input | Without a contract |
+|---|---|
+| `TENANT_A=9f3a7c21b85e4d0fa62c` | **"✓ No secrets detected", exit 0** — a real credential with a name that gives nothing away |
+| `INTERNAL_SECRET=a-long-config-value` | reported **high** — a config string flagged because of its name |
+
+Declaring it settles both:
+
+```toml
+[vars.TENANT_A]
+secret = true          # report it, whatever it looks like
+
+[vars.INTERNAL_SECRET]
+secret = false         # I have looked; this is configuration
+```
+
+```text
+  ✗  Declared secret                             high
+     ./.env:1 (TENANT_A)  9f3a…a62c
+     ·  declared `secret = true` in .evnx.toml
+```
+
+<Callout type="danger" title="`secret = false` cannot silence a real key">
+It retracts a guess made from a variable's **name**. It does **not** retract a
+match on the **value**.
+
+```toml
+[vars.STRIPE_SECRET_KEY]
+secret = false         # the sk_live_… match is still reported
+```
+
+A declaration says what a variable is *for*. It cannot make its contents stop
+being a live credential — and `.evnx.toml` is committed, so one wrong line would
+otherwise silence a real secret for everyone who clones the repository.
+</Callout>
+
+<Callout type="info">
+Because `secret = false` loosens scanning from a committed file, evnx announces
+it on every run, the way it already announces `scan.exclude`:
+
+```text
+  config    .evnx.toml (vars.secret=false on 1 variable(s))
+```
+
+A declared secret whose value is empty or an obvious placeholder is **not**
+reported. The declaration says the variable holds a secret, not that every string
+in it is one.
+</Callout>
+
+---
+
+## Keeping it current
+
+**v0.5.0+.** A contract that stops describing the project is worse than none —
+it looks authoritative and is not.
+
+### `add` and `init` record what they introduce
+
+```console
+$ evnx add service redis --yes
+  ✓ added 5 variable(s) to [vars] in .evnx.toml
+```
+
+New variables are appended with the same inference `spec init` uses, so an entry
+does not depend on which command introduced it:
+
+```toml
+[vars.REDIS_PASSWORD]
+required = false
+secret = true
+```
+
+It **only appends**. A name already declared is left exactly as it is, so a
+hand-written `required = false` is never reset by an unrelated `evnx add`.
+
+| Project state | What happens |
+|---|---|
+| No `.evnx.toml` | Nothing, silently — you have not opted in |
+| `.evnx.toml`, no `[vars]` | A note on stderr pointing at `evnx spec init` |
+| `[vars]` present | Appended, with a count |
+
+<Callout type="info">
+The note is on **stderr** and never fatal, so nothing new can fail a CI job.
+Failing to record the contract does not fail the write that already happened —
+the variables are on disk either way.
+</Callout>
+
+### `sync` can satisfy the contract
+
+`evnx sync --direction reverse` adds declared-but-missing variables to `.env`,
+not just the ones in `.env.example`:
+
+```console
+$ evnx validate
+  ✗  Missing required variable: ONLY_IN_SPEC
+
+$ evnx sync --direction reverse
+✓ Added 1 variables to .env
+```
+
+Before v0.5.0 the second command said *".env is up to date"* — two commands
+contradicting each other about the same variable.
+
+Only variables that are **required** and **apply to the file being synced** are
+added. An optional one being absent is permitted by the contract, so inventing a
+placeholder for it would be work nobody asked for.
+
+### `diff` explains what the contract declared
+
+A variable scoped to one environment is *supposed* to be absent from another.
+Calling that drift is noise:
+
+```console
+$ evnx diff --env-name production --against staging
+  1 different value  ·  1 explained by [vars] environments: SENTRY_DSN
+```
+
+It is named rather than silently dropped, and it does **not** affect the exit
+code — an intentional difference is not drift, so a CI gate will not fail over
+it.
+
+<Callout type="info">
+The JSON gains a `by_design` array, omitted when empty — a consumer written
+before v0.5.0 sees the same document.
+</Callout>
+
+---
+
 ## Exit codes
 
 | Code | Meaning |

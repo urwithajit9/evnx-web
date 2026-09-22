@@ -187,6 +187,29 @@ told. Pass `--yes` to be explicit.
 
 ---
 
+## Keeping the contract current
+
+**v0.5.0+.** When the project has a [contract](/guides/commands/spec), `add`
+records what it introduces:
+
+```console
+$ evnx add service redis --yes
+  ✓ added 5 variable(s) to [vars] in .evnx.toml
+```
+
+Without this, adopting a contract and then adding anything left it describing a
+project that no longer existed — `REDIS_PASSWORD` would be neither required, nor
+format-checked, nor declared secret.
+
+It **only appends**: a name already declared is left exactly as it is, so a
+hand-written `required = false` survives an unrelated `evnx add`.
+
+A project with no `.evnx.toml` sees nothing. One with a config but no `[vars]`
+gets a note on stderr pointing at `evnx spec init` — never fatal, so CI is
+unaffected.
+
+---
+
 ## See also
 
 - [Add Basics](/guides/getting-started/add-basic) — Walkthrough for common workflows

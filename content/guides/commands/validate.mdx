@@ -35,7 +35,7 @@ evnx validate [OPTIONS]
 | `--env` | `string` | `.env` | Path to your environment file |
 | `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--example` | `string` | `.env.example` | Path to your example/template file |
-| `--strict` | `bool` | `false` | Warn about extra variables not in `.env.example` |
+| `--strict` | `bool` | `false` | Warn about variables not declared. Measured against `.env.example`, or against `[vars]` when the project has a [contract](/guides/commands/spec) |
 | `--fix` | `bool` | `false` | Auto-fix common issues (placeholders, booleans, weak secrets) |
 | `--format` | `pretty\|json\|github-actions` | `pretty` | Output format |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (useful for CI) |
@@ -65,7 +65,7 @@ evnx validate runs these checks automatically:
 | Check | Severity | Auto-fixable | Description |
 |-------|----------|--------------|-------------|
 | `missing_variable` | `error` | ✅ | Variable in `.env.example` not present in `.env` |
-| `extra_variable` | `warning` | ❌ | Variable in `.env` not in `.env.example` (strict mode) |
+| `extra_variable` | `warning` | ❌ | Variable in `.env` that is not declared — in `.env.example`, or in `[vars]` when a contract exists (strict mode) |
 | `placeholder_value` | `error` | ✅ | Value looks like `changeme`, `your_key_here`, etc. |
 | `boolean_trap` | `warning` | ✅ | `DEBUG=False` (string) vs `DEBUG=false` (boolean) |
 | `weak_secret` | `error` | ✅ | SECRET_KEY < 32 chars or contains weak patterns |

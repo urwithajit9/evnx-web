@@ -297,6 +297,39 @@ preceding step is what fails the build.
 
 ---
 
+## Declaring what the heuristics cannot know
+
+**v0.5.0+.** `scan` guesses at secrecy from a variable's name and the shape of
+its value, and both guesses fail in opposite directions:
+
+- `TENANT_A=9f3a7c21b85e4d0fa62c` — a real credential whose name gives nothing
+  away. Reported as **"✓ No secrets detected"**, exit `0`.
+- `INTERNAL_SECRET=a-long-config-value` — configuration, flagged **high**
+  because of its name.
+
+A project can settle either with a [contract](/guides/commands/spec):
+
+```toml
+[vars.TENANT_A]
+secret = true
+
+[vars.INTERNAL_SECRET]
+secret = false
+```
+
+<Callout type="danger">
+**`secret = false` cannot silence a real key.** It retracts a guess made from a
+variable's *name*; it does not retract a match on the *value*. A variable holding
+`sk_live_…` is still reported however it is declared, because `.evnx.toml` is
+committed and one wrong line would otherwise silence a live credential for
+everyone who clones.
+
+Since it does loosen scanning, evnx announces it on every run:
+`config .evnx.toml (vars.secret=false on 1 variable(s))`.
+</Callout>
+
+---
+
 ## Ignoring false positives
 
 Some values look like secrets but are not — test fixtures, sample values, generated

@@ -105,6 +105,35 @@ meaning, or gate on the two structural counts as above.
 
 ---
 
+## Differences the contract explains
+
+**v0.5.0+.** A variable declared `environments = ["production"]` is *supposed* to
+be absent from staging. Reporting it as drift is noise:
+
+```console
+$ evnx diff --env-name production --against staging
+  1 different value  ·  1 explained by [vars] environments: SENTRY_DSN
+```
+
+It is named rather than silently dropped — a reader who knows the files differ
+needs to see that evnx noticed and had a reason.
+
+This applies only when **both** sides are named environments. `.env.example` is a
+template, so an `environments` list has nothing to say about it.
+
+<Callout type="info">
+An explained difference does **not** affect the exit code. It is not drift, so a
+CI gate will not fail over it — and when it is the only difference, the output
+says so rather than claiming the files are identical.
+
+The JSON gains a `by_design` array, omitted when empty, so a consumer written
+before v0.5.0 sees the same document.
+</Callout>
+
+See [`evnx spec`](/guides/commands/spec) for the contract itself.
+
+---
+
 ## Exit codes
 
 | Code | Meaning | Use case |

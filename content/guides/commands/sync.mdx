@@ -127,6 +127,28 @@ If you do choose actual values, the next-steps text says the file is **not** saf
 to commit as written, instead of telling you to commit it.
 </Callout>
 
+### The contract is a source too
+
+**v0.5.0+.** When the project has a [contract](/guides/commands/spec), reverse
+sync adds variables declared in `[vars]`, not only those in `.env.example`:
+
+```console
+$ evnx validate
+  ✗  Missing required variable: ONLY_IN_SPEC
+
+$ evnx sync --direction reverse
+✓ Added 1 variables to .env
+```
+
+Before this, the second command said *".env is up to date"* — `validate`
+enforcing a contract that `sync` could not satisfy.
+
+Only variables that are **required** and **apply to the file being synced** are
+added. An optional one being absent is permitted by the contract, and
+`environments` narrows it the same way it narrows `validate`.
+
+---
+
 ### Machine-readable — `--check --format json`
 
 ```bash
