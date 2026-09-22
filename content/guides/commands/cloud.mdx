@@ -31,6 +31,7 @@ evnx cloud [SUBCOMMAND]
 evnx cloud link my-api/production
 evnx cloud push
 evnx cloud pull
+evnx cloud run --vault my-api/production -- ./deploy.sh
 evnx cloud history
 </CommandSignature>
 
@@ -38,6 +39,7 @@ evnx cloud history
 |---|---|
 | `push` | Encrypt a `.env` and upload it as a new version |
 | `pull` | Download a version and decrypt it |
+| `run` | **v0.5.0+** — run a command with a vault's variables in its environment, writing no file |
 | `history` | List a vault's versions, newest first |
 | `link` | Bind this directory to a vault |
 | `unlink` | Remove the binding |
@@ -131,6 +133,129 @@ one. The file written is always printed.
 <Callout type="warning" title="--version here means the vault version">
 Because `pull` takes a `--version` of its own, clap's automatic `--version` flag is disabled on this subcommand. For the program version use `evnx --version`.
 </Callout>
+
+---
+
+## Running a command without writing a file
+
+**v0.5.0+.**
+
+```bash
+evnx cloud run --vault my-api/production -- ./deploy.sh
+```
+
+Everything after `--` is your command. It is run as a child process with the
+vault's variables in its environment — `./deploy.sh` is only an example:
+
+```bash
+evnx cloud run --vault my-api/production -- npm run build
+evnx cloud run --vault my-api/production -- python manage.py migrate
+evnx cloud run --vault my-api/staging    -- terraform apply
+```
+
+### What it replaces
+
+```bash
+evnx cloud pull && ./deploy.sh && rm .env     # a file, and an rm that may not run
+export $(cat .env | xargs) && ./deploy.sh     # your shell's environment, and its history
+```
+
+The secrets are decrypted in memory, handed to the child, and destroyed. Nothing
+is written to disk and nothing enters your shell history.
+
+<Callout type="info" title="Why the values never appear in `ps`">
+They travel in the child's **environment block**, never in its argument vector.
+That is the difference between this and every `export`-based workaround:
+
+```bash
+evnx cloud run --vault my-api/production -- sleep 30 &
+ps aux | grep sleep     # shows "sleep 30", and no values
+```
+</Callout>
+
+<Callout type="danger" title="This removes the file, not the master password">
+The vault key is wrapped under **your master key**, so decrypting needs your
+password wherever this runs. An API token authenticates you to the server; it
+cannot unwrap a vault key, because the server never had one to give.
+
+In CI that means feeding the password from a secret:
+
+```yaml
+- run: echo "$EVNX_PASSWORD" | evnx cloud run --vault my-api/production --password-stdin -- ./deploy.sh
+  env:
+    EVNX_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+```
+
+Only the first line of stdin is consumed; the child inherits the rest.
+
+The honest description of the win is **"no file"**, not "no secret to manage".
+</Callout>
+
+### The `--` is required
+
+```bash
+evnx cloud run --vault x -- npm run build --prod
+```
+
+Without the separator, `--prod` would be read as one of evnx's own flags. With
+it, everything to the right belongs to the child, and `evnx cloud run echo hi`
+is a usage error rather than a guess.
+
+### It does not go through a shell
+
+The command is executed directly, so pipelines, redirections and shell builtins
+need one asked for:
+
+```bash
+evnx cloud run --vault x -- sh -c 'psql "$DATABASE_URL" < schema.sql'
+```
+
+A missing command says so, and says this.
+
+### Narrowing what the child sees
+
+| Flag | Description |
+|---|---|
+| `--vault <VAULT>` | `name`, `name/environment`, or an id. Optional in a linked directory |
+| `--version <N>` | Version to inject. Defaults to the latest |
+| `--include <GLOB>` | Inject only names matching these globs, comma-separated |
+| `--exclude <GLOB>` | Skip names matching these. Applied after `--include` |
+| `--password-stdin` | Read the master password from stdin |
+
+A build step that needs only public configuration has no reason to hold your
+database password:
+
+```bash
+evnx cloud run --vault my-api/production --include "NEXT_PUBLIC_*" -- npm run build
+```
+
+An excluded variable is **never written into the child's environment** — it is
+not passed and then unset.
+
+<Callout type="warning">
+**A filter that matches nothing is an error**, not a quiet success. Running a
+deploy with zero secrets injected is the kind of success that is worse than a
+failure, so `evnx cloud run` stops rather than proceeding:
+
+```text
+Error: --include/--exclude left nothing to inject — all 12 variable(s) were filtered out.
+```
+
+The patterns are case-sensitive globs matched against variable names.
+</Callout>
+
+### Exit codes
+
+`evnx cloud run` exits with **the child's own code**, so a pipeline branches on
+your command rather than on evnx:
+
+```bash
+evnx cloud run --vault x -- ./deploy.sh   # ./deploy.sh returns 2 → this returns 2
+```
+
+A child killed by a signal has no code to pass through; that is reported and
+becomes `1`. Failures *before* the child starts — not signed in, no such vault,
+the wrong password — are evnx's own errors and exit `1`.
 
 ---
 

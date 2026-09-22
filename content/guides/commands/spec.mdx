@@ -1,0 +1,280 @@
+---
+title: "evnx spec"
+slug: spec
+section: commands
+order: 11
+publishedAt: "2026-09-22"
+excerpt: "Declare what each variable is — required, a URL, a secret, production-only — in a contract .env.example cannot express. Generated from your project, then enforced by evnx validate."
+difficulty: intermediate
+timeToComplete: "8 minutes"
+tags: ["spec", "contract", "validate", "schema", "evnx"]
+evnxVersion: "0.5.0"
+prerequisites:
+  - getting-started/installation
+  - commands/validate
+draft: false
+---
+
+`.env.example` is doing three jobs badly. It is the documentation, the contract
+and the validation source all at once, and it cannot say any of the things a
+contract needs to say: that a variable is **optional**, that it must be a
+**URL**, that it is a **secret**, that it only applies in **production**.
+
+A spec can.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/validate">Know what evnx validate checks</Prerequisite>
+</Prerequisites>
+
+---
+
+## Commands
+
+<CommandSignature>
+evnx spec init
+evnx spec init --stdout
+evnx spec init --with django,postgresql,stripe
+</CommandSignature>
+
+---
+
+## The contract
+
+It lives in `[vars]` in `.evnx.toml` — the file your project already has for
+per-project policy — rather than in a second file of its own:
+
+```toml
+[vars.DATABASE_URL]
+required     = true
+format       = "url"
+secret       = true
+description  = "Primary Postgres connection string"
+
+[vars.FEATURE_NEW_CHECKOUT]
+required = false
+format   = "bool"
+
+[vars.SENTRY_DSN]
+environments = ["production"]
+secret       = true
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `required` | `bool` | Must be present. **Defaults to `true`** — see below |
+| `format` | `string` | `url`, `int`, `port`, `bool`, `email`, or a regex |
+| `secret` | `bool` | Declares the value sensitive. Unstated is not the same as `false` |
+| `description` | `string` | Shown in `validate`'s suggestion when the variable is missing |
+| `environments` | `list` | The variable applies **only** in these |
+
+<Callout type="info" title="Why `required` defaults to true">
+Because that is what `.env.example` already means. `evnx validate` treats every
+line in the template as required, so a project writing its first spec keeps the
+behaviour it had and relaxes it per variable with `required = false`. Nothing
+changes underneath you on the day you adopt a spec.
+</Callout>
+
+<Callout type="info" title="Why unstated `secret` is not `secret = false`">
+Three states, not two. **Unstated** means "nothing declared, fall back to
+`evnx scan`'s heuristics". **`secret = false`** means "I have looked, and this is
+not sensitive" — which tells the scanner to stop flagging it. Collapsing the two
+would turn every undeclared variable into an assertion nobody made.
+</Callout>
+
+---
+
+## Generating the first one
+
+Nothing needs writing by hand. Your project already states most of its contract:
+`.env.example` says which names are expected, `.env` shows what the values look
+like, and evnx's component catalogue knows what a recognised variable is for.
+
+```bash
+evnx spec init
+```
+
+```text
+  evnx spec  Generate the variable contract
+
+✓ wrote 5 variable(s) to .evnx.toml
+
+Next steps:
+  1. Read the generated entries — every field is a guess from your files
+  2. Mark optional variables with `required = false`
+  3. Commit .evnx.toml; the spec is the contract
+```
+
+From a `.env` holding a Postgres URL, a port, a Stripe key and a retry count:
+
+```toml
+[vars.APP_NAME]
+required = true
+
+[vars.DATABASE_URL]
+required = true
+format = "url"
+
+[vars.MAX_RETRIES]
+required = true
+format = "int"
+
+[vars.PORT]
+required = true
+format = "port"
+
+[vars.STRIPE_SECRET_KEY]
+required = true
+secret = true
+```
+
+<Callout type="warning">
+**Read what it wrote.** Every field is inferred. A `format` that is wrong turns a
+working project red on the next `evnx validate`, and a variable marked required
+that is genuinely optional will block a build.
+
+The inference is deliberately conservative — an empty template value or a
+placeholder like `YOUR_KEY_HERE` produces no `format` at all — but it is still a
+draft, not an answer.
+</Callout>
+
+### From the catalogue instead
+
+```bash
+evnx spec init --with django,postgresql,stripe
+```
+
+This is the higher-quality source: `required` and `description` are **known**
+rather than guessed, and each entry records which component it came from.
+
+```toml
+[vars.STRIPE_SECRET_KEY]
+# from Stripe
+description = "Secret key (server-side only)"
+required = true
+secret = true
+```
+
+Run `evnx init --list-components` for the ids. An unknown one is refused with a
+suggestion — `postgres` tells you about `postgresql` rather than silently
+producing nothing.
+
+---
+
+## Options
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--with` | `list` | — | Build from named components instead of the project's files |
+| `--env` | `path` | `.env` | Where to read sample values from, for inferring formats |
+| `--example` | `path` | `.env.example` | Which template decides membership and `required` |
+| `--stdout` | `bool` | `false` | Print the block instead of writing it |
+| `--force` | `bool` | `false` | Append even when `[vars]` already exists |
+| `--verbose`, `-v` | `bool` | `false` | Name each variable and where it came from |
+
+### It appends, and refuses rather than corrupting
+
+`spec init` adds its block to the end of `.evnx.toml`, leaving every other
+section — and every comment — byte for byte intact.
+
+Because it appends rather than merges, a second run would write `[vars]` twice,
+which TOML refuses to read back. So it stops:
+
+```text
+Error: .evnx.toml already has a [vars] section.
+  Appending a second one would produce a file TOML refuses to read.
+  Review the existing entries, or pass --force to append anyway and
+  merge them by hand.
+```
+
+`--force` does append the second block. The file will then need merging by hand
+before anything can read it.
+
+To regenerate cleanly, delete the existing `[vars]` entries first, or use
+`--stdout` and diff:
+
+```bash
+evnx spec init --stdout > /tmp/spec.toml && diff <(grep -A99 '^\[vars' .evnx.toml) /tmp/spec.toml
+```
+
+---
+
+## What `validate` does with it
+
+This is the point of the whole thing. With a spec, `evnx validate` stops
+counting lines in `.env.example` and starts checking the contract.
+
+```bash
+evnx validate                          # the local .env
+evnx validate --env-name production    # .env.production
+```
+
+**Optional means optional.** A variable declared `required = false` is no longer
+reported missing, however it appears in the template.
+
+**Formats are enforced**, with the expectation spelled out:
+
+```text
+  ✗  PORT is not a port between 1 and 65535
+```
+
+⚠️ A format mismatch is deliberately **not** auto-fixable. evnx knows the value
+is wrong; it has no idea what the right one is. `--fix` will not touch it.
+
+**Environments narrow the contract** to the file being checked:
+
+```text
+$ evnx validate                          # local
+✓ All checks passed
+
+$ evnx validate --env-name production
+  ✗  Missing required variable: SENTRY_DSN
+```
+
+<Callout type="info" title="A variable scoped to an environment is not wanted anywhere else">
+`environments = ["production"]` means the variable applies **only** there —
+including against the plain `.env`. A developer running `evnx validate` locally
+is not told they are missing a production-only secret, which is the whole reason
+the field exists.
+</Callout>
+
+<Callout type="warning">
+**With a spec, the template no longer decides what is required.** The two
+checks answer the same question, so running both would report a variable twice
+and keep the behaviour the spec exists to replace.
+
+`.env.example` does not go away — it is still what a person reads when cloning
+the repo, and still what `evnx sync` maintains. The spec says what is *true*
+about a variable; the template shows what one *looks like*.
+</Callout>
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | The spec was written, or printed with `--stdout` |
+| `1` | Nothing to read, an unknown component, or `[vars]` already exists |
+| `2` | Argument error (unknown flag, bad value) |
+
+A format that will not compile as a regex is refused when the **config is read**,
+not the first time a value happens to be checked against it — so a broken
+contract fails the next command, whatever it is, rather than lying dormant.
+
+---
+
+## A project without a spec is unaffected
+
+Every project today has no `[vars]` section, and an absent spec means the
+previous behaviour exactly. Nothing about `validate`, `scan` or `sync` requires
+one, and adopting a spec is a decision you make per project.
+
+---
+
+## See also
+
+- [`evnx validate`](/guides/commands/validate) — what enforces the contract
+- [Configuration file](/guides/reference/configuration-file) — the rest of `.evnx.toml`
+- [`evnx init`](/guides/commands/init) — `--list-components` prints the catalogue `--with` draws on
+- [Environments](/guides/reference/environments) — how `.env.<name>` files are selected

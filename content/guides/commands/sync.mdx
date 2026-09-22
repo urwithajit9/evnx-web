@@ -55,7 +55,7 @@ were hardcoded, so keeping a template in step with `.env.production` was not exp
 | `--example` | `path` | `.env.example` | **v0.5.0+** — the template to sync into (forward) or from (reverse) |
 | `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--direction`, `-d` | `enum` | `forward` | Sync direction: `forward` (`.env` → `.env.example`) or `reverse` (`.env.example` → `.env`) |
-| `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when adding new variables (ignored in `--force` mode, which always uses placeholders for safety) |
+| `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when **adding** variables to an existing `.env.example`. Creating the file from scratch uses placeholders regardless — see below. `--force` implies it |
 | `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files. Always exits `0`, whatever it finds |
 | `--check` | `bool` | `false` | **v0.5.0+** — report whether the files are in step through the [exit code](#exit-codes). Implies `--dry-run`; never writes |
 | `--format` | `enum` | `pretty` | **v0.5.0+** — `json` reports *what* drifted, not only that something did. Requires `--check` |
@@ -102,6 +102,30 @@ When adding variables with placeholders, evnx uses these built-in heuristics (cu
 ## Exit codes
 
 There are two contracts. Which one applies depends on whether you pass `--check`.
+
+### Creating `.env.example` for the first time
+
+When `.env.example` does not exist, `evnx sync` creates it from `.env`.
+
+<Callout type="danger" title="v0.5.0 changed this default, because it leaked">
+**Before v0.5.0 this path copied `.env` verbatim** — real secrets included —
+unless you passed `--placeholder`. It then printed `✓ Created .env.example` and
+advised committing the file.
+
+The placeholder-versus-actual prompt, whose second option is labelled a security
+risk, guarded only the *other* path: adding variables to an example file that
+already existed. So every case was covered except the **first** `evnx sync` in a
+project — the one a getting-started guide tells you to run, and the one where
+`.env` most likely holds the values you just pasted in. `evnx scan` does not read
+`.env.example`, so nothing downstream caught it either.
+
+Now: placeholders by default. At a terminal you are asked and placeholders are
+the default answer; without one it uses them and says so. `--placeholder` and
+`--force` skip the question.
+
+If you do choose actual values, the next-steps text says the file is **not** safe
+to commit as written, instead of telling you to commit it.
+</Callout>
 
 ### Machine-readable — `--check --format json`
 
