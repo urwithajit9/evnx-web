@@ -389,12 +389,32 @@ For unattended pipelines this is the real constraint, and it is the honest conse
 
 ## What survives a round trip
 
-Push then pull on another machine and you get the same file back, byte for byte. Verified as part of the release, not assumed:
+Push then pull and you get the same file back, byte for byte — comments, ordering, both
+quote styles, non-ASCII, trailing whitespace and the final newline. All of it, because the
+encryption input is the file itself rather than a parsed representation of it.
+
+Verified before each release against a fixture built to break exactly that:
 
 ```bash
-sha256sum .env
-# 08677f2b...  .env      (before push, machine A)
-# 08677f2b...  .env      (after pull, machine B)
+printf '# leading comment\n\nZEBRA_LAST=ordering-must-survive\nQUOTED="value with  spaces"\nUNICODE=café-日本\nTRAILING=ws   \n' > .env.development
+evnx cloud push --vault my-app/development --file .env.development
+evnx cloud pull --vault my-app/development --file .env.pulled
+cmp .env.development .env.pulled && echo "byte-identical"
 ```
 
-Comments, ordering, quoting, trailing newlines — all preserved, because the encryption input is the file itself.
+```
+byte-identical
+```
+
+<Callout type="tip">
+**Do not take this on trust — run it.**
+[Verifying the Round Trip](/guides/reference/verifying-the-round-trip) is the full recipe,
+including proof that `evnx cloud run` keeps secrets out of `ps` and propagates a child's
+exit code, with the real output from a release run.
+</Callout>
+
+<Callout type="warning">
+Use `cmp`, not `diff`. `diff` treats two files as identical when they differ only in
+trailing whitespace or a missing final newline — which is the corruption most worth
+catching.
+</Callout>

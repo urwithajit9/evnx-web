@@ -1,0 +1,330 @@
+---
+title: "Verifying the Round Trip"
+slug: verifying-the-round-trip
+section: reference
+order: 7
+publishedAt: "2026-09-23"
+excerpt: "Check evnx's zero-knowledge claims yourself: a byte-identical push/pull round trip, and proof that evnx cloud run keeps secrets out of ps and propagates a child's exit code. Real commands, real output."
+difficulty: intermediate
+timeToComplete: "15 minutes"
+tags: ["cloud", "zero-knowledge", "verification", "testing", "security", "evnx"]
+evnxVersion: "0.5.0"
+prerequisites:
+  - getting-started/cloud-sync-quickstart
+draft: false
+---
+
+evnx makes three claims that are easy to state and easy to get wrong:
+
+1. **A file survives a round trip byte for byte** — comments, ordering, quoting, trailing
+   whitespace and all.
+2. **`evnx cloud run` keeps secrets out of the process table** — they travel in the
+   environment block, never in the argument vector.
+3. **A child's exit code comes back unchanged**, so a pipeline can branch on it.
+
+You should not take any of those on trust. This page is the recipe evnx's own maintainers
+run before tagging a release, with the output from an actual run so you know what passing
+looks like.
+
+<Callout type="info">
+**The output on this page is real.** It comes from a run on 2026-09-23 against
+`api.evnx.dev` (server `v0.1.0`), using a binary built from the commit that became v0.5.0.
+Two things are normalised: the account email reads `you@example.com`, and the scratch
+directory is shown as `/tmp/evnx-roundtrip` throughout even though the last steps were run
+in a second one. Nothing else is edited.
+</Callout>
+
+---
+
+## What this proves, and what it does not
+
+| Claim | Does this recipe establish it? |
+|-------|-------------------------------|
+| Your file comes back unchanged | **Yes** — directly, with `cmp` |
+| Secrets do not reach the argument vector | **Yes** — by reading `/proc/self/cmdline` from inside the child |
+| A child's exit code is preserved | **Yes** — by exiting `42` and checking |
+| A filter that matches nothing refuses to run | **Yes** |
+| **The server cannot read your secrets** | **No.** That is structural, not observable from the client — it follows from the server only ever receiving ciphertext. See [Cloud Architecture](/guides/reference/cloud-architecture) and the [security model](/guides/reference/concepts-security-model) |
+
+The third row is worth dwelling on. A client-side round trip cannot prove what a server
+does not have — it would look identical against a server that stored your plaintext. What
+makes the guarantee real is that encryption happens before the request is built, and that
+the key never leaves your machine. This recipe checks that the client holds up its end.
+
+---
+
+## 0. Build from source, so you know what you are testing
+
+```bash
+git clone https://github.com/urwithajit9/evnx && cd evnx
+cargo build --release --all-features
+./target/release/evnx --version
+```
+
+<Callout type="tip">
+The prebuilt binaries include the cloud commands too — you do not need to build from source
+to *use* them. Build from source when the point is to verify, so the binary you test is one
+you can read.
+</Callout>
+
+## 1. Preflight
+
+```bash
+evnx cloud status --ping && evnx auth status
+```
+
+```
+evnx cloud
+  server    https://api.evnx.dev
+  account   you@example.com
+  status    signed in
+  token     expired — renewed automatically on the next command
+
+  reachable yes (server ok v0.1.0)
+
+evnx account
+  server    https://api.evnx.dev
+  email     you@example.com
+  verified  yes
+  2FA       off
+```
+
+`cloud status` alone reads local files and works offline. `--ping` is what exits non-zero
+when the server cannot be reached, which is what makes it usable as a health check.
+
+## 2. Hold the password once
+
+```bash
+read -rs -p "evnx master password: " PW && echo && echo "captured ${#PW} chars"
+```
+
+A shell variable, deliberately **not** exported — so it is never in the environment block of
+any child process. Every command below takes it on stdin with `--password-stdin`, which
+keeps it out of your shell history and out of `ps`.
+
+## 3. A fixture designed to break byte-identity
+
+```bash
+mkdir -p /tmp/evnx-roundtrip && cd /tmp/evnx-roundtrip
+printf '# leading comment\n\nZEBRA_LAST=ordering-must-survive\nAPI_TOKEN=super-secret-value-123\nQUOTED="value with  spaces"\nSINGLE='"'"'single quoted'"'"'\nUNICODE=café-日本\nTRAILING=ws   \n\n# trailing comment\n' > .env.development
+cat -A .env.development | tail -3
+```
+
+```
+TRAILING=ws   $
+$
+# trailing comment$
+```
+
+Out-of-order keys, both quote styles, non-ASCII, **trailing whitespace**, blank lines, and
+comments at both ends. `cat -A` marks line ends with `$` so you can see the whitespace is
+really there — it is the first thing a normalising bug would eat.
+
+Then create a vault and push:
+
+```bash
+printf '%s\n' "$PW" | evnx vault create roundtrip-test -e development --password-stdin
+printf '%s\n' "$PW" | evnx cloud push --vault roundtrip-test/development --file .env.development --password-stdin
+```
+
+```
+  ✓ created roundtrip-test/development
+
+  Push a .env into it with:  evnx cloud push
+  file      .env.development (--file)
+  ✓ pushed .env.development to roundtrip-test/development as version 1
+```
+
+## 4. Pull it back and compare bytes
+
+```bash
+printf '%s\n' "$PW" | evnx cloud pull --vault roundtrip-test/development --file .env.pulled --password-stdin
+cmp .env.development .env.pulled && echo "PASS: byte-identical"
+```
+
+```
+  file      .env.pulled (--file)
+  ✓ pulled version 1 of roundtrip-test/development into .env.pulled
+PASS: byte-identical
+```
+
+<Callout type="warning">
+**Use `cmp`, not `diff`.** `diff` will happily call two files identical when they differ only
+in trailing whitespace or a missing final newline, which is exactly the class of corruption
+worth catching. `cmp` compares bytes.
+</Callout>
+
+## 5. `evnx cloud run` — three properties in one command
+
+```bash
+printf '%s\n' "$PW" | evnx cloud run --vault roundtrip-test/development --password-stdin -- \
+  sh -c 'tr "\0" "\n" < /proc/self/cmdline | grep -q "super-secret-value-123" \
+      && { echo "FAIL: secret is in argv (visible in ps)"; exit 9; }; \
+    echo "PASS: secret not in argv"; \
+    [ "$API_TOKEN" = "super-secret-value-123" ] || { echo "FAIL: not injected"; exit 8; }; \
+    echo "PASS: injected into env"; \
+    [ "$UNICODE" = "café-日本" ] && echo "PASS: unicode survived"; \
+    exit 42'
+echo "child exit code came back as: $?"
+```
+
+```
+PASS: secret not in argv
+PASS: injected into env
+PASS: unicode survived
+child exit code came back as: 42  (must be 42)
+```
+
+The child inspects **its own** `/proc/self/cmdline` — the same thing `ps` reads. If evnx
+passed secrets as arguments, they would appear there and be visible to every other user on
+the machine. They do not.
+
+The `exit 42` matters just as much for CI. Collapsing every child failure onto evnx's own
+exit code would make `evnx cloud run -- npm test` useless as a gate, because a test failure
+and an evnx failure would be indistinguishable.
+
+<Callout type="danger">
+**This removes the plaintext *file*, not the master password.** The vault key is wrapped
+under your master key, so decryption needs that password wherever the command runs. In CI,
+feed it with `--password-stdin` from your runner's secret store. `evnx cloud run` means "no
+secret file on disk", not "no secret needed".
+</Callout>
+
+## 6. Filters, and the failure that must not be silent
+
+```bash
+printf '%s\n' "$PW" | evnx cloud run --vault roundtrip-test/development \
+  --include 'API_*,UNICODE' --password-stdin -- \
+  sh -c '[ -n "$API_TOKEN" ] && [ -z "${ZEBRA_LAST+set}" ] \
+    && echo "PASS: --include kept only what was asked for" || echo "FAIL: filter leaked"'
+```
+
+```
+  · 4 of 6 variable(s) filtered out
+PASS: --include kept only what was asked for
+```
+
+Least privilege for a subprocess: a build step that needs only `NEXT_PUBLIC_*` has no reason
+to hold your database password. Note the count goes to **stderr**, so it does not pollute a
+piped stdout.
+
+Now the important half — a filter that matches nothing:
+
+```bash
+printf '%s\n' "$PW" | evnx cloud run --vault roundtrip-test/development \
+  --include 'NOSUCH_*' --password-stdin -- echo "this should never print"
+echo "exit=$?"
+```
+
+```
+Error: --include/--exclude left nothing to inject — all 6 variable(s) were filtered out.
+  Check the patterns: they are case-sensitive globs matched against variable names.
+exit=1
+```
+
+A typo in a glob that silently ran your deploy with **zero** secrets injected would be a
+success worse than any failure — the deploy would go out misconfigured and nothing would say
+so. `evnx migrate` has the same shape and exits `0`; this deliberately does not.
+
+## 7. History, binding, and cleanup
+
+```bash
+evnx cloud history --vault roundtrip-test/development
+```
+
+```
+  VERSION  KEYS     SIZE  PUSHED BY   PUSHED
+        1     6    220 B  you         2026-09-23 03:02
+
+  Restore one with:  evnx cloud pull --version 1
+```
+
+Read-only: no password, no decryption, no blob download. Note what it can show without
+decrypting anything — a version number, a **count** of keys, a ciphertext size and who
+pushed. Not the names, and certainly not the values.
+
+```bash
+evnx cloud link roundtrip-test/development && cat .evnx.toml
+```
+
+```
+  ✓ bound this directory to roundtrip-test/development
+  written to /tmp/evnx-roundtrip/.evnx.toml
+
+  `evnx cloud push` and `pull` now work here without --vault.
+  Safe to commit — a vault name is not a secret, and sharing it
+  means a teammate's pull lands in the same place.
+
+# Which evnx cloud vault this directory syncs with.
+# Safe to commit: a vault name is not a secret, and sharing it means
+# a teammate's `evnx cloud pull` lands in the same place.
+[cloud]
+vault = "roundtrip-test/development"
+```
+
+The binding is written with a comment explaining itself, because the file is meant to be
+committed and read by someone who did not run the command.
+
+```bash
+printf '%s\n' "$PW" | evnx cloud pull --force --password-stdin
+```
+
+```
+  config    .evnx.toml
+  using roundtrip-test/development from /tmp/evnx-roundtrip/.evnx.toml
+  file      ./.env (default)
+  ✓ pulled version 1 of roundtrip-test/development into ./.env
+```
+
+No `--vault` — that is the point of the binding, and the command says where it got the vault
+from rather than resolving it silently.
+
+<Callout type="info">
+**It wrote `./.env`, not `.env.development`.** `pull` prefers `.env.<environment>` when the
+vault names one **and that file already exists**; in a fresh directory it falls back to
+`.env`. The file chosen is always printed, so a first pull into a clean checkout never
+surprises you. See [evnx cloud](/guides/commands/cloud#pulling).
+</Callout>
+
+Then tear it down:
+
+```bash
+evnx cloud unlink
+evnx vault delete roundtrip-test/development --yes
+cd /tmp && rm -rf /tmp/evnx-roundtrip && unset PW
+```
+
+```
+  config    .evnx.toml
+  ✓ removed the vault binding
+  config    .evnx.toml
+  ✓ deleted roundtrip-test/development
+```
+
+<Callout type="warning">
+**`vault delete` takes no `--password-stdin`.** Deleting a vault is a server-side operation
+on an authenticated session — there is nothing to decrypt, so there is no password to give.
+Passing the flag is an argument error, and the vault is *not* deleted. Worth knowing,
+because a cleanup step that silently fails leaves a vault behind on your account.
+</Callout>
+
+---
+
+## If a step fails
+
+| Symptom | What it usually means |
+|---------|----------------------|
+| `cmp` reports a difference | A data-integrity bug. Stop and report it — this is the claim everything else rests on |
+| `FAIL: secret is in argv` | The secret reached the argument vector and is visible in `ps` to every user on the machine |
+| Exit code is `1` instead of `42` | The child's status is being swallowed, so CI cannot tell a test failure from a tool failure |
+| The empty-filter case exits `0` | A typo'd glob would run your deploy with no secrets and report success |
+| `reachable no` | The server, not evnx. Check [status](https://api.evnx.dev/health) before debugging further |
+
+---
+
+## Related
+
+- **[evnx cloud](/guides/commands/cloud)** — every cloud subcommand, flag by flag
+- **[Cloud Architecture](/guides/reference/cloud-architecture)** — what each component holds and what crosses the wire
+- **[Security Model](/guides/reference/concepts-security-model)** — where the zero-knowledge guarantee actually comes from
+- **[CI/CD with cloud tokens](/guides/integrations/ci-cd-cloud-tokens)** — running this in a pipeline instead of at a terminal

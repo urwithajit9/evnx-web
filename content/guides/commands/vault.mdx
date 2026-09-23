@@ -352,6 +352,17 @@ evnx vault delete my-api/production
 
 This removes the vault and **every version in it**. You are asked to confirm.
 
+| Flag | Effect |
+|------|--------|
+| `-y`, `--yes` | Skip the confirmation prompt — what a teardown script needs |
+
+<Callout type="info">
+**There is no `--password-stdin` here**, unlike `create`, `share` and `revoke`. Deleting is
+a server-side operation on an authenticated session; nothing is decrypted, so there is no
+password to give. Passing the flag is an argument error and the vault is **not** deleted —
+worth knowing, because a cleanup step that silently fails leaves the vault on your account.
+</Callout>
+
 <Callout type="danger" title="Deleting a vault destroys the only copy of its key">
 Your wrapped vault key lives in one place: the server's database. The CLI does not cache it — it fetches and unwraps it on each command.
 

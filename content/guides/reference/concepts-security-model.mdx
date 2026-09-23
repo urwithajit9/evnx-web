@@ -572,4 +572,14 @@ evnx provides strong cryptographic guarantees, but security requires ongoing vig
 With these practices, evnx can be a trusted component of your secrets management workflow.
 </Callout>
 
+<Callout type="tip" title="Do not take the client's side of this on trust">
+The claims above that are observable from your own machine — that a file survives a round
+trip unchanged, and that `evnx cloud run` keeps secrets out of `ps` — can be checked in
+about fifteen minutes:
+**[Verifying the Round Trip](/guides/reference/verifying-the-round-trip)**.
+
+It is explicit about what it does *not* establish. A client-side test cannot prove what the
+server does not hold; that comes from the architecture, not from an experiment.
+</Callout>
+
 
