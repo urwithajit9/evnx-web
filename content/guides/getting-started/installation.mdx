@@ -41,30 +41,89 @@ Verify the installation:
 
 ```bash
 evnx --version
-# evnx 0.2.0
 ```
 
-### Homebrew (coming soon)
+### Homebrew
 
 ```bash
-# brew install evnx  ← not yet available, coming in v0.3.0
+brew install urwithajit9/evnx/evnx
+```
+
+### npm
+
+```bash
+npm install -g @evnx/cli
+```
+
+### pipx
+
+```bash
+pipx install evnx
 ```
 
 ---
 
 ## Windows
 
-### Via winget
+### winget
 
 ```powershell
-winget install evnx
+winget install urwithajit9.evnx
 ```
 
-### Via Cargo (fallback)
+### Scoop
 
 ```powershell
-cargo install evnx
+scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx
+scoop install evnx
 ```
+
+---
+
+## Docker
+
+No install step at all — useful in CI, or to try evnx without putting it on your
+machine:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx scan
+```
+
+The image is built from the same static binary as the release tarballs, so it is
+the same program. It is multi-arch (`amd64` and `arm64`) and about 27 MB.
+
+<Callout type="warning">
+**Commands that write files need your own user id**, or the container creates
+files your host account cannot edit:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" \
+  ghcr.io/urwithajit9/evnx sync --direction forward
+```
+
+Read-only commands — `scan`, `validate`, `diff`, `convert` to stdout — need
+nothing extra. This is not an evnx quirk: it applies to every container that
+writes into a mounted directory.
+</Callout>
+
+Pin a version rather than tracking `latest` in a pipeline:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.5.0 scan
+```
+
+In GitHub Actions the container form usually reads better than an install step:
+
+```yaml
+- name: Scan for secrets
+  run: |
+    docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.5.0 \
+      scan --severity high
+```
+
+⚠️ `evnx cloud` works in the container, but the master password still has to
+reach it — pass it on stdin with `--password-stdin`, never as an argument or a
+plain `-e` variable.
 
 ---
 
@@ -73,17 +132,33 @@ cargo install evnx
 Install the stable release from [crates.io](https://crates.io/crates/evnx):
 
 ```bash
-cargo install evnx
+cargo install evnx --all-features
 ```
 
-Install with all optional features (cloud sync, extra format targets):
+<Callout type="danger">
+**Use `--all-features`, not `--features full`.**
 
-```bash
-cargo install evnx --features full
-```
+`full` is `migrate` + `backup`. It does **not** include `cloud`, so
+`cargo install evnx --features full` gives you a binary with no `auth`, `vault`
+or `cloud` commands — verified by building it.
+
+This page previously described `--features full` as "all optional features
+(cloud sync, extra format targets)". That was wrong, and it would have left you
+unable to use the feature you installed it for.
+</Callout>
+
+Plain `cargo install evnx` builds with `default = []` — the local commands only,
+no cloud. That is the right choice if you do not want the network stack.
 
 <Callout type="info" title="Compile times">
 Cargo builds from source, so the first install takes 60–90 seconds. Subsequent installs are faster because Cargo caches dependencies.
+</Callout>
+
+<Callout type="tip">
+**Every other channel already includes the cloud commands.** The prebuilt
+binaries — the install script, Homebrew, npm, pipx, Scoop, winget, Docker and the
+GitHub Release — are built with `--all-features`. `cargo install` is the only one
+that needs the flag, because it is the only one that compiles from source.
 </Callout>
 
 ---
@@ -92,7 +167,6 @@ Cargo builds from source, so the first install takes 60–90 seconds. Subsequent
 
 ```bash
 evnx --version
-# evnx 0.2.0
 
 evnx --help
 # Usage: evnx [COMMAND]
