@@ -226,14 +226,14 @@ evnx template --input config.yaml.template --output config.yaml
 
 ```bash
 # Generate production config using .env.production
-evnx template -i deploy.yaml.tpl -o deploy.yaml --env .env.production
+evnx template --input deploy.yaml.tpl --output deploy.yaml --env .env.production
 ```
 
 ### Enable verbose output for debugging
 
 ```bash
 # See detailed progress and variable loading info
-evnx template -i template.json -o output.json --verbose
+evnx template --input template.json --output output.json --verbose
 ```
 
 ### Generate multiple configs in a script

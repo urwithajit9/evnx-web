@@ -134,7 +134,7 @@ RESTART_POLICY=always
 
 ```bash
 # Dev
-evnx template -i docker-compose.yml.template -o docker-compose.yml --env .env.dev --gitignore
+evnx template --input docker-compose.yml.template --output docker-compose.yml --env .env.dev --gitignore
 
 ✓ Loaded 6 variables from .env.dev
 ✓ Read template from docker-compose.yml.template
@@ -142,7 +142,7 @@ evnx template -i docker-compose.yml.template -o docker-compose.yml --env .env.de
 ✓ Added 'docker-compose.yml' to .gitignore
 
 # Production
-evnx template -i docker-compose.yml.template -o docker-compose.yml.prod --env .env.production --gitignore
+evnx template --input docker-compose.yml.template --output docker-compose.yml.prod --env .env.production --gitignore
 
 ✓ Loaded 6 variables from .env.production
 ✓ Generated config at docker-compose.yml.prod
@@ -381,13 +381,13 @@ APP_NAME=my api
 
 ```bash
 # Staging
-evnx template -i config.toml.template -o config.toml --env .env.staging
+evnx template --input config.toml.template --output config.toml --env .env.staging
 
 ✓ Loaded 10 variables from .env.staging
 ✓ Generated config at config.toml
 
 # Production
-evnx template -i config.toml.template -o config.toml --env .env.production
+evnx template --input config.toml.template --output config.toml --env .env.production
 
 ✓ Loaded 10 variables from .env.production
 ✓ Generated config at config.toml

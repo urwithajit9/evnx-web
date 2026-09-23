@@ -856,7 +856,7 @@ Once pydantic-settings is in place and validating your config at runtime, you ca
 
 ```bash
 # Migrate secrets to AWS Secrets Manager
-evnx migrate --to aws-secrets-manager --prefix myapp/production
+evnx migrate --to aws-secrets-manager --secret-name myapp/production
 
 # [MIGRATE] Migrating secrets from .env to AWS Secrets Manager...
 # [OK]  SECRET_KEY → myapp/production/SECRET_KEY

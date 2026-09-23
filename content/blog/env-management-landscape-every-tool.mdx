@@ -761,7 +761,7 @@ evnx validate
 evnx scan
 
 # Diff two environments
-evnx diff .env .env.production
+evnx diff --env-name production
 
 # Convert to GitHub Actions secrets format
 evnx convert --to github-actions
@@ -835,7 +835,7 @@ Here's how the tools described in this post map to each phase of the development
 
 **CI/CD setup:** `evnx convert --to github-actions` (convert .env.example to CI secrets format)
 
-**PR review:** `evnx diff .env.example .env.example.new` (review new variables being added)
+**PR review:** `evnx diff --env .env.example --example .env.example.new` (review new variables being added)
 
 **Production:** `evnx migrate --to aws-secrets-manager` (migrate from .env to secrets manager) or dotenvx encrypt (encrypt .env for committed storage)
 
