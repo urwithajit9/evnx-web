@@ -129,6 +129,14 @@ severity            = "high"        # "high" | "medium" | "low"
 exclude             = ["fixtures"]  # paths this project never scans
 ignore_placeholders = true          # skip values that look like filler
 
+# Secret formats this project recognises beyond the built-in ones.
+# Repeat the block for each rule.
+[[scan.patterns]]
+name       = "Acme API key"
+regex      = "ACME-[A-Z0-9]{32}"
+confidence = "high"                 # optional; "high" | "medium" | "low"
+url        = "https://acme.example/settings/keys"   # optional
+
 # ─── evnx validate ───────────────────────────────────────────────────────────
 [validate]
 strict           = true
@@ -150,6 +158,12 @@ keep = 3                       # previous backups to retain
 # ─── evnx cloud ──────────────────────────────────────────────────────────────
 [cloud]
 vault = "my-app/production"    # written by `evnx cloud link` — see below
+
+# ─── The variable contract ───────────────────────────────────────────────────
+[vars]
+PORT         = { format = "port", description = "HTTP listen port" }
+STRIPE_KEY   = { secret = true, environments = ["production"] }
+DEBUG_BANNER = { required = false }
 ```
 
 ### `[defaults]`
@@ -169,6 +183,7 @@ overridden by `--env-name`, and by an explicit `--env` path.
 | `severity` | `"high"` \| `"medium"` \| `"low"` | `"low"` | Lowest confidence worth reporting. `"high"` reports only detections matching a known provider format |
 | `exclude` | list of strings | `[]` | Paths this project never scans |
 | `ignore_placeholders` | bool | `false` | Skip values that look like filler |
+| `patterns` | list of tables | `[]` | **v0.5.0+** — secret formats this project recognises beyond the built-in ones. See below |
 
 <Callout type="info">
 **`exclude` entries without `*` are substrings; entries with `*` are globs.**
@@ -183,6 +198,43 @@ root, and the file name — so `"fixtures/**"`, `"./fixtures/**"`, `"*fixtures*"
 ⚠️ Before v0.5.0 a glob was matched only against the whole path *including* its leading
 `./`, so `"fixtures/**"` matched nothing and said nothing about it. Patterns written around
 that limitation still behave identically.
+</Callout>
+
+#### `[[scan.patterns]]`
+
+An **array of tables** — repeat the `[[scan.patterns]]` header once per rule.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `name` | string | *required* | What the finding is called in every output format. Becomes the SARIF rule id: `secret/acme-api-key` |
+| `regex` | string | *required* | The expression. Anchor it yourself if you want it anchored |
+| `confidence` | `"high"` \| `"medium"` \| `"low"` | `"high"` | Feeds `severity`, the counts and the exit code together |
+| `url` | string | none | Where to go and revoke a match |
+
+```toml
+[[scan.patterns]]
+name = "Acme API key"
+regex = "ACME-[A-Z0-9]{32}"
+url = "https://acme.example/settings/keys"
+
+[[scan.patterns]]
+name = "Ring handle"
+regex = "RING-[0-9]{4}"
+confidence = "medium"
+```
+
+These combine with `--pattern` rather than being replaced by it, the same way `exclude`
+does. The default confidence is `high` on the grounds that you wrote the rule deliberately.
+
+<Callout type="warning">
+⚠️ **`name` and `regex` are required, and a missing one fails the whole file** — every
+command, not just `scan`, because the config is parsed before any command runs. That is
+louder than the usual treatment of a mistake here: an *unrecognised* key such as
+`secretGroup` only warns.
+
+An expression that does not **compile** behaves differently again — it fails `evnx scan`
+alone, with exit `2`, and leaves other commands working. Full behaviour in
+[evnx scan](/guides/commands/scan#teaching-it-your-own-formats).
 </Callout>
 
 ### `[validate]`
@@ -226,6 +278,61 @@ You do not write this one by hand. `evnx cloud link` writes it for you, preservi
 comments, key order, and any keys it does not recognise.
 </Callout>
 
+### `[vars]`
+
+**v0.5.0+.** The project's variable contract — what each variable is, rather than how a
+command behaves. Read by `validate`, `scan` and `sync`.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `required` | bool | `true` | Unstated means required. `false` marks a variable that may be absent |
+| `secret` | bool | *unstated* | `true` reports a credential the heuristics cannot name; `false` retracts a guess made from the variable's name |
+| `format` | string | none | `url`, `int`, `port`, `bool`, `email`, or a regular expression |
+| `description` | string | none | Written into `.env.example` by `evnx sync` |
+| `environments` | list of strings | all | Which environments the variable is required in |
+
+```toml
+[vars]
+PORT = { format = "port", description = "HTTP listen port" }
+
+[vars.STRIPE_KEY]
+secret = true
+environments = ["production"]
+```
+
+`evnx spec init` writes this section for you by inferring it from the files you already
+have. Full behaviour, including what `secret = false` can and cannot retract:
+**[evnx spec](/guides/commands/spec)**.
+
+<Callout type="tip">
+Section order does not matter. `[vars]` reads the same before or after
+`[[scan.patterns]]` — verified both ways.
+
+What *does* matter is that a plain key written **after** a `[[scan.patterns]]` block lands
+inside that rule rather than in `[scan]`:
+
+```toml
+[scan]
+severity = "high"
+
+[[scan.patterns]]
+name = "Acme API key"
+regex = "ACME-[A-Z0-9]{32}"
+
+exclude = ["fixtures"]     # ← belongs to the rule above, not to [scan]
+```
+
+That is ordinary TOML, not an evnx quirk — a header ends the table above it. evnx catches
+it rather than silently ignoring it:
+
+```
+! /home/you/my-repo/.evnx.toml: unknown key `scan.patterns[0].exclude` (ignored)
+```
+
+Keep every `[[scan.patterns]]` block at the end of its section and the question does not
+come up.
+</Callout>
+
 ---
 
 ## evnx tells you when a config is in force
@@ -265,7 +372,7 @@ The banner and all warnings go to stderr, never stdout, so
 ```bash
 $ evnx validate
   config    .evnx.toml
-⚠ /home/you/my-repo/.evnx.toml: unknown key `scan.entropy_threshold` (ignored)
+! /home/you/my-repo/.evnx.toml: unknown key `scan.entropy_threshold` (ignored)
 ```
 
 The file is committed and teams run mixed versions, so a config written for a later evnx
@@ -355,9 +462,12 @@ There is also **no user-level config**. `~/.config/evnx/` holds credentials and 
 settings, and those are deliberately separate: a policy file in your home directory would
 apply to every project on the machine without being visible in any of them.
 
-Custom secret patterns, entropy thresholds, required-variable lists and per-command output
-defaults are all **not configurable**. They were described on this page for a long time and
-were never implemented.
+Entropy thresholds and per-command output defaults are **not configurable**. They were
+described on this page for a long time and were never implemented — 4.8 for the generic
+check and 4.5 for the gate on AWS secret keys are compiled in, and `--format` is a flag.
+
+⚠️ Two things this paragraph used to list have since shipped, in v0.5.0: **custom secret
+patterns** are `[[scan.patterns]]`, and **required-variable lists** are `[vars]`.
 
 ---
 

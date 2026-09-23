@@ -37,15 +37,18 @@ evnx scan [OPTIONS] [PATH]
 | `--severity` | `high\|medium\|low` (`all` = `low`) | `low` | **v0.5.0+** — lowest confidence worth reporting. Filters the findings, the counts and the exit code together |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (advisory mode) |
 | `--exclude` | `string[]` | `[]` | Glob or substring patterns to skip |
+| `--pattern` | `regex[]` | `[]` | **v0.5.0+** — also report values matching this expression. Repeatable. Combines with `[[scan.patterns]]` |
 | `--ignore-placeholders` | `bool` | `false` | Skip values that look like placeholders (`changeme`, `your_key_here`) |
 
 <Callout type="warning">
 `--path`, `--recursive`, `--ignore`, `--include-example`, `--output` and `--exit-code`
 have appeared on this page in the past. **None of them exist.** Paths are positional,
-scanning is already recursive, and the advisory flag is `--exit-zero`. `--pattern` is
-accepted by the parser but currently does nothing — it is reserved and has no effect.
+scanning is already recursive, and the advisory flag is `--exit-zero`.
 
 Redirect instead of `--output`: `evnx scan --format sarif > results.sarif`.
+
+`--pattern` **did** nothing until v0.5.0 — it was accepted by the parser and discarded.
+It works now; see [Teaching it your own formats](#teaching-it-your-own-formats).
 </Callout>
 
 ---
@@ -66,6 +69,9 @@ OPENAI_API_KEY        — /sk-[a-zA-Z0-9]{48}/
 SENDGRID_API_KEY      — /SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}/
 TWILIO_AUTH_TOKEN     — /[0-9a-f]{32}/
 ```
+
+These are the formats evnx ships with. For the ones only your project knows — an internal
+token, a vendor key shape — see [Teaching it your own formats](#teaching-it-your-own-formats).
 
 ### High-entropy detection
 
@@ -330,18 +336,186 @@ Since it does loosen scanning, evnx announces it on every run:
 
 ---
 
+## Teaching it your own formats
+
+**v0.5.0+.** The built-in patterns know AWS, Stripe, GitHub, OpenAI and the rest. They do
+not know your company's internal token, or the key shape of a vendor nobody else uses —
+and a credential evnx cannot name is a credential it reports as `✓ No secrets detected`.
+
+`--pattern` takes a regular expression and reports anything matching it:
+
+```bash
+evnx scan --pattern 'ACME-[A-Z0-9]{32}'
+```
+
+```
+  ✗  Custom pattern 1                            high
+     ./.env:2 (TENANT_A)  ACME…A539
+     !  matches a live key format, not a placeholder
+```
+
+It is repeatable, and it takes an expression and **nothing else** — there is no
+`--pattern 'Name=regex'` form. `=` is legal inside a character class, so a pattern like
+`[A-Za-z0-9+/=]{40}` would split into a nonsense name and a broken expression. Flag
+patterns are named by position instead: `Custom pattern 1`, `Custom pattern 2`.
+
+### The durable form — `[[scan.patterns]]`
+
+For a rule the whole team should scan with, and for a name that means something, declare it
+in `.evnx.toml`:
+
+```toml
+[[scan.patterns]]
+name = "Acme API key"
+regex = "ACME-[A-Z0-9]{32}"
+url = "https://acme.example/settings/keys"   # optional: where to revoke it
+
+[[scan.patterns]]
+name = "Ring handle"
+regex = "RING-[0-9]{4}"
+confidence = "medium"                        # optional: high | medium | low
+```
+
+```
+  ✗  Acme API key                                high
+     ./.env:2 (TENANT_A)  ACME…A539
+     !  matches a live key format, not a placeholder
+     →  revoke at https://acme.example/settings/keys
+
+  !  Ring handle                                 medium
+     ./src/client.ts:2  RI…21
+```
+
+| Key | Required | Meaning |
+|-----|----------|---------|
+| `name` | yes | What the finding is called, in every output format. Becomes the SARIF rule id — `secret/acme-api-key` |
+| `regex` | yes | The expression. Anchor it yourself if you want it anchored |
+| `confidence` | no | `high` (default), `medium` or `low`. Feeds `--severity`, the counts and the exit code together |
+| `url` | no | Where to go and revoke a match |
+
+The two sets **combine** — `--pattern` is this run's rule, `[[scan.patterns]]` is the
+project's standing set — the same way `--exclude` combines with `[scan] exclude`. The
+default confidence is `high` because you wrote the rule deliberately; a rule you want to be
+advisory says `confidence = "medium"` and drops out of `--severity high`.
+
+### A broken expression is not a clean scan
+
+<Callout type="danger">
+**An expression that does not compile exits `2`, and `--exit-zero` does not suppress it.**
+
+```
+$ evnx scan . --pattern '('
+Error: 'Custom pattern 1' is not a valid regular expression
+  (
+
+regex parse error:
+    (
+    ^
+error: unclosed group
+
+No verdict: evnx did not scan anything. This is not a clean result.
+```
+
+Exit `0` there would mean CI reads a search that never ran as a pass. A pattern that matches
+the empty string — `.*`, `a?` — is refused on the same grounds: it would flag every line in
+the project.
+
+The same applies to a typo in `confidence`. `confidence = "hgih"` is an error, not a silent
+downgrade to `low`, because a quiet downgrade would drop the rule out of a `--severity high`
+gate that used to catch it.
+</Callout>
+
+### How it interacts with the built-in detectors
+
+| Situation | What is reported |
+|-----------|------------------|
+| Your rule matches a value nothing else recognises | Your rule, under your name |
+| Your rule and the *name* heuristic both match | **Your rule.** `ACME_TOKEN=ACME-…` reports as `Acme API key`, not `Sensitive config key: ACME_TOKEN` |
+| Your rule and a built-in *provider* pattern both match | **The built-in.** A real AWS key stays `AWS Access Key`, because only it can link you to IAM to revoke it |
+| Your rule matches a variable declared `secret = false` | **Your rule.** It read the value, and no declaration about what a variable is *for* can make its contents stop being a credential |
+
+### Files that are not `.env`
+
+Custom patterns are matched against the whole line in non-`.env` files, so a short format is
+found where the entropy heuristics could not see it:
+
+```ts
+// src/client.ts
+const ring = "RING-4821";
+```
+
+```bash
+evnx scan ./src --pattern 'RING-[0-9]{4}'   # found
+evnx scan ./src                             # ✓ No secrets detected
+```
+
+The generic detectors split each line into tokens and discard anything 20 characters or
+shorter, which is right for "this looks random" and wrong for "this is exactly what I am
+looking for".
+
+### Performance
+
+Declaring rules is close to free. Every pattern is compiled into a single automaton that
+reports which of them match in one pass, so a line with no secret in it costs the same
+whether you declared one rule or two hundred — the same approach GitHub's scanner and
+gitleaks use.
+
+Measured over 400 files, 60,000 lines, 6.3 MB, no findings:
+
+| patterns | scan time |
+|---------:|----------:|
+| 0 | 55 ms |
+| 1 | 56 ms |
+| 10 | 59 ms |
+| 50 | 58 ms |
+| 200 | 68 ms |
+
+Expressions are also matched without backtracking, so a pattern committed to `.evnx.toml`
+cannot hang the scan for everyone who clones the repository.
+
+<Callout type="warning">
+**A pattern made only of literal text will match its own declaration**, because `.evnx.toml`
+is scanned like any other file. `--exclude .evnx.toml` if that bothers you — but note that
+excluding it also means a secret pasted into that file would never be found, which is why
+evnx does not exclude it for you. Expressions with metacharacters do not self-match.
+</Callout>
+
+<Callout type="info" title="Not to be confused with `evnx validate --pattern`">
+`validate`'s `--pattern` was **removed** in the same release. It named a file to validate
+and its entire implementation was a discarded argument. `scan --pattern` names a secret
+format and works. Same word, opposite directions — see
+[evnx validate](/guides/commands/validate).
+</Callout>
+
+### When to use which
+
+| You want | Use |
+|----------|-----|
+| A named variable treated as secret, whatever it holds | `[vars] secret = true` — see [Declaring what the heuristics cannot know](#declaring-what-the-heuristics-cannot-know) |
+| Any value of a given *shape* found, wherever it appears | `[[scan.patterns]]` |
+| To try an expression once, without committing it | `--pattern` |
+
+The first is about a variable, the other two about a format. A spec entry will not find your
+token pasted into a `.ts` file; a pattern will not know that `TENANT_A` is a credential if
+its value has no distinctive shape.
+
+---
+
 ## Ignoring false positives
 
 Some values look like secrets but are not — test fixtures, sample values, generated
 tokens in a seed file.
 
 <Callout type="warning">
-⚠️ **Inline `# evnx-ignore` comments and `.evnx.toml` `[scan]` keys do not work.** This
-page has documented both; neither is read by anything, and `.evnx.toml` as a whole is not
-loaded by any command except the cloud vault binding. A value marked
-`# evnx-ignore: test fixture` is still reported.
+⚠️ **Inline `# evnx-ignore` comments do not work.** This page has documented them; no
+command reads them. A value marked `# evnx-ignore: test fixture` is still reported, and
+there is no `[scan] ignore` key either.
 
-The two mechanisms below are the ones that exist.
+`.evnx.toml`'s `[scan]` section **does** work as of v0.5.0 — `severity`, `exclude`,
+`ignore_placeholders` and `patterns` are all read. On v0.4.x the loader existed but nothing
+called it, which is where the older claim came from.
+
+The three mechanisms below are the ones that exist.
 </Callout>
 
 ### Skip files and paths — `--exclude`
@@ -459,3 +633,5 @@ Use `--exit-zero` in environments where you want to report findings without bloc
 - **[evnx validate](/guides/commands/validate)** — catch misconfiguration (wrong types, weak secrets, placeholders)
 - **[evnx migrate](/guides/commands/migrate)** — move detected secrets to a cloud secret manager
 - **[evnx doctor](/guides/commands/doctor)** — full environment health check including gitignore
+- **[evnx spec](/guides/commands/spec)** — the `[vars]` contract, for declaring secrecy by variable rather than by shape
+- **[.evnx.toml reference](/guides/reference/configuration-file)** — every `[scan]` key, including `[[scan.patterns]]`
