@@ -49,26 +49,11 @@ export const INSTALL_COMMANDS = {
   cargoCloud: `cargo install evnx --features cloud`,
 } as const;
 
-// Mirrors `evnx --help` on the v0.4.0 binary. `auth`, `vault` and `cloud` ship
-// in every prebuilt binary; from crates.io they need --features cloud.
-export const EVNX_COMMANDS = [
-  "init",
-  "add",
-  "validate",
-  "scan",
-  "diff",
-  "convert",
-  "migrate",
-  "sync",
-  "template",
-  "backup",
-  "restore",
-  "auth",
-  "vault",
-  "cloud",
-  "doctor",
-  "completions",
-] as const;
-
-// Commands that require the cloud feature and a signed-in account.
-export const EVNX_CLOUD_COMMANDS = ["auth", "vault", "cloud"] as const;
+// `EVNX_COMMANDS` and `EVNX_CLOUD_COMMANDS` were removed in v0.5.0. They were
+// exported, had no consumer anywhere in the app, and had already drifted — the
+// list was missing `spec`, so wiring it up to render a command index would have
+// shipped an incomplete one.
+//
+// If a command index is wanted, build it from the guides' own frontmatter, which
+// is verified against the binary on every release. A hand-maintained array is a
+// second source of truth that nothing forces anyone to update.
