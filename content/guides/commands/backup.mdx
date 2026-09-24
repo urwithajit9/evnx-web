@@ -37,7 +37,7 @@ evnx backup [OPTIONS]
 | `[ENV]` | positional | `.env` | The file to back up — `evnx backup .env.production` |
 | `--env-name` | `string` | — | **v0.5.0+** — back up `.env.<NAME>`. env |
 | `--output` | `string` | `<env>.backup` | Destination path for the encrypted backup |
-| `--key-file` | `path` | — | Use a file as the encryption key instead of a password prompt |
+| `--key-file` | `path` | — | Use a file as the encryption key instead of a password prompt. **v0.5.0+** — also accepted as `--password-file`, the spelling [`restore`](/guides/commands/restore) uses |
 | `--keep` | `number` | `3` | Number of previous backups to retain alongside the new one |
 | `--verify` | `bool` | `false` | Re-decrypt and integrity-check the backup immediately after writing |
 | `--verbose` | `bool` | `false` | Print diagnostic information at each pipeline stage |
@@ -241,15 +241,35 @@ in sequence, consider whether the safety guarantee is worth the added time.
 
 ---
 
-## Non-interactive / CI usage with `--key-file`
+## Non-interactive / CI usage
 
-For automated pipelines where typing a password is not possible, supply a key
-file instead. The file's contents are used as the encryption password source —
-no prompts are shown.
+For automated pipelines where typing a password is not possible, there are two
+sources. Neither shows a prompt.
+
+**1. `--key-file <path>`** — the file's contents become the encryption password.
 
 ```bash
 evnx backup --key-file /run/secrets/backup-key
 ```
+
+**2. `EVNX_PASSWORD`** — **v0.5.0+**. Read once, then removed from the process
+environment.
+
+```bash
+EVNX_PASSWORD="$BACKUP_PASSPHRASE" evnx backup
+```
+
+<Callout type="info">
+  **`EVNX_PASSWORD` was added to `backup` in v0.5.0.** Before it, only
+  [`restore`](/guides/commands/restore) accepted the variable — so a scheduled
+  backup had no way to supply a passphrase except writing one to disk, while the
+  restore it fed needed no file at all. The two halves of one pipeline now take
+  the same inputs, under either flag spelling.
+</Callout>
+
+`--key-file` wins if both are present. Both print a warning to stderr: they are
+less secure than the interactive prompt, and `EVNX_PASSWORD` may already have
+been captured by a shell, a process monitor or a CI log before evnx removed it.
 
 **How key material is read:**
 
@@ -258,6 +278,14 @@ evnx backup --key-file /run/secrets/backup-key
   without the trailing newline.
 - **Binary files** — content is Base64-encoded first to produce a stable ASCII
   string before being fed into Argon2id.
+
+<Callout type="warning">
+  **The same reader runs on both sides.** `evnx restore --password-file` reads
+  the file exactly as `backup` does, so one key file round-trips. Before v0.5.0
+  it did not: `restore` read the file as UTF-8 and stripped only a trailing
+  newline, so a **binary** key file wrote a backup that the same file could not
+  open, and the only symptom was a failed decryption.
+</Callout>
 
 Both paths go through the same Argon2id KDF, so key length beyond the KDF input
 limit is handled automatically.

@@ -44,7 +44,7 @@ evnx restore [OPTIONS] <BACKUP>
 | `--output` | `string` | `.env` | Destination path for the restored file |
 | `--inspect` | `bool` | `false` | List variable names (never values) without writing any files |
 | `--dry-run` | `bool` | `false` | Decrypt and validate but do not write any files |
-| `--password-file` | `path` | — | Read decryption password from a file (CI/CD) |
+| `--password-file` | `path` | — | Read decryption password from a file (CI/CD). **v0.5.0+** — also accepted as `--key-file`, the spelling [`backup`](/guides/commands/backup) uses |
 | `--verbose` | `bool` | `false` | Print a diagnostic line at each pipeline stage |
 
 `EVNX_PASSWORD` environment variable is also accepted as a password source. See [Non-interactive password input](#non-interactive-password-input) for the full priority order.
@@ -239,7 +239,11 @@ Use `--dry-run` to:
 
 For CI/CD pipelines where interactive prompts are not possible, passwords are resolved in this priority order:
 
-**1. `--password-file <path>`** — read from a file, trailing newline stripped automatically.
+**1. `--password-file <path>`** — read from a file. UTF-8 content is trimmed of
+surrounding whitespace; binary content is Base64-encoded first. This is the same
+reader [`evnx backup --key-file`](/guides/commands/backup) uses, so one file
+round-trips — **changed in v0.5.0**, when the two sides could still derive
+different passwords from one file.
 
 ```bash
 evnx restore .env.backup --password-file /run/secrets/evnx-pass
