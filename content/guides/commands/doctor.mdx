@@ -41,6 +41,7 @@ evnx doctor [OPTIONS] [PATH]
 | `--fix` | `bool` | `false` | **v0.5.0+** — repair what can be repaired, instead of only reporting it |
 | `--strict` | `bool` | `false` | **v0.5.0+** — count warnings as problems, so they affect the exit code |
 | `--path <PATH>` | `string` | `.` | **v0.5.0+** — same as the positional argument; giving both is an error |
+| `--format` | `pretty\|json` | `pretty` | **v0.5.0+** — machine-readable output. An unrecognised value exits 2 |
 | `--verbose`, `-v` | `bool` | `false` | Show detailed diagnostic output |
 | `--help`, `-h` | `bool` | `false` | Display help information |
 
@@ -64,11 +65,43 @@ evnx doctor --fix
 Either one saying yes is enough; a flag can turn repair on, never off.
 </Callout>
 
+### `--format` — machine-readable output
+
+**v0.5.0+.**
+
+```bash
+evnx doctor --format json | jq '.summary.errors'
+```
+
+| Value | Output |
+|-------|--------|
+| `pretty` | the default: colour, glyphs, grouped by check |
+| `json` | one document with `project_path`, `checks[]` and `summary` |
+
+An unrecognised value exits `2` rather than falling back to `pretty` — a typo in
+a CI step must not quietly turn a JSON contract into prose the next `jq` cannot
+read.
+
+<Callout type="warning">
+**`EVNX_OUTPUT_JSON=1` does the same thing and still works**, but the flag wins
+when both are given. That is deliberate and differs from `--fix`/`EVNX_AUTO_FIX`,
+where either saying yes is enough: a format is a choice between two answers
+rather than a guard, so an explicit `--format pretty` has to be able to override
+an `EVNX_OUTPUT_JSON=1` exported by a CI image.
+
+⚠️ This flag shipped in v0.5.0 and was documented nowhere until 2026-09-24 — the
+JSON output existed from the beginning, reachable only through the environment
+variable. That is the same shape as `--fix` before v0.5.0, and it is how this
+page came to invent `--check-config`, `--fail-on-warning` and three other flags
+that never parsed: a capability with no discoverable surface gets documented
+into existence sooner or later.
+</Callout>
+
 **Environment Variables:**
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `EVNX_OUTPUT_JSON` | `1`, `true`, `json` | `false` | Output results as JSON (for CI/CD) |
+| `EVNX_OUTPUT_JSON` | `1`, `true`, `json` | `false` | Same as `--format json`. Kept because it shipped first |
 | `EVNX_AUTO_FIX` | `1`, `true` | `false` | Attempt to auto-fix detected issues |
 
 ---

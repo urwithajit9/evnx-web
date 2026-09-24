@@ -414,8 +414,25 @@ evnx restore test.backup --output .env.test.restored --dry-run  # Verify metadat
 ls -l .env.test.backup  # Should show -rw------- (0o600) on Unix
 
 # 6. Confirm no network activity
-strace -e trace=network evnx backup --env .env.test 2>&1 | grep -E "connect|sendto" || echo "✓ No network calls"
+strace -f -e trace=network evnx backup .env.test --output net.backup 2>&1 \
+  | grep -E "connect|sendto" || echo "✓ No network calls"
 ```
+
+<Callout type="danger">
+⚠️ **This check used to pass for the wrong reason.** It ran
+`evnx backup --env .env.test` — and `backup` has no `--env` flag, the file is
+positional. So the command exited 2 without doing anything, `grep` found no
+network calls in the output of a program that never ran, and the checklist
+printed `✓ No network calls`.
+
+A verification step that passes when the thing it verifies did not execute is
+worse than no step at all. If you are adapting this, confirm the command
+actually runs before trusting the `✓`:
+
+```bash
+evnx backup .env.test --output net.backup; echo "exit=$?"   # expect 0
+```
+</Callout>
 
 ### Operational checks
 
