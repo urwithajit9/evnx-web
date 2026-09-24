@@ -219,17 +219,30 @@ DATABASE_URL=postgres://user:pass@localhost:5432/db
 # ... more vars
 
 cat .env
-# TODO: DATABASE_URL=postgres://user:pass@localhost:5432/db  # <-- Fill in real value
-# ... more TODOs
+# ── Service: postgresql ──
+DATABASE_URL=postgres://user:pass@localhost:5432/db
+# ... more vars
 ```
+
+Both files carry the same variables. `.env` is yours to fill in; `.env.example` is
+the template you commit.
 
 **Step 4: Replace placeholders with real values**
 
 ```bash
 nano .env
-# Edit each TODO line with your actual credentials
+# Replace each placeholder value with your actual credentials
 # Keep .env.example unchanged (it's your team template)
+
+evnx validate        # names exactly which values still need replacing
 ```
+
+<Callout type="info">
+  **Changed in v0.5.0.** `.env` used to receive these as `# TODO:` comment lines. The
+  parser cannot see a commented assignment, so `evnx add` reported adding six variables
+  and `evnx validate`, run immediately after, reported all six *missing*. Both commands
+  now agree.
+</Callout>
 
 **Step 5: Validate your setup**
 
