@@ -9,7 +9,7 @@ excerpt: "Automate evnx sync validation in GitHub Actions, GitLab CI, and pre-co
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["sync", "ci-cd", "github-actions", "gitlab", "automation", "validation"]
-evnxVersion: "0.5.0"
+evnxVersion: "0.5.2"
 prerequisites:
   - commands/sync
   - getting-started/sync-basics
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install evnx
-        run: cargo install evnx
+        run: cargo install evnx --all-features
 
       - name: Check .env.example is up to date
         run: |
@@ -373,7 +373,7 @@ fi
 
 ```yaml
 - name: Install evnx
-  run: cargo install evnx
+  run: cargo install evnx --all-features
 ```
 
 Or use a pre-built binary:

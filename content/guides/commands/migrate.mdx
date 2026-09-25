@@ -9,7 +9,7 @@ excerpt: "Generate the commands that move your .env into a cloud secret manager.
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["migrate", "reference", "cli", "secrets", "cloud"]
-evnxVersion: "0.5.0"
+evnxVersion: "0.5.2"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -267,13 +267,19 @@ include → exclude → strip prefix → add prefix.
 | `--strip-prefix` | `string` | — | Remove a leading prefix from every key. `APP_` turns `APP_DB_URL` into `DB_URL` |
 | `--add-prefix` | `string` | — | Prepend a prefix to every key. `PROD_` turns `DB_URL` into `PROD_DB_URL` |
 
-<Callout type="warning">
-**A filter that matches nothing exits `0`.** `evnx migrate --to gcp --include
-'DB_ *'` — note the typo — prints *"All secrets were filtered out — nothing to
-migrate"* and succeeds. In a pipeline that reads as a completed migration.
+<Callout type="success">
+**A filter that matches nothing is an error — changed in v0.5.0.** `evnx migrate --to gcp
+--include 'DB_ *'` — note the typo — now exits `2` and names the file:
 
-Check the count before trusting it, or run without `--to` first to see what
-survives filtering.
+```
+Error: every one of the 12 variable(s) in .env was filtered out, so there is nothing to migrate.
+
+Check --include / --exclude: a pattern that matches nothing leaves the destination untouched.
+```
+
+Until v0.5.0 it printed *"All secrets were filtered out"* and exited `0`, which in a
+pipeline read as a completed migration. An empty source file is now an error for the same
+reason, and `evnx cloud run` has always treated a filter matching nothing this way.
 </Callout>
 
 ### Destination options
@@ -315,9 +321,17 @@ Patterns are case-sensitive. Multiple patterns are comma-separated.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Completed — commands generated, or an upload finished. **Also returned when filtering left nothing to do** |
-| `1` | Failed — unknown destination, missing source file, a required platform CLI not installed, a missing identifier with no terminal, or an API error |
-| `2` | Argument error (unknown flag, bad value) |
+| `0` | Completed — commands generated, or an upload finished |
+| `2` | Did not run. Unknown destination, missing or empty source file, a filter that matched nothing, a missing platform identifier, a flag the destination cannot honour, or an argument error |
+
+<Callout type="info">
+  **`migrate` never returns `1`** — measured across eight failure modes on v0.5.2. evnx's
+  contract is `0` clean · `1` findings · `2` could not run, and `migrate` has no "findings"
+  state, so it only ever emits `0` or `2`. **Gate on non-zero, never on `-eq 1`.**
+
+  ⚠️ Until v0.5.0 this table listed a `1` row, and `0` was also returned when filtering
+  left nothing to do. Both were wrong.
+</Callout>
 
 ---
 

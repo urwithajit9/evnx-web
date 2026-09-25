@@ -8,7 +8,7 @@ excerpt: "Pull encrypted secrets into a pipeline with a scoped API token — and
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["ci-cd", "cloud", "tokens", "github-actions", "security", "evnx"]
-evnxVersion: "0.4.0"
+evnxVersion: "0.5.2"
 prerequisites:
   - commands/auth
   - commands/cloud
@@ -156,6 +156,46 @@ deploy:
 <Callout type="tip" title="printf, not echo">
 `printf '%s'` writes the password with no trailing newline and no interpretation of backslashes. `echo` varies between shells on both counts, and a passphrase containing a backslash will silently become a different password under some of them.
 </Callout>
+
+---
+
+## Prefer `evnx cloud run` over writing a file
+
+**Added in v0.5.0.** Every example above ends with `--file .env`, which writes your
+decrypted secrets to the runner's filesystem. They then live there for the rest of the
+job, readable by every later step, and land in any artifact or cache that picks up the
+working directory.
+
+`evnx cloud run` hands them to one process instead:
+
+```yaml
+- name: Deploy
+  run: |
+    printf '%s' "${{ secrets.EVNX_MASTER_PASSWORD }}" \
+      | evnx cloud run --vault my-api/production --password-stdin -- ./deploy.sh
+```
+
+Nothing is written to disk, nothing enters shell history, and nothing appears in `ps` —
+the values travel in the child's environment block, never in its argument vector. The
+child's exit code is returned unchanged, so it gates the job exactly as the script would
+on its own.
+
+`--include` and `--exclude` narrow what the child sees, and a filter matching nothing is
+an error rather than a silent run with no secrets.
+
+<Callout type="warning">
+  ⚠️ **This removes the plaintext *file*, not the master password.** The vault key is
+  wrapped under your master key, so decryption still needs it wherever this runs — feed it
+  with `--password-stdin` exactly as `pull` does. The token scopes what can be read; the
+  password is what decrypts it.
+</Callout>
+
+The command runs directly rather than through a shell. For a pipeline or a shell builtin,
+ask for one: `-- sh -c 'a | b'`.
+
+Use `cloud pull --file` when something later in the job genuinely needs a file on disk —
+a container build context, a tool that only reads `.env`. Otherwise `cloud run` is
+strictly less exposure for the same result.
 
 ---
 

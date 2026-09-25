@@ -8,7 +8,7 @@ excerpt: "Validate .env against .env.example — catch missing variables, placeh
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
-evnxVersion: "0.5.0"
+evnxVersion: "0.5.2"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -66,16 +66,36 @@ evnx validate runs these checks automatically:
 |-------|----------|--------------|-------------|
 | `missing_variable` | `error` | ✅ | Variable in `.env.example` not present in `.env` |
 | `extra_variable` | `warning` | ❌ | Variable in `.env` that is not declared — in `.env.example`, or in `[vars]` when a contract exists (strict mode) |
-| `placeholder_value` | `error` | ✅ | Value looks like `changeme`, `your_key_here`, etc. |
+| `placeholder_value` | `error` | sometimes | Value looks like `changeme`, `your_key_here`, or anything starting `your_` — which is what `evnx init` generates. **v0.5.0+** |
+| `duplicate_key` | `warning` | ❌ | The same key is assigned more than once. Names the lines and says which one takes effect. **v0.5.0+** |
 | `boolean_trap` | `warning` | ✅ | `DEBUG=False` (string) vs `DEBUG=false` (boolean) |
-| `weak_secret` | `error` | ✅ | SECRET_KEY < 32 chars or contains weak patterns |
+| `weak_secret` | `error` | ✅ | **Any** credential-shaped name — `*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_TOKEN` — whose value is too short or too predictable. **v0.5.0+**, was `SECRET_KEY` alone |
 | `localhost_in_docker` | `warning` | ❌ | localhost URL when Docker files detected |
-| `invalid_url` | `warning` | ❌ | URL variable doesn't match `https?://...` |
+| `invalid_url` | `warning` | ❌ | Not a valid URL under any scheme. `postgresql://`, `redis://` and `amqp://` all pass — **v0.5.0+**, this was `https?://` only |
 | `invalid_port` | `error` | ❌ | Port variable not in range 1-65535 |
 | `invalid_email` | `warning` | ❌ | Email variable doesn't match standard format |
+| `format_mismatch` | `error` | ❌ | Value does not match the `format` declared for it in `.evnx.toml`'s `[vars]`. Never auto-fixable — evnx knows the shape required, not the value |
+
+`.env` not being covered by `.gitignore` is reported too, separately from the table above.
 
 <Callout type="info" title="Auto-fix behavior">
-The `--fix` flag only applies to issues marked as auto-fixable. It generates secure secrets, replaces placeholders with sensible defaults, and fixes boolean formatting. Always review changes with `git diff` before committing.
+`--fix` only touches issues it can actually resolve. It generates a real secret from the
+OS CSPRNG for credential-shaped variables, supplies a URL, email or port where the name
+implies one, and fixes boolean formatting.
+
+⚠️ **It declines what it cannot invent — changed in v0.5.0.** A placeholder in `DB_NAME`
+is left exactly as it is and still reported, because evnx has no way to know your database
+name. It used to overwrite such values with `your_value_here`, which discarded the only
+hint the line carried and resolved nothing. Adding a *missing* variable inserts a
+placeholder and says so explicitly:
+
+```
+Applied fixes:
+  • DB_NAME: (new) → your_value_here
+    a placeholder — evnx cannot invent this value, so fill it in
+```
+
+Always review changes with `git diff` before committing.
 </Callout>
 
 ---

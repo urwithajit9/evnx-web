@@ -8,7 +8,7 @@ excerpt: "Scan .env files for secrets, high-entropy strings, and known credentia
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions","evnx"]
-evnxVersion: "0.5.0"
+evnxVersion: "0.5.2"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -135,18 +135,20 @@ evnx scan --format json
     {
       "pattern": "AWS Secret Access Key",
       "confidence": "high",
-      "value_preview": "wJalrXUt...KEYab",
+      "value_preview": "wJal…EYab",
       "location": "./.env:1 (AWS_SECRET_ACCESS_KEY)",
       "variable": "AWS_SECRET_ACCESS_KEY",
-      "action_url": "https://console.aws.amazon.com/iam"
+      "action_url": "https://console.aws.amazon.com/iam",
+      "matched_by": "value"
     },
     {
       "pattern": "Stripe Secret Key (LIVE)",
       "confidence": "high",
-      "value_preview": "sk_live_...defXY",
+      "value_preview": "sk_l…efXY",
       "location": "./.env:2 (STRIPE_SECRET_KEY)",
       "variable": "STRIPE_SECRET_KEY",
-      "action_url": "https://dashboard.stripe.com/apikeys"
+      "action_url": "https://dashboard.stripe.com/apikeys",
+      "matched_by": "value"
     }
   ],
   "high_confidence": 2,
@@ -228,9 +230,23 @@ evnx scan --format github
 ```
 
 ```
-::error file=.env,line=8,title=Secret detected::AWS_SECRET_ACCESS_KEY matches aws_secret pattern
-::warning file=.env,line=12,title=Possible secret::STRIPE_SECRET_KEY may be a live key
+::error file=./.env,line=1,title=Secret detected (high)::AWS_SECRET_ACCESS_KEY matches AWS Secret Access Key. Rotate it at https://console.aws.amazon.com/iam
+::error file=./.env,line=2,title=Secret detected (high)::STRIPE_SECRET_KEY matches Stripe Secret Key (LIVE). Rotate it at https://dashboard.stripe.com/apikeys
 ```
+
+A finding reached by the variable's **name** rather than its value is worded
+differently, and does not tell you to rotate anything:
+
+```
+::error file=./.env,line=1,title=Secret detected (high)::NEXTAUTH_SECRET is named like a secret (Sensitive config key: NEXTAUTH_SECRET). The value was not checked against a known key format — confirm before rotating
+```
+
+<Callout type="info">
+  **`matched_by` in v0.5.0+.** `--format json` carries `"value"` or `"name"` per finding,
+  so CI can tell a real key match from a name heuristic. Before that the two were
+  indistinguishable in every machine format, and the GitHub annotation told you to rotate
+  a credential nothing had read.
+</Callout>
 
 ---
 

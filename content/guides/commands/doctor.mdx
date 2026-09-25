@@ -8,7 +8,7 @@ excerpt: "Diagnose environment setup issues including .env configuration, Git tr
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
-evnxVersion: "0.5.0"
+evnxVersion: "0.5.2"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -351,7 +351,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install evnx
-        run: cargo install evnx
+        run: cargo install evnx --all-features
 
       - name: Run diagnostics
         run: |
