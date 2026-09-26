@@ -128,6 +128,8 @@ example  = ".env.template"     # the template path, if not .env.example
 severity            = "high"        # "high" | "medium" | "low"
 exclude             = ["fixtures"]  # paths this project never scans
 ignore_placeholders = true          # skip values that look like filler
+disable             = ["Stripe Secret Key (test)"]   # switch off a built-in rule
+builtins            = true          # false = only this project's rules
 
 # Secret formats this project recognises beyond the built-in ones.
 # Repeat the block for each rule.
@@ -184,6 +186,8 @@ overridden by `--env-name`, and by an explicit `--env` path.
 | `exclude` | list of strings | `[]` | Paths this project never scans |
 | `ignore_placeholders` | bool | `false` | Skip values that look like filler |
 | `patterns` | list of tables | `[]` | **v0.5.0+** — secret formats this project recognises beyond the built-in ones. See below |
+| `disable` | list of strings | `[]` | **v0.5.3+** — built-in rules this project does not want, by name |
+| `builtins` | bool | `true` | **v0.5.3+** — `false` scans with **only** this project's rules |
 
 <Callout type="info">
 **`exclude` entries without `*` are substrings; entries with `*` are globs.**
@@ -236,6 +240,60 @@ An expression that does not **compile** behaves differently again — it fails `
 alone, with exit `2`, and leaves other commands working. Full behaviour in
 [evnx scan](/guides/commands/scan#teaching-it-your-own-formats).
 </Callout>
+
+#### Turning built-in rules off
+
+**v0.5.3+.** The detectors evnx ships are ordinary rules of the same shape as
+`[[scan.patterns]]`, so a project can switch them off or replace them.
+
+```toml
+[scan]
+# Our fixtures contain Stripe test keys on purpose.
+disable = ["Stripe Secret Key (test)"]
+```
+
+Names are the ones that appear in scan output, matched case-insensitively. The full list:
+`AWS Access Key`, `Stripe Secret Key (LIVE)`, `Stripe Secret Key (test)`, `GitHub Token`,
+`OpenAI API Key`, `Anthropic API Key`, `Private Key`.
+
+To scan for **only** your own formats:
+
+```toml
+[scan]
+builtins = false
+
+[[scan.patterns]]
+name  = "Acme token"
+regex = "ACME-[A-Z0-9]{10}"
+```
+
+<Callout type="info">
+  **A rule that reuses a built-in's name replaces it.** Rules are de-duplicated by name,
+  first one wins, and the order is `--pattern` → `[[scan.patterns]]` → built-ins. So
+  declaring `name = "Private Key"` with your own expression overrides the shipped rule
+  rather than adding a second one — which is how you re-rate a detector instead of only
+  disabling it.
+</Callout>
+
+<Callout type="warning">
+  ⚠️ **Both keys weaken scanning, and this file is committed.** `evnx` lists them among its
+  security overrides and announces them on every run that loads a config:
+
+  ```
+  config    .evnx.toml (scan.disable=1 built-in rule(s))
+  config    .evnx.toml (scan.builtins=false (no built-in rules))
+  ```
+
+  A team with fixtures that trip a provider pattern has a real need for this. Doing it
+  silently would not be acceptable, which is why it is announced rather than merely
+  documented.
+</Callout>
+
+⚠️ **The two heuristics are not rules and cannot be disabled this way.** The AWS secret
+access key is matched on the variable's *name* plus entropy — its shape is only 40 base64
+characters, so as a bare pattern it would match any 40-character token — and the generic
+high-entropy check is a last-resort fallback. Use `severity` to silence those: both are
+reported below `high`.
 
 ### `[validate]`
 

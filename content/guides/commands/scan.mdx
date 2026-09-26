@@ -57,18 +57,43 @@ It works now; see [Teaching it your own formats](#teaching-it-your-own-formats).
 
 ### Known credential patterns
 
-evnx ships with built-in patterns for the most common credentials:
+evnx ships with these rules. The list is generated from the source, so it is what the
+binary actually has:
 
-```
-AWS_ACCESS_KEY_ID     — /AKIA[0-9A-Z]{16}/
-AWS_SECRET_ACCESS_KEY — high entropy, 40 chars
-STRIPE_SECRET_KEY     — /sk_(live|test)_[a-zA-Z0-9]{24}/
-STRIPE_PUBLIC_KEY     — /pk_(live|test)_[a-zA-Z0-9]{24}/
-GITHUB_TOKEN          — /ghp_[a-zA-Z0-9]{36}/
-OPENAI_API_KEY        — /sk-[a-zA-Z0-9]{48}/
-SENDGRID_API_KEY      — /SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}/
-TWILIO_AUTH_TOKEN     — /[0-9a-f]{32}/
-```
+| Rule | Severity | Expression |
+|---|---|---|
+| `AWS Access Key` | high | `AKIA[0-9A-Z]{16}` |
+| `Stripe Secret Key (LIVE)` | high | `sk_live_[0-9a-zA-Z]{24,}` |
+| `Stripe Secret Key (test)` | medium | `sk_test_[0-9a-zA-Z]{24,}` |
+| `GitHub Token` | high | `\b(?:ghp\|gho\|ghu\|ghs)_[A-Za-z0-9]{36,40}\b` |
+| `OpenAI API Key` | high | `sk-(?:proj-[0-9a-zA-Z_-]{40,}\|[0-9a-zA-Z]{48})` |
+| `Anthropic API Key` | high | `sk-ant-api[0-9]{2}-[0-9a-zA-Z\-_]{95}` |
+| `Private Key` | high | `-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----` |
+
+Two further checks are **not** rules, because neither can be expressed as one:
+
+| Check | Severity | How it decides |
+|---|---|---|
+| `AWS Secret Access Key` | medium | 40 base64-ish characters **and** a variable name containing `AWS` **and** entropy > 4.5. Its shape alone matches any 40-character token, so the name is part of the test |
+| `High-entropy string` | low | 32+ characters with entropy > 4.8. The last resort |
+
+<Callout type="warning">
+  ⚠️ **This list previously named three patterns that do not exist** — a Stripe
+  *publishable* key (`pk_…`), SendGrid (`SG.…`) and Twilio (`[0-9a-f]{32}`) — and omitted
+  two that do, Anthropic and `Private Key`. Corrected in v0.5.3 against the source.
+
+  It mattered more than a wrong table usually does. A leaked `pk_…` or `SG.…` key is caught
+  only by the generic high-entropy check, which is **low** severity — so
+  `evnx scan --severity high` in CI does not fail on it, while this page implied it would.
+  If you relied on either, add your own rule:
+
+  ```toml
+  [[scan.patterns]]
+  name  = "SendGrid API key"
+  regex = "SG\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}"
+  url   = "https://app.sendgrid.com/settings/api_keys"
+  ```
+</Callout>
 
 These are the formats evnx ships with. For the ones only your project knows — an internal
 token, a vendor key shape — see [Teaching it your own formats](#teaching-it-your-own-formats).
@@ -452,8 +477,9 @@ gate that used to catch it.
 
 ### Files that are not `.env`
 
-Custom patterns are matched against the whole line in non-`.env` files, so a short format is
-found where the entropy heuristics could not see it:
+Rules — yours and the built-in ones alike — are matched against the whole line in
+non-`.env` files, so a short or multi-word format is found where the entropy heuristics
+could not see it:
 
 ```ts
 // src/client.ts
@@ -465,9 +491,15 @@ evnx scan ./src --pattern 'RING-[0-9]{4}'   # found
 evnx scan ./src                             # ✓ No secrets detected
 ```
 
-The generic detectors split each line into tokens and discard anything 20 characters or
+The two heuristics split each line into tokens and discard anything 20 characters or
 shorter, which is right for "this looks random" and wrong for "this is exactly what I am
 looking for".
+
+⚠️ **Before v0.5.3 the built-in rules were subject to that floor too**, and it made them
+weaker than a rule you could write yourself. `-----BEGIN RSA PRIVATE KEY-----` is a phrase,
+never one token, so the `Private Key` rule could not fire in any file that was not a
+`.env` — including the `.pem` files private keys live in. Built-ins and custom rules now
+run on the same engine, so both see the whole line.
 
 ### Performance
 
