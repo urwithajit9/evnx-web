@@ -1,0 +1,124 @@
+---
+title: "Deleting your account"
+slug: deleting-your-account
+section: reference
+order: 8
+publishedAt: "2026-09-28"
+excerpt: "What deleting an evnx account removes, what survives it, and why a vault you share with other people stops it until you resolve that yourself."
+difficulty: beginner
+timeToComplete: "3 minutes"
+tags: ["cloud", "auth", "account", "privacy", "gdpr", "evnx"]
+evnxVersion: "0.6.1"
+prerequisites:
+  - commands/auth
+draft: true
+---
+
+You can delete your evnx account from the CLI or from the web app. It removes the
+account, its credentials, and every vault you are the only member of.
+
+It is not a logout, and there is no undo.
+
+## Before you start
+
+**Rotate the secrets first if anyone else ever held them.** Deleting the account
+destroys your copy of the ciphertext. It does not reach a copy somebody else
+pulled, and it does not change the secrets themselves — those still work wherever
+they are used. This is the step people skip.
+
+## From the CLI
+
+```bash
+evnx auth delete-account
+```
+
+You are shown the account, asked to type its email address back, and — if you
+have two-factor authentication enabled — asked for a 2FA code or a recovery code.
+
+```
+  This deletes your evnx account.
+  account   you@example.com
+  Sessions, API tokens, 2FA and every vault you are the only member of go with
+  it — ciphertext included. There is no undo.
+  Vaults you share with other people will block this, and be named.
+
+  Type you@example.com to confirm:
+```
+
+There is no `--yes`. A flag that deletes an account is one shell-history recall
+away from doing it, so the confirmation has to be typed. `--confirm-stdin` reads
+the address from stdin for the rare scripted case, and it still has to be the
+right address.
+
+## From the app
+
+**Settings → Delete account.** The same typed confirmation, and the same 2FA
+requirement. The button stays disabled until the address matches.
+
+## What is removed
+
+| | |
+|---|---|
+| The account itself | email, password verifier, salts and keys |
+| Every session | you are signed out everywhere |
+| Every API token | CI using one starts failing immediately |
+| Two-factor enrolment | secret and recovery codes |
+| Vaults you are the **only** member of | including every encrypted version |
+
+## What survives, and why
+
+**Audit events stay, with your identity removed from them.** The log keeps *that*
+something happened — a login, a push, a share — and no longer records *who*. An
+audit trail that can be edited by the person it describes is not an audit trail,
+so the events themselves are never altered or deleted; only the link to you is
+cut.
+
+**Versions you pushed to other people's vaults stay.** They belong to those
+vaults, not to you, and the record simply stops naming a pusher. Deleting your
+account must not delete someone else's history.
+
+## A shared vault stops the deletion
+
+If you own a vault that other people are members of, the deletion is refused and
+the vault is named:
+
+```
+this account owns 2 vaults that other people are members of: api/prod
+(1 other member), web/staging (3 other members). Deleting the account would
+delete those vaults and everyone else's access with them, so nothing has been
+deleted. Remove the other members, or delete the vaults, then try again.
+```
+
+This is deliberate. Deleting an owner deletes their vaults, and everyone else's
+access goes with them — your deletion must not take other people's data with it.
+
+evnx cannot resolve this for you. Handing the vault to a new owner means wrapping
+the vault key for them, and the server has never seen that key — it holds only
+ciphertext it cannot open. Leaving the vault without an owner would be worse:
+nobody could then administer, share or re-key it.
+
+So the choice is yours, and either path works without anyone's help:
+
+- **Remove the other members** — `evnx vault revoke <vault> --user them@example.com`,
+  or from the app's members list. Then delete the account.
+- **Delete the vault** — `evnx vault delete <vault>`. Then delete the account.
+
+Ownership transfer would make this one step. It is not built yet.
+
+## What it does not do
+
+**It does not rotate your secrets.** See *Before you start*.
+
+**It does not recall anything anyone already read.** Someone who had access to a
+vault may hold a copy of what they pulled, and no server-side action reaches that.
+
+**It cannot be undone, and support cannot undo it either.** Your vaults are
+encrypted with keys derived from your master password, which the server has never
+held. There is nothing to restore from — that is the same property that makes
+evnx worth using, seen from the other side.
+
+## Related
+
+- [`evnx auth`](/guides/commands/auth) — the rest of the account commands
+- [Security model](/guides/reference/concepts-security-model) — why the server
+  cannot recover a deleted vault
