@@ -8,10 +8,10 @@ excerpt: "What deleting an evnx account removes, what survives it, and why a vau
 difficulty: beginner
 timeToComplete: "3 minutes"
 tags: ["cloud", "auth", "account", "privacy", "gdpr", "evnx"]
-evnxVersion: "0.6.1"
+evnxVersion: "0.6.0"
 prerequisites:
   - commands/auth
-draft: true
+draft: false
 ---
 
 You can delete your evnx account from the CLI or from the web app. It removes the
@@ -26,7 +26,18 @@ destroys your copy of the ciphertext. It does not reach a copy somebody else
 pulled, and it does not change the secrets themselves — those still work wherever
 they are used. This is the step people skip.
 
+## From the app
+
+**[app.evnx.dev](https://app.evnx.dev) → Settings → Delete account.** You are
+asked to type the account's email address back, and for a 2FA code if you have
+two-factor enabled. The button stays disabled until the address matches.
+
 ## From the CLI
+
+<Callout type="info" title="Arriving in the next release">
+`evnx auth delete-account` is merged but not yet in a published binary. `evnx
+--version` will tell you whether you have it; until then, use the app above.
+</Callout>
 
 ```bash
 evnx auth delete-account
@@ -49,11 +60,6 @@ There is no `--yes`. A flag that deletes an account is one shell-history recall
 away from doing it, so the confirmation has to be typed. `--confirm-stdin` reads
 the address from stdin for the rare scripted case, and it still has to be the
 right address.
-
-## From the app
-
-**Settings → Delete account.** The same typed confirmation, and the same 2FA
-requirement. The button stays disabled until the address matches.
 
 ## What is removed
 

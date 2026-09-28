@@ -165,7 +165,16 @@ evnx vault share my-api/production --with alice@example.com
 ```
 
 The role defaults to `developer`. Pass `--role viewer` for read-only access, or
-`--role admin` to let them manage members too.
+`--role admin` to let them manage members too. **From v0.6.0** `--user` is
+accepted as an alias for `--with`, so the flag is the same one `revoke` and
+`role` take; on earlier versions `share` takes only `--with`.
+
+<Callout type="info" title="Or from the dashboard">
+**[app.evnx.dev](https://app.evnx.dev) → a vault → Members → Share with.** The
+vault key is re-wrapped in your browser, exactly as the CLI does it here. Only
+the vault's owner sees the form: an admin's own copy of the key is itself a
+share, and re-wrapping from that form is not supported on either client.
+</Callout>
 
 | Flag | Description |
 |---|---|
@@ -255,6 +264,13 @@ nothing.
 ```bash
 evnx vault revoke my-api/production --user bob@example.com
 ```
+
+<Callout type="info" title="Or from the dashboard">
+**[app.evnx.dev](https://app.evnx.dev) → a vault → Members → Remove → Remove and
+rotate the key.** The same rotation, run in your browser, with per-version
+progress. Leaving the page cancels it safely — nothing changes until the final
+step, which the server applies in one transaction.
+</Callout>
 
 This is the expensive one, and the only command here that touches every version:
 
