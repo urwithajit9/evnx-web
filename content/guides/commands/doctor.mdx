@@ -115,7 +115,18 @@ into existence sooner or later.
 | File exists | Verifies at least one `.env*` file is present | ⚠️ Warning |
 | Git ignored | Ensures **every** `.env*` file is in `.gitignore` | 🚨 **Error** |
 | Secure permissions | Checks for `600`/`400` on Unix | ⚠️ Warning |
-| Valid syntax | Validates `KEY=VALUE` format | ⚠️ Warning |
+| Valid syntax | Validates `KEY=VALUE` format, multiline values, and quotes that never close | ⚠️ Warning |
+
+<Callout type="warning" title="The syntax check and the parser used to disagree">
+**Fixed in v0.6.0.** `doctor` reported the continuation lines of a perfectly valid
+multiline value as `invalid syntax`, while `validate`, `convert` and `scan` all
+accepted the same file — so a `.env` holding a PEM key produced two or three
+complaints about nothing. It also could not represent a quoted value whose quote
+*never* closes, and called such a file clean while `validate` failed on it.
+
+Both now come from the same parser, so they cannot drift apart again, and an
+unterminated value is reported rather than passed.
+</Callout>
 
 <Callout type="warning">
 **Before v0.5.0 this checked `.env` and nothing else.** A project whose `.gitignore`

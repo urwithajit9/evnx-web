@@ -1,0 +1,255 @@
+---
+slug: "use-cases-sharing-a-vault"
+section: "use-cases"
+order: 3
+title: "Sharing a Vault, and Taking It Back"
+publishedAt: "2026-09-29"
+updatedAt: "2026-09-29"
+excerpt: "The full two-account walkthrough: share an encrypted vault, have the other person pull it, then revoke and confirm the old key no longer works."
+difficulty: "intermediate"
+timeToComplete: "20 minutes"
+tags: ["cloud", "vault", "sharing", "team", "revocation", "workflow"]
+evnxVersion: "0.6.0"
+prerequisites:
+  - getting-started/cloud-sync-quickstart
+  - commands/vault
+draft: false
+---
+
+# Sharing a Vault, and Taking It Back
+
+<Callout type="tip" title="Who this is for">
+You have a vault in evnx cloud and a second person who needs it. This walks the
+whole path with two real accounts — share, pull, revoke — and shows how to check at
+each step that what you think happened actually happened.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/cloud-sync-quickstart">Have a vault pushed to evnx cloud</Prerequisite>
+  <Prerequisite href="/guides/commands/vault">Know the vault subcommands</Prerequisite>
+</Prerequisites>
+
+---
+
+## What you need
+
+Two evnx accounts, both with a verified email address. Throughout, `you@example.com`
+is the vault owner and `teammate@example.com` is the person being added.
+
+The second account has to have **signed in at least once**. Signing in is what
+uploads its public keys, and a share is wrapped to those keys on your machine. An
+account that has registered but never logged in cannot be shared with — evnx
+refuses rather than falling back to something weaker.
+
+---
+
+## 1. Create the vault and push a version
+
+```bash
+evnx vault create my-app --env production
+evnx cloud push
+```
+
+```
+  ✓ pushed .env to my-app/production as version 1
+```
+
+Your `.env` is encrypted on this machine. The server receives ciphertext and a
+BLAKE3 hash, and never holds anything that can open it.
+
+## 2. Share it
+
+```bash
+evnx vault share my-app/production --with teammate@example.com --role developer
+```
+
+You are asked for your master password. That is not a formality — it is the only
+thing that can open your copy of the vault key, and the key has to be **unwrapped
+locally** so it can be re-wrapped to the recipient. The server cannot grant access
+itself, because it has never held the key in a usable form.
+
+<Callout type="info" title="Roles">
+`--role` takes `viewer`, `developer` or `admin`, and defaults to `developer`.
+
+- **viewer** — pull only
+- **developer** — pull and push
+- **admin** — that, plus sharing, changing roles and revoking
+
+**Sharing needs admin or above**, because handing out a key is not a
+developer-level act. Only the **owner** can delete the vault.
+
+⚠️ The dashboard is currently stricter than the CLI here: it shows the Share form
+to the owner only. Use the CLI if you are an admin and need to share.
+</Callout>
+
+<Callout type="info" title="Who can remove whom">
+Removing someone requires **outranking** them, not merely being an admin — so two
+admins cannot evict each other, and only the owner resolves a disagreement between
+them.
+
+Any member can remove **themselves**: leaving is always allowed. And the **owner
+cannot be removed by anyone, including themselves** — a vault with no owner has
+nobody who can delete it or promote a replacement, and there is no
+transfer-ownership command yet.
+</Callout>
+
+<Callout type="info" title="`--with` and `--user` are the same flag">
+`share` historically took `--with` while `revoke` and `role` took `--user`, so
+whichever you learned first was wrong half the time. Both work on all three from
+v0.6.0, and neither is deprecated.
+</Callout>
+
+## 3. Check that it landed
+
+```bash
+evnx vault members my-app/production
+```
+
+```
+  my-app/production — 2 member(s)
+
+  owner      you@example.com (you)
+  developer  teammate@example.com
+```
+
+Add `-v` to see each member's id and when they were granted access.
+
+## 4. The other person pulls it
+
+On their machine, signed in as `teammate@example.com`:
+
+```bash
+evnx vault list
+evnx cloud pull --vault my-app/production
+```
+
+They are asked for **their own** master password, never yours. Their copy of the
+vault key was wrapped to their public keys; their password unwraps their private
+key, which unwraps the vault key, which decrypts the blob.
+
+<Callout type="info" title="Why the wrap is a hybrid">
+A share is wrapped with **X25519 and ML-KEM-768 together**, and the wrapping key is
+derived from both shared secrets plus the transcript. It holds if either primitive
+survives — which matters because an adversary can record a wrapped key today and
+attack it whenever a quantum computer arrives.
+
+There is no X25519-only path. A database constraint makes half a wrap unstorable,
+and sharing with an account that has no ML-KEM key on file is refused rather than
+downgraded.
+</Callout>
+
+---
+
+## Taking it back
+
+## 5. Revoke, which rotates the key
+
+```bash
+evnx vault revoke my-app/production --user teammate@example.com
+```
+
+```
+  ✓ 1 version(s) re-encrypted, 1 member(s) re-wrapped
+```
+
+Read that output. Removing someone's row would be quick and would achieve nothing:
+they may have kept the unwrapped vault key, and it would still open every blob —
+**including versions pushed after their removal.** So `revoke` generates a fresh
+vault key, re-encrypts every version under it, and re-wraps it for everyone who
+stays.
+
+<Callout type="warning" title="It is not instant, and it is not reversible">
+The work is proportional to the number of versions in the vault. The server applies
+the swap in a single transaction, so interrupting the command cannot leave the vault
+half-rotated — but once it completes, the old key is gone.
+</Callout>
+
+## 6. Confirm the old access is actually gone
+
+This is the step people skip, and it is the only one that proves anything. On the
+removed person's machine:
+
+```bash
+evnx vault list
+```
+
+The vault is **not in the list**. A pull by id fails too. Revocation that leaves the
+old key working is theatre, and the only way to know which you have is to look.
+
+## 7. Confirm you did not lock yourself out
+
+```bash
+evnx cloud pull --vault my-app/production
+```
+
+Still works. Your own copy was re-wrapped in the same transaction, so a successful
+rotation is one where the removed member is out **and** everyone who stayed is
+unaffected. Checking only the first half would not distinguish a correct rotation
+from a broken vault.
+
+---
+
+## What revocation does not do
+
+<Callout type="warning" title="Rotate the secrets themselves">
+Revoking removes future access. It cannot un-see what the other person could
+already read — they may have copied the values to disk, to a clipboard, or to their
+own notes at any point while they had access.
+
+If access ended because of a dispute, or because someone left, **rotate the
+credentials at their source**: reissue the Stripe key, cycle the database password,
+regenerate the JWT secret. evnx can stop distributing a secret. Only the provider
+can make the old value worthless.
+</Callout>
+
+---
+
+## Doing it in the browser instead
+
+Every step above is available at [app.evnx.dev](https://app.evnx.dev): open a vault,
+then **Members**.
+
+- **Share with** — shown to the owner only, which is stricter than the CLI and the
+  API, where an admin may also share.
+- **Remove** offers *Remove and rotate the key* and *Remove without rotating*. Pick
+  the first unless you have a specific reason not to; the second leaves the removed
+  member's copy of the key able to open existing blobs.
+- The **Activity** trail on the same page shows grants, pushes and revocations.
+
+Your keys never leave the browser tab — the crypto is the same Rust code compiled to
+WebAssembly, and the key material lives in a Web Worker, never in `localStorage`.
+
+---
+
+## If something goes wrong
+
+**`teammate@example.com has no post-quantum sharing key yet.`**
+
+They have registered but never signed in. Signing in is what uploads the key, and
+the full message says so:
+
+```
+  They need to sign in once with evnx 0.5 or later, or at
+  app.evnx.dev, which registers it automatically.
+```
+
+Sharing is refused rather than falling back to a weaker wrap, which is why this is
+an error and not a warning.
+
+**`the vault owner cannot be removed.`**
+
+By anyone, including the owner. Transfer ownership first — which is not built yet.
+
+**A vault you can see in the dashboard is `not found` from the CLI.**
+
+Check the target. `my-app` and `my-app/production` are different vaults; `vault list`
+shows the exact names.
+
+---
+
+## Related guides
+
+- [vault command reference](/guides/commands/vault) — every subcommand and flag
+- [Cloud architecture](/guides/reference/cloud-architecture) — where the encryption boundary sits
+- [Security model](/guides/reference/concepts-security-model) — what the server can and cannot do
+- [Deleting your account](/guides/reference/deleting-your-account) — a vault with other members blocks deletion until they are removed

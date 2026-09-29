@@ -117,6 +117,73 @@ the generic check, and 4.5 for the gate on AWS secret keys, are compiled in.
 A string like `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` scores high on Shannon entropy because its characters are distributed almost uniformly — a property of cryptographically random strings. Human-readable values like `my-app-name` score low.
 </Callout>
 
+### Variables your build publishes to the browser
+
+**New in v0.6.0.** Some prefixes are instructions to a bundler: inline this value
+into the JavaScript that ships to every visitor. A secret behind one of them is not
+at risk of leaking — it **has already leaked**, to everyone who has ever loaded the
+site, and it stays leaked in every build artefact and CDN cache that still exists.
+
+evnx recognises nine:
+
+| Prefix | Inlined by |
+|---|---|
+| `NEXT_PUBLIC_` | Next.js |
+| `NUXT_PUBLIC_` | Nuxt |
+| `EXPO_PUBLIC_` | Expo |
+| `REACT_APP_` | Create React App |
+| `STORYBOOK_` | Storybook |
+| `GATSBY_` | Gatsby |
+| `VUE_APP_` | Vue CLI |
+| `VITE_` | Vite |
+| `PUBLIC_` | SvelteKit and Astro |
+
+```bash
+$ evnx scan .env.local
+  ✗  Stripe Secret Key (LIVE)                    high
+     .env.local:3 (NEXT_PUBLIC_STRIPE_KEY)  sk_l…1234
+     !  NEXT_PUBLIC_ is inlined into the client bundle by Next.js — anyone who
+        loads your site can read this
+     →  revoke at https://dashboard.stripe.com/apikeys
+```
+
+### It raises the severity, and why only sometimes
+
+The prefix changes the severity **before** the `--severity` filter runs, so a
+finding it escalates cannot be filtered out by the gate it was escalated for:
+
+| The finding | Becomes | Why |
+|---|---|---|
+| A **named provider format** — Stripe, AWS, GitHub | `high` | This is a real credential and it is already public. Nothing about it is low risk |
+| **Shape alone** — the entropy check, an unrecognised token | at least `medium` | Enough to be seen and read, not enough to fail `--severity high` |
+
+<Callout type="info" title="Why shape alone stops at medium">
+Plenty of keys behind these prefixes are **meant** to be public. A PostHog key, a
+Sentry DSN and a Supabase anon key are all designed to ship in the bundle — the
+Supabase one is protected by row-level security, not by secrecy. evnx cannot tell
+those from a secret it does not recognise, so it reports them and says so rather
+than failing your build.
+
+The remedy text follows the same distinction. With no recognised provider among
+them, it asks you to **check whether they are meant to be public** before rotating
+anything. With one, it tells you to revoke — a Stripe key behind `VITE_` is not
+ambiguous.
+</Callout>
+
+<Callout type="warning" title="Renaming is the fix; rotating alone is not">
+While the name carries the prefix, **every build republishes the value.** Revoking
+and reissuing without renaming just publishes the new key too. Rename it to drop the
+prefix, read it server-side, and then rotate.
+</Callout>
+
+<Callout type="warning" title="`PUBLIC_` is deliberately broad">
+SvelteKit and Astro use a bare `PUBLIC_` prefix, so `PUBLIC_KEY` — an ordinary name
+for the public half of a keypair, which is *supposed* to be public — matches it.
+That is the trade: the prefix genuinely does mean "inline this" in two popular
+frameworks, and a false note on a public key costs less than silence on a published
+secret.
+</Callout>
+
 ---
 
 ## Output formats
@@ -276,6 +343,18 @@ differently, and does not tell you to rotate anything:
 ---
 
 ## CI/CD usage
+
+<Callout type="warning" title="Counts change after v0.6.0 — in your favour">
+In files other than `.env`, one credential used to be reported **twice** — once by
+the entropy check and once by the pattern that identified it — because the two reach
+a source file by different routes and nothing reconciled them. A key appearing twice
+in a `.json` counted four times, and it inflated `secrets_found` as well as the
+`high`/`low` totals.
+
+One credential is now one finding. If you assert on exact counts rather than on
+`--severity`, re-baseline them once after upgrading. `.env` files were never
+affected.
+</Callout>
 
 ### Block commits with pre-commit
 

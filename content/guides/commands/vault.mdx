@@ -410,3 +410,15 @@ Worth being precise, because "zero knowledge" is often used loosely:
 | BLAKE3 hash of each ciphertext | Anything that reveals the plaintext |
 
 Key *names* are sent deliberately, so a dashboard can show what a vault holds without decrypting it. If your key names are themselves sensitive, that is a real trade-off to know about rather than discover.
+
+---
+
+## Related guides
+
+- [Sharing a Vault, and Taking It Back](/guides/use-cases/sharing-a-vault-with-a-teammate)
+  — the full two-account walkthrough, including how to verify a revocation actually
+  revoked
+- [Cloud architecture](/guides/reference/cloud-architecture) — where the encryption
+  boundary sits
+- [Deleting your account](/guides/reference/deleting-your-account) — a vault with
+  other members blocks deletion until they are removed
