@@ -4,7 +4,7 @@ section: "reference"
 order: 5
 title: "Sync Configuration Reference"
 publishedAt: "2026-03-06"
-updatedAt: "2026-03-06"
+updatedAt: "2026-09-29"
 excerpt: "Advanced configuration for evnx sync: placeholder JSON schema, pattern matching, and security options."
 difficulty: "advanced"
 timeToComplete: "25 minutes"
@@ -35,7 +35,6 @@ Create `.evnx/placeholders.json` to customize placeholder generation:
 
 ```json
 {
-  "$schema": "https://evnx.dev/schemas/placeholders.v1.json",
   "description": "Team-specific placeholder conventions",
   "patterns": {
     ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
@@ -68,12 +67,12 @@ Create `.evnx/placeholders.json` to customize placeholder generation:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `$schema` | `string` | No | JSON Schema URL for validation |
-| `description` | `string` | No | Human-readable description |
-| `patterns` | `object` | No | Regex pattern to placeholder mappings |
+| `$schema` | `string` | No | Accepted and ignored. For editor tooling; evnx does not validate against it, and no schema file is published yet |
+| `description` | `string` | No | Accepted and ignored. A note for whoever reads the file |
+| `patterns` | `object` | No | Regex pattern to placeholder mappings. See [Pattern precedence](#pattern-precedence) when more than one matches |
 | `default` | `string` | No | Fallback placeholder for unmatched keys |
-| `allow_actual` | `string[]` | No | Keys permitted to use actual values |
-| `naming_convention` | `object` | No | Naming policy configuration |
+| `allow_actual` | `string[]` | No | Keys whose **real value** is written to the template. Guarded, and arriving in the next release — see [allow_actual](#allow_actual) |
+| `naming_convention` | `object` | No | ⚠️ **Not read from this file.** Set naming policy with `--naming-policy` or `[sync] naming_policy` in `.evnx.toml`. Arriving in the next release: evnx warns if you set it here |
 
 ---
 
@@ -110,11 +109,111 @@ $       End of string
 All patterns are matched case-insensitively. `.*_api_key$` matches `STRIPE_API_KEY`, `stripe_api_key`, and `Stripe_Api_Key`.
 </Callout>
 
+### Pattern precedence
+
+More than one pattern usually matches a given key. `STRIPE_SECRET_KEY` matches
+`SECRET`, `_KEY$` and `^STRIPE_` all at once. evnx picks the most specific, in this
+order:
+
+1. **An exact key match** — a pattern that is simply the variable's name.
+2. **The longest pattern.** `.*_SECRET_KEY$` beats `SECRET`; anything beats `.*`.
+3. **Declaration order** — the first one written in the file wins.
+
+```json
+{
+  "patterns": {
+    "SECRET": "<any-secret>",
+    "_KEY$": "<any-key>",
+    "^STRIPE_": "<stripe-thing>",
+    "STRIPE_SECRET_KEY": "<the-exact-key>"
+  }
+}
+```
+
+`STRIPE_SECRET_KEY` gets `<the-exact-key>`, whatever order you write them in.
+
+<Callout type="warning" title="Arriving in the next release — before it, this is not deterministic">
+On v0.6.0 and earlier the winner depends on internal hash ordering, so the
+same `.env` can produce a different `.env.example` on each run — and
+`.env.example` is a committed file, so `git diff` showed changes nobody made. If
+you pinned a template config against the old behaviour, check the result once after
+upgrading.
+</Callout>
+
+<Callout type="warning" title="A pattern that is not valid regex is an error">
+Arriving in the next release: `evnx sync` refuses to run and names the pattern.
+On v0.6.0 and earlier it is skipped silently, and the key fell through to `default` — so the template looked
+fine and did not follow your rules.
+</Callout>
+
+---
+
+## `allow_actual`
+
+Every value in `.env.example` is normally replaced by a placeholder. `allow_actual`
+lists keys that keep their **real value** instead.
+
+```json
+{
+  "default": "REPLACE_IN_PRODUCTION",
+  "allow_actual": ["APP_NAME", "APP_VERSION", "ENVIRONMENT", "LOG_LEVEL"]
+}
+```
+
+```bash
+# .env                          # .env.example, after evnx sync
+APP_NAME=my-app                 APP_NAME=my-app
+LOG_LEVEL=debug                 LOG_LEVEL=debug
+STRIPE_API_KEY=sk_live_…        STRIPE_API_KEY=REPLACE_IN_PRODUCTION
+```
+
+This is for the part of a `.env` that is **configuration rather than credentials**.
+For `APP_NAME` or `LOG_LEVEL` the real value is the useful example, and
+`YOUR_VALUE_HERE` is strictly worse. It also means `evnx sync --reverse` gives a new
+teammate working defaults in their `.env`, leaving only the genuine secrets to
+obtain.
+
+### Listing a secret is refused, not warned about
+
+<Callout type="warning" title="evnx checks every value before writing">
+A listed key whose value looks like a credential **fails the sync**. Nothing is
+written, every offending key is named at once, and the exit code is `2`.
+
+```
+Error: `allow_actual` would copy a real credential into .env.example, which is a
+committed file. Nothing was written.
+
+  DATABASE_URL — a password embedded in a URL
+  JWT_SECRET — Sensitive config key: JWT_SECRET
+```
+
+Remove those keys from `allow_actual` and they are written as placeholders again.
+The check uses the same detectors as `evnx scan`, plus a check for a password
+embedded in a connection string.
+</Callout>
+
+<Callout type="warning" title="On v0.6.0 and earlier this field does nothing">
+On v0.6.0 and earlier, `allow_actual` is parsed and never read: listed keys get
+placeholders like any other. The behaviour described above arrives in the next
+release. Nothing leaked — the failure was in the safe
+direction — but the documented behaviour did not happen. If you have been relying on
+it, check your `.env.example` after upgrading, because values that were previously
+placeholders will now be real.
+</Callout>
+
 ---
 
 ## Naming convention configuration
 
 Control how variable names are validated.
+
+<Callout type="warning" title="Not read from placeholders.json">
+`naming_convention` in this file is **ignored**. Naming policy comes from
+`--naming-policy` on the command line, or `[sync] naming_policy` in `.evnx.toml`.
+Arriving in the next release, `evnx sync` warns when it finds `naming_convention`
+here rather than discarding it silently. The fields below describe the intended shape and are kept
+for when the file does support it.
+</Callout>
 
 ### `naming_convention` object
 
