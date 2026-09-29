@@ -35,6 +35,7 @@ Create `.evnx/placeholders.json` to customize placeholder generation:
 
 ```json
 {
+  "$schema": "https://evnx.dev/schemas/placeholders.v1.json",
   "description": "Team-specific placeholder conventions",
   "patterns": {
     ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
@@ -67,7 +68,7 @@ Create `.evnx/placeholders.json` to customize placeholder generation:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `$schema` | `string` | No | Accepted and ignored. For editor tooling; evnx does not validate against it, and no schema file is published yet |
+| `$schema` | `string` | No | Accepted and ignored by evnx. Point your editor at it for completion and inline validation: [`evnx.dev/schemas/placeholders.v1.json`](https://evnx.dev/schemas/placeholders.v1.json) |
 | `description` | `string` | No | Accepted and ignored. A note for whoever reads the file |
 | `patterns` | `object` | No | Regex pattern to placeholder mappings. See [Pattern precedence](#pattern-precedence) when more than one matches |
 | `default` | `string` | No | Fallback placeholder for unmatched keys |

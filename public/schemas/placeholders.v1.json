@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evnx.dev/schemas/placeholders.v1.json",
+  "title": "evnx placeholder template config",
+  "description": "The JSON file passed to `evnx sync --template-config`. Describes how .env values are replaced when generating .env.example. Reference: https://www.evnx.dev/guides/reference/sync-configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "This schema's URL. Accepted and ignored by evnx; it exists for editor tooling."
+    },
+    "description": {
+      "type": "string",
+      "description": "A note for whoever reads the file. Accepted and ignored by evnx."
+    },
+    "patterns": {
+      "type": "object",
+      "description": "Regular expression to placeholder. Matching is case-insensitive. When more than one pattern matches a key, evnx picks an exact key match first, then the longest pattern, then the first declared — so the order keys appear in this file is significant.",
+      "additionalProperties": { "type": "string" }
+    },
+    "default": {
+      "type": "string",
+      "description": "Placeholder for keys no pattern matches.",
+      "default": "YOUR_VALUE_HERE"
+    },
+    "allow_actual": {
+      "type": "array",
+      "description": "Keys whose REAL value is written to the template instead of a placeholder. For configuration rather than credentials — APP_NAME, LOG_LEVEL, ENVIRONMENT. evnx refuses the sync, naming the key, if a listed value looks like a credential.",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "naming_convention": {
+      "type": "object",
+      "description": "NOT READ FROM THIS FILE. Naming policy comes from `--naming-policy` or `[sync] naming_policy` in .evnx.toml. evnx warns if this is set here. Kept in the schema because the published example carries it.",
+      "additionalProperties": true
+    }
+  }
+}
