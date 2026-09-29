@@ -9,7 +9,7 @@ excerpt: "Exactly what evnx accepts in a .env file: the four quoting forms, whic
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["reference", "syntax", "quoting", "multiline", "escaping", "parser"]
-evnxVersion: "0.6.0"
+evnxVersion: "0.7.0"
 prerequisites:
   - getting-started/quick-start
 draft: false
@@ -35,16 +35,19 @@ SINGLE='hello world'
 BACKTICK=`hello world`
 ```
 
-All four are accepted. They differ in **one** respect — whether backslash escapes are
-resolved — and they behave identically in every other way, including multiline support
-and variable expansion.
+All four are accepted. They differ in **two** respects — whether backslash escapes are
+resolved, and whether `$NAME` is expanded — and behave identically otherwise, including
+multiline support.
 
-| Form | Escapes resolved | Multiline | Expansion |
+| Form | Escapes resolved | Expands `$NAME` | Multiline |
 |---|---|---|---|
-| unquoted | ❌ literal | — | ✅ |
+| unquoted | ❌ literal | ✅ | — |
 | `"double"` | ✅ **yes** | ✅ | ✅ |
-| `'single'` | ❌ literal | ✅ | ✅ |
-| `` `backtick` `` | ❌ literal | ✅ | ✅ |
+| `'single'` | ❌ literal | ❌ **no** | ✅ |
+| `` `backtick` `` | ❌ literal | ❌ **no** | ✅ |
+
+**Single quotes are literal, fully.** That is the one rule worth remembering: whatever
+is between them is the value. It is the answer to a backslash, a `$`, or both.
 
 ### Whitespace and `export`
 
@@ -61,6 +64,7 @@ EMPTY=                   # → "" (an empty value, not an error)
 | Written | In `"…"` | In `'…'`, `` `…` `` or unquoted |
 |---|---|---|
 | `\t` | a tab | a backslash and a `t` |
+| `\$` | `$`, never expanded | a backslash and a `$` |
 | `\n` | a newline | a backslash and an `n` |
 | `\"` | `"` | unchanged |
 | `\\` | `\` | unchanged |
@@ -118,48 +122,63 @@ DATABASE_URL=postgresql://user:pass@${HOST}:${PORT}/app
 
 `$NAME` and `${NAME}` both work.
 
-### ⚠️ Three things here will surprise you
+### Where it does and does not happen
 
-**Expansion happens in every form, including single quotes.** In a shell — and in most
-`.env` libraries — single quotes suppress it. In evnx they do not:
-
-```bash
-B=world
-A='hello $B'    # → hello world, NOT "hello $B"
-```
-
-**There is no way to escape a `$`.** Neither backslash nor doubling works:
+**Single quotes and backticks do not expand.** They are literal in every respect —
+escapes and variables alike:
 
 ```bash
 B=world
-A="cost \$B"    # → cost \world   (the backslash survives; $B still expands)
-A="cost $$B"    # → cost $world   (the first $ is literal; $B still expands)
+A='hello $B'     # → hello $B
+A=`hello $B`     # → hello $B
+A="hello $B"     # → hello world
+A=hello $B       # → hello world
 ```
 
-A `$` followed by a valid identifier always expands. A `$` that is **not** followed by
-one is left alone, which covers most real values:
+<Callout type="warning" title="This changed in v0.7.0">
+Before v0.7.0, expansion ran in **every** quoting form, so `'hello $B'` yielded
+`hello world`. Single quotes were literal for backslashes and not for dollars, which
+is not a rule anyone can hold in their head.
+
+If a file of yours relied on expansion inside single quotes, it changes meaning
+silently — the value stops being substituted, and nothing errors, because both forms
+parse. Worth one `evnx validate` and a glance after upgrading.
+</Callout>
+
+**`\$` is a literal `$` in a double-quoted value**, so expansion can be kept for the
+rest of the string:
+
+```bash
+B=world
+A="\$B costs $B"    # → $B costs world
+A="path\\$B"        # → path\world   (a real backslash, then the expansion)
+```
+
+A `$` that is not followed by an identifier is left alone in any form:
 
 ```bash
 PRICE="costs $"      # → costs $
-PRICE="costs $5"     # → costs $5      ($5 is not an identifier)
-PRICE="costs $ 5"    # → costs $ 5
+PRICE="costs $5"     # → costs $5
 ```
 
-**An undefined reference behaves differently depending on braces:**
+**An undefined reference still behaves differently depending on braces:**
 
 ```bash
 A=hello $NOPE        # → hello $NOPE   (left as written)
 A=hello ${NOPE}      # → Error: Undefined variable: ${NOPE} is not defined
 ```
 
-<Callout type="warning" title="What this means for a secret containing a dollar sign">
-A generated password or token containing `${...}` will **fail to parse**, and one
-containing `$` followed by a name that also exists in the file will be **silently
-replaced**.
+<Callout type="tip" title="A secret containing a dollar sign — single-quote it">
+This is the reliable answer, and the reason single quotes stopped expanding.
 
-There is no escape, so the options are: regenerate the value without a `$`, or keep it
-out of the `.env` and fetch it another way. This is worth knowing before a deploy
-rather than during one.
+```bash
+TOKEN='pa${SOMETHING}ss'      # → exactly that, no error
+API_KEY='prefix$DB_PASS'      # → exactly that, even if DB_PASS is a key here
+```
+
+Before v0.7.0 neither was possible: the first made the **whole file fail to parse**,
+and the second was **silently replaced** with the value of `DB_PASS` — substituting one
+of your secrets into another, with no error and no way to prevent it.
 </Callout>
 
 ### Expansion sees the file, not your shell
@@ -246,7 +265,7 @@ it. Both now use the same parser.
 | backslashes — a Windows path, a regex | `'single'` |
 | a tab or newline you want resolved from `\t` / `\n` | `"double"` |
 | real newlines — a PEM key, a certificate | any quoted form; `"double"` is conventional |
-| a `$` followed by a word | ⚠️ nothing will help — see above |
+| a `$` followed by a word | `'single'` — or `\$` to keep expansion elsewhere in the value |
 
 ---
 
