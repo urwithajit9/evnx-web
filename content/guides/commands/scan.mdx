@@ -69,6 +69,7 @@ binary actually has:
 | `OpenAI API Key` | high | `sk-(?:proj-[0-9a-zA-Z_-]{40,}\|[0-9a-zA-Z]{48})` |
 | `Anthropic API Key` | high | `sk-ant-api[0-9]{2}-[0-9a-zA-Z\-_]{95}` |
 | `Private Key` | high | `-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----` |
+| `Credentials in a connection string` | high | `[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s/?#@]+:[^\s/?#@]+@[^\s/?#]+` |
 
 Two further checks are **not** rules, because neither can be expressed as one:
 
@@ -93,6 +94,23 @@ Two further checks are **not** rules, because neither can be expressed as one:
   regex = "SG\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}"
   url   = "https://app.sendgrid.com/settings/api_keys"
   ```
+</Callout>
+
+<Callout type="warning" title="The connection-string rule is new in v0.7.0, and it will fail builds that used to pass">
+`DATABASE_URL=postgresql://admin:s3cr3t@db.example.com:5432/main` scanned **clean**
+before v0.7.0, and structurally so: the provider rules are all prefix formats and a
+connection string has none, the sensitive-key heuristic keys off names containing
+`secret`/`token`/`key` and `DATABASE_URL` has none of them, and the entropy check
+scores a whole URL below threshold.
+
+A live database password in `DATABASE_URL` is among the most common things in a `.env`,
+so this is caught now — which means **a repository with one now fails
+`evnx scan --severity high`** where it did not before. That is the point, but re-run
+your pipeline once after upgrading rather than discovering it on a release branch.
+
+Two things it deliberately does **not** flag: `postgresql://reader@host/db`, which is a
+username with no password, and `https://api.example.com/users/me@example.com`, where
+the `@` is in the path rather than the authority.
 </Callout>
 
 These are the formats evnx ships with. For the ones only your project knows — an internal
