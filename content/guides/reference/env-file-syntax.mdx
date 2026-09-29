@@ -1,0 +1,257 @@
+---
+slug: "reference-env-file-syntax"
+section: "reference"
+order: 1
+title: ".env Syntax Reference"
+publishedAt: "2026-09-29"
+updatedAt: "2026-09-29"
+excerpt: "Exactly what evnx accepts in a .env file: the four quoting forms, which escapes resolve where, multiline values, variable expansion, and what does not work."
+difficulty: "intermediate"
+timeToComplete: "15 minutes"
+tags: ["reference", "syntax", "quoting", "multiline", "escaping", "parser"]
+evnxVersion: "0.6.0"
+prerequisites:
+  - getting-started/quick-start
+draft: false
+---
+
+# .env Syntax Reference
+
+<Callout type="tip" title="Who this is for">
+Anyone whose value contains a quote, a backslash, a newline, a `#` or a `$` — which is
+most private keys, connection strings and JSON blobs. Everything on this page was
+checked against the parser rather than transcribed from another tool's documentation,
+because `.env` has no specification and implementations genuinely differ.
+</Callout>
+
+---
+
+## The four forms
+
+```bash
+PLAIN=hello world
+DOUBLE="hello world"
+SINGLE='hello world'
+BACKTICK=`hello world`
+```
+
+All four are accepted. They differ in **one** respect — whether backslash escapes are
+resolved — and they behave identically in every other way, including multiline support
+and variable expansion.
+
+| Form | Escapes resolved | Multiline | Expansion |
+|---|---|---|---|
+| unquoted | ❌ literal | — | ✅ |
+| `"double"` | ✅ **yes** | ✅ | ✅ |
+| `'single'` | ❌ literal | ✅ | ✅ |
+| `` `backtick` `` | ❌ literal | ✅ | ✅ |
+
+### Whitespace and `export`
+
+```bash
+SPACED   =   padded      # → "padded"; whitespace round = and at the ends is trimmed
+export EXPORTED=value    # → the export prefix is accepted and dropped
+EMPTY=                   # → "" (an empty value, not an error)
+```
+
+---
+
+## Escapes resolve in double quotes, and only there
+
+| Written | In `"…"` | In `'…'`, `` `…` `` or unquoted |
+|---|---|---|
+| `\t` | a tab | a backslash and a `t` |
+| `\n` | a newline | a backslash and an `n` |
+| `\"` | `"` | unchanged |
+| `\\` | `\` | unchanged |
+
+```bash
+TABBED="col1\tcol2"      # → col1<tab>col2
+LITERAL='col1\tcol2'     # → col1\tcol2
+QUOTED="say \"hi\""      # → say "hi"
+WINPATH='C:\Users\ajit'  # → C:\Users\ajit — single quotes are the escape hatch
+```
+
+<Callout type="warning" title="A Windows path or a regex belongs in single quotes">
+`"C:\Users\ajit"` resolves `\U` and `\a` as escapes. Single quotes take the value
+exactly as written, which is what you want for paths, regular expressions and anything
+else where a backslash is data.
+</Callout>
+
+---
+
+## Multiline values
+
+Any of the three quote characters can span lines. The value ends at the matching
+closing quote.
+
+```bash
+PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ...
+-----END PRIVATE KEY-----"
+```
+
+<Callout type="warning" title="Escapes changed in v0.6.0 — and this affects multiline values">
+Before v0.6.0, a **multiline** double-quoted value did not resolve escapes even though
+a single-line one did. `\t` meant a tab on one line and a literal backslash-t across
+two. That inconsistency is fixed: escapes now mean the same thing in a double-quoted
+value regardless of how many lines it spans.
+
+**PEM keys, certificates and base64 are unaffected** — they contain no backslashes, so
+they are byte-identical before and after. What changes is a multiline value containing
+`\n`, `\t` or `\"`: a JSON blob, for instance.
+
+If a multiline value must be taken literally, use single quotes.
+</Callout>
+
+---
+
+## Variable expansion
+
+A value can reference another variable in the same file:
+
+```bash
+HOST=db.example.com
+PORT=5432
+DATABASE_URL=postgresql://user:pass@${HOST}:${PORT}/app
+```
+
+`$NAME` and `${NAME}` both work.
+
+### ⚠️ Three things here will surprise you
+
+**Expansion happens in every form, including single quotes.** In a shell — and in most
+`.env` libraries — single quotes suppress it. In evnx they do not:
+
+```bash
+B=world
+A='hello $B'    # → hello world, NOT "hello $B"
+```
+
+**There is no way to escape a `$`.** Neither backslash nor doubling works:
+
+```bash
+B=world
+A="cost \$B"    # → cost \world   (the backslash survives; $B still expands)
+A="cost $$B"    # → cost $world   (the first $ is literal; $B still expands)
+```
+
+A `$` followed by a valid identifier always expands. A `$` that is **not** followed by
+one is left alone, which covers most real values:
+
+```bash
+PRICE="costs $"      # → costs $
+PRICE="costs $5"     # → costs $5      ($5 is not an identifier)
+PRICE="costs $ 5"    # → costs $ 5
+```
+
+**An undefined reference behaves differently depending on braces:**
+
+```bash
+A=hello $NOPE        # → hello $NOPE   (left as written)
+A=hello ${NOPE}      # → Error: Undefined variable: ${NOPE} is not defined
+```
+
+<Callout type="warning" title="What this means for a secret containing a dollar sign">
+A generated password or token containing `${...}` will **fail to parse**, and one
+containing `$` followed by a name that also exists in the file will be **silently
+replaced**.
+
+There is no escape, so the options are: regenerate the value without a `$`, or keep it
+out of the `.env` and fetch it another way. This is worth knowing before a deploy
+rather than during one.
+</Callout>
+
+### Expansion sees the file, not your shell
+
+```bash
+A=home is ${HOME}    # → Error: ${HOME} is not defined
+```
+
+Even though `HOME` is set in every shell. Expansion resolves **only** against the
+`.env` file itself, which keeps the file self-contained — the same file produces the
+same values on every machine.
+
+Order does not matter. A variable may reference one defined further down.
+
+---
+
+## Comments
+
+```bash
+# A full-line comment.
+
+KEY=value            # stripped — the value is "value"
+KEY="value # here"   # kept — the value is "value # here"
+```
+
+An unquoted `#` starts a comment. Inside any quoted form it is part of the value.
+
+---
+
+## What does not work
+
+### Triple-quoted heredocs
+
+```bash
+CONFIG="""
+line one
+line two
+"""
+```
+
+```
+Error: Invalid format at line 2: missing '=' separator
+```
+
+Not supported, and not planned — an ordinary double-quoted multiline value covers the
+same ground. Use:
+
+```bash
+CONFIG="line one
+line two"
+```
+
+### A quote that never closes
+
+```bash
+API_KEY="never closes
+NEXT_KEY=value
+```
+
+```
+Error: Unterminated quoted string at line 1
+```
+
+Worth knowing because the failure is reported at the line where the value **opened**,
+not where the file ran out. If a file fails to parse near the end, look for an
+unbalanced quote earlier.
+
+<Callout type="info" title="`evnx doctor` reports this too, as of v0.6.0">
+Before v0.6.0 `doctor` and the parser disagreed: `doctor` flagged the continuation
+lines of a valid multiline value as invalid syntax, and could not represent an
+unterminated value at all — so it called such a file clean while `validate` failed on
+it. Both now use the same parser.
+</Callout>
+
+---
+
+## Which form to use
+
+| Your value contains | Use |
+|---|---|
+| nothing special | anything; unquoted is fine |
+| spaces | any quoted form, or unquoted — spaces are preserved either way |
+| a `#` | any quoted form |
+| backslashes — a Windows path, a regex | `'single'` |
+| a tab or newline you want resolved from `\t` / `\n` | `"double"` |
+| real newlines — a PEM key, a certificate | any quoted form; `"double"` is conventional |
+| a `$` followed by a word | ⚠️ nothing will help — see above |
+
+---
+
+## Related guides
+
+- [evnx validate](/guides/commands/validate) — checks a file parses and reports where it does not
+- [evnx doctor](/guides/commands/doctor) — the same syntax check as part of a wider health report
+- [evnx convert](/guides/commands/convert) — how these values are rendered into 14 other formats
