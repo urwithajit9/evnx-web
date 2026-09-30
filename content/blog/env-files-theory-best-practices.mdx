@@ -2,7 +2,7 @@
 title: ".env vs .env.example vs .env.production: Theory & Best Practices"
 slug: env-files-theory-best-practices
 publishedAt: "2026-03-09"
-updatedAt: "2026-03-09"
+updatedAt: "2026-10-01"
 excerpt: "A comprehensive guide to environment variable management: understand the critical differences between .env files, avoid catastrophic security mistakes, and learn how modern tools like evnx, dmno, and varlock solve configuration drift."
 author: ajit
 tags: ["environment-variables", "security", "devops", "best-practices", "evnx", "configuration-management", "12factor"]
@@ -267,7 +267,7 @@ Instead of manually editing `.env.example`, let `evnx` scan your codebase and up
 
 ```bash
 # Scan your entire project for environment variable usage
-npx evnx sync
+npx @evnx/cli sync
 
 # [SCAN] Analyzing source files...
 # [FOUND] process.env.DATABASE_URL in src/db/connect.ts:12
@@ -311,7 +311,7 @@ Before merging a PR or deploying to production, verify that your target environm
 
 ```bash
 # Check local environment against code requirements
-npx evnx diff
+npx @evnx/cli diff
 
 # [DIFF] Comparing environment to code requirements...
 # [MISSING] ANALYTICS_WRITE_KEY: required but not set
@@ -333,11 +333,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install evnx
-        run: npm install -g evnx
+        run: npm install -g @evnx/cli
       - name: Validate .env.example sync
         run: evnx sync --check  # Fails if .env.example is outdated
       - name: Validate production env
-        run: evnx diff --env production  # Fails if prod is missing vars
+        # Gate on the JSON, not the exit code. `evnx diff` exits 1 whenever any
+        # VALUE differs -- and a placeholder in .env.example differing from the
+        # real value is the entire point of that file, so the bare command fails
+        # on a perfectly healthy project.
+        run: |
+          missing=$(evnx diff --env .env.production --format json | jq '.summary.missing')
+          [ "$missing" -eq 0 ] || { echo "missing $missing variable(s)"; exit 1; }
 ```
 
 ### Pre-commit Hook: Catch Mistakes Before They Leave Your Machine
@@ -345,8 +351,8 @@ jobs:
 ```bash
 # .husky/pre-commit
 #!/bin/sh
-npx evnx scan --severity high     # Exits 1 on a high-confidence detection
-npx evnx sync --check            # Block if .env.example is outdated
+npx @evnx/cli scan --severity high   # Exits 1 on a high-confidence detection
+npx @evnx/cli sync --check           # Block if .env.example is outdated
 ```
 
 **Performance**: Cold start ~180ms, cached runs ~40ms. Fast enough that developers don't disable it.

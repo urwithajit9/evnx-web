@@ -2,7 +2,7 @@
 slug: "dogfooding-evnx-adding-supabase-to-our-own-website"
 title: "Drinking Our Own .env: How We Used evnx to Add Supabase to evnx-web"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
+updatedAt: "2026-10-01"
 excerpt: "What happens when the team behind evnx—the CLI for environment variable management—uses evnx to build evnx-web, its own website? Spoiler: no .env-y feelings, just clean commits and supa-fast setup. Here's how we dogfooded our tool to add Supabase, with puns intact."
 coverImage: "/images/evnx-dogfooding-supabase.png"
 author: evnx-team
@@ -200,8 +200,8 @@ cargo install evnx --all-features
 # or
 curl -fsSL https://dotenv.space/install.sh | bash
 
-# Coming soon at npm
-npm install -g evnx
+# or from npm
+npm install -g @evnx/cli
 
 # Navigate to your project (or start a new one—live a little)
 cd your-nextjs-app
