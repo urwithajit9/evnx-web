@@ -245,10 +245,10 @@ If the runner had `EVNX_PASSWORD`, assume it did. A token is scoped; the master 
 This is the step people skip. Revoking evnx credentials stops future reads; it does nothing about the database password that was already pulled. Rotate the underlying secrets at their source, push the new values, and treat the old ones as public.
 </Step>
 
-<Callout type="info" title="Changing your master password — arriving in the next release">
-It rotates the key that wraps every vault key, so every wrapped copy has to be re-wrapped atomically. That is now built and merged, but not yet in a published binary or on the dashboard's API.
+<Callout type="info" title="Changing your master password — what it does to this pipeline">
+It rotates the key that wraps every vault key, so every wrapped copy has to be re-wrapped atomically. Available in the CLI since **0.7.0**, and on the dashboard.
 
-⚠️ **When it arrives, note what it does to this pipeline.** Your API tokens keep working — a token authenticates, it does not decrypt — but every runner holding `EVNX_PASSWORD` starts failing on the next run, because that secret no longer derives the right key. Changing the master password means updating that secret everywhere it is set, and evnx cannot tell you where those places are.
+⚠️ **Note what it does to this pipeline.** Your API tokens keep working — a token authenticates, it does not decrypt — but every runner holding `EVNX_PASSWORD` starts failing on the next run, because that secret no longer derives the right key. Changing the master password means updating that secret everywhere it is set, and evnx cannot tell you where those places are.
 
 It is also not a substitute for step 3. Re-wrapping your vault keys does nothing about the database password a runner already pulled.
 </Callout>

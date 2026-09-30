@@ -72,8 +72,8 @@ Create `.evnx/placeholders.json` to customize placeholder generation:
 | `description` | `string` | No | Accepted and ignored. A note for whoever reads the file |
 | `patterns` | `object` | No | Regex pattern to placeholder mappings. See [Pattern precedence](#pattern-precedence) when more than one matches |
 | `default` | `string` | No | Fallback placeholder for unmatched keys |
-| `allow_actual` | `string[]` | No | Keys whose **real value** is written to the template. Guarded, and arriving in the next release — see [allow_actual](#allow_actual) |
-| `naming_convention` | `object` | No | ⚠️ **Not read from this file.** Set naming policy with `--naming-policy` or `[sync] naming_policy` in `.evnx.toml`. Arriving in the next release: evnx warns if you set it here |
+| `allow_actual` | `string[]` | No | Keys whose **real value** is written to the template. Guarded since 0.7.0 — see [allow_actual](#allow_actual) |
+| `naming_convention` | `object` | No | ⚠️ **Not read from this file.** Set naming policy with `--naming-policy` or `[sync] naming_policy` in `.evnx.toml`. Since 0.7.0 evnx warns if you set it here |
 
 ---
 
@@ -133,7 +133,7 @@ order:
 
 `STRIPE_SECRET_KEY` gets `<the-exact-key>`, whatever order you write them in.
 
-<Callout type="warning" title="Arriving in the next release — before it, this is not deterministic">
+<Callout type="warning" title="Deterministic since 0.7.0 — before it, it was not">
 On v0.6.0 and earlier the winner depends on internal hash ordering, so the
 same `.env` can produce a different `.env.example` on each run — and
 `.env.example` is a committed file, so `git diff` showed changes nobody made. If
@@ -142,9 +142,9 @@ upgrading.
 </Callout>
 
 <Callout type="warning" title="A pattern that is not valid regex is an error">
-Arriving in the next release: `evnx sync` refuses to run and names the pattern.
-On v0.6.0 and earlier it is skipped silently, and the key fell through to `default` — so the template looked
-fine and did not follow your rules.
+Since 0.7.0, `evnx sync` refuses to run and names the pattern, and nothing is
+written. On v0.6.0 and earlier it is skipped silently, and the key fell through to
+`default` — so the template looked fine and did not follow your rules.
 </Callout>
 
 ---
@@ -211,8 +211,8 @@ Control how variable names are validated.
 <Callout type="warning" title="Not read from placeholders.json">
 `naming_convention` in this file is **ignored**. Naming policy comes from
 `--naming-policy` on the command line, or `[sync] naming_policy` in `.evnx.toml`.
-Arriving in the next release, `evnx sync` warns when it finds `naming_convention`
-here rather than discarding it silently. The fields below describe the intended shape and are kept
+Since 0.7.0, `evnx sync` warns when it finds `naming_convention` here rather than
+discarding it silently. The fields below describe the intended shape and are kept
 for when the file does support it.
 </Callout>
 
