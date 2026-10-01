@@ -84,23 +84,25 @@ control.
 
 **[app.evnx.dev](https://app.evnx.dev) → Settings → Download your data.**
 
-One button. The file is named `evnx-export-<date>.json`.
+One button. The file is named `evnx-account-data-<date>.json`.
 
 ## From the CLI
 
 <Callout type="info" title="Requires evnx 0.8.0">
-`evnx auth export` ships in **0.8.0**. `evnx --version` will tell you what you
-have; on an earlier version, use the dashboard above — it produces the same file.
+`evnx auth download-data` ships in **0.8.0**. `evnx --version` will tell you
+what you have; on an earlier version, use the dashboard above — it produces the
+same file.
 </Callout>
 
 ```bash
-evnx auth export
+evnx auth download-data
 ```
 
-Writes `evnx-export-<date>.json` in the current directory. To choose the path:
+Writes `evnx-account-data-<date>.json` in the current directory. To choose the
+path:
 
 ```bash
-evnx auth export --output ~/Documents/evnx-backup.json
+evnx auth download-data --output ~/Documents/evnx-backup.json
 ```
 
 It refuses to overwrite an existing file unless you pass `--force`, and it
@@ -108,6 +110,13 @@ checks that **before** making the request — so a refusal never leaves you
 wondering whether something was written.
 
 On Linux and macOS the file is created mode `0600`, readable only by you.
+
+<Callout type="info" title="Why it is not called `evnx auth export`">
+`evnx cloud export` is planned as the anti-lock-in escape hatch, and it writes
+every vault's secrets **decrypted** to disk. Two commands named `export` with
+opposite contents would be a trap — the lesson you learn here, that an export
+holds no secrets, is exactly the wrong thing to carry to that one.
+</Callout>
 
 ## ⚠️ Keep the file private anyway
 

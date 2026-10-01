@@ -34,7 +34,7 @@ evnx auth [SUBCOMMAND]
 evnx auth register --email you@example.com
 evnx auth login
 evnx auth status
-evnx auth export --output my-data.json
+evnx auth download-data --output my-data.json
 </CommandSignature>
 
 | Subcommand | What it does |
@@ -48,7 +48,7 @@ evnx auth export --output my-data.json
 | `sessions` | List and revoke active sessions |
 | `rotate-master-password` | Change your master password — see [Changing your master password](/guides/reference/changing-your-master-password) |
 | `undo-password-change` | Undo that change, by proving the previous password |
-| `export` | Download everything the server holds, as JSON — see [Exporting your data](/guides/reference/exporting-your-data) |
+| `download-data` | Download everything the server holds, as JSON — see [Exporting your data](/guides/reference/exporting-your-data). ⚠️ Not called `export`: `cloud export` will write secrets |
 | `delete-account` | Erase the account — see [Deleting your account](/guides/reference/deleting-your-account) |
 
 ---
@@ -227,10 +227,10 @@ counts — and note that `3 / 3` means **full**, not one remaining.
 ## Taking your data with you
 
 ```bash
-evnx auth export
+evnx auth download-data
 ```
 
-Writes `evnx-export-<date>.json`: your vaults, who can reach them, each version's
+Writes `evnx-account-data-<date>.json`: your vaults, who can reach them, each version's
 variable **names**, your tokens by name and scope, and your own activity. `-o`
 chooses the path; `--force` allows overwriting.
 
