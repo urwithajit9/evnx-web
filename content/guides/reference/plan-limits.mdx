@@ -1,0 +1,121 @@
+---
+title: "Plan limits"
+slug: plan-limits
+section: reference
+order: 12
+publishedAt: "2026-10-01"
+updatedAt: "2026-10-01"
+excerpt: "What the free plan allows, how each limit is counted, what happens when you reach one — and how to see your usage before you do."
+difficulty: beginner
+timeToComplete: "4 minutes"
+tags: ["cloud", "plans", "limits", "quota", "evnx"]
+evnxVersion: "0.7.0"
+prerequisites:
+  - commands/auth
+draft: false
+---
+
+Until now the only way to find out an evnx limit was to hit one. The refusals are
+clear — they name the limit and what to do about it — but a limit you discover at
+the moment it blocks you is a limit nobody could plan around.
+
+This page states them, and tells you how to see your own usage.
+
+## The free plan
+
+| | Limit | Counted as |
+|---|---|---|
+| **Vaults** | 3 | Vaults you **own** and have not deleted |
+| **Versions** | 5 **per vault** | Every version stored for that vault |
+| **API tokens** | 2 | Tokens that are neither revoked nor expired |
+| **Activity history** | 7 days | How far back the audit view reaches |
+
+Team and Enterprise plans remove the first three. Team keeps 90 days of activity
+history; Enterprise keeps all of it.
+
+<Callout type="info" title="A vault shared with you is not one of yours">
+Vaults count against the person who **owns** them. If a colleague shares a vault
+with you, it spends their allowance, not yours — and the versions pushed to it
+count against them too, even when you are the one pushing.
+
+That is deliberate: otherwise a free-tier developer could not contribute to a
+team's vault, and a free-tier owner could raise their own limit by inviting
+someone on a bigger plan.
+</Callout>
+
+## ⚠️ What "3 of 3" means
+
+<Callout type="warning" title="At the limit, the next one is already refused">
+evnx refuses when the count **reaches** the limit, not when it would exceed it.
+So three of three vaults means creating a fourth is already rejected — not that
+one slot remains.
+
+The CLI and dashboard both mark that state as **full** rather than showing a
+neutral `3 / 3`, for exactly this reason.
+</Callout>
+
+## Seeing your usage
+
+```bash
+evnx auth status
+```
+
+Prints your plan, vaults used, active tokens, and the per-vault version limit —
+plus a warning naming any vault that is at or near its cap.
+
+In the dashboard: **[app.evnx.dev](https://app.evnx.dev) → Settings → Plan and
+usage**, and a line above the create form on the vaults page.
+
+## What happens when you reach one
+
+Each limit refuses the action that would cross it, and names the remedy. Nothing
+is deleted and nothing is silently dropped.
+
+| Limit reached | What is refused | What to do |
+|---|---|---|
+| Vaults | Creating another | Delete one you no longer need — the slot frees immediately |
+| Versions | `evnx cloud push` to that vault | `evnx cloud history` lists them, `evnx cloud delete-version` removes one. The latest cannot be deleted |
+| API tokens | Creating another | Revoke one you are no longer using |
+
+<Callout type="warning" title="Why a full vault refuses the push instead of dropping the oldest version">
+Most services prune the oldest entry when a history limit is reached, and a push
+never fails. evnx refuses instead.
+
+Pruning would delete your data as a side effect of a routine action — and for a
+vault, the deleted thing is **a secret you may not have anywhere else**. A
+refusal is recoverable; a silent delete is not.
+
+The cost is real: on a limit of five, the sixth push fails until you remove
+something. That is the trade, chosen deliberately.
+</Callout>
+
+## ⚠️ Activity history is a visibility limit, not deletion
+
+<Callout type="info" title="Nothing is pruned">
+"7 days of activity history" means the audit view shows you the last seven days.
+It does **not** mean older events are deleted — `audit_events` is append-only at
+the database level, so nothing prunes it and nothing can.
+
+Upgrading a plan widens the window over history that was there all along.
+</Callout>
+
+## Self-hosting
+
+Every limit is configuration, not code: `QUOTA_<PLAN>_<WHAT>`, where `PLAN` is
+`FREE`, `TEAM` or `ENTERPRISE` and `WHAT` is `VAULTS`, `VERSIONS`, `TOKENS` or
+`AUDIT_DAYS`. The word `unlimited` is spelled out.
+
+```bash
+QUOTA_FREE_VAULTS=10
+QUOTA_FREE_VERSIONS=unlimited
+```
+
+An unparseable value fails startup rather than quietly becoming unlimited — a
+mistyped limit that silently gave everything away would be a failure nobody
+notices from the outside.
+
+## Related
+
+- [`evnx auth`](/guides/commands/auth) — `status`, which prints your usage
+- [`evnx cloud`](/guides/commands/cloud) — `history` and `delete-version`
+- [Exporting your data](/guides/reference/exporting-your-data) — your plan is in the export too

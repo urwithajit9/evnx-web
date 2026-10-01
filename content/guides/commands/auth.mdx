@@ -213,6 +213,11 @@ evnx auth status
 
 This asks the **server**, so it answers "is this credential actually still good?" rather than "is there a file on disk?" It reports your email, whether it is verified, whether 2FA is on, and whether the stored session still works.
 
+Since 0.8.0 it also prints your **plan and usage**: vaults used, active API
+tokens, the per-vault version limit, and a warning naming any vault at or near
+its cap. See [Plan limits](/guides/reference/plan-limits) for what each number
+counts — and note that `3 / 3` means **full**, not one remaining.
+
 <Callout type="info" title="Two different status commands">
 `evnx auth status` is about your **account**. `evnx cloud status` is about **this machine** — whether it has credentials, whether the directory is bound to a vault, and which server it will talk to.
 </Callout>
