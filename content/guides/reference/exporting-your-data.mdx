@@ -1,0 +1,128 @@
+---
+title: "Exporting your data"
+slug: exporting-your-data
+section: reference
+order: 11
+publishedAt: "2026-10-01"
+updatedAt: "2026-10-01"
+excerpt: "Download everything evnx holds about your account as JSON — and understand why your secrets are not in it, which is the guarantee rather than a gap."
+difficulty: beginner
+timeToComplete: "4 minutes"
+tags: ["cloud", "privacy", "gdpr", "export", "portability", "evnx"]
+evnxVersion: "0.7.0"
+prerequisites:
+  - commands/auth
+draft: false
+---
+
+You can download everything the evnx server holds about your account, as a single
+JSON file, at any time and without asking anyone.
+
+This is the other half of [deleting your
+account](/guides/reference/deleting-your-account): take your data with you, then
+erase it if you want to.
+
+## ⚠️ Your secrets are not in it
+
+Read this part first, because it is the thing people expect and do not find.
+
+<Callout type="warning" title="And they cannot be — that is the point">
+Your vault contents are encrypted **on your machine**, with a key derived from
+your master password. The server has never held that password, that key, or any
+plaintext value. So there is nothing on its side to decrypt them with, and
+nothing it could put in an export.
+
+An export that contained your secrets would mean the server could read them.
+Its absence is the product working.
+</Callout>
+
+To get the values themselves, pull each vault on a machine signed in to your
+account:
+
+```bash
+evnx cloud pull
+```
+
+The downloaded file says all of this in its own body, so it still makes sense
+when someone opens it months later in a Downloads folder.
+
+## What is in it
+
+| | |
+|---|---|
+| **Account** | email, verification state, whether 2FA is on, plan, timestamps |
+| **Public keys** | your Ed25519, X25519 and ML-KEM public keys — public by definition, they are what others encrypt *to* |
+| **Vaults** | every vault you can reach: name, environment, your role, when you joined |
+| **Members** | who else is in each one, their role, when they were granted it |
+| **Version history** | per version: the number, when, by whom, the content hash, size, and the variable **names** it held |
+| **API tokens** | by name, scope and dates — never the token values |
+| **Activity** | your own audit trail: what you did and when |
+
+## What is deliberately left out
+
+Beyond the secrets, nothing usable as a credential is included:
+
+| Left out | Why |
+|---|---|
+| SRP verifier and salts | password-equivalent for an **offline** attack. A file sitting in Downloads should not be something to run a cracker against |
+| 2FA secret and recovery codes | live second factors |
+| API token values | they exist only as hashes; each was shown once when created |
+| Your sealed private key | key material. It is useless without your master password, but an export is the wrong place to carry it |
+| Hashed IP and device fingerprints | keyed digests — you could not reverse them, so they would be noise |
+
+## Your activity only, not your team's
+
+The audit trail in the export covers **your** actions. A vault's trail also
+records what other members did, and the right to your data is not a right to
+theirs.
+
+To see a whole vault's activity, open that vault in
+[app.evnx.dev](https://app.evnx.dev), where it sits behind the vault's own access
+control.
+
+## From the dashboard
+
+**[app.evnx.dev](https://app.evnx.dev) → Settings → Download your data.**
+
+One button. The file is named `evnx-export-<date>.json`.
+
+## From the CLI
+
+<Callout type="info" title="Requires evnx 0.8.0">
+`evnx auth export` ships in **0.8.0**. `evnx --version` will tell you what you
+have; on an earlier version, use the dashboard above — it produces the same file.
+</Callout>
+
+```bash
+evnx auth export
+```
+
+Writes `evnx-export-<date>.json` in the current directory. To choose the path:
+
+```bash
+evnx auth export --output ~/Documents/evnx-backup.json
+```
+
+It refuses to overwrite an existing file unless you pass `--force`, and it
+checks that **before** making the request — so a refusal never leaves you
+wondering whether something was written.
+
+On Linux and macOS the file is created mode `0600`, readable only by you.
+
+## ⚠️ Keep the file private anyway
+
+<Callout type="warning" title="No secrets, but not harmless">
+The export lists your **vault names**, your **variable names**, and the **email
+address of everyone you share a vault with**. That describes the shape of your
+system — which services you use, which credentials exist, who has them — even
+though no value appears anywhere in it.
+
+Treat it like an architecture diagram, not like a public README.
+</Callout>
+
+## Related
+
+- [Deleting your account](/guides/reference/deleting-your-account) — the other half; export first if you want a copy
+- [`evnx auth`](/guides/commands/auth) — the rest of account management
+- [`evnx cloud`](/guides/commands/cloud) — `pull`, which is how you get the secrets
+- [Cloud architecture](/guides/reference/cloud-architecture) — why the server cannot read your vaults

@@ -21,6 +21,13 @@ It is not a logout, and there is no undo.
 
 ## Before you start
 
+**Download your data first if you want a copy.** Deletion is irreversible and the
+server keeps nothing afterwards, so this is the last moment it is possible —
+[Exporting your data](/guides/reference/exporting-your-data) takes a minute and
+produces a JSON file of everything evnx holds about the account. ⚠️ It does not
+contain your secrets, and cannot; run `evnx cloud pull` for each vault to keep
+those.
+
 **Rotate the secrets first if anyone else ever held them.** Deleting the account
 destroys your copy of the ciphertext. It does not reach a copy somebody else
 pulled, and it does not change the secrets themselves — those still work wherever
@@ -125,6 +132,8 @@ evnx worth using, seen from the other side.
 
 ## Related
 
+- [Exporting your data](/guides/reference/exporting-your-data) — take a copy
+  before you erase it
 - [`evnx auth`](/guides/commands/auth) — the rest of the account commands
 - [Security model](/guides/reference/concepts-security-model) — why the server
   cannot recover a deleted vault

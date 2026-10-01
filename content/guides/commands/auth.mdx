@@ -34,6 +34,7 @@ evnx auth [SUBCOMMAND]
 evnx auth register --email you@example.com
 evnx auth login
 evnx auth status
+evnx auth export --output my-data.json
 </CommandSignature>
 
 | Subcommand | What it does |
@@ -45,6 +46,10 @@ evnx auth status
 | `token` | Mint, list and revoke API tokens for CI |
 | `totp` | Enable, disable and re-issue recovery codes for 2FA |
 | `sessions` | List and revoke active sessions |
+| `rotate-master-password` | Change your master password — see [Changing your master password](/guides/reference/changing-your-master-password) |
+| `undo-password-change` | Undo that change, by proving the previous password |
+| `export` | Download everything the server holds, as JSON — see [Exporting your data](/guides/reference/exporting-your-data) |
+| `delete-account` | Erase the account — see [Deleting your account](/guides/reference/deleting-your-account) |
 
 ---
 
@@ -211,6 +216,29 @@ This asks the **server**, so it answers "is this credential actually still good?
 <Callout type="info" title="Two different status commands">
 `evnx auth status` is about your **account**. `evnx cloud status` is about **this machine** — whether it has credentials, whether the directory is bound to a vault, and which server it will talk to.
 </Callout>
+
+---
+
+## Taking your data with you
+
+```bash
+evnx auth export
+```
+
+Writes `evnx-export-<date>.json`: your vaults, who can reach them, each version's
+variable **names**, your tokens by name and scope, and your own activity. `-o`
+chooses the path; `--force` allows overwriting.
+
+<Callout type="warning" title="Your secrets are not in it, and cannot be">
+They are encrypted on your machine under a key derived from your master password,
+which the server has never held — so it has nothing to decrypt them with. Run
+`evnx cloud pull` in each project to get the values. The file says so itself.
+
+It does still list vault names, variable names and your co-members' email
+addresses, so keep it private. On Linux and macOS it is written mode `0600`.
+</Callout>
+
+Full detail: [Exporting your data](/guides/reference/exporting-your-data).
 
 ---
 
