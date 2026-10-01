@@ -119,13 +119,20 @@ into existence sooner or later.
 
 <Callout type="warning" title="The syntax check and the parser used to disagree">
 **Fixed in v0.6.0.** `doctor` reported the continuation lines of a perfectly valid
-multiline value as `invalid syntax`, while `validate`, `convert` and `scan` all
-accepted the same file — so a `.env` holding a PEM key produced two or three
-complaints about nothing. It also could not represent a quoted value whose quote
-*never* closes, and called such a file clean while `validate` failed on it.
+multiline value as `invalid syntax`, while `validate` and `convert` accepted the
+same file — so a `.env` holding a PEM key produced two or three complaints about
+nothing. It also could not represent a quoted value whose quote *never* closes,
+and called such a file clean while `validate` failed on it.
 
-Both now come from the same parser, so they cannot drift apart again, and an
-unterminated value is reported rather than passed.
+`doctor` and `validate` now come from the same parser, and an unterminated value
+is reported rather than passed.
+
+⚠️ **This note originally named `scan` alongside them and said they "cannot drift
+apart again". That was wrong.** `scan` kept its own `.env` splitting until
+v0.8.0, and the consequence was worse than a spurious warning: a secret inside a
+multiline value — a PEM key, the very example above — was **not reported at
+all**. Corrected here because the claim was load-bearing: it is why nobody
+checked.
 </Callout>
 
 <Callout type="warning">

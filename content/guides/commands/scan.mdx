@@ -125,6 +125,17 @@ Beyond known patterns, `evnx scan` flags any value of 32 characters or more whos
 - JWTs (which contain base64-encoded payloads)
 - Private keys accidentally pasted as values
 
+<Callout type="warning" title="Multiline values: fixed in v0.8.0">
+⚠️ **Before v0.8.0 a secret inside a multiline value was not reported at all** —
+`scan` exited 0 and printed "No secrets detected". A PEM private key is the
+common multiline value, and it is the example this very list invites.
+
+The cause was that `scan` split each `.env` line on `=` itself instead of using
+the parser the rest of evnx uses; a continuation line has no `=`, so it was
+skipped. If you have been relying on `scan` in a pre-commit hook or CI, re-run it
+once after upgrading — it may find something it was quietly passing over.
+</Callout>
+
 <Callout type="warning">
 The threshold is **not configurable**. This page and the `.evnx.toml` reference both
 described `entropy_threshold` as a setting; no such setting is read by anything. 4.8 for
