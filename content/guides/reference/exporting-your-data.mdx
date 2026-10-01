@@ -112,10 +112,11 @@ wondering whether something was written.
 On Linux and macOS the file is created mode `0600`, readable only by you.
 
 <Callout type="info" title="Why it is not called `evnx auth export`">
-`evnx cloud export` is planned as the anti-lock-in escape hatch, and it writes
-every vault's secrets **decrypted** to disk. Two commands named `export` with
-opposite contents would be a trap — the lesson you learn here, that an export
-holds no secrets, is exactly the wrong thing to carry to that one.
+[`evnx cloud export`](/guides/reference/getting-your-secrets-out) is the
+anti-lock-in escape hatch, and it writes every vault's secrets **decrypted** to
+disk. Two commands named `export` with opposite contents would be a trap — the
+lesson you learn here, that an export holds no secrets, is exactly the wrong
+thing to carry to that one.
 </Callout>
 
 ## ⚠️ Keep the file private anyway
@@ -131,6 +132,7 @@ Treat it like an architecture diagram, not like a public README.
 
 ## Related
 
+- [Getting your secrets out](/guides/reference/getting-your-secrets-out) — the other export, the one that **does** contain your secrets
 - [Deleting your account](/guides/reference/deleting-your-account) — the other half; export first if you want a copy
 - [`evnx auth`](/guides/commands/auth) — the rest of account management
 - [`evnx cloud`](/guides/commands/cloud) — `pull`, which is how you get the secrets

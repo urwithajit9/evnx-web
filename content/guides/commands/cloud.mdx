@@ -8,7 +8,7 @@ excerpt: "Push and pull encrypted .env files across machines and CI. Encryption 
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.8.0"
 prerequisites:
   - commands/auth
   - commands/vault
@@ -41,6 +41,8 @@ evnx cloud history
 | `pull` | Download a version and decrypt it |
 | `run` | **v0.5.0+** — run a command with a vault's variables in its environment, writing no file |
 | `history` | List a vault's versions, newest first |
+| `delete-version` | Delete one version, and its encrypted blob |
+| `export` | **v0.8.0+** — write every version to a directory, **decrypted** |
 | `link` | Bind this directory to a vault |
 | `unlink` | Remove the binding |
 | `status` | Show whether this machine is set up for sync |
@@ -274,6 +276,30 @@ VERSION   PUSHED BY          KEYS   WHEN
 </TerminalOutput>
 
 `history` is **read-only in the strongest sense**: no password prompt, no decryption, no blob download. It reads metadata the server already holds in the clear, which is why it is safe to run from a script or a read-only token.
+
+---
+
+## Getting everything out
+
+```bash
+evnx cloud export --vault my-api/production --all-versions --output ~/evnx-export
+```
+
+<Callout type="danger" title="⚠️ This writes your secrets to disk in plain text">
+It is the one `cloud` subcommand whose purpose is to do that, and the only one
+in evnx. `pull` writes a single file and asks first; `run` writes none at all.
+
+With no `--to` the files are the **exact bytes you pushed** — comments,
+ordering and quoting included — because that is how they were encrypted.
+`--to json` and the other thirteen `evnx convert` formats are available, and a
+conversion keeps only keys and values.
+
+Full guide, including what it refuses and why an export goes stale:
+[Getting your secrets out](/guides/reference/getting-your-secrets-out).
+</Callout>
+
+This exists so the answer to *what happens when we want to leave?* is a command
+rather than a promise. It is not the command for CI — that is `run`, above.
 
 ---
 
