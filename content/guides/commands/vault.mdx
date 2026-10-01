@@ -32,6 +32,7 @@ evnx vault share my-api/production --with alice@example.com
 evnx vault members my-api/production
 evnx vault role my-api/production --user alice@example.com --role admin
 evnx vault revoke my-api/production --user bob@example.com
+evnx vault rekey my-api/production
 evnx vault delete my-api/production
 </CommandSignature>
 
@@ -360,6 +361,28 @@ remove you.
 
 ---
 
+## Rotating the key without removing anyone
+
+`revoke` rotates the vault key because it has to — otherwise the person removed
+keeps a working copy. But rotation does not require anyone to leave, and the
+situations that call for it most often have nobody leaving at all: a lost laptop
+with a signed-in CLI, a CI runner that held the master password, an account
+breach where the person stays on the team.
+
+```bash
+evnx vault rekey my-api/production
+```
+
+Every version is re-encrypted under a fresh key and re-wrapped for every current
+member. Nobody loses access and nobody is signed out.
+
+⚠️ It fixes the future, not the past — anyone who could already read a version may
+still hold a copy, and no rotation recalls that. Full detail, including what to do
+on an older evnx:
+[Rotating a vault key](/guides/reference/rotating-a-vault-key).
+
+---
+
 ## Deleting a vault
 
 ```bash
@@ -422,3 +445,5 @@ Key *names* are sent deliberately, so a dashboard can show what a vault holds wi
   boundary sits
 - [Deleting your account](/guides/reference/deleting-your-account) — a vault with
   other members blocks deletion until they are removed
+- [Rotating a vault key](/guides/reference/rotating-a-vault-key) — `rekey` on its
+  own, and the difference between rotating a key and recalling what was read

@@ -1,0 +1,162 @@
+---
+title: "Rotating a vault key"
+slug: rotating-a-vault-key
+section: reference
+order: 10
+publishedAt: "2026-10-01"
+updatedAt: "2026-10-01"
+excerpt: "Rotate the key a vault is encrypted under without removing anyone — what it protects you from, what it cannot reach, and why that distinction is the whole point."
+difficulty: intermediate
+timeToComplete: "5 minutes"
+tags: ["cloud", "vault", "security", "rotation", "incident", "evnx"]
+evnxVersion: "0.8.0"
+prerequisites:
+  - commands/vault
+  - reference/concepts-security-model
+draft: true
+---
+
+Every version of a vault is encrypted under one **vault key**, and each member
+holds their own wrapped copy of it. Rotating that key means generating a fresh
+one, re-encrypting every version under it, and re-wrapping it for everyone who
+should still have it.
+
+`evnx vault revoke` has always done this as part of removing someone. This is the
+same operation with nobody leaving.
+
+<Callout type="info" title="Requires evnx 0.8.0">
+`evnx vault rekey` ships in **0.8.0**. `evnx --version` will tell you what you
+have. On an earlier version, the only way to rotate is to remove a member and
+re-share — see [When you have an older version](#when-you-have-an-older-version).
+</Callout>
+
+## When you need this
+
+The common thread: **a key may be somewhere it should not be, and nobody is
+leaving the team.**
+
+| Situation | Why rotation helps |
+|---|---|
+| A laptop with a signed-in CLI is lost or stolen | the credential file was readable at `~/.config/evnx/`, mode 0600 or not |
+| A CI runner is compromised, and it held `EVNX_PASSWORD` | that secret derives the master key, which unwraps the vault key |
+| A member's account is breached but they stay on the team | their wrapped copy may have been opened |
+| Someone left the company months ago and you are not sure the key was rotated then | rotating now costs minutes and settles it |
+
+If somebody should **lose access**, that is
+[`evnx vault revoke`](/guides/commands/vault) instead — it rotates the key *and*
+removes them, in one server transaction, so there is no moment where they are
+still a member of a vault whose key has already moved.
+
+## Rotating
+
+```bash
+evnx vault rekey api/production
+```
+
+```
+  About to rotate the key for api/production.
+  4 version(s) will be re-encrypted and re-wrapped for 3 member(s).
+  Nobody loses access, and nobody is signed out.
+
+  This stops anyone holding only the OLD key from reading what is
+  pushed from now on. It cannot recall copies of what they could
+  already read — rotate those secrets at their source.
+
+? Rotate the key for api/production? (y/N)
+```
+
+You are asked for your master password, because the current key has to be opened
+before anything can be re-encrypted under a new one.
+
+Add `-y` to skip the prompt, and `--password-stdin` to read the password from a
+pipe rather than a terminal.
+
+## ⚠️ What rotation cannot do
+
+This is the part worth reading twice.
+
+<Callout type="warning" title="Rotation fixes the future, not the past">
+Anyone who could already read a version **may still hold a copy of the
+plaintext**. No server-side operation recalls that, and no amount of re-encryption
+reaches a `.env` someone already pulled onto a laptop or pasted into a terminal.
+
+Rotating a vault key stops the **old key** from opening anything pushed from now
+on. If the concern is that a specific database password or API token was exposed,
+**rotate that secret at its source** — in the database, in the provider's
+dashboard — and push the new value. Rotating the vault key is not a substitute for
+that, any more than revoking a leaked GitHub token un-reads the repository.
+</Callout>
+
+## What it does not disturb
+
+- **Nobody is signed out.** Members fetch their wrapped key per command, so they
+  pick up the new one on their next `evnx cloud pull` without noticing.
+- **Nobody loses access.** Every current member is re-wrapped. Roles, membership
+  and version history are untouched.
+- **API tokens keep working.** A token authenticates; it does not decrypt. ⚠️ But
+  any CI job holding the **master password** as a secret is a different matter —
+  see [CI/CD and cloud tokens](/guides/integrations/ci-cd-cloud-tokens).
+- **Version numbers do not change.** Version 3 stays version 3, re-encrypted. The
+  ciphertext is bound to `(vault_id, version)`, so a malicious server still cannot
+  replay an old version as current.
+
+## If a member has no post-quantum sharing key
+
+The rotation refuses, and names them:
+
+```
+these members have no post-quantum sharing key, so the vault key
+cannot be re-wrapped for them:
+    colleague@example.com
+
+ They each need to sign in once with evnx 0.5 or later, or at
+ app.evnx.dev. Re-keying without them would lock them out of
+ api/production entirely.
+```
+
+Shares are wrapped with hybrid X25519 + ML-KEM-768, so a recipient needs a
+post-quantum public key on file. Accounts created before that landed upload one
+automatically on their next sign-in — so this usually clears itself the moment
+that person signs in anywhere.
+
+<Callout type="info" title="Why it refuses rather than skipping them">
+Leaving someone out of the re-wrap would silently revoke their access. The server
+requires the payload to cover every member exactly once, so a member omitted is a
+member removed — and whoever is rotating a key during an incident is the least
+likely to notice one name missing from a summary. If that person genuinely should
+lose access, `evnx vault revoke` says so out loud and rotates the key in the same
+operation.
+</Callout>
+
+Your own missing key never blocks a rotation: your copy is sealed under your
+master key with no key agreement at all, so it needs no post-quantum key.
+
+## Cost
+
+Every version is downloaded, decrypted, re-encrypted and uploaded — on your
+machine, because the server never holds a key. A vault at the free tier's five
+versions is a few seconds. A large vault with long history is not.
+
+Pass `--verbose` to see each version as it goes.
+
+## When you have an older version
+
+Before 0.8.0 there is no standalone rotation. The nearest equivalent is to remove
+the member and re-share:
+
+```bash
+evnx vault revoke api/production --user colleague@example.com
+evnx vault share api/production --with colleague@example.com --role developer
+```
+
+⚠️ Two costs worth knowing. There is a window where that person genuinely has no
+access, and the audit trail records a revocation and a grant rather than a
+rotation — which reads, to anyone looking later, like you removed someone and
+changed your mind.
+
+## Related
+
+- [`evnx vault`](/guides/commands/vault) — share, revoke, members, roles
+- [Changing your master password](/guides/reference/changing-your-master-password) — rotates the key your *own* wrapped copies sit under, which is a different key
+- [Cloud architecture](/guides/reference/cloud-architecture) — where vault keys live and what the server can see
+- [CI/CD and cloud tokens](/guides/integrations/ci-cd-cloud-tokens) — what rotation means for a pipeline
