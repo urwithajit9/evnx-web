@@ -4,11 +4,11 @@ slug: auth
 section: commands
 order: 7
 publishedAt: "2026-09-16"
-excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, enable two-factor authentication and manage sessions — without your password ever leaving the machine."
+excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, enable two-factor authentication, and manage sessions and devices — without your password ever leaving the machine."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.8.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -46,6 +46,7 @@ evnx auth download-data --output my-data.json
 | `token` | Mint, list and revoke API tokens for CI |
 | `totp` | Enable, disable and re-issue recovery codes for 2FA |
 | `sessions` | List and revoke active sessions |
+| `devices` | **v0.8.0+** — where you have signed in from, and reporting one that was not you. See [Knowing your devices](/guides/reference/knowing-your-devices) |
 | `rotate-master-password` | Change your master password — see [Changing your master password](/guides/reference/changing-your-master-password) |
 | `undo-password-change` | Undo that change, by proving the previous password |
 | `download-data` | Download everything the server holds, as JSON — see [Exporting your data](/guides/reference/exporting-your-data). ⚠️ Not called `export`: [`cloud export`](/guides/reference/getting-your-secrets-out) writes secrets |
@@ -202,6 +203,31 @@ evnx auth sessions revoke-others
 ```
 
 Revocation is immediate, not eventual. It kills the refresh token **and** blocklists the session, so the 15-minute access token dies at once rather than lingering until it expires. `revoke-others` is what you want after losing a laptop — it clears every session except the one you are typing in.
+
+---
+
+## Devices
+
+```bash
+evnx auth devices list
+evnx auth devices disavow <ID>
+```
+
+**v0.8.0+.** Where this account has signed in from — a network and a browser, with repeat sign-ins collapsed into one row.
+
+<Callout type="warning" title="Not the same as sessions, and not a location">
+A **session** is a live credential you can revoke. A **device** is somewhere you have signed in from, which may have no session left at all. Lost a laptop? `sessions revoke-others`. Think somebody else has been in your account? `devices disavow`.
+
+And there is no place in any of this: evnx stores a keyed *hash* of your IP address and user agent, never the values, so it cannot tell where you were. A device that looks new is very often a phone that reconnected.
+</Callout>
+
+`disavow` records the judgement — which is what makes the next sign-in from that device say so — and ends **every** session, including the one you are typing in.
+
+<Callout type="danger" title="Then change your master password">
+Signing out buys minutes. Your vault keys are wrapped under your master password, so whoever had access can sign in again until it changes — and anything they already pulled is plain text in their hands already.
+
+Full explanation: [Knowing your devices](/guides/reference/knowing-your-devices).
+</Callout>
 
 ---
 

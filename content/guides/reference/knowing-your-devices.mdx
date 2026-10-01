@@ -1,0 +1,230 @@
+---
+title: "Knowing your devices"
+slug: knowing-your-devices
+section: reference
+order: 14
+publishedAt: "2026-10-02"
+updatedAt: "2026-10-02"
+excerpt: "evnx tells you when a sign-in looks unusual, and lets you say one wasn't you. What it can actually see — which is less than you might expect, and deliberately so."
+difficulty: beginner
+timeToComplete: "6 minutes"
+tags: ["cloud", "security", "devices", "sessions", "privacy", "evnx"]
+evnxVersion: "0.8.0"
+prerequisites:
+  - commands/auth
+draft: false
+---
+
+When you sign in, evnx emails you. That has always been true. What is new is
+that the email now tells you when a sign-in looked **unusual** — and that you
+can answer it.
+
+<Callout type="info" title="Available now in the browser; the CLI command ships with 0.8.0">
+The device list is live at [app.evnx.dev](https://app.evnx.dev) under
+**Settings → Devices**. The `evnx auth devices` commands on this page arrive
+with the next CLI release and are marked **v0.8.0+** where they appear.
+</Callout>
+
+## ⚠️ First: evnx cannot see where you are
+
+This is the part that shapes everything else, so it comes before the feature.
+
+A "device" here is a **network and a browser**. evnx identifies one by storing a
+*keyed hash* of your IP address and your user-agent string — never the values
+themselves. The server cannot reverse either one.
+
+<Callout type="warning" title="So there is no city, no country, and no 'impossible travel'">
+Those features all need a readable IP address to look up in a geolocation
+database. evnx does not have one and will not store one, so it cannot offer
+them — not approximately, not with a bigger database.
+
+**A device that looks new is very often a phone that reconnected.** A mobile
+network hands out a different address constantly, and a browser update changes
+the user-agent string. Both are ordinary.
+</Callout>
+
+That is a real cost, and we would rather state it than imply a capability that
+does not exist. An alert that said *"a sign-in from Berlin"* would be more
+alarming, more actionable — and invented.
+
+## What the alert actually tells you
+
+Two kinds of email, and the difference is the point:
+
+| Subject | Meaning |
+|---|---|
+| **New sign-in to your evnx account** | Nothing stood out |
+| **New sign-in to evnx — something looked unusual** | One or more of the signals below fired |
+
+The second kind lists the reasons in plain language:
+
+<TerminalOutput title="New sign-in that looked unusual">
+Your account was signed into on 02 Oct 2026 at 14:23 UTC.
+
+  • this is a device you previously told us was not you
+  • the network and browser are both new to this account
+
+Session a3f91c
+</TerminalOutput>
+
+<Callout type="tip" title="Why the reasons, and not a risk score">
+A number cannot be argued with. "The network and browser are both new to this
+account" can be checked against what you were actually doing; "risk: 0.72"
+cannot.
+</Callout>
+
+### The signals
+
+| Signal | What it means |
+|---|---|
+| **A device you said was not you** | The strongest by far — you told us, and we remember |
+| **A new network and browser** | Both are unfamiliar for this account. Either alone is not enough |
+| **A recent lockout** | Someone was guessing this account's password in the last week |
+| **A recovery code was used** | Your authenticator was not available |
+| **A long gap** | No sign-in for 90 days or more |
+
+<Callout type="info" title="Why a new browser alone does not alarm">
+Browsers update, and a user-agent string changes when they do. If that alone
+triggered a warning, the warning would fire for everyone constantly — and an
+alert that always fires is one you learn to delete unread. Both halves have to
+be unfamiliar.
+</Callout>
+
+## Seeing your devices
+
+In the browser, **Settings → Devices**. From the command line:
+
+```bash
+evnx auth devices list
+```
+
+<TerminalOutput title="evnx auth devices list">
+  DEVICE          FIRST SEEN         LAST SEEN         SIGN-INS
+  b306a08b5649    2026-10-02 14:23   2026-10-02 15:01         3  ← this device
+  ae51c4b88ee9    2026-10-01 03:11   2026-10-01 03:11         1
+</TerminalOutput>
+
+Each row is one network-and-browser combination, with every sign-in from it
+collapsed together. The handle is derived from the stored hashes — stable
+between listings, so you can refer to one, and meaningless outside your own
+account.
+
+### ⚠️ Devices are not sessions
+
+They sit next to each other and they are not the same thing.
+
+| | Sessions | Devices |
+|---|---|---|
+| What it is | A **live credential** | Somewhere you have **signed in from** |
+| Can be empty | No — if it is listed, it works | Yes — a device can have no session left |
+| Revoking it | Ends that one way in | n/a |
+| Disavowing it | n/a | Records a judgement **and** ends every session |
+
+If you lost a laptop and want it signed out, that is
+[`evnx auth sessions`](/guides/commands/auth). If you think somebody else has
+been in your account, this page is the one.
+
+## Saying a device was not you
+
+```bash
+evnx auth devices disavow ae51c4b88ee9
+```
+
+Or **This wasn't me** in the browser. Three things happen:
+
+<Step title="The judgement is recorded">
+Permanently, against that network-and-browser pair. If a sign-in ever comes
+from it again, the alert says so — and that single signal outweighs every other
+one combined, because it came from you rather than from a guess.
+</Step>
+
+<Step title="Every session ends — including the one you are using">
+Not "every other session". You will be signed out and will need to sign in
+again.
+</Step>
+
+<Step title="You are told to change your master password">
+And you should, immediately. The next section is why.
+</Step>
+
+### ⚠️ Why signing out is not the part that protects you
+
+<Callout type="danger" title="Read this one properly">
+Your vault keys are wrapped under your **master password**. Whoever had access
+to your account had to know it.
+
+So ending their session buys you minutes. They can sign in again immediately
+with the same password — and **anything they already pulled is plain text in
+their hands already**, and no action on your side can reach it.
+
+Changing the master password is the part that actually closes the door:
+
+```bash
+evnx auth rotate-master-password
+```
+
+See [Changing your master
+password](/guides/reference/changing-your-master-password).
+</Callout>
+
+That is why the confirmation says so before you click, and why the command
+prints it afterwards rather than stopping at a tick.
+
+### Why your own session ends too
+
+Revoking "all the other sessions" quietly assumes that the one you are using is
+the trustworthy one. Someone who has just found an unrecognised sign-in does not
+know that, and if the assumption is wrong, the single session left running is
+the attacker's.
+
+Signing everyone out — you included — is the version with no assumption in it.
+
+## What is stored, exactly
+
+| Stored | Not stored |
+|---|---|
+| A keyed hash of the IP address | The IP address |
+| A keyed hash of the user agent | The user-agent string |
+| Timestamps and a count | Any location |
+| That you disavowed a device | — |
+
+<Callout type="info" title="Why the hash is keyed">
+An ordinary hash of an IP address would be reversible. There are only about four
+billion IPv4 addresses — hashing all of them takes minutes on a laptop, once,
+and then every address is readable forever.
+
+The hash is therefore **keyed** with a secret the server holds, which makes it
+stable enough to compare against itself and useless to anyone who takes the
+database.
+</Callout>
+
+### One consequence worth knowing
+
+<Callout type="warning" title="Rotating the server's hash key marks every device new">
+Comparison depends on that key. If the operator rotates it, every stored hash
+stops matching new ones, and the next sign-in on every device is reported as
+unrecognised — once, for everybody.
+
+On `api.evnx.dev` this is a deliberate, scheduled operation rather than a
+surprise. If you are **self-hosting**, set `AUDIT_HASH_KEY` separately from
+`JWT_SECRET` so the two can rotate independently.
+</Callout>
+
+## An API token cannot do any of this
+
+```text
+Error: an API token cannot manage devices — that is deliberate.
+  A leaked CI token must not be able to enumerate where you sign in
+  from, nor to sign you out everywhere.
+```
+
+A token that leaked out of a CI log should not be able to map where you work,
+and should certainly not be able to sign you out of everything. Both commands
+need a real sign-in.
+
+## Related
+
+- [`evnx auth`](/guides/commands/auth) — sessions, tokens, and the rest of account management
+- [Changing your master password](/guides/reference/changing-your-master-password) — the thing to do after disavowing
+- [Deleting your account](/guides/reference/deleting-your-account)
+- [Cloud architecture](/guides/reference/cloud-architecture) — why the server holds hashes rather than addresses
