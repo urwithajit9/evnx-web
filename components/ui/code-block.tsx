@@ -9,21 +9,8 @@
  */
 
 import { useState } from 'react'
-
-const LANG_LABELS: Record<string, string> = {
-  bash: 'Bash', shell: 'Shell', sh: 'Shell',
-  powershell: 'PowerShell',
-  yaml: 'YAML', yml: 'YAML',
-  json: 'JSON', toml: 'TOML',
-  typescript: 'TypeScript', ts: 'TypeScript',
-  javascript: 'JavaScript', js: 'JavaScript',
-  python: 'Python', py: 'Python',
-  rust: 'Rust', rs: 'Rust',
-  go: 'Go', dockerfile: 'Dockerfile',
-  diff: 'Diff', sql: 'SQL',
-  ini: '.env', env: '.env',
-  plaintext: 'Text',
-}
+// Client-safe: lang-labels has no imports and never reaches shiki.
+import { LANG_LABELS } from '@/lib/lang-labels'
 
 function getLineClass(line: string): string {
   if (/^\[ERROR\]|^\[CRITICAL\]/.test(line))                       return 'text-danger'

@@ -12,7 +12,7 @@
  */
 import React from 'react'
 import { codeToHtml } from 'shiki'
-import { LANG_LABELS } from '@/lib/shiki'
+import { LANG_LABELS, resolveGrammar } from '@/lib/shiki'
 import { CopyButton } from './copy-button'
 
 type Props = { children?: React.ReactNode }
@@ -42,7 +42,7 @@ export async function FencedCodeBlock({ children }: Props) {
 
   try {
     const fullHtml = await codeToHtml(rawCode, {
-      lang:  SUPPORTED_LANGS.has(lang) ? lang : 'plaintext',
+      lang:  resolveGrammar(lang),
       theme: 'github-dark',
     })
 
@@ -56,7 +56,11 @@ export async function FencedCodeBlock({ children }: Props) {
     const match = fullHtml.match(/<code[^>]*>([\s\S]*?)<\/code>/)
     innerHtml   = match?.[1] ?? escapeHtml(rawCode)
   } catch (err) {
-    console.error('[FencedCodeBlock] shiki failed:', err)
+    // ⚠️ This component had its OWN hardcoded SUPPORTED_LANGS — a third copy
+    // of the same list, carrying the same ```env bug, and the only one that
+    // actually rendered MDX. Fixing `lib/shiki.ts` alone changed nothing.
+    // Grammar resolution is now `resolveGrammar`, in one place.
+    console.error(`[FencedCodeBlock] shiki failed lang="${lang}":`, err)
     innerHtml = escapeHtml(rawCode)
   }
 
@@ -95,13 +99,6 @@ export async function FencedCodeBlock({ children }: Props) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const SUPPORTED_LANGS = new Set([
-  'bash','shell','sh','powershell','yaml','yml','json','toml',
-  'typescript','ts','tsx','javascript','js','jsx',
-  'python','py','rust','rs','go','dockerfile','diff','sql',
-  'ini','env','dotenv','plaintext','text',
-])
 
 function extractText(node: React.ReactNode): string {
   if (typeof node === 'string') return node
