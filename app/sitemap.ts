@@ -27,6 +27,7 @@ const STATIC_PAGES: { path: string; priority: number; changeFrequency: Entry["ch
   { path: "/blog", priority: 0.8, changeFrequency: "weekly" },
   { path: "/install", priority: 0.8, changeFrequency: "monthly" },
   { path: "/changelog", priority: 0.7, changeFrequency: "weekly" },
+  { path: "/talks", priority: 0.5, changeFrequency: "yearly" },
   { path: "/testimonials", priority: 0.4, changeFrequency: "monthly" },
 ];
 

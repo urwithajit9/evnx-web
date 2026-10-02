@@ -216,6 +216,36 @@ writeFileSync(
   JSON.stringify({ capturedAt: new Date().toISOString(), origin: ORIGIN, pages: rows }, null, 2) + "\n",
 );
 
+// ── Sitemap coverage ─────────────────────────────────────────────────────────
+//
+// ⚠️ `app/sitemap.ts` derives guides and blog posts from the content, but its
+// static-page list is hand-written because there is nothing to derive it from.
+// A hand-written list is a list someone forgets — adding /talks without adding
+// it here is exactly the failure that left 79 pages out of the old sitemap.
+// This catches it, which is the only thing that makes the hand-list safe.
+if (!offline) {
+  try {
+    const res = await fetch(`${ORIGIN}/sitemap.xml`);
+    const xml = await res.text();
+    const listed = new Set(
+      [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) =>
+        m[1].replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "") || "/",
+      ),
+    );
+    const missing = rows
+      .filter((r) => r.kind !== "dead-scaffold" && !listed.has(r.url.replace(/\/$/, "") || "/"))
+      .map((r) => r.url);
+    if (missing.length) {
+      console.log(`\n  ⚠ ${missing.length} live URL(s) missing from sitemap.xml:`);
+      for (const u of missing.slice(0, 12)) console.log(`      ${u}`);
+    } else {
+      console.log("\n  ✓ every live URL is in sitemap.xml");
+    }
+  } catch (err) {
+    console.log(`\n  ⚠ could not read sitemap.xml: ${err.message}`);
+  }
+}
+
 const by = (k) => rows.filter((r) => r.kind === k).length;
 console.log(`\n  home ${by("home")} · docs ${by("docs")} · blog ${by("blog")} · marketing ${by("marketing")} · dead ${by("dead-scaffold")}`);
 if (!offline) {

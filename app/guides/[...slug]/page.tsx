@@ -15,20 +15,47 @@ import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
 import { HelpfulVote } from "@/components/ui/helpful-vote";
 import { canonicalUrl } from "@evnx/config";
+import { SectionIndex } from "@/components/guides/section-index";
 
 // ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
   params: Promise<{ slug: string[] }>;
 };
 
+/**
+ * ⚠️ Section indexes are generated here too, not just the guides.
+ *
+ * `/guides/commands` and the other four were 404s — a one-segment slug fell
+ * through `getGuide()` to `notFound()`. Nothing linked to them, so nothing
+ * caught it until the new landing page's "Every command and flag" link
+ * shipped pointing at one.
+ */
 export async function generateStaticParams() {
-  return getAllGuides().map((guide) => ({
-    slug: guide.slug.split("/"),
-  }));
+  return [
+    ...GUIDE_SECTIONS.map((s) => ({ slug: [s.key] })),
+    ...getAllGuides().map((guide) => ({ slug: guide.slug.split("/") })),
+  ];
+}
+
+/** A one-segment slug that names a real section, e.g. `["commands"]`. */
+function sectionFor(slug: string[]) {
+  if (slug.length !== 1) return null;
+  return GUIDE_SECTIONS.find((s) => s.key === slug[0])?.key ?? null;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params; // ← await
+
+  const section = sectionFor(slug);
+  if (section) {
+    const meta = GUIDE_SECTIONS.find((s) => s.key === section);
+    return {
+      title: meta?.label ?? section,
+      description: meta?.description,
+      alternates: { canonical: canonicalUrl(`/guides/${section}`) },
+    };
+  }
+
   const guide = getGuide(slug);
   if (!guide) return {};
   return {
@@ -50,10 +77,16 @@ const DIFFICULTY_COLORS = {
 // ── async so we can await params ──────────────────────────────────────────────
 export default async function GuidePage({ params }: Props) {
   const { slug } = await params; // ← await
-  const guide = getGuide(slug);
-  if (!guide) notFound();
 
   const bySection = getGuidesBySection();
+
+  const section = sectionFor(slug);
+  if (section) {
+    return <SectionIndex section={section} guides={bySection[section] ?? []} />;
+  }
+
+  const guide = getGuide(slug);
+  if (!guide) notFound();
   const { prev, next } = getAdjacentGuides(guide);
 
   return (
