@@ -173,8 +173,6 @@ fn main() {
 2.  **Validation:** Types ensure `PORT` is actually a number.
 3.  **Dependency Injection:** You can pass the `Config` struct into your app state, making unit testing trivial (no need to mock environment variables).
 
-![Type-Safe Config Architecture](/images/rust-config-struct.png)
-*Figure 2: Encapsulating environment variables into a single Config struct.*
 
 <Callout type="tip" title="Take it Further">
 For even stronger validation, check out the [`figment`](https://crates.io/crates/figment) or [`config`](https://crates.io/crates/config) crates, which support merging multiple sources (`env`, `.toml`, CLI args, remote stores).
@@ -306,4 +304,4 @@ Then create a `config.rs` module and thank yourself later.
 *   [The 12-Factor App Methodology](https://12factor.net/config)
 *   [Rust By Example: Environment Variables](https://doc.rust-lang.org/rust-by-example/std/env.html)
 *   [Security Best Practices for Rust Services](https://rust-lang.github.io/api-guidelines/)
-*   [evnx Documentation](/docs/evnx) — Open-source CLI for env var management
+*   [evnx Documentation](/guides) — Open-source CLI for env var management

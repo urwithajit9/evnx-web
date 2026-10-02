@@ -35,6 +35,19 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
 
+  content-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Node builtins only — no install, runs in seconds, cannot be broken by
+      # a dependency. An audit of the built site found 43 dead internal links
+      # that nothing but clicking would have surfaced.
+      - name: Every internal link in content/ resolves
+        run: node scripts/check-content-links.mjs
+
   config-drift:
     runs-on: ubuntu-latest
     steps:
