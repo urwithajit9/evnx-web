@@ -32,9 +32,10 @@ const STATIC_PAGES: { path: string; priority: number; changeFrequency: Entry["ch
 ];
 
 /**
- * ⚠️ `/login` and `/dashboard` are deliberately absent. They are the dead auth
- * scaffold ADR-5 removes, `public/robots.txt` already disallows them, and a
- * sitemap that lists a disallowed URL sends Search Console a contradiction.
+ * ⚠️ `/login` and `/dashboard` are absent because they no longer exist. They
+ * were a non-functional sign-in form and an empty dashboard on the marketing
+ * origin of a secrets product; both now 308 to `app.evnx.dev`, and a sitemap
+ * should list destinations, never redirects.
  */
 
 export default function sitemap(): MetadataRoute.Sitemap {

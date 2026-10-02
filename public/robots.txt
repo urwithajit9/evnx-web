@@ -1,7 +1,7 @@
 User-agent: *
 Allow: /
-Disallow: /dashboard
-Disallow: /login
+# /login and /dashboard are gone — they now 308 to app.evnx.dev, and a
+# disallowed URL is one Google will not follow to see where it leads.
 Disallow: /api
 
 # Canonical host. The apex redirects here, so naming the apex would point
