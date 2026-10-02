@@ -1,19 +1,24 @@
 import type { Metadata } from "next";
 import { canonicalUrl } from "@evnx/config";
-import { HomeClient } from "@/components/marketing/home-client";
+import { activeSections } from "@evnx/content";
+import { SECTIONS, SectionShell } from "@/components/sections";
 
 /**
- * ⚠️ This wrapper exists so the homepage can have a canonical URL at all.
+ * The landing page.
  *
- * The page body is a client component — it animates a terminal and manages
- * install tabs — and a client component cannot export `metadata`. So the most
- * important page on the site was the one page with no canonical, on a domain
- * served from two hostnames.
+ * ⚠️ There is no page layout here, deliberately. The order, the backgrounds
+ * and which sections exist at all come from `landingSections` in
+ * @evnx/content; this file just walks the array.
  *
- * Note there is deliberately NO default canonical in the root layout. A
- * layout-level default would make every page that forgot to override declare
- * itself a duplicate of the homepage, which is considerably worse than having
- * no canonical at all.
+ * What it replaced was 1,067 lines of JSX with every section inlined, beside
+ * six component files — hero, feature-grid, origin-story, ci-cd-section,
+ * command-showcase, social-proof — that were **zero bytes each**. Moving a
+ * section meant cutting two hundred lines of markup and hoping the wrapper
+ * divs came too. Now reordering is editing an array and removing one is
+ * `enabled: false`.
+ *
+ * The canonical lives here because a client component cannot export metadata,
+ * and the homepage is the page that most needs one.
  */
 export const metadata: Metadata = {
   alternates: { canonical: canonicalUrl("/") },
@@ -21,5 +26,16 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <HomeClient />;
+  return (
+    <>
+      {activeSections.map((spec) => {
+        const Section = SECTIONS[spec.id];
+        return (
+          <SectionShell key={spec.id} spec={spec}>
+            <Section />
+          </SectionShell>
+        );
+      })}
+    </>
+  );
 }
