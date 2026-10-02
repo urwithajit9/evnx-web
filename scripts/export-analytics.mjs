@@ -112,7 +112,10 @@ async function api(path, headers, { required = true } = {}) {
  * to the handler, behind auth. So the script discovers it, once, and says
  * what it found.
  */
-const URL_TYPE_CANDIDATES = ["url", "path", "page", "pageview", "entry"];
+// ⚠️ `path` first: it is what this instance answers to, confirmed 2026-10-03
+// (203 rows). `url` is the documented name and returns bad-request here. The
+// others stay as fallbacks in case the instance is upgraded.
+const URL_TYPE_CANDIDATES = ["path", "url", "page", "pageview", "entry"];
 const REFERRER_TYPE_CANDIDATES = ["referrer", "referrers", "ref"];
 
 /** Query shapes, broadest first. Umami 2.x has varied on these. */
