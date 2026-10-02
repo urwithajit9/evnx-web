@@ -2,7 +2,9 @@
   "name": "evnx-web-monorepo",
   "private": true,
   "packageManager": "pnpm@9.15.4",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -12,7 +14,8 @@
     "config:check": "node scripts/sync-config.mjs --check",
     "check:links": "node scripts/check-content-links.mjs",
     "baseline:analytics": "node scripts/export-analytics.mjs",
-    "baseline:crawl": "node scripts/crawl-inventory.mjs"
+    "baseline:crawl": "node scripts/crawl-inventory.mjs",
+    "verify:redirects": "node scripts/verify-redirects.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.3"

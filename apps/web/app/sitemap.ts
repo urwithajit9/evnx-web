@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { canonicalUrl } from "@evnx/config";
+import { DOCS_MODE, canonicalUrl } from "@evnx/config";
 import { getAllBlogPosts, getAllGuides } from "@/lib/content";
 
 /**
@@ -42,7 +42,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const dated = (iso: string | undefined, fallback: string) =>
     new Date(iso ?? fallback);
 
-  const guides: Entry[] = getAllGuides()
+  // ⚠️ Once the split is on, every /guides/* URL is a 301 — and a sitemap
+  // should list destinations, never redirects. Telling Google to crawl
+  // eighty-two URLs that all bounce is the opposite of what the redirects are
+  // for. docs.evnx.dev publishes its own sitemap for the real locations.
+  const guides: Entry[] = DOCS_MODE === "split" ? [] : getAllGuides()
     // ⚠️ Filtered here, not relied on upstream. `getAllGuides` only drops
     // drafts when `isProd()`, so a non-production build would otherwise
     // publish a sitemap advertising pages that do not exist in production.
@@ -63,7 +67,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
     }));
 
-  const statics: Entry[] = STATIC_PAGES.map((p) => ({
+  const statics: Entry[] = STATIC_PAGES.filter(
+    (p) => !(DOCS_MODE === "split" && p.path.startsWith("/guides")),
+  ).map((p) => ({
     url: canonicalUrl(p.path),
     // No real modification date for a generated page; "now" is the honest
     // answer and tells crawlers nothing false.

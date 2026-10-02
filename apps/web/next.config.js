@@ -1,3 +1,27 @@
+/**
+ * ⚠️ THE SPLIT SWITCH, and the rollback for it.
+ *
+ * `inline` — /guides/* is served from this app (today).
+ * `split`  — /guides/* 301s to docs.evnx.dev/cli/*.
+ *
+ * Flipping back to `inline` removes every redirect and the guides serve from
+ * here again. That is schedule 3.4's rollback, and it is a single environment
+ * variable rather than a re-migration — which is why 3.6 (deleting the guide
+ * routes from this app) must NOT happen until 3.3 has passed against the live
+ * site. Delete the routes and this switch stops being a way back.
+ *
+ * Must match NEXT_PUBLIC_DOCS_MODE in packages/config/src/site.ts: that value
+ * decides where links POINT, this one decides where URLs GO. Set one and not
+ * the other and the site either links to a host that 404s, or links to pages
+ * that immediately redirect.
+ */
+const DOCS_MODE = process.env.NEXT_PUBLIC_DOCS_MODE ?? "inline";
+// ⚠️ Overridable so the whole chain can be proven locally before it is real.
+// Without this the 301 always points at a host that does not resolve yet, and
+// "the redirect fires" is all you can ever test — not "the reader lands on a
+// 200", which is the thing that actually matters.
+const DOCS_ORIGIN = process.env.NEXT_PUBLIC_DOCS_ORIGIN ?? "https://docs.evnx.dev";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Enable React strict mode for better development warnings
@@ -44,6 +68,29 @@ const nextConfig = {
       // again — the product lives on its own origin by design.
       { source: "/login", destination: "https://app.evnx.dev/login", permanent: true },
       { source: "/dashboard", destination: "https://app.evnx.dev/vaults", permanent: true },
+
+      // ── Schedule 3.1 · the docs split ──────────────────────────────────
+      //
+      // ⚠️ Empty until NEXT_PUBLIC_DOCS_MODE=split. Enabling these before
+      // docs.evnx.dev answers would 301 fifty-eight working pages onto a
+      // hostname that does not resolve — which is worse than leaving them,
+      // because a redirect to nothing is indexed as a redirect to nothing.
+      //
+      // `statusCode: 301` rather than `permanent: true` (which emits 308).
+      // Both are equivalent to Google, and 308's method preservation is
+      // irrelevant for GET-only documentation — but SPEC, the schedule and
+      // the verification script all say 301, and every SEO tool understands
+      // it without a footnote.
+      ...(DOCS_MODE === "split"
+        ? [
+            { source: "/guides", destination: `${DOCS_ORIGIN}/cli`, statusCode: 301 },
+            {
+              source: "/guides/:path*",
+              destination: `${DOCS_ORIGIN}/cli/:path*`,
+              statusCode: 301,
+            },
+          ]
+        : []),
     ];
   },
 
