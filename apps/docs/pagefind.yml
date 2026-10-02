@@ -1,0 +1,7 @@
+# ⚠️ Indexes this app's OWN build output, not apps/web's. Two hosts, two
+# indexes — a reader searching the docs should not get blog results, and a
+# combined index would have to be rebuilt by whichever app deployed last.
+site: .next/server/app
+output_path: public/pagefind
+strip_suffixes:
+  - .html

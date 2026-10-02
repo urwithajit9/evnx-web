@@ -16,6 +16,12 @@ import {
 import { mdxComponents } from "@evnx/mdx";
 import { HOSTS } from "@evnx/config";
 
+const DIFFICULTY: Record<string, string> = {
+  beginner: "text-success border-success/30 bg-success/5",
+  intermediate: "text-warning border-warning/30 bg-warning/5",
+  advanced: "text-danger border-danger/30 bg-danger/5",
+};
+
 type Props = { params: Promise<{ slug: string[] }> };
 
 /** A one-segment slug naming a real section, e.g. `["commands"]`. */
@@ -105,7 +111,55 @@ export default async function DocsPage({ params }: Props) {
 
       <h1 className="font-serif text-4xl font-bold mb-4">{guide.title}</h1>
       {guide.excerpt && (
-        <p className="text-lg text-text-secondary mb-10 leading-relaxed">{guide.excerpt}</p>
+        <p className="text-lg text-text-secondary mb-6 leading-relaxed">{guide.excerpt}</p>
+      )}
+
+      {/* ⚠️ The frontmatter was already there and nothing rendered it. A guide
+          that does not say how long it takes, what it assumes, or which
+          version it was checked against is a guide a reader has to finish
+          before knowing whether it was for them. */}
+      <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-border-muted">
+        <span
+          className={`font-mono text-xs px-2 py-1 rounded border ${DIFFICULTY[guide.difficulty] ?? DIFFICULTY.beginner}`}
+        >
+          {guide.difficulty}
+        </span>
+        {guide.timeToComplete && (
+          <span className="font-mono text-xs text-text-muted">⏱ {guide.timeToComplete}</span>
+        )}
+        {guide.evnxVersion && (
+          <span className="font-mono text-xs text-text-muted">
+            evnx v{guide.evnxVersion}+
+          </span>
+        )}
+        {guide.updatedAt && (
+          <span className="font-mono text-xs text-text-muted">
+            updated {guide.updatedAt}
+          </span>
+        )}
+      </div>
+
+      {guide.prerequisites && guide.prerequisites.length > 0 && (
+        <div className="bg-info/5 border border-info/20 rounded-lg p-4 mb-8">
+          <p className="font-mono text-xs text-info uppercase tracking-widest mb-3">
+            Before you start
+          </p>
+          <ul className="space-y-1.5">
+            {guide.prerequisites.map((slug) => {
+              const target = getGuide(slug.split("/"));
+              return (
+                <li key={slug}>
+                  <Link
+                    href={`/cli/${slug}`}
+                    className="text-sm text-brand-400 hover:underline underline-offset-4"
+                  >
+                    {target?.title ?? slug}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       <div className="prose-evnx">

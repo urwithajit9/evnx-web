@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postbuild": "pagefind --site .next/server/app --output-path public/pagefind"
   },
   "dependencies": {
     "@evnx/config": "workspace:*",
@@ -31,6 +32,7 @@
     "postcss": "8.4.30",
     "tailwindcss": "3.3.3",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "5.2.2"
+    "typescript": "5.2.2",
+    "pagefind": "^1.4.0"
   }
 }

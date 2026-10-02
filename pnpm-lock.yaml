@@ -66,6 +66,9 @@ importers:
       autoprefixer:
         specifier: 10.4.15
         version: 10.4.15(postcss@8.4.30)
+      pagefind:
+        specifier: ^1.4.0
+        version: 1.5.2
       postcss:
         specifier: 8.4.30
         version: 8.4.30

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HOSTS, SITE, appUrl } from "@evnx/config";
+import { SearchModal, SearchTrigger } from "@/components/search-modal";
 import "./globals.css";
 
 /**
@@ -34,10 +35,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {SITE.name}
               <span className="text-text-muted text-sm">docs</span>
             </Link>
-            <nav aria-label="Main" className="flex gap-1 text-sm">
+            <nav aria-label="Main" className="flex gap-1 text-sm items-center">
               <Link href="/cli" className="px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary">
                 CLI
               </Link>
+              {/* ⚠️ Search is the first thing a docs reader reaches for, and
+                  this app shipped without it. Pagefind indexes the build, so
+                  it returns nothing in `next dev` — expected, not broken. */}
+              <SearchTrigger className="mx-1" />
               <a href={HOSTS.web} className="px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary">
                 evnx.dev ↗
               </a>
@@ -54,6 +59,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main id="main-content" tabIndex={-1} className="flex-1">
           {children}
         </main>
+
+        <SearchModal />
 
         <footer className="border-t border-border-subtle py-8 mt-16">
           <div className="container-base text-xs text-text-muted flex flex-wrap gap-4 justify-between">
