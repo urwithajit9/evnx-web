@@ -6,9 +6,14 @@ import { useState } from "react";
 import { Menu, X, Github } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
 import { SearchTrigger , SearchModal} from'@/components/ui/search-modal'
+import { docsUrl } from "@evnx/config";
 
 const NAV_LINKS = [
-  { href: "/guides", label: "Guides" },
+  // ⚠️ docsUrl(), not "/guides". The header renders on every page, so a
+  // hardcoded path here is a 301 on every page of the site once the split is
+  // on. A redirect is a safety net for links you do not control — not a
+  // substitute for fixing the ones you do.
+  { href: docsUrl(), label: "Guides" },
   { href: "/blog", label: "Blog" },
   { href: "/testimonials", label: "Testimonials" },
   { href: "/changelog", label: "Changelog" },

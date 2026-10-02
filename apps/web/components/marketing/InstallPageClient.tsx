@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code-block";
 import { CopyButton } from "@/components/ui/copy-button";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
+import { docsUrl } from "@evnx/config";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -875,7 +876,7 @@ evnx --help`}</CodeBlock>
             </p>
             <div className="flex flex-wrap gap-4">
               <Button asChild>
-                <Link href="/guides">Read guides</Link>
+                <Link href={docsUrl()}>Read guides</Link>
               </Button>
               <Button variant="outline" asChild>
                 <Link href={GITHUB_URL} target="_blank" rel="noopener noreferrer">

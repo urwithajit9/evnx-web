@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Github, Star } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL, CRATES_IO_URL, NPM_URL, PYPI_URL, AGENT_SKILLS_URL } from "@/lib/config";
+import { docsUrl } from "@evnx/config";
 
 // ── TypeScript fix: every link has `external`, defaulting to false ────────────
 // The previous LINKS object mixed { href, label } and { href, label, external }
@@ -16,14 +17,15 @@ type NavLink = {
 
 const LINKS: Record<string, NavLink[]> = {
   Learn: [
-    { href: "/guides", label: "Guides", external: false },
+    // ⚠️ Same reason as the header — see the note there.
+    { href: docsUrl(), label: "Guides", external: false },
     {
-      href: "/guides/getting-started/installation",
+      href: docsUrl("getting-started/installation"),
       label: "Install Guide",
       external: false,
     },
     {
-      href: "/guides/getting-started/quick-start",
+      href: docsUrl("getting-started/quick-start"),
       label: "Quick Start",
       external: false,
     },

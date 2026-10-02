@@ -50,13 +50,14 @@ const DOCS_ORIGIN = { inline: HOSTS.web, split: HOSTS.docs } as const;
  * Link to a documentation page by its **stable slug** — the part after the
  * prefix, e.g. `"getting-started/quick-start"`.
  *
+ *   docsUrl()                 →  the docs root
  *   docsUrl("commands/scan")  →  /guides/commands/scan            (inline)
  *                             →  https://docs.evnx.dev/cli/commands/scan  (split)
  *
  * Returns a relative path while docs are inline, so Next renders a client-side
  * navigation rather than a full page load. Absolute once they move hosts.
  */
-export function docsUrl(slug: string): string {
+export function docsUrl(slug = ""): string {
   const clean = slug.replace(/^\/+/, "").replace(/\/+$/, "");
   const path = clean ? `${DOCS_PREFIX[DOCS_MODE]}/${clean}` : DOCS_PREFIX[DOCS_MODE];
   return DOCS_MODE === "inline" ? path : `${DOCS_ORIGIN[DOCS_MODE]}${path}`;
