@@ -93,23 +93,47 @@ inside it.
 
 ---
 
+## ✅ Traffic baseline captured — 2026-10-03
+
+`baseline/umami-pages-90d.csv` · 203 paths · 2,793 pageviews over 90 days
+`baseline/umami-referrers-90d.csv` · 25 referrers
+
+⚠️ **This Umami calls the metric `type=path`, not the documented `type=url`.**
+`type=url` returns a bare `bad-request` on this instance. The export script
+discovers it, and records which name worked in the summary JSON.
+
+### ⚠️ 19% of that traffic is junk, and the comparison must exclude it
+
+**127 of the 203 paths do not exist** — 540 pageviews. They are malformed
+versions of real pages:
+
+```
+/guides/commands/migrates      /guides/commands/initn     /guides/commands/addE
+/guides/commands/init;         /guides/commands/sync0     /guides/commands/init==
+/guides/commands/inithttps:/www.evnx.dev/guides/commands/scanSecret
+```
+
+A valid command path with one or two junk characters appended. All 404.
+**Nothing in `content/` generates them** — no MDX link, no component — and the
+referrers are ordinary search engines, so they arrive from outside. The shape
+is machine-generated: almost certainly AI crawlers fetching hallucinated URLs,
+which is now common for documentation sites.
+
+**Why this matters for the migration:** a naive before/after comparison would
+count 540 phantom pageviews in the "before" and attribute their disappearance
+to the migration — or worse, see them persist and conclude nothing changed.
+Filter to paths present in `url-inventory.csv` before comparing. Real traffic
+over the window is **~2,253 pageviews across 76 real pages**.
+
+Worth knowing separately: `formulae.brew.sh` sent 23 visits. The Homebrew
+formula page is a live acquisition channel nobody was counting.
+
+---
+
 ## 🔴 Still outstanding — only you can do these
 
 The crawler captures the **technical** baseline. The **traffic** baseline needs
 accounts I cannot sign into.
-
-### A1a · Umami
-
-`analytics.dotenv.space`, proxied at `evnx.dev/stats`.
-
-1. Set the range to **the last 90 days**, ending yesterday.
-2. Export, and save into `baseline/`:
-   - `umami-pages-90d.csv` — pageviews and visitors **per URL** ⚠️ the critical one
-   - `umami-referrers-90d.csv`
-   - `umami-summary-90d.png` — a screenshot of the overview
-3. ⚠️ **Per-URL is what matters.** A site total cannot answer "did
-   `/guides/commands/scan` lose its traffic", which is the only question worth
-   asking after a 58-URL move.
 
 ### A1b · Google Search Console
 

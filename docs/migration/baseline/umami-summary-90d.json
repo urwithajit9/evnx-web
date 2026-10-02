@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-10-02T15:59:07.881Z",
+  "host": "https://analytics.dotenv.space",
+  "websiteId": "b50850fb-0a46-4863-bfbb-75c67d04b312",
+  "days": 90,
+  "startAt": 1783180741072,
+  "endAt": 1790956741072,
+  "urlMetricType": "path",
+  "summary": {
+    "pageviews": 3149,
+    "visitors": 2072,
+    "visits": 2326,
+    "bounces": 2031,
+    "totaltime": 76786,
+    "comparison": {
+      "pageviews": 937,
+      "visitors": 821,
+      "visits": 846,
+      "bounces": 809,
+      "totaltime": 11081
+    }
+  }
+}
