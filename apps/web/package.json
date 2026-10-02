@@ -80,7 +80,9 @@
     "vaul": "^0.9.9",
     "zod": "^3.23.8",
     "@evnx/config": "workspace:*",
-    "@evnx/content": "workspace:*"
+    "@evnx/content": "workspace:*",
+    "@evnx/docs-content": "workspace:*",
+    "@evnx/mdx": "workspace:*"
   },
   "devDependencies": {
     "@types/mdx": "^2.0.13",

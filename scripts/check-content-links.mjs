@@ -21,7 +21,8 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, extname, basename } from "node:path";
 
-const GUIDES = "apps/web/content/guides";
+// ⚠️ Guides live in the shared package now; blog stayed in apps/web.
+const GUIDES = "packages/docs-content/guides";
 const BLOG = "apps/web/content/blog";
 
 const read = (p) => readFileSync(p, "utf8");
@@ -114,7 +115,7 @@ function resolveInternal(href) {
 
 for (const [, { file }] of [...guides, ...posts]) {
   const body = read(file);
-  const rel = file.replace(/^apps\/web\/content\//, "");
+  const rel = file.replace(/^apps\/web\/content\//, "").replace(/^packages\/docs-content\//, "guides/");
 
   // Markdown links to internal paths.
   for (const m of body.matchAll(/\]\((\/[^)\s]*)\)/g)) {

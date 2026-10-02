@@ -1,0 +1,19 @@
+{
+  "name": "@evnx/docs-content",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The CLI guides, as MDX. Owned by neither app: apps/web serves them at /guides/* until the redirects land, then apps/docs serves them at /cli/*.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "guides",
+    "src"
+  ],
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./guides": "./src/guides.ts"
+  }
+}
