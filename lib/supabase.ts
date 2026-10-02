@@ -105,9 +105,48 @@ export type Database = {
   }
 }
 
-// Single typed client — safe to use in both client and server components.
-// The anon key is intentionally public; RLS policies are the security boundary.
+const url     = process.env.NEXT_PUBLIC_SUPABASE_URL
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+/**
+ * Whether Supabase is configured in this environment.
+ *
+ * ⚠️ **Every entry point below must check this before touching the client.**
+ *
+ * The two `!` assertions that used to be here were a lie: the variables are
+ * genuinely absent on a fresh clone, so `createClient` threw at module-eval
+ * time and `next build` died collecting page data for `/testimonials`. The
+ * whole production build of a marketing site failed because a testimonials
+ * widget could not reach a database — and it failed on a clean checkout, so
+ * nobody could build the repo without credentials.
+ *
+ * There is a joke in a `.env` tool shipping that, and it is not a good one.
+ *
+ * Supabase here backs four optional widgets: testimonials, the waitlist, the
+ * helpful-vote control and the testimonial form. None of them is load-bearing
+ * for a single page of content, so none of them may take the build down.
+ */
+export const isSupabaseConfigured = Boolean(url && anonKey)
+
+/**
+ * Single typed client. The anon key is intentionally public; RLS policies are
+ * the security boundary.
+ *
+ * ⚠️ When unconfigured this points at `.invalid` — a reserved TLD that is
+ * guaranteed never to resolve, so a missed guard fails instantly and loudly
+ * instead of hanging or, worse, reaching something real. Typed non-nullable
+ * deliberately: nine call sites across four components would each need a null
+ * check, and a forgotten one would be a crash rather than a disabled widget.
+ * The flag is the guard; this value exists only to satisfy the type.
+ */
 export const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  url ?? 'https://unconfigured.invalid',
+  anonKey ?? 'unconfigured',
 )
+
+if (!isSupabaseConfigured && process.env.NODE_ENV !== 'production') {
+  console.warn(
+    '[supabase] NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY are not set — ' +
+      'testimonials, waitlist and vote widgets are disabled. See .env.example.',
+  )
+}

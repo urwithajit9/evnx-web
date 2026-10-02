@@ -11,12 +11,16 @@
  *   <TestimonialsGrid limit={24} /> — full /testimonials page
  */
 import { Building2, User, ExternalLink } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import type { Database } from '@/lib/supabase'
 
 type Testimonial = Database['public']['Tables']['testimonials']['Row']
 
 async function getTestimonials(limit: number): Promise<Testimonial[]> {
+  // ⚠️ This runs at BUILD time. Without the guard a missing env var took the
+  // whole production build down — see `isSupabaseConfigured`.
+  if (!isSupabaseConfigured) return []
+
   const { data, error } = await supabase
     .from('testimonials')
     .select('*')

@@ -13,7 +13,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, User, Building2, Check, Loader2, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 type Mode     = 'user' | 'company'
 type Status   = 'idle' | 'loading' | 'success' | 'error'
@@ -86,6 +86,14 @@ export function TestimonialForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (status === 'loading') return
+
+    // ⚠️ This form can carry an uploaded image and several minutes of typing.
+    // Refusing up front is the only acceptable behaviour when the backend is
+    // not configured — a silent discard loses someone's work.
+    if (!isSupabaseConfigured) {
+      setStatus('error')
+      return
+    }
 
     setStatus('loading')
 

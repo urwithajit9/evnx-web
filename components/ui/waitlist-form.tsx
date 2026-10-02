@@ -14,7 +14,7 @@
 
 import { useState } from 'react'
 import { ArrowRight, Check, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 type Props = {
   source?: string
@@ -37,6 +37,13 @@ export function WaitlistForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!email || status === 'loading') return
+
+    // ⚠️ Refuse rather than appear to work. Someone typing an address into a
+    // form that silently discards it is worse than a form that says it is off.
+    if (!isSupabaseConfigured) {
+      setStatus('error')
+      return
+    }
 
     setStatus('loading')
 

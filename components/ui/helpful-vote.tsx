@@ -12,7 +12,7 @@
  */
 import { useState, useEffect } from 'react'
 import { ThumbsUp, ThumbsDown } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 type Props = { slug: string }
 type VoteCounts = { yes: number; no: number }
@@ -37,6 +37,7 @@ export function HelpfulVote({ slug }: Props) {
   const [ready, setReady]     = useState(false)
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return
     const sessionId = getSessionId()
 
     async function load() {
