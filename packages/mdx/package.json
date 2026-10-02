@@ -16,5 +16,16 @@
     "lucide-react": "^0.446.0",
     "shiki": "^4.0.1"
   },
-  "peerDependencies": { "react": ">=19", "react-dom": ">=19" }
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19",
+    "next": ">=16"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.2.2",
+    "next": "16.1.6",
+    "@types/mdx": "^2.0.13"
+  }
 }

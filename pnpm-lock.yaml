@@ -335,6 +335,22 @@ importers:
       tailwind-merge:
         specifier: ^2.5.2
         version: 2.6.1
+    devDependencies:
+      '@types/mdx':
+        specifier: ^2.0.13
+        version: 2.0.14
+      '@types/react':
+        specifier: 19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      next:
+        specifier: 16.1.6
+        version: 16.1.6(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      typescript:
+        specifier: 5.2.2
+        version: 5.2.2
 
 packages:
 
