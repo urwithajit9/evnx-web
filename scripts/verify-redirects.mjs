@@ -67,6 +67,20 @@ async function check(entry) {
     return { ...entry, ok: false, why: `network error: ${err.message}` };
   }
 
+  // ── A permanent hop off this site (e.g. /login → app.evnx.dev) ───────────
+  if (entry.kind === "external-redirect") {
+    if (first.status !== 308 && first.status !== 301) {
+      return { ...entry, ok: false, why: `expected a permanent redirect, got ${first.status}` };
+    }
+    try {
+      const dest = await hop(first.location);
+      if (dest.status === 200) return { ...entry, ok: true, note: `${first.status} → 200` };
+      return { ...entry, ok: false, why: `destination returned ${dest.status}` };
+    } catch (err) {
+      return { ...entry, ok: false, why: `destination unreachable: ${err.message}` };
+    }
+  }
+
   // ── Not a docs URL: must be 200 directly ──────────────────────────────────
   if (!isDoc) {
     if (first.status === 200) return { ...entry, ok: true, note: "200" };
@@ -110,7 +124,26 @@ async function check(entry) {
 
 // ── Run ──────────────────────────────────────────────────────────────────────
 
-const entries = readInventory().filter((e) => e.kind !== "dead-scaffold");
+/**
+ * ⚠️ URLs that are NOT pages and so are not in the inventory, but which still
+ * have to resolve in one hop.
+ *
+ * `/docs` is why this list exists. It was a temporary hop to `/guides`, and
+ * the split silently turned it into a chain — /docs → 307 → /guides → 301 →
+ * docs.evnx.dev. The gate walked the inventory, `/docs` was never a page, so
+ * nothing looked at it. Redirect targets need checking too, not just pages.
+ */
+const EXTRA = [
+  { url: "/docs", kind: "docs" },
+  { url: "/docs/commands/scan", kind: "docs" },
+  { url: "/login", kind: "external-redirect" },
+  { url: "/dashboard", kind: "external-redirect" },
+];
+
+const entries = [
+  ...readInventory().filter((e) => e.kind !== "dead-scaffold"),
+  ...EXTRA,
+];
 console.log(`checking ${entries.length} URLs against ${ORIGIN}`);
 if (expectMode) console.log(`expecting mode: ${expectMode}`);
 

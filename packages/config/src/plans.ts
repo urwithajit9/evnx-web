@@ -61,8 +61,23 @@ const limits = limitsData.plans as Record<PlanId, PlanLimits>;
  * form on the marketing origin. This function is the only way a plan reaches
  * checkout, which is what keeps that rule enforced rather than remembered.
  */
+/**
+ * ⚠️ BILLING IS NOT BUILT. `app.evnx.dev/billing` returns 404 today.
+ *
+ * The pricing page shipped ahead of the product — a deliberate choice at the
+ * time, flagged as "marketing at week six against something that cannot take
+ * money" — but a paid CTA pointing at a 404 is where that choice stops being
+ * a trade-off and starts being a broken button on the conversion path.
+ *
+ * So until Chain 3 lands, upgrade sends people to registration, which exists
+ * and is the honest first step anyway: you need an account before you can buy
+ * a seat on it. Flip this to `true` in the same commit that deploys
+ * /billing — and not before, because nothing else will tell you.
+ */
+export const BILLING_LIVE = false;
+
 export function checkoutUrl(plan: PlanId): string {
-  return appUrl(`/billing?plan=${plan}`);
+  return BILLING_LIVE ? appUrl(`/billing?plan=${plan}`) : appUrl("/register");
 }
 
 export const PLANS: readonly Plan[] = [

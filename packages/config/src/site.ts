@@ -63,9 +63,23 @@ export function docsUrl(slug = ""): string {
   return DOCS_MODE === "inline" ? path : `${DOCS_ORIGIN[DOCS_MODE]}${path}`;
 }
 
-/** Link into the product. Always absolute — a different origin by design. */
+/**
+ * Link into the product. Always absolute — a different origin by design.
+ *
+ * ⚠️ ALWAYS WITH A TRAILING SLASH, and that is not cosmetic. `app.evnx.dev`
+ * is a static export on Cloudflare Pages, which 308s `/login` to `/login/`.
+ * Without the slash every CTA on this site was a two-hop chain:
+ * evnx.dev/login → 308 → app.evnx.dev/login → 308 → app.evnx.dev/login/ → 200.
+ * It works, which is why nobody noticed; it is also an avoidable round trip on
+ * the most important links we have.
+ *
+ * Query strings keep their place: `/billing?plan=team` → `/billing/?plan=team`.
+ */
 export function appUrl(path = "/"): string {
-  return `${HOSTS.app}${path.startsWith("/") ? path : `/${path}`}`;
+  const raw = path.startsWith("/") ? path : `/${path}`;
+  const [pathname, query] = raw.split("?");
+  const withSlash = pathname.endsWith("/") ? pathname : `${pathname}/`;
+  return `${HOSTS.app}${withSlash}${query ? `?${query}` : ""}`;
 }
 
 /** Link to an API route. Used for docs examples, never for client fetches. */

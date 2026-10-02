@@ -52,10 +52,27 @@ const nextConfig = {
 
   async redirects() {
     return [
-      // Temporary on purpose: these move again when docs.evnx.dev exists, and
-      // a 308 cached by browsers would then be the wrong answer forever.
-      { source: "/docs", destination: "/guides", permanent: false },
-      { source: "/docs/:path*", destination: "/guides/:path*", permanent: false },
+      // ⚠️ /docs USED to be a temporary hop to /guides. Once the split is on
+      // that becomes a CHAIN — /docs → 307 → /guides → 301 → docs.evnx.dev —
+      // which is the exact thing the redirect verifier exists to prevent. It
+      // slipped through because /docs was never a real page and so is not in
+      // url-inventory.csv, which is what the gate walks.
+      //
+      // Now it goes straight to the destination, and becomes permanent once
+      // there is a permanent destination to point at.
+      ...(DOCS_MODE === "split"
+        ? [
+            { source: "/docs", destination: `${DOCS_ORIGIN}/cli`, statusCode: 301 },
+            {
+              source: "/docs/:path*",
+              destination: `${DOCS_ORIGIN}/cli/:path*`,
+              statusCode: 301,
+            },
+          ]
+        : [
+            { source: "/docs", destination: "/guides", permanent: false },
+            { source: "/docs/:path*", destination: "/guides/:path*", permanent: false },
+          ]),
 
       // ⚠️ The dead auth scaffold. `app/(auth)/login/` and `app/dashboard/`
       // were a non-functional sign-in form and an empty dashboard on the
@@ -66,8 +83,11 @@ const nextConfig = {
       // wants to sign in, and the real sign-in is app.evnx.dev. A 404 would
       // be correct and unhelpful. Permanent, because this will not move
       // again — the product lives on its own origin by design.
-      { source: "/login", destination: "https://app.evnx.dev/login", permanent: true },
-      { source: "/dashboard", destination: "https://app.evnx.dev/vaults", permanent: true },
+      // ⚠️ Trailing slashes are required. app.evnx.dev is a static export on
+      // Cloudflare Pages and 308s /login to /login/, so without them these
+      // were two-hop chains.
+      { source: "/login", destination: "https://app.evnx.dev/login/", permanent: true },
+      { source: "/dashboard", destination: "https://app.evnx.dev/vaults/", permanent: true },
 
       // ── Schedule 3.1 · the docs split ──────────────────────────────────
       //

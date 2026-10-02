@@ -58,7 +58,7 @@ export const pricing: SectionHeading & {
       id: "team",
       name: "Team",
       tagline: "Shared vaults, unlimited history, per seat.",
-      ctaLabel: "Upgrade to Team",
+      ctaLabel: "Create an account",
       ribbon: "Most popular",
       features: [
         "Everything in Free",
@@ -70,7 +70,12 @@ export const pricing: SectionHeading & {
         "Unlimited API tokens",
         "Priority support",
       ],
-      footnote: "Billed per user. Cancel any time.",
+      // ⚠️ Says what is actually true. Self-serve checkout does not exist yet
+      // (see BILLING_LIVE in @evnx/config), and "Cancel any time" on a plan
+      // nobody can start implied a purchase flow that returns 404. Restore the
+      // original wording in the same commit that ships billing.
+      footnote:
+        "Billed per user. Self-serve checkout is coming — create an account and we will get you set up in the meantime.",
     },
     {
       id: "enterprise",
