@@ -6,6 +6,7 @@
 // billing contract.
 
 import { appUrl } from "./site";
+import { CONTACT } from "./social";
 import { annualFrom, type Price } from "./money";
 import limitsData from "./plan-limits.json";
 
@@ -100,7 +101,11 @@ export const PLANS: readonly Plan[] = [
     // beside a $9 Team tier. Change this one integer to settle it.
     price: { amount: 2900, currency: "USD", per: "seat-month" },
     limits: limits.enterprise,
-    cta: { href: checkoutUrl("enterprise"), external: true },
+    // ⚠️ NOT `checkoutUrl()`. Enterprise is `invoiceBilling: true`, so a
+    // self-serve card checkout is the wrong flow — and a button labelled
+    // "Talk to us" that opens a payment page is a bait-and-switch even when
+    // it is only an oversight. Sales, until an invoiced flow exists.
+    cta: { href: `mailto:${CONTACT.sales}?subject=evnx%20Enterprise`, external: true },
     highlighted: false,
     capabilities: {
       teamSharing: true,
@@ -131,3 +136,26 @@ export function formatLimit(value: number | null, unlimited = "Unlimited"): stri
 
 /** Whether the generated limits came from the live API or are stale defaults. */
 export const PLAN_LIMITS_SYNCED_AT: string | null = limitsData.syncedAt;
+
+/**
+ * Fill `{vaults}` / `{versions}` / `{tokens}` / `{auditDays}` in a copy string
+ * with the plan's real limits.
+ *
+ * Content supplies the sentence, configuration supplies the numbers. That seam
+ * is why a feature bullet can be reworded without anyone checking whether the
+ * free tier still allows three vaults — and why changing the quota cannot
+ * leave a stale number in prose.
+ *
+ * ⚠️ An unknown placeholder is left verbatim rather than blanked, so a typo
+ * shows up as `{vauls}` on the page instead of a sentence with a hole in it.
+ */
+export function fillLimits(template: string, id: PlanId): string {
+  const l = getPlan(id).limits;
+  const values: Record<string, string> = {
+    vaults: formatLimit(l.vaults, "Unlimited"),
+    versions: formatLimit(l.versionsPerVault, "unlimited"),
+    tokens: formatLimit(l.apiTokens, "unlimited"),
+    auditDays: formatLimit(l.auditRetentionDays, "Unlimited"),
+  };
+  return template.replace(/\{(\w+)\}/g, (whole, key) => values[key] ?? whole);
+}
