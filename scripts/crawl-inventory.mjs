@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const BUILD_DIR = ".next/server/app";
+const BUILD_DIR = "apps/web/.next/server/app";
 const OUT_DIR = "docs/migration";
 const ORIGIN = process.env.CRAWL_ORIGIN ?? "https://www.evnx.dev";
 const CONCURRENCY = 4;
@@ -148,7 +148,7 @@ if (compareTo) {
 }
 
 if (!existsSync(BUILD_DIR)) {
-  console.error(`✗ ${BUILD_DIR} not found — run \`npx next build\` first.`);
+  console.error(`✗ ${BUILD_DIR} not found — run \`pnpm build\` first.`);
   console.error("  Enumerating from the live sitemap is NOT a substitute: it lists 5 of 85 URLs.");
   process.exit(1);
 }
@@ -162,7 +162,7 @@ if (!existsSync(BUILD_DIR)) {
 // the manifest declares.
 const fromBuild = (await walk(BUILD_DIR)).map(pathToUrl);
 
-const MANIFEST = ".next/app-path-routes-manifest.json";
+const MANIFEST = "apps/web/.next/app-path-routes-manifest.json";
 const fromManifest = existsSync(MANIFEST)
   ? Object.values(JSON.parse(readFileSync(MANIFEST, "utf8"))).filter(
       (r) =>

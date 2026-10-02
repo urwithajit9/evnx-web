@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: [main]
   # ⚠️ The drift check matters most when nobody is pushing. A release goes out,
-  # `versions.json` becomes stale, and without a schedule the site carries the
-  # old number until the next unrelated pull request happens to run this.
+  # versions.json goes stale, and without a schedule the site carries the old
+  # number until the next unrelated pull request happens to run this.
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
@@ -17,23 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      # ⚠️ `--legacy-peer-deps` is required, and it is not cosmetic.
-      #
-      # cmdk@1.0.0 declares `peer react@^18` and this project is on React
-      # 19.2.4, so a strict `npm ci` fails ERESOLVE. That has been true since
-      # React 19 landed — the local node_modules was installed with this flag
-      # and nobody noticed, because nothing ever ran a clean install.
-      #
-      # The real fix is one of: upgrade cmdk to a release that declares React
-      # 19, or finish the pnpm migration (ADR-3a), which also resolves the
-      # three committed lockfiles. Until then this flag is what makes a clean
-      # install reproducible, and removing it breaks CI rather than fixing it.
-      - run: npm ci --legacy-peer-deps
-      - run: npm run typecheck
+          cache: pnpm
+      # ⚠️ No --legacy-peer-deps any more. cmdk declares `peer react@^18` and
+      # this project is on React 19, which made `npm ci` fail ERESOLVE outright.
+      # pnpm reports the unmet peer and installs, which is the correct
+      # behaviour for a peer range that is merely stale.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
 
   content-links:
     runs-on: ubuntu-latest
@@ -55,12 +49,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # No `npm ci` — the script uses only Node builtins and `fetch`, so it
-      # runs in seconds and cannot be broken by a dependency.
-      #
-      # ⚠️ This fails ONLY when a fetch succeeded and disagreed with what is
-      # committed. A registry timeout or a 429 leaves the committed values
-      # alone and reports a warning, because a check that goes red when
-      # crates.io is slow is a check people learn to ignore.
+      # ⚠️ Fails ONLY when a fetch succeeded and disagreed with what is
+      # committed. A registry timeout leaves the committed values alone and
+      # reports a warning — a check that goes red when crates.io is slow is a
+      # check people learn to ignore. Download counts never fail it; they move
+      # every day and a stale one is cosmetic. Versions and plan limits do.
       - name: Generated config matches the registries and the API
         run: node scripts/sync-config.mjs --check

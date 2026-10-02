@@ -3,6 +3,13 @@ const nextConfig = {
   // Enable React strict mode for better development warnings
   reactStrictMode: true,
   reactCompiler: true,
+
+  // ⚠️ Required now that @evnx/config and @evnx/content are real workspace
+  // packages. They export raw TypeScript from src/, and Next does not
+  // transpile node_modules by default — pnpm links workspace packages into
+  // node_modules, so without this the build fails on the first `.ts` import.
+  // It was unnecessary while they resolved through tsconfig path aliases.
+  transpilePackages: ["@evnx/config", "@evnx/content"],
   serverExternalPackages: ["shiki", "vscode-oniguruma"],
 
   // Image domains for external avatars (GitHub, etc.)

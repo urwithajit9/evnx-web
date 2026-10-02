@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.js
 
@@ -9,7 +9,9 @@
 /coverage
 
 # next.js
-/.next/
+.next/
+out/
+.turbo/
 /out/
 
 # production
@@ -36,3 +38,13 @@ yarn-error.log*
 next-env.d.ts
 # Pagefind index is a build artifact — generated at build time, not source code
 public/pagefind/
+# monorepo
+# ⚠️ The patterns above were rooted (/.next/, /node_modules) and matched only
+# the repo root. After the move to apps/web they matched nothing, and a build
+# would have committed .next/ — 89 pages of generated HTML — on the next
+# `git add`. Unrooted now, so they apply at every level.
+*.tsbuildinfo
+
+# ⚠️ The pattern above is "/public/pagefind/" — rooted, so it stopped
+# matching when the app moved to apps/web. Same class of bug as /.next/.
+apps/*/public/pagefind/

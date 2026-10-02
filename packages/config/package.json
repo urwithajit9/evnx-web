@@ -12,8 +12,5 @@
     "./packages": "./src/packages.ts",
     "./plans": "./src/plans.ts",
     "./money": "./src/money.ts"
-  },
-  "scripts": {
-    "sync": "node ../../scripts/sync-config.mjs"
   }
 }

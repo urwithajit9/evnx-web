@@ -25,18 +25,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "@evnx/config": [
-        "./packages/config/src"
-      ],
-      "@evnx/config/*": [
-        "./packages/config/src/*"
-      ],
-      "@evnx/content": [
-        "./packages/content/src"
-      ],
-      "@evnx/content/*": [
-        "./packages/content/src/*"
       ]
     }
   },

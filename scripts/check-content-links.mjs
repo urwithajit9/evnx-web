@@ -21,8 +21,8 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, extname, basename } from "node:path";
 
-const GUIDES = "content/guides";
-const BLOG = "content/blog";
+const GUIDES = "apps/web/content/guides";
+const BLOG = "apps/web/content/blog";
 
 const read = (p) => readFileSync(p, "utf8");
 const isMdx = (f) => [".mdx", ".md"].includes(extname(f));
@@ -82,7 +82,7 @@ function resolveInternal(href) {
   if (STATIC_ROUTES.has(path)) return { ok: true };
   // Static assets under public/ are files, not routes.
   if (/\.[a-z0-9]{2,4}$/i.test(path)) {
-    return existsSync(join("public", path))
+    return existsSync(join("apps/web/public", path))
       ? { ok: true }
       : { ok: false, why: "no such file in public/" };
   }
@@ -114,7 +114,7 @@ function resolveInternal(href) {
 
 for (const [, { file }] of [...guides, ...posts]) {
   const body = read(file);
-  const rel = file.replace(/^content\//, "");
+  const rel = file.replace(/^apps\/web\/content\//, "");
 
   // Markdown links to internal paths.
   for (const m of body.matchAll(/\]\((\/[^)\s]*)\)/g)) {
