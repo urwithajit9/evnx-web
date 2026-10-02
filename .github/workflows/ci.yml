@@ -21,7 +21,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # ⚠️ `--legacy-peer-deps` is required, and it is not cosmetic.
+      #
+      # cmdk@1.0.0 declares `peer react@^18` and this project is on React
+      # 19.2.4, so a strict `npm ci` fails ERESOLVE. That has been true since
+      # React 19 landed — the local node_modules was installed with this flag
+      # and nobody noticed, because nothing ever ran a clean install.
+      #
+      # The real fix is one of: upgrade cmdk to a release that declares React
+      # 19, or finish the pnpm migration (ADR-3a), which also resolves the
+      # three committed lockfiles. Until then this flag is what makes a clean
+      # install reproducible, and removing it breaks CI rather than fixing it.
+      - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
 
   config-drift:

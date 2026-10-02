@@ -142,30 +142,68 @@ async function syncLimits() {
 
 // ─── Run ──────────────────────────────────────────────────────────────────────
 
-function stable(obj) {
-  const { syncedAt, ...rest } = obj;
-  return JSON.stringify(rest);
+/**
+ * ⚠️ Not everything stale is wrong, and failing on both is how a check dies.
+ *
+ * A stale **version** is a visible lie — the site advertises v0.4.0 while the
+ * CLI is on 0.7.0, which is the exact failure this whole config layer exists
+ * to prevent. That must fail the build.
+ *
+ * A stale **download count** is cosmetic and is stale within hours of every
+ * sync, because the registries keep counting. Failing on it would make this
+ * check red every single day by tomorrow morning, and a permanently-red check
+ * is one people route around — at which point it stops catching the version
+ * drift it was built for.
+ *
+ * So: versions and plan limits fail. Counts warn.
+ */
+function versionFields(obj) {
+  const { cli, cryptoCrate, wasm, minSupportedCli } = obj;
+  return JSON.stringify({ cli, cryptoCrate, wasm, minSupportedCli });
+}
+
+function limitFields(obj) {
+  return JSON.stringify(obj.plans);
+}
+
+function downloadFields(obj) {
+  return JSON.stringify(obj.downloads);
 }
 
 const v = await syncVersions();
 const l = await syncLimits();
 
-const versionsChanged = stable(v.current) !== stable(v.next);
-const limitsChanged = stable(l.current) !== stable(l.next);
+const versionsChanged = versionFields(v.current) !== versionFields(v.next);
+const limitsChanged = limitFields(l.current) !== limitFields(l.next);
+const downloadsChanged = downloadFields(v.current) !== downloadFields(v.next);
 
 if (checkOnly) {
   if (versionsChanged) {
     console.error("✗ versions.json is stale:");
-    console.error(`    cli        ${v.current.cli} → ${v.next.cli}`);
-    console.error(`    downloads  ${v.current.downloads.total} → ${v.next.downloads.total}`);
+    for (const k of ["cli", "cryptoCrate", "wasm", "minSupportedCli"]) {
+      if (v.current[k] !== v.next[k]) {
+        console.error(`    ${k.padEnd(16)} ${v.current[k]} → ${v.next[k]}`);
+      }
+    }
   }
-  if (limitsChanged) console.error("✗ plan-limits.json no longer matches the server");
+  if (limitsChanged) {
+    console.error("✗ plan-limits.json no longer matches what the server enforces:");
+    console.error(`    committed ${limitFields(l.current)}`);
+    console.error(`    server    ${limitFields(l.next)}`);
+  }
+  // Informational. Deliberately does not fail — see the note above.
+  if (downloadsChanged) {
+    console.log(
+      `· download counts moved ${v.current.downloads.total} → ${v.next.downloads.total}` +
+        " (run the sync when convenient; not a failure)",
+    );
+  }
   for (const p of problems) console.error(`⚠ ${p}`);
   if (versionsChanged || limitsChanged) {
     console.error("\nRun `node scripts/sync-config.mjs` and commit the result.");
     process.exit(1);
   }
-  console.log("✓ generated config is current");
+  console.log("✓ versions and plan limits are current");
   process.exit(0);
 }
 
