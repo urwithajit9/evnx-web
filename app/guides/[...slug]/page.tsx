@@ -14,6 +14,7 @@ import {
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
 import { HelpfulVote } from "@/components/ui/helpful-vote";
+import { canonicalUrl } from "@evnx/config";
 
 // ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
@@ -33,6 +34,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: guide.title,
     description: guide.excerpt,
+    // ⚠️ Built from the guide's own slug, not from the request. A canonical
+    // derived from the URL that was asked for cannot deduplicate anything —
+    // it would just agree with whatever variant the crawler arrived on.
+    alternates: { canonical: canonicalUrl(`/guides/${guide.slug}`) },
   };
 }
 

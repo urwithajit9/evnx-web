@@ -8,6 +8,7 @@ import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/content";
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
 import { HelpfulVote } from "@/components/ui/helpful-vote";
+import { canonicalUrl } from "@evnx/config";
 
 // ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
@@ -25,7 +26,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: post.title,
     description: post.excerpt,
+    alternates: { canonical: canonicalUrl(`/blog/${post.slug}`) },
     openGraph: {
+      url: canonicalUrl(`/blog/${post.slug}`),
       title: post.title,
       description: post.excerpt,
       type: "article",

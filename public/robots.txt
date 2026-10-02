@@ -4,4 +4,6 @@ Disallow: /dashboard
 Disallow: /login
 Disallow: /api
 
-Sitemap: https://evnx.dev/sitemap.xml
+# Canonical host. The apex redirects here, so naming the apex would point
+# crawlers at a redirect — see CANONICAL_HOST in packages/config/src/site.ts.
+Sitemap: https://www.evnx.dev/sitemap.xml

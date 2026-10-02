@@ -18,10 +18,12 @@ import {
 } from "@/lib/content";
 import type { Metadata } from "next";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
+import { canonicalUrl } from "@evnx/config";
 export const metadata: Metadata = {
   title: "Guides",
   description:
     "From first install to production CI/CD — comprehensive evnx guides for every step.",
+  alternates: { canonical: canonicalUrl("/guides") },
 };
 
 // ─── Section icons ─────────────────────────────────────────────────────────

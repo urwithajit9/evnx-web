@@ -72,6 +72,55 @@ export function apiUrl(path = "/"): string {
   return `${HOSTS.api}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+// ─── The canonical host ───────────────────────────────────────────────────────
+
+/**
+ * ⚠️ THE HOSTNAME THAT ACTUALLY SERVES CONTENT. Measured, not assumed.
+ *
+ * ```
+ * https://evnx.dev  →  307  →  https://www.evnx.dev/
+ * ```
+ *
+ * So `www` is where pages live, and the apex is a redirect. Everything else in
+ * this codebase said `evnx.dev` — `metadataBase`, the OG tags, the sitemap —
+ * which meant the one file whose job is declaring canonical URLs named a
+ * hostname that redirects. Link equity split across two hostnames.
+ *
+ * This is set to the host that *resolves*, so a canonical tag never points at
+ * a redirect. It is not a judgement about which host is nicer.
+ *
+ * ### ⚠️ Flipping to the apex — read before you do it
+ *
+ * Schedule 3.2 wants the apex (`evnx.dev`) canonical, and the apex is what the
+ * CLI, the docs and the install command all print. Flipping is correct. It is
+ * also **two changes that must happen together, in this order**:
+ *
+ *   1. **In the Vercel dashboard**, change the domain redirect from
+ *      `evnx.dev → www.evnx.dev` to `www.evnx.dev → evnx.dev`, and make it
+ *      **308/301, not 307**. The current 307 is *temporary*, which tells
+ *      Google to keep indexing the apex rather than consolidating onto one
+ *      host — half the reason the equity is split.
+ *   2. Set `NEXT_PUBLIC_CANONICAL_HOST=https://evnx.dev` and redeploy.
+ *
+ * ⛔ **Do NOT add a `www → apex` redirect to `next.config.js`.** The apex→www
+ * hop lives at Vercel's edge, above the application. A redirect in the app
+ * would send www→apex, Vercel would send apex→www, and the site would loop
+ * until the browser gives up. The redirect direction is changed in one place:
+ * Vercel's domain settings.
+ */
+export const CANONICAL_HOST =
+  process.env.NEXT_PUBLIC_CANONICAL_HOST ?? "https://www.evnx.dev";
+
+/**
+ * Absolute URL for a path on the canonical host. Every `<link rel="canonical">`
+ * and every sitemap entry goes through this — so changing hosts is one
+ * environment variable, not a search across 84 pages.
+ */
+export function canonicalUrl(path = "/"): string {
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  return clean === "/" ? `${CANONICAL_HOST}/` : `${CANONICAL_HOST}${clean}`;
+}
+
 // ─── Identity ─────────────────────────────────────────────────────────────────
 
 export const SITE = {
@@ -85,8 +134,15 @@ export const SITE = {
   description:
     "Open-source Rust CLI that scans, validates and syncs your .env files — on your machine, at commit time, and in CI. Zero-knowledge encrypted cloud sync.",
   locale: "en",
-  /** Canonical origin. Overridable so previews self-canonicalise correctly. */
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? HOSTS.web,
+  /**
+   * Canonical origin for `metadataBase`, OG tags and the sitemap.
+   *
+   * ⚠️ `CANONICAL_HOST`, not `HOSTS.web`. `HOSTS.web` is the apex — the brand
+   * name, and what the install command prints — but it 307s to `www`, and
+   * metadata that names a redirect is metadata Google has to resolve before
+   * it can use it.
+   */
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? CANONICAL_HOST,
 } as const;
 
 /**

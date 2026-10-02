@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge-status";
+import { canonicalUrl } from "@evnx/config";
 
 // -----------------------------
 // Types (Production-grade schema)
@@ -430,6 +431,7 @@ const highlightLabelMap: Record<HighlightType, string> = {
 export const metadata = {
   title: "Changelog",
   description: "Release notes and changelog for evnx.",
+  alternates: { canonical: canonicalUrl("/changelog") },
 };
 
 export default function ChangelogPage() {

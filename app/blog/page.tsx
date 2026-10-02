@@ -2,10 +2,12 @@ import Link from 'next/link'
 import { TagLink } from '@/components/ui/tag-link'
 import { getAllBlogPosts, getAllBlogTags, getFeaturedBlogPosts } from '@/lib/content'
 import type { Metadata } from 'next'
+import { canonicalUrl } from "@evnx/config";
 
 export const metadata: Metadata = {
   title: 'Blog',
   description: 'Thoughts on developer security, .env management, and building Rust CLI tools.',
+  alternates: { canonical: canonicalUrl("/blog") },
 }
 
 const CATEGORY_LABELS: Record<string, string> = {

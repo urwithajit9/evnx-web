@@ -1,10 +1,12 @@
 import { TestimonialsGrid } from '@/components/ui/testimonials-grid'
 import { TestimonialForm }  from '@/components/ui/testimonial-form'
 import type { Metadata } from 'next'
+import { canonicalUrl } from "@evnx/config";
 
 export const metadata: Metadata = {
   title: 'What engineers are saying — evnx',
   description: 'Real feedback from developers and teams using evnx to secure their environment files.',
+  alternates: { canonical: canonicalUrl("/testimonials") },
 }
 
 export default function TestimonialsPage() {
