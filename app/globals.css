@@ -19,7 +19,13 @@
     /* Text */
     --text-primary:   #E6EDF3;
     --text-secondary: #8B949E;
-    --text-muted:     #484F58;
+    /* ⚠️ WCAG AA. The previous #484F58 failed contrast against every
+       background this palette uses — 1.95:1 to 2.48:1 where 4.5:1 is
+       required — which axe reported as 57 serious violations on the landing
+       page alone. It is one token, so it was one fix and not fifty-seven.
+       #8B949E is GitHub dark's own muted foreground, matching the provenance
+       of #0d1117 / #161b22, and clears 5.26:1 at worst. */
+    --text-muted:     #8B949E;
 
     /* Brand — Rust Orange */
     --brand-500: #E8652A;

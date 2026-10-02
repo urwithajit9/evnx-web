@@ -49,7 +49,15 @@ export function TerminalBlock({
         {title && <span className="font-mono text-xs text-text-muted">{title}</span>}
       </div>
 
-      <pre className="p-5 overflow-x-auto font-mono text-sm leading-relaxed">
+      {/* ⚠️ tabIndex={0} on the scroll container, not the <code>: a terminal
+          transcript overflows horizontally and a keyboard user must be able
+          to reach the rest of the line. */}
+      <pre
+        tabIndex={0}
+        role="group"
+        aria-label={title ? `Terminal: ${title}` : "Terminal transcript"}
+        className="p-5 overflow-x-auto font-mono text-sm leading-relaxed"
+      >
         <code>
           {lines.map((line, i) => (
             <span key={i} className={`block ${LINE[line.type]}`}>

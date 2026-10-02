@@ -94,7 +94,7 @@ export default async function GuidePage({ params }: Props) {
       {/* Breadcrumb */}
       <div className="border-b border-border-subtle">
         <div className="container-base py-3">
-          <nav className="flex items-center gap-2 text-xs font-mono text-text-muted">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs font-mono text-text-muted">
             <Link
               href="/"
               className="hover:text-text-primary transition-colors"
@@ -121,8 +121,8 @@ export default async function GuidePage({ params }: Props) {
       <div className="container-base py-8">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12">
           {/* Left sidebar — section nav */}
-          <aside className="lg:col-span-1 hidden lg:block">
-            <nav className="sticky top-8 space-y-6">
+          <aside aria-label="Guide navigation" className="lg:col-span-1 hidden lg:block">
+            <nav aria-label="Guide sections" className="sticky top-8 space-y-6">
               {GUIDE_SECTIONS.map((section) => {
                 const sectionGuides = bySection[section.key] ?? [];
                 if (sectionGuides.length === 0) return null;
@@ -285,7 +285,7 @@ export default async function GuidePage({ params }: Props) {
           </article>
 
           {/* Right sidebar */}
-          <aside className="lg:col-span-1 hidden lg:block">
+          <aside aria-label="On this page" className="lg:col-span-1 hidden lg:block">
             <div className="sticky top-8 space-y-6">
               <div className="bg-bg-surface border border-border-muted rounded-lg p-4">
                 <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-3">

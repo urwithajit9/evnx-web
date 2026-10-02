@@ -134,9 +134,9 @@ function SectionCard({
             <Icon className="w-4 h-4 text-brand-500" />
           </div>
           <div>
-            <h3 className="font-serif font-bold text-text-primary">
+            <h2 className="font-serif font-bold text-text-primary">
               {meta.label}
-            </h3>
+            </h2>
             <p className="font-mono text-xs text-text-muted">
               {guides.length} guide{guides.length !== 1 ? "s" : ""}
             </p>
@@ -213,9 +213,12 @@ export default function GuidesPage() {
         {startHere.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-6">
-              <p className="font-mono text-xs text-text-muted uppercase tracking-widest">
+              {/* ⚠️ h2, not p. This looked like a heading and was not one, so
+                  the page went h1 → h3 and a screen reader's outline had a
+                  hole where "Start Here" should be. Classes unchanged. */}
+              <h2 className="font-mono text-xs text-text-muted uppercase tracking-widest">
                 Start Here
-              </p>
+              </h2>
               <span className="font-mono text-xs text-text-muted">
                 New to evnx?
               </span>

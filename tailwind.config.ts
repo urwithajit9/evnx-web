@@ -25,7 +25,8 @@ const config: Config = {
         // Text
         "text-primary": "#E6EDF3",
         "text-secondary": "#8B949E",
-        "text-muted": "#484F58",
+        // WCAG AA — see the note in app/globals.css. Must match it.
+        "text-muted": "#8B949E",
 
         // Brand
         brand: {

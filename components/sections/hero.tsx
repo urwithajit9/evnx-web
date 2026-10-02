@@ -74,7 +74,15 @@ export function Hero() {
         </div>
 
         <div className="flex items-center gap-2 bg-terminal-bg border border-border-muted rounded-lg px-4 py-3 mb-3">
-          <code className="flex-1 font-mono text-sm text-terminal-text overflow-x-auto whitespace-pre">
+          {/* ⚠️ tabIndex={0}: a region that scrolls must be reachable by
+              keyboard, or the overflowing half of the command is readable
+              only with a mouse. */}
+          <code
+            tabIndex={0}
+            role="group"
+            aria-label={`${channel.label} install command`}
+            className="flex-1 font-mono text-sm text-terminal-text overflow-x-auto whitespace-pre"
+          >
             <span className="text-terminal-prompt select-none">$ </span>
             {channel.command}
           </code>

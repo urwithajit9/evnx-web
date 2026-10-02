@@ -220,16 +220,19 @@ export default async function BlogPostPage({ params }: Props) {
             {/* Related posts */}
             {related.length > 0 && (
               <div className="mt-12">
-                <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-6">
+                {/* ⚠️ h2, not p — same trap as "Start Here" on /guides. It
+                    looked like a heading and was not one, so the post's
+                    outline jumped from h2 straight to the h4 cards below. */}
+                <h2 className="font-mono text-xs text-text-muted uppercase tracking-widest mb-6">
                   Related Posts
-                </p>
+                </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {related.map((p) => (
                     <Link key={p.slug} href={`/blog/${p.slug}`}>
                       <div className="group bg-bg-surface border border-border-muted rounded-lg p-5 hover:border-border-default hover:bg-bg-overlay transition-all h-full">
-                        <h4 className="font-serif font-bold mb-2 group-hover:text-brand-400 transition-colors">
+                        <h3 className="font-serif font-bold mb-2 group-hover:text-brand-400 transition-colors">
                           {p.title}
-                        </h4>
+                        </h3>
                         <p className="text-sm text-text-muted">
                           {p.readTime} min read
                         </p>

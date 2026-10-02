@@ -79,7 +79,7 @@ export function FileTree({ title, children }: Props) {
           Each line is a <span className="block"> — NOT flex.
           flex collapses leading whitespace, breaking indentation.
           inline-block icons sit on the text baseline via align-middle. */}
-      <div className="bg-terminal-bg overflow-x-auto">
+      <div tabIndex={0} role="group" aria-label="File tree" className="bg-terminal-bg overflow-x-auto">
         <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
           {lines.map((line, i) => {
             const isComment   = line.trimStart().startsWith('#')

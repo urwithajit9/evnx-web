@@ -70,7 +70,7 @@ export function TerminalOutput({ title, children }: Props) {
       </div>
 
       {/* Output lines */}
-      <div className="bg-terminal-bg overflow-x-auto">
+      <div tabIndex={0} role="group" aria-label="Terminal output" className="bg-terminal-bg overflow-x-auto">
         <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
           {lines.map((line, i) => (
             <span key={i} className={`block ${getLineClass(line)}`}>

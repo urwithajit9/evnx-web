@@ -34,7 +34,8 @@ export function Talks() {
 
       <Link
         href="/talks"
-        className="inline-flex items-center gap-1 mt-6 text-brand-400 hover:underline underline-offset-4"
+        // Underlined by default: colour alone is not a distinction (WCAG 1.4.1).
+        className="inline-flex items-center gap-1 mt-6 text-brand-400 underline underline-offset-4"
       >
         All talks and slides
         <ArrowRight className="w-4 h-4" />

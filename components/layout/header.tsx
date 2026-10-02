@@ -37,7 +37,7 @@ export function Header() {
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav aria-label="Main" className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map(({ href, label }) => {
               const isActive =
                 pathname === href || pathname.startsWith(href + "/");
@@ -94,7 +94,7 @@ export function Header() {
 
         {/* Mobile nav */}
         {mobileOpen && (
-          <nav className="md:hidden border-t border-border-subtle py-4 space-y-1">
+          <nav aria-label="Mobile" className="md:hidden border-t border-border-subtle py-4 space-y-1">
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}

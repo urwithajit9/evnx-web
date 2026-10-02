@@ -134,7 +134,7 @@ type OptionTableProps = {
 export function OptionTable({ children }: OptionTableProps) {
   return (
     <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
-      <div className="overflow-x-auto">
+      <div tabIndex={0} role="group" aria-label="Options" className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-bg-overlay border-b border-border-muted">
             <tr>

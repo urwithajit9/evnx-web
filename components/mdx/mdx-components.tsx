@@ -193,7 +193,7 @@ function Figure({
 // ── Tables ────────────────────────────────────────────────────────────────────
 function Table({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="my-6 overflow-x-auto rounded-xl border border-border-muted">
+    <div tabIndex={0} role="group" aria-label="Table" className="my-6 overflow-x-auto rounded-xl border border-border-muted">
       <table className="w-full text-sm border-collapse">{children}</table>
     </div>
   );

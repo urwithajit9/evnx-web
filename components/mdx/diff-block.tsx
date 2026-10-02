@@ -81,7 +81,7 @@ export function DiffBlock({ filename, children }: Props) {
       </div>
 
       {/* Diff lines */}
-      <div className="bg-terminal-bg overflow-x-auto">
+      <div tabIndex={0} role="group" aria-label="Diff" className="bg-terminal-bg overflow-x-auto">
         <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
           {lines.map((line, i) => {
             let bgClass = ''

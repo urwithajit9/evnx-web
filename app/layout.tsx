@@ -82,7 +82,14 @@ export default function RootLayout({
   </a>
         <Header />
         <SearchModal />
-        <main className="flex-1">{children}</main>
+        {/* ⚠️ `id` and `tabIndex` are both required. The skip link above has
+            always pointed at #main-content and no element carried that id, so
+            the first thing a keyboard user reaches did nothing. tabIndex={-1}
+            makes the target focusable so focus actually lands here rather than
+            just scrolling the page. */}
+        <main id="main-content" tabIndex={-1} className="flex-1">
+          {children}
+        </main>
         <Footer />
 
         {/* Umami Analytics */}

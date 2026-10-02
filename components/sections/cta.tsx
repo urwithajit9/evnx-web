@@ -28,7 +28,12 @@ export function Cta() {
         className="w-full flex items-center gap-3 bg-terminal-bg border border-border-muted hover:border-brand-500 rounded-lg px-5 py-4 mb-5 transition-colors text-left"
         aria-label={cta.primaryLabel}
       >
-        <code className="flex-1 font-mono text-sm text-terminal-text overflow-x-auto whitespace-pre">
+        <code
+          tabIndex={0}
+          role="group"
+          aria-label="Install command"
+          className="flex-1 font-mono text-sm text-terminal-text overflow-x-auto whitespace-pre"
+        >
           <span className="text-terminal-prompt select-none">$ </span>
           {command}
         </code>

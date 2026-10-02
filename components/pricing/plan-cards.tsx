@@ -69,7 +69,11 @@ export function PlanCards() {
                 </div>
               )}
 
-              <h3 className="text-2xl font-serif font-bold mb-2">{copy.name}</h3>
+              {/* ⚠️ h2, not h3. The page goes h1 → plan names → h2 for the
+                  limits and FAQ sections, so h3 here skipped a level. Each
+                  plan is a top-level section of this page. The size comes
+                  from the class, so nothing moves visually. */}
+              <h2 className="text-2xl font-serif font-bold mb-2">{copy.name}</h2>
               <p className="text-text-secondary mb-6 text-sm leading-relaxed min-h-[3rem]">
                 {copy.tagline}
               </p>

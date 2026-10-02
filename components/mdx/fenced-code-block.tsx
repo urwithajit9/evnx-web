@@ -28,7 +28,7 @@ export async function FencedCodeBlock({ children }: Props) {
 
   if (!lang) {
     return (
-      <pre className="my-6 rounded-xl bg-terminal-bg border border-border-muted p-5 overflow-x-auto font-mono text-sm text-terminal-text leading-relaxed">
+      <pre tabIndex={0} className="my-6 rounded-xl bg-terminal-bg border border-border-muted p-5 overflow-x-auto font-mono text-sm text-terminal-text leading-relaxed">
         {children}
       </pre>
     )
@@ -43,7 +43,12 @@ export async function FencedCodeBlock({ children }: Props) {
   try {
     const fullHtml = await codeToHtml(rawCode, {
       lang:  resolveGrammar(lang),
-      theme: 'github-dark',
+      // ⚠️ `github-dark-default`, not `github-dark`. The legacy theme's
+      // comment colour #6A737D sits at 3.93:1 on our terminal background
+      // where 4.5:1 is required — 18 failures on a single guide page, and
+      // comments are the part of a code sample a reader most needs to read.
+      // This is GitHub's current dark theme; worst token contrast 6.15:1.
+      theme: 'github-dark-default',
     })
 
     // Shiki outputs:
@@ -73,7 +78,7 @@ export async function FencedCodeBlock({ children }: Props) {
       </div>
 
       {/* Our <pre> — single box, full control, Shiki token spans inside */}
-      <div className="overflow-x-auto bg-terminal-bg">
+      <div tabIndex={0} role="group" aria-label={`${label} code`} className="overflow-x-auto bg-terminal-bg">
         <pre
           style={{
             margin:     0,
