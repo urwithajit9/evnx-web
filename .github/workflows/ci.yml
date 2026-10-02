@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # ⚠️ The drift check matters most when nobody is pushing. A release goes out,
+  # `versions.json` becomes stale, and without a schedule the site carries the
+  # old number until the next unrelated pull request happens to run this.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  config-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No `npm ci` — the script uses only Node builtins and `fetch`, so it
+      # runs in seconds and cannot be broken by a dependency.
+      #
+      # ⚠️ This fails ONLY when a fetch succeeded and disagreed with what is
+      # committed. A registry timeout or a 429 leaves the committed values
+      # alone and reports a warning, because a check that goes red when
+      # crates.io is slow is a check people learn to ignore.
+      - name: Generated config matches the registries and the API
+        run: node scripts/sync-config.mjs --check

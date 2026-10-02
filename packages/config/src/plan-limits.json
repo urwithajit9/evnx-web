@@ -1,0 +1,25 @@
+{
+  "_comment": "GENERATED from GET https://api.evnx.dev/api/v1/plans by scripts/sync-config.mjs. Committed so the build is deterministic and works offline. `null` means unlimited. Hand-editing this makes the pricing page lie about what the server enforces.",
+  "_source": "defaults from evnx-server src/services/quota.rs — replace by running the sync script once GET /api/v1/plans is deployed",
+  "syncedAt": "2026-10-02T05:43:46.966Z",
+  "plans": {
+    "free": {
+      "vaults": 3,
+      "versionsPerVault": 5,
+      "apiTokens": 2,
+      "auditRetentionDays": 7
+    },
+    "team": {
+      "vaults": null,
+      "versionsPerVault": null,
+      "apiTokens": null,
+      "auditRetentionDays": 90
+    },
+    "enterprise": {
+      "vaults": null,
+      "versionsPerVault": null,
+      "apiTokens": null,
+      "auditRetentionDays": null
+    }
+  }
+}

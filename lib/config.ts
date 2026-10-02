@@ -1,59 +1,88 @@
-// ─── evnx Single Source of Truth ──────────────────────────────────────────────
-// Never hardcode version numbers or URLs elsewhere. Pull from here.
-
-export const EVNX_VERSION = "0.4.0";
-export const EVNX_MIN_VERSION = "0.1.0";
-
-export const GITHUB_REPO = "urwithajit9/evnx";
-export const GITHUB_URL = "https://github.com/urwithajit9/evnx";
-export const GITHUB_DISCUSSIONS_URL =
-  "https://github.com/urwithajit9/evnx/discussions";
-export const CRATES_IO_URL = "https://crates.io/crates/evnx";
-// The published package is @evnx/cli. The bare `evnx` name also exists on the
-// registry but has no versions and no maintainers, so the old link led nowhere.
-export const NPM_URL = "https://www.npmjs.com/package/@evnx/cli";
-export const PYPI_URL = "https://pypi.org/project/evnx/";
-export const AGENT_SKILLS_URL = "https://github.com/urwithajit9/agent-skills";
-
-// ─── Cloud sync (new in 0.4.0) ──────────────────────────────────────────────
-export const API_URL = "https://api.evnx.dev";
-export const EVNX_SERVER_URL = "https://github.com/urwithajit9/evnx-server";
-export const EVNX_CRYPTO_URL = "https://github.com/urwithajit9/evnx-crypto";
-export const EVNX_CRYPTO_CRATES_URL = "https://crates.io/crates/evnx-crypto";
-
-export const INSTALL_SCRIPT_URL = "https://dotenv.space/install.sh";
-
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://evnx.dev";
-export const SITE_NAME = "evnx";
-export const SITE_TAGLINE = "The .env tool for developers who've been there.";
-export const SITE_DESCRIPTION =
-  "Rust-powered CLI for validating, scanning, converting, and securing your environment files — before they become incidents.";
-
-export const TWITTER_HANDLE = "@urwithajit9";
-
-export const INSTALL_COMMANDS = {
-  macos: `curl -fsSL ${INSTALL_SCRIPT_URL} | bash`,
-  linux: `curl -fsSL ${INSTALL_SCRIPT_URL} | bash`,
-  // Full package id: the winget manifest declares no Moniker, so a bare
-  // `winget install evnx` falls back to name matching and can prompt for
-  // disambiguation. `urwithajit9.evnx` always resolves.
-  windows: `winget install urwithajit9.evnx`,
-  npm: `npm install -g @evnx/cli`,
-  cargo: `cargo install evnx`,
-  cargoFull: `cargo install evnx --features full`,
-  // `full` is ["migrate", "backup"] and deliberately does NOT include `cloud`,
-  // so `cargoFull` yields a binary with no auth/vault/cloud commands. crates.io
-  // is the only channel that needs this flag — the prebuilt binaries on
-  // Homebrew, Scoop, npm, PyPI and the GitHub Release are built with
-  // --all-features and already contain them.
-  cargoCloud: `cargo install evnx --features cloud`,
-} as const;
-
-// `EVNX_COMMANDS` and `EVNX_CLOUD_COMMANDS` were removed in v0.5.0. They were
-// exported, had no consumer anywhere in the app, and had already drifted — the
-// list was missing `spec`, so wiring it up to render a command index would have
-// shipped an incomplete one.
+// ─── COMPATIBILITY SHIM — do not add anything here ───────────────────────────
 //
-// If a command index is wanted, build it from the guides' own frontmatter, which
-// is verified against the binary on every release. A hand-maintained array is a
-// second source of truth that nothing forces anyone to update.
+// This file used to be the single source of truth. It is now a thin re-export
+// of `@evnx/config`, kept so the six existing consumers keep compiling while
+// they are migrated one at a time.
+//
+// ⚠️ Why it was replaced: it hardcoded `EVNX_VERSION = "0.4.0"` and the CLI
+// reached 0.7.0 without anything noticing. The version now comes from
+// `packages/config/src/versions.json`, which a script rewrites from the
+// registries — so it cannot go stale by being forgotten.
+//
+// 👉 NEW CODE IMPORTS FROM `@evnx/config`. Delete a line below whenever its
+//    last consumer moves over; the file goes away when they all have.
+
+import {
+  EVNX_VERSION as VERSION,
+  MIN_SUPPORTED_VERSION,
+  REPOS,
+  REGISTRIES,
+  GITHUB_REPO as REPO_SLUG,
+  HOSTS,
+  SITE,
+  SOCIAL,
+  INSTALL_CHANNELS,
+  CANONICAL_INSTALL_SCRIPT,
+} from "@evnx/config";
+
+/** @deprecated Import `EVNX_VERSION` from `@evnx/config`. */
+export const EVNX_VERSION = VERSION;
+/** @deprecated Import `MIN_SUPPORTED_VERSION` from `@evnx/config`. */
+export const EVNX_MIN_VERSION = MIN_SUPPORTED_VERSION;
+
+/** @deprecated Import `GITHUB_REPO` from `@evnx/config`. */
+export const GITHUB_REPO = REPO_SLUG;
+/** @deprecated Use `REPOS.cli`. */
+export const GITHUB_URL = REPOS.cli;
+/** @deprecated Use `REPOS.discussions`. */
+export const GITHUB_DISCUSSIONS_URL = REPOS.discussions;
+/** @deprecated Use `REGISTRIES.crates`. */
+export const CRATES_IO_URL = REGISTRIES.crates;
+/** @deprecated Use `REGISTRIES.npm`. */
+export const NPM_URL = REGISTRIES.npm;
+/** @deprecated Use `REGISTRIES.pypi`. */
+export const PYPI_URL = REGISTRIES.pypi;
+/** @deprecated Use `REPOS.agentSkills`. */
+export const AGENT_SKILLS_URL = REPOS.agentSkills;
+
+/** @deprecated Use `HOSTS.api`. */
+export const API_URL = HOSTS.api;
+/** @deprecated Use `REPOS.server`. */
+export const EVNX_SERVER_URL = REPOS.server;
+/** @deprecated Use `REPOS.crypto`. */
+export const EVNX_CRYPTO_URL = REPOS.crypto;
+/** @deprecated Use `REGISTRIES.cratesCrypto`. */
+export const EVNX_CRYPTO_CRATES_URL = REGISTRIES.cratesCrypto;
+/** @deprecated Use `CANONICAL_INSTALL_SCRIPT`. */
+export const INSTALL_SCRIPT_URL = CANONICAL_INSTALL_SCRIPT;
+
+/** @deprecated Use `SITE.url`. */
+export const SITE_URL = SITE.url;
+/** @deprecated Use `SITE.name`. */
+export const SITE_NAME = SITE.name;
+/** @deprecated Use `SITE.tagline`. */
+export const SITE_TAGLINE = SITE.tagline;
+/** @deprecated Use `SITE.description`. */
+export const SITE_DESCRIPTION = SITE.description;
+/** @deprecated Use `SOCIAL.twitter`. */
+export const TWITTER_HANDLE = SOCIAL.twitter;
+
+const channel = (id: string) =>
+  INSTALL_CHANNELS.find((c) => c.id === id)?.command ?? "";
+
+/**
+ * @deprecated Use `INSTALL_CHANNELS` / `FEATURED_CHANNELS` from `@evnx/config`,
+ * which carry the registry URL and the per-channel caveat alongside the command.
+ */
+export const INSTALL_COMMANDS = {
+  macos: channel("curl"),
+  linux: channel("curl"),
+  windows: channel("winget"),
+  npm: channel("npm"),
+  // ⚠️ `cargo install evnx` builds from source with `default = []`, so it has
+  // no cloud commands. `INSTALL_CHANNELS` ships the `--features cloud` form,
+  // which is why these three now resolve to the same correct string.
+  cargo: channel("cargo"),
+  cargoFull: "cargo install evnx --features full",
+  cargoCloud: channel("cargo"),
+} as const;

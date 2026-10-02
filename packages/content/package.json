@@ -1,0 +1,13 @@
+{
+  "name": "@evnx/content",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Every word on the marketing site, as data. Prose that must be GOOD — facts that must be TRUE live in @evnx/config.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./en": "./src/en/index.ts"
+  }
+}
