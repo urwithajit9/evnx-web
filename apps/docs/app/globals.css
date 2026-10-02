@@ -1,0 +1,220 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design System Variables ───────────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* Backgrounds */
+    --bg-void:       #080B0F;
+    --bg-base:       #0D1117;
+    --bg-surface:    #161B22;
+    --bg-overlay:    #1C2128;
+
+    /* Borders */
+    --border-subtle:  #21262D;
+    --border-muted:   #30363D;
+    --border-default: #484F58;
+
+    /* Text */
+    --text-primary:   #E6EDF3;
+    --text-secondary: #8B949E;
+    /* ⚠️ WCAG AA. The previous #484F58 failed contrast against every
+       background this palette uses — 1.95:1 to 2.48:1 where 4.5:1 is
+       required — which axe reported as 57 serious violations on the landing
+       page alone. It is one token, so it was one fix and not fifty-seven.
+       #8B949E is GitHub dark's own muted foreground, matching the provenance
+       of #0d1117 / #161b22, and clears 5.26:1 at worst. */
+    --text-muted:     #8B949E;
+
+    /* Brand — Rust Orange */
+    --brand-500: #E8652A;
+    --brand-400: #F07840;
+    --brand-300: #F8A07A;
+    --brand-glow: rgba(232, 101, 42, 0.15);
+
+    /* Semantic */
+    --success: #3FB950;
+    --warning: #D29922;
+    --danger:  #F85149;
+    --info:    #388BFD;
+
+    /* Terminal */
+    --terminal-bg:     #010409;
+    --terminal-text:   #C9D1D9;
+    --terminal-prompt: #E8652A;
+    --terminal-cursor: #E8652A;
+
+    /* shadcn compatibility */
+    --background: var(--bg-base);
+    --foreground: var(--text-primary);
+    --card: var(--bg-surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--bg-overlay);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--brand-500);
+    --primary-foreground: #000000;
+    --secondary: var(--bg-surface);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--bg-surface);
+    --muted-foreground: var(--text-muted);
+    --accent: var(--bg-overlay);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--text-primary);
+    --border: var(--border-muted);
+    --input: var(--border-muted);
+    --ring: var(--brand-500);
+    --radius: 0.5rem;
+  }
+}
+
+/* ─── Base Styles ────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Serif headings */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fraunces', 'Georgia', serif;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-base);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-muted);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-default);
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(232, 101, 42, 0.25);
+    color: var(--text-primary);
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
+  }
+}
+
+/* ─── Layout Utilities ───────────────────────────────────────────────────────── */
+@layer utilities {
+  .container-base {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-padding {
+    @apply py-16 md:py-24;
+  }
+
+  .prose-width {
+    max-width: 72ch;
+  }
+
+  .glow-brand {
+    box-shadow: 0 0 20px var(--brand-glow);
+  }
+}
+
+/* ─── Prose Styles (for MDX content) ────────────────────────────────────────── */
+@layer components {
+
+  .prose-evnx {
+    /* Shiki code block overrides — for any <pre class="shiki"> NOT inside
+       .shiki-block (e.g. if Shiki is used directly without our container) */
+    pre.shiki {
+      @apply rounded-lg overflow-x-auto my-6 p-4;
+      background-color: var(--terminal-bg) !important;
+      border: 1px solid var(--border-muted);
+      font-size: 0.875rem;
+      line-height: 1.7;
+    }
+
+    pre.shiki code {
+      background: none !important;
+      font-family: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+    }
+
+    /* Line numbers */
+    pre.shiki.has-line-numbers {
+      padding-left: 3.5rem;
+    }
+
+    /* Headings - handled by mdx-components.tsx */
+
+    /* Tables */
+    table {
+      @apply w-full border-collapse my-6 text-sm;
+    }
+    th {
+      @apply text-left py-2 px-4 font-mono text-xs uppercase tracking-wide text-text-muted border-b border-border-muted;
+    }
+    td {
+      @apply py-2 px-4 text-text-secondary border-b border-border-subtle;
+    }
+    tr:hover td {
+      background-color: var(--bg-surface);
+    }
+  }
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-blink,
+  .animate-fade-in,
+  .animate-slide-in {
+    animation: none;
+  }
+}
