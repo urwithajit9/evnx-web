@@ -12,7 +12,8 @@
     "search:index": "pagefind --site .next/server/app --output-path public/pagefind",
     "config:sync": "node scripts/sync-config.mjs",
     "config:check": "node scripts/sync-config.mjs --check",
-    "check:links": "node scripts/check-content-links.mjs"
+    "check:links": "node scripts/check-content-links.mjs",
+    "baseline:analytics": "node scripts/export-analytics.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

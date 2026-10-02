@@ -40,12 +40,28 @@ const nextConfig = {
     ];
   },
 
-  // Umami analytics proxy (ad-blocker bypass)
   async rewrites() {
     return [
+      // Umami analytics proxy (ad-blocker bypass).
       {
         source: "/stats/:match*",
         destination: "https://analytics.dotenv.space/:match*",
+      },
+
+      // ⚠️ Schedule P5. A REWRITE, not a redirect — this must answer 200 with
+      // the script itself. Install commands get copied out of docs and blog
+      // posts without `curl -L`, and a redirect turns those into a silent
+      // no-op that writes HTML to a pipe.
+      //
+      // Points at the CLI repo's raw file, which is the single source
+      // `dotenv.space/install.sh` already proxies (verified byte-identical,
+      // sha256 a080c411…). Going direct skips the GitHub rename redirect that
+      // dotenv.space's older `dotenv-space-cli` URL still travels through, so
+      // the two URLs serve one file and cannot drift.
+      {
+        source: "/install.sh",
+        destination:
+          "https://raw.githubusercontent.com/urwithajit9/evnx/main/scripts/install.sh",
       },
     ];
   },
