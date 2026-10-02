@@ -9,7 +9,7 @@ const nextConfig = {
   // transpile node_modules by default — pnpm links workspace packages into
   // node_modules, so without this the build fails on the first `.ts` import.
   // It was unnecessary while they resolved through tsconfig path aliases.
-  transpilePackages: ["@evnx/config", "@evnx/content"],
+  transpilePackages: ["@evnx/config", "@evnx/content", "@evnx/mdx", "@evnx/docs-content"],
   serverExternalPackages: ["shiki", "vscode-oniguruma"],
 
   // Image domains for external avatars (GitHub, etc.)

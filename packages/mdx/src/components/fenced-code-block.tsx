@@ -12,7 +12,7 @@
  */
 import React from 'react'
 import { codeToHtml } from 'shiki'
-import { LANG_LABELS, resolveGrammar } from '@/lib/shiki'
+import { LANG_LABELS, resolveGrammar } from '../lib/shiki'
 import { CopyButton } from './copy-button'
 
 type Props = { children?: React.ReactNode }

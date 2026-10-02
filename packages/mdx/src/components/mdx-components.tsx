@@ -20,7 +20,6 @@ import { Difficulty } from "./difficulty";
 import { CommandSignature } from "./command-signature";
 import { OptionTable, Option } from "./option-table";
 import { FileTree } from "./file-tree";
-import { AuthorNote } from "./author-note";
 import { CommandRef } from "./command-ref";
 import { ExternalBadge } from './external-badge'
 // ── Inline code ───────────────────────────────────────────────────────────────
@@ -272,7 +271,6 @@ export const mdxComponents: MDXComponents = {
   OptionTable,
   Option,
   FileTree,
-  AuthorNote,
   CommandRef,
   ExternalBadge
 };

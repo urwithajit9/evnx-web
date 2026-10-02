@@ -1,0 +1,20 @@
+{
+  "name": "@evnx/mdx",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MDX rendering components shared by apps/web and apps/docs: callouts, code blocks, option tables, terminal output, steps.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./shiki": "./src/lib/shiki.ts",
+    "./lang-labels": "./src/lib/lang-labels.ts"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.2",
+    "lucide-react": "^0.446.0",
+    "shiki": "^4.0.1"
+  },
+  "peerDependencies": { "react": ">=19", "react-dom": ">=19" }
+}

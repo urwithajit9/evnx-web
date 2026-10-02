@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 // Client-safe: lang-labels has no imports and never reaches shiki.
-import { LANG_LABELS } from '@/lib/lang-labels'
+import { LANG_LABELS } from '@evnx/mdx/lang-labels'
 
 function getLineClass(line: string): string {
   if (/^\[ERROR\]|^\[CRITICAL\]/.test(line))                       return 'text-danger'

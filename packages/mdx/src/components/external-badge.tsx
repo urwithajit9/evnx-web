@@ -1,6 +1,6 @@
 // components/ExternalBadge.tsx
 import * as React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '../lib/utils'
 
 export interface ExternalBadgeProps
   extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
