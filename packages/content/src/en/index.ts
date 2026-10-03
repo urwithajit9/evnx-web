@@ -11,6 +11,8 @@ export { trust } from "./trust";
 export { pricing } from "./pricing";
 export { nav, footer } from "./nav";
 export { cta } from "./cta";
+export { privacy, terms, security } from "./legal";
+export type { LegalDoc, LegalSection } from "./legal";
 export { landingSections, activeSections } from "./sections";
 export type { SectionId, SectionSpec } from "./sections";
 export type { PlanCopy } from "./pricing";

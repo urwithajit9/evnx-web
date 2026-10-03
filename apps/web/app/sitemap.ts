@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { DOCS_MODE, canonicalUrl } from "@evnx/config";
+import { DOCS_MODE, TESTIMONIALS_ENABLED, canonicalUrl } from "@evnx/config";
 import { getAllBlogPosts, getAllGuides } from "@/lib/content";
 
 /**
@@ -28,7 +28,9 @@ const STATIC_PAGES: { path: string; priority: number; changeFrequency: Entry["ch
   { path: "/install", priority: 0.8, changeFrequency: "monthly" },
   { path: "/changelog", priority: 0.7, changeFrequency: "weekly" },
   { path: "/talks", priority: 0.5, changeFrequency: "yearly" },
-  { path: "/testimonials", priority: 0.4, changeFrequency: "monthly" },
+  { path: "/security", priority: 0.5, changeFrequency: "yearly" },
+  { path: "/privacy", priority: 0.3, changeFrequency: "yearly" },
+  { path: "/terms", priority: 0.3, changeFrequency: "yearly" },
 ];
 
 /**
@@ -67,9 +69,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
     }));
 
-  const statics: Entry[] = STATIC_PAGES.filter(
-    (p) => !(DOCS_MODE === "split" && p.path.startsWith("/guides")),
-  ).map((p) => ({
+  // ⚠️ /testimonials is absent while the flag is off. A thin page that is
+  // linked and indexed is a quality signal about the whole site, and the page
+  // has nothing on it until there are approved rows.
+  const statics: Entry[] = [
+    ...STATIC_PAGES,
+    ...(TESTIMONIALS_ENABLED
+      ? [{ path: "/testimonials", priority: 0.4, changeFrequency: "monthly" as const }]
+      : []),
+  ]
+    .filter((p) => !(DOCS_MODE === "split" && p.path.startsWith("/guides")))
+    .map((p) => ({
     url: canonicalUrl(p.path),
     // No real modification date for a generated page; "now" is the honest
     // answer and tells crawlers nothing false.

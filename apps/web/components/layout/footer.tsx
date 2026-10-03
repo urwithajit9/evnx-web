@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Github, Star } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL, CRATES_IO_URL, NPM_URL, PYPI_URL, AGENT_SKILLS_URL } from "@/lib/config";
-import { docsUrl } from "@evnx/config";
+import { TESTIMONIALS_ENABLED, docsUrl } from "@evnx/config";
 
 // ── TypeScript fix: every link has `external`, defaulting to false ────────────
 // The previous LINKS object mixed { href, label } and { href, label, external }
@@ -31,7 +31,11 @@ const LINKS: Record<string, NavLink[]> = {
     },
     { href: "/blog", label: "Blog", external: false },
     { href: "/changelog", label: "Changelog", external: false },
-    { href: "/testimonials", label: "Testimonials", external: false },
+    // ⚠️ Shown only once there are approved testimonials — see
+    // TESTIMONIALS_ENABLED.
+    ...(TESTIMONIALS_ENABLED
+      ? [{ href: "/testimonials", label: "Testimonials", external: false }]
+      : []),
   ],
   Project: [
     { href: GITHUB_URL, label: "GitHub", external: true },
@@ -41,6 +45,9 @@ const LINKS: Record<string, NavLink[]> = {
     { href: AGENT_SKILLS_URL, label: "Agent Skills", external: true },
     // { href: "/pricing", label: "Pricing", external: false },
     { href: "/install", label: "Install", external: false },
+    { href: "/security", label: "Security", external: false },
+    { href: "/privacy", label: "Privacy", external: false },
+    { href: "/terms", label: "Terms", external: false },
   ],
 };
 

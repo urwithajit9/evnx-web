@@ -72,11 +72,7 @@ export const footer: {
       items: [
         { label: "dotenv.space", external: true },
         { label: "Blog", href: "/blog" },
-        // ⚠️ `/security` is NOT listed because the route does not exist. A
-        // link added here before its page ships is a 404 the moment anyone
-        // wires this data into the footer component — which has its own
-        // hardcoded list today, so nothing here is rendered yet. Add the row
-        // back in the same commit that adds the page, not before.
+        { label: "Security", href: "/security" },
       ],
     },
   ],
@@ -84,11 +80,8 @@ export const footer: {
   disclosure:
     "dotenv.space is a vendor-neutral reference for how .env files behave. Same maintainer as evnx, kept separate on purpose.",
 
-  // ⚠️ Empty on purpose. `/privacy` and `/terms` do not exist yet, and listing
-  // them would plant two 404s for whoever connects this to the footer.
-  //
-  // Both become necessary before billing ships: Paddle is merchant of record
-  // and will ask for them, and a paid product without a privacy policy is a
-  // problem well beyond a broken link. Chain 3, not this project.
-  legal: [],
+  legal: [
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
+  ],
 };
