@@ -59,19 +59,20 @@ const STATIC_ROUTES = new Set([
 /**
  * Links to guides that are intentionally `draft: true`.
  *
- * ⚠️ These are broken on the live site right now, and that is a known,
- * deliberate trade. Both guides document commands that are merged on the
- * CLI's `main` but not yet tagged, so publishing them early would document
- * something a reader cannot run. They go live with 0.8.0.
- *
  * ⚠️ THIS LIST CANNOT ROT. If an entry stops being a draft, the check below
- * FAILS and tells you to delete the line — so un-drafting the guides is what
- * removes the exception, and forgetting to remove it is not silent.
+ * FAILS and names the stale line — so un-drafting a guide is what removes its
+ * exception, and forgetting to remove it is not silent.
+ *
+ * ✅ It fired exactly that way on 2026-10-04. v0.8.0 shipped, both entries'
+ * guides were un-drafted, and this check went red naming each line — which is
+ * how they came to be deleted rather than left behind to quietly permit some
+ * future broken link.
+ *
+ * Empty is the correct steady state. Add an entry only alongside a guide
+ * deliberately held back, and expect this check to demand its removal on the
+ * day that guide goes live.
  */
-const DRAFT_LINKS_ALLOWED = new Set([
-  "reference/getting-your-secrets-out", // `evnx cloud export` — ships in 0.8.0
-  "reference/rotating-a-vault-key",     // `evnx vault rekey`   — ships in 0.8.0
-]);
+const DRAFT_LINKS_ALLOWED = new Set([]);
 
 // ── Checks ───────────────────────────────────────────────────────────────────
 
