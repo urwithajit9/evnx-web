@@ -42,9 +42,17 @@ function readInventory() {
   });
 }
 
-/** Where a /guides URL should land after the split. */
+/**
+ * Where a docs URL should land after the split.
+ *
+ * ⚠️ Strips `/docs` as well as `/guides`. The first version stripped only
+ * `/guides`, so when `/docs` was added to the extra-URL list it computed
+ * `/cli/` + `/docs` and reported two failures against redirects that were
+ * perfectly correct. A gate that cries wolf is worse than no gate — the next
+ * real failure gets waved through as "probably the script again".
+ */
 function expectedDestination(url) {
-  const slug = url.replace(/^\/guides\/?/, "");
+  const slug = url.replace(/^\/(guides|docs)\/?/, "");
   return slug ? `${DOCS_ORIGIN}/cli/${slug}` : `${DOCS_ORIGIN}/cli`;
 }
 
