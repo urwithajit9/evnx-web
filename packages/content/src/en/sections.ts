@@ -19,6 +19,7 @@ export type SectionId =
   | "trust"
   | "origin-story"
   | "talks"
+  | "testimonials"
   | "cta";
 
 export interface SectionSpec {
@@ -40,6 +41,12 @@ export const landingSections: SectionSpec[] = [
   { id: "trust", enabled: true, surface: "void", anchor: "trust" },
   { id: "origin-story", enabled: true, surface: "base" },
   { id: "talks", enabled: true, surface: "surface" },
+  // ⚠️ `enabled` here is the PAGE ORDER decision, not the editorial one. The
+  // component itself refuses to render unless TESTIMONIALS_ENABLED is on AND
+  // approved rows exist — see components/sections/testimonials.tsx. Leaving
+  // this true means the section slots into the right place the moment there is
+  // something to put in it, rather than needing two edits later.
+  { id: "testimonials", enabled: true, surface: "base" },
   { id: "cta", enabled: true, surface: "void" },
 ];
 

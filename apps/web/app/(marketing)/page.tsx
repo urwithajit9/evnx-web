@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { canonicalUrl } from "@evnx/config";
 import { activeSections } from "@evnx/content";
-import { SECTIONS, SectionShell } from "@/components/sections";
+import { SECTIONS, SECTION_VISIBLE, SectionShell } from "@/components/sections";
 
 /**
  * The landing page.
@@ -25,10 +25,17 @@ export const metadata: Metadata = {
   openGraph: { url: canonicalUrl("/") },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  // ⚠️ Asked BEFORE the shell is drawn. A section that renders nothing still
+  // gets a band, a border and a screen of padding otherwise.
+  const visible = await Promise.all(
+    activeSections.map(async (spec) => (await SECTION_VISIBLE[spec.id]?.()) ?? true),
+  );
+
   return (
     <>
-      {activeSections.map((spec) => {
+      {activeSections.map((spec, i) => {
+        if (!visible[i]) return null;
         const Section = SECTIONS[spec.id];
         return (
           <SectionShell key={spec.id} spec={spec}>

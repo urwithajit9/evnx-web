@@ -14,3 +14,4 @@ export * from "./money";
 export * from "./plans";
 export * from "./social";
 export * from "./analytics";
+export * from "./features";

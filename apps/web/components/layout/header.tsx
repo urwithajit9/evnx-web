@@ -6,8 +6,11 @@ import { useState } from "react";
 import { Menu, X, Github } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
 import { SearchTrigger , SearchModal} from'@/components/ui/search-modal'
-import { docsUrl } from "@evnx/config";
+import { TESTIMONIALS_ENABLED, docsUrl } from "@evnx/config";
 
+// ⚠️ Testimonials is appended only when the flag is on — see
+// TESTIMONIALS_ENABLED. A "Testimonials" tab leading to an empty page reads as
+// a product nobody is saying anything about.
 const NAV_LINKS = [
   // ⚠️ docsUrl(), not "/guides". The header renders on every page, so a
   // hardcoded path here is a 301 on every page of the site once the split is
@@ -15,10 +18,12 @@ const NAV_LINKS = [
   // substitute for fixing the ones you do.
   { href: docsUrl(), label: "Guides" },
   { href: "/blog", label: "Blog" },
-  { href: "/testimonials", label: "Testimonials" },
   { href: "/changelog", label: "Changelog" },
   // { href: "/pricing", label: "Pricing" },
   // { href: "/login", label: "Login"},
+  ...(TESTIMONIALS_ENABLED
+    ? [{ href: "/testimonials", label: "Testimonials" }]
+    : []),
 ];
 
 export function Header() {
