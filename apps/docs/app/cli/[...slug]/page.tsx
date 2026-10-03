@@ -16,6 +16,10 @@ import {
 import { mdxComponents } from "@evnx/mdx";
 import { HOSTS } from "@evnx/config";
 
+/** Share-card URL for a page. See app/api/og/route.tsx for why it is a route. */
+const ogImage = (title: string, kicker: string) =>
+  `${HOSTS.docs}/api/og?title=${encodeURIComponent(title)}&kicker=${encodeURIComponent(kicker)}`;
+
 const DIFFICULTY: Record<string, string> = {
   beginner: "text-success border-success/30 bg-success/5",
   intermediate: "text-warning border-warning/30 bg-warning/5",
@@ -46,6 +50,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: meta?.label ?? section,
       description: meta?.description,
       alternates: { canonical: `${HOSTS.docs}/cli/${section}` },
+      openGraph: {
+        url: `${HOSTS.docs}/cli/${section}`,
+        images: [ogImage(meta?.label ?? section, "Documentation")],
+      },
     };
   }
   const guide = getGuide(slug);
@@ -56,6 +64,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // ⚠️ Canonical on docs.evnx.dev, not evnx.dev. The 301s from /guides/* say
     // this URL is now authoritative; a canonical pointing back contradicts them.
     alternates: { canonical: `${HOSTS.docs}/cli/${guide.slug}` },
+    openGraph: {
+      url: `${HOSTS.docs}/cli/${guide.slug}`,
+      images: [
+        ogImage(
+          guide.title,
+          GUIDE_SECTIONS.find((s) => s.key === guide.section)?.label ?? "Docs",
+        ),
+      ],
+    },
   };
 }
 
