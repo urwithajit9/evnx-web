@@ -1,0 +1,235 @@
+---
+title: "evnx org"
+section: commands
+order: 9
+publishedAt: "2026-10-04"
+excerpt: "Organisations hold a plan and a set of seats. A seat decides which plan's limits apply to its holder — and nothing else. An organisation cannot give anyone access to a vault."
+difficulty: intermediate
+timeToComplete: "8 minutes"
+tags: ["cloud", "organisation", "team", "seats", "billing", "invitations", "evnx"]
+evnxVersion: "0.9.0"
+prerequisites:
+  - commands/auth
+draft: true
+---
+
+An **organisation** owns a plan and a set of seats. Whoever holds a seat gets that plan's limits.
+
+<Prerequisites>
+  <Prerequisite href="/guides/commands/auth">Sign in with evnx auth</Prerequisite>
+</Prerequisites>
+
+<Callout type="danger">
+**An organisation does not give anyone access to a vault.**
+
+This is the first thing to understand and the easiest to assume wrongly. Adding someone to your organisation does not let them read a single secret. The server cannot wrap a vault key — it has never been able to, and that is the guarantee the whole product rests on — so there is no membership, role or seat that could produce vault access.
+
+Sharing a vault is a separate, deliberate act by someone who already holds its key: [`evnx vault share`](/guides/commands/vault).
+</Callout>
+
+---
+
+## Commands
+
+<CommandSignature>
+evnx org create "Acme Corp" --slug acme
+evnx org list
+evnx org members
+evnx org invite colleague@example.com --role member
+evnx org accept evnx_inv_…
+evnx org seats --set 10
+evnx org assign colleague@example.com
+evnx org release colleague@example.com
+evnx org role colleague@example.com --set admin
+evnx org remove colleague@example.com
+evnx org leave
+evnx org delete
+</CommandSignature>
+
+Every command takes `--org <slug>`. You can leave it out when you belong to exactly one organisation; with several, leaving it out is an error that lists them rather than guessing.
+
+<Callout type="info">
+Organisation commands need a real sign-in. An `evnx_tok_` API token is refused — inviting people and assigning seats changes what the account is billed, so it takes a login rather than a CI credential.
+</Callout>
+
+---
+
+## The two things an organisation is
+
+| | |
+|---|---|
+| **A plan** | Free, Team or Enterprise. Seat holders get its limits — vaults, versions per vault, API tokens, audit retention. |
+| **A directory** | A list of people, with roles, so you can find each other's addresses. |
+
+That is the whole feature. It is worth stating what is *not* in that list: shared vaults, shared keys, shared secrets. Those move one at a time, between people who hold them.
+
+---
+
+## Creating one
+
+```bash
+evnx org create "Acme Corp" --slug acme
+```
+
+<OptionTable>
+  <Option flag="NAME" type="string" required>Display name. Anything readable.</Option>
+  <Option flag="--slug" type="string" required>Short handle used by `--org` and in links. Lowercase letters, digits and hyphens; may not start or end with a hyphen.</Option>
+  <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `.evnx.toml`.</Option>
+</OptionTable>
+
+You become the owner — and you hold **no seat**.
+
+<Callout type="info">
+That is deliberate, for two reasons. A seat can only be held in one organisation at a time, so assigning one automatically would fail outright for anyone who already has one elsewhere — with a confusing message, at the worst moment. And a new organisation is on the free plan, so the seat would change nothing anyway.
+
+Seats are assigned when you mean to assign them, which is what they will be once they cost money.
+</Callout>
+
+---
+
+## Inviting people
+
+```bash
+evnx org invite colleague@example.com --role member
+```
+
+The command prints a single-use token and the server emails a link. Both expire in seven days.
+
+<Callout type="warning">
+**Only the invited address can redeem it.** The token alone is not enough — redemption checks it against the signed-in account's own email. That is what makes it safe to print the token and to forward the link; a stranger who gets hold of either cannot join.
+</Callout>
+
+Roles are `member` or `admin`.
+
+<Callout type="danger">
+`owner` cannot be granted — not by invitation, not by a role change. An organisation has exactly one owner, set when it is created. Handing it out would leave two, and nothing could then remove either.
+</Callout>
+
+You may only invite at a rank you outrank, so an admin cannot invite another admin. That would create a pair neither of them can manage.
+
+### Accepting
+
+```bash
+evnx org accept evnx_inv_b315944e8661…
+```
+
+Joining puts you in the directory. It assigns **no seat**, so your limits do not change until an administrator gives you one — and it gives you access to no vault at all.
+
+---
+
+## Seats
+
+A seat is what makes the organisation's plan apply to someone.
+
+```bash
+evnx org seats              # how many are purchased and used
+evnx org seats --set 10     # buy ten
+evnx org seats --unlimited  # no limit
+evnx org assign  colleague@example.com
+evnx org release colleague@example.com
+```
+
+<Callout type="warning">
+**Assigning a seat is a plan change for the person named.** Their limits become the organisation's. Releasing it drops them back to their own plan — and `evnx auth status` will show the new numbers without them doing anything.
+
+Nothing is ever deleted by a seat change. A vault that is over the new limit stays readable; the next push to it is what gets refused.
+</Callout>
+
+Setting the seat *count* is owner-only. Assigning a seat is something any admin can do. The count is what an invoice is computed from, so an admin who could raise it could raise the bill.
+
+### One seat per person
+
+```
+Error: this person already holds a seat in Acme Corp, and a person
+may hold only one. That organisation has to release it first.
+```
+
+You can belong to as many organisations as invite you — a contractor working for two companies is in both directories. But exactly one of them pays for your seat, and that one decides your limits.
+
+<Callout type="info">
+Without this rule there would be no single answer to "which plan applies to me". Letting the most generous win would mean anyone with an Enterprise organisation could raise the limits of every account they invite, for free.
+</Callout>
+
+### More assigned than purchased
+
+Lowering the seat count below what is already assigned is allowed, and reported rather than refused:
+
+```
+✓ seats 7 / 5
+
+! more seats are assigned than purchased. Release some with
+  `evnx org release <email>`.
+```
+
+Nobody loses a seat automatically. This is deliberate — a billing downgrade must never be rejected, or billing and the database end up disagreeing with no way to reconcile them.
+
+---
+
+## Roles
+
+| Role | Can |
+|---|---|
+| `member` | See the directory. |
+| `admin` | Invite, remove, assign seats, change roles below their own. |
+| `owner` | Everything, plus the seat count, renaming and deleting. Exactly one. |
+
+```bash
+evnx org role colleague@example.com --set admin
+```
+
+<Callout type="danger">
+These are **organisation** roles. They are a different thing from vault roles, which `evnx vault role` sets, and neither implies the other. An organisation owner is not an admin of any vault; a vault admin holds no organisation privileges.
+</Callout>
+
+---
+
+## Leaving and removing
+
+```bash
+evnx org leave                           # remove yourself
+evnx org remove colleague@example.com    # admin removes someone
+```
+
+Leaving needs no administrator — it is your membership. Removing someone else takes an admin who outranks them.
+
+The owner can do neither. An organisation with no owner has nobody who can change its billing or delete it, so ownership has to move before the owner can go.
+
+<Callout type="warning">
+Removing someone frees their seat, which drops their limits back to their own plan. It does not recall anything they already pulled, and it does not touch any vault — if they were a member of one, they still are. Use [`evnx vault revoke`](/guides/commands/vault) for that, which re-keys the vault.
+</Callout>
+
+---
+
+## Deleting
+
+```bash
+evnx org delete --org acme
+```
+
+Owner-only, and it asks first. Every seat holder drops back to their own plan.
+
+<Callout type="info">
+This is also the way out of a corner: **`evnx auth delete-account` refuses while you own an organisation**, because an organisation may be paying for other people's seats. Delete or transfer the organisation first, then the account can be closed.
+</Callout>
+
+---
+
+## What the server knows
+
+The same things it knew before, plus a directory:
+
+* Which organisations exist, their names, slugs and plans.
+* Who is a member of each, with their role and whether they hold a seat.
+* Which addresses have been invited, and by whom.
+
+It does not learn anything new about your secrets, because an organisation touches none of them. Vault contents remain ciphertext the server cannot read, and vault keys remain wrapped to individual people.
+
+Organisation events are recorded in the audit trail — created, invited, joined, seat assigned, seat released, role changed, removed, left, deleted. Invitation tokens are never recorded; the invited address is, because that is the fact a billing question turns on.
+
+---
+
+## Related guides
+
+* [`evnx vault`](/guides/commands/vault) — sharing a vault, which is the thing an organisation does *not* do
+* [`evnx auth`](/guides/commands/auth) — sign-in, `auth status`, closing an account
+* [Plan limits](/guides/reference/plan-limits) — what each plan allows
