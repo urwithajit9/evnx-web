@@ -1,1 +1,4 @@
 out/
+.turbo/
+node_modules/
+.wrangler/

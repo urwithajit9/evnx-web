@@ -1,0 +1,39 @@
+{
+  // ─── pay.evnx.dev ───────────────────────────────────────────────────────────
+  //
+  // An assets-only Worker: no `main`, no script, nothing runs server-side. It
+  // serves three files and applies `public/_headers`.
+  //
+  // ⚠️ This config is in the repository on purpose, rather than in the
+  // Cloudflare dashboard. The entire security argument for this origin is its
+  // configuration — the CSP, and the fact that nothing else is served here — and
+  // configuration that lives only in a dashboard cannot be reviewed, diffed, or
+  // noticed when it changes. Pages' Git integration keeps build settings in the
+  // dashboard; Workers keeps them here, which is the better trade for this one.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "evnx-pay",
+
+  // Set when this was created. Workers pins runtime behaviour to this date, so
+  // raising it is a deliberate act, not maintenance.
+  "compatibility_date": "2026-10-05",
+
+  "assets": {
+    // Produced by `node build.mjs`, which substitutes PADDLE_ENVIRONMENT and
+    // PADDLE_CLIENT_TOKEN and refuses to build without them.
+    "directory": "./out"
+
+    // ⚠️ `not_found_handling` is deliberately NOT set, so an unknown path
+    // returns 404.
+    //
+    // The alternative, "single-page-application", would serve the checkout page
+    // at every URL on this domain — so `pay.evnx.dev/account/verify` or
+    // `pay.evnx.dev/evnx-login` would render a real payment page under a URL a
+    // phisher chose. Paddle only ever links to `/`, so there is nothing to gain
+    // and a convincing URL to lose.
+  },
+
+  "observability": {
+    // Cheap, and this is the origin where a silent failure costs a sale.
+    "enabled": true
+  }
+}
