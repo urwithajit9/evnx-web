@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Checkout · evnx</title>
+
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  pay.evnx.dev — the only evnx origin that runs a third-party script.
+
+  ⛔ WHY THIS IS A SEPARATE ORIGIN AND NOT A PAGE IN THE APP
+
+  Paddle Billing has no Paddle-hosted checkout page for the web. A transaction's
+  payment link is *our own* URL with `?_ptxn=txn_…` appended, and the page it
+  points at has to load Paddle.js. So Paddle.js runs somewhere we own; the only
+  question is where.
+
+  Not app.evnx.dev. That origin holds the master key in a Web Worker and the
+  access token in memory. A script there could read the token, and — far worse —
+  could render a convincing "re-enter your master password" prompt. That is a
+  *plaintext* compromise, not a ciphertext one, and it would defeat the single
+  claim the whole product rests on. `evnx-app/public/_headers` says the same
+  thing in its own words: "a tag manager on this origin could [read your
+  secrets]".
+
+  Not evnx.dev either. ADR-1 keeps the marketing origin anonymous, and it
+  already carries analytics and will accumulate more. A payment page is exactly
+  the thing that should not share an origin with whatever marketing adds next.
+
+  So: this origin. It holds no session, no cookie, no key, no analytics and no
+  API credential. It reads one query parameter that Paddle itself put there, and
+  it has nothing to steal.
+
+  ⚠️ KEEP IT THAT WAY. The moment this page needs a login, an API call or an
+  analytics tag, the reason it exists has gone.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+
+<style>
+  /* Tokens copied from evnx-app/src/app/globals.css so the hand-off does not
+     look like a different company. Dark only — this page is on screen for about
+     two seconds before Paddle's overlay covers it. */
+  :root {
+    --bg-void: #080B0F;
+    --bg-surface: #161B22;
+    --border-subtle: #21262D;
+    --text-primary: #E6EDF3;
+    --text-secondary: #8B949E;
+    --brand-500: #E8652A;
+    --danger: #F85149;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Mono', 'SF Mono', ui-monospace, monospace;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    min-height: 100svh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  main { max-width: 42ch; text-align: center; }
+  .mark {
+    display: inline-grid; place-items: center;
+    width: 34px; height: 34px; margin-bottom: 18px;
+    border-radius: 8px; background: var(--brand-500);
+    color: #080B0F; font-weight: 700;
+  }
+  h1 { font-size: 1rem; font-weight: 600; }
+  p { color: var(--text-secondary); margin-top: 10px; }
+  a { color: var(--brand-500); }
+  .panel {
+    margin-top: 20px; padding: 14px 16px; text-align: left;
+    border: 1px solid var(--border-subtle); border-radius: 8px;
+    background: var(--bg-surface); font-size: 0.8125rem;
+  }
+  [hidden] { display: none !important; }
+  .err { color: var(--danger); }
+  .spin {
+    width: 14px; height: 14px; margin: 18px auto 0;
+    border: 2px solid var(--border-subtle); border-top-color: var(--brand-500);
+    border-radius: 50%; animation: s 0.8s linear infinite;
+  }
+  @keyframes s { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark" aria-hidden="true">e</div>
+
+  <div id="loading">
+    <h1>Opening secure checkout…</h1>
+    <p>Payment is handled by <strong>Paddle</strong>, our merchant of record.
+       They are the name that appears on your statement.</p>
+    <div class="spin" role="status" aria-label="Loading"></div>
+  </div>
+
+  <div id="nothing" hidden>
+    <h1>Nothing to pay for</h1>
+    <p>This page opens a checkout that was started in the evnx app. Start one
+       from your organisation's billing screen.</p>
+    <p><a href="https://app.evnx.dev/organizations/">Go to evnx →</a></p>
+  </div>
+
+  <div id="failed" hidden>
+    <h1 class="err">Checkout could not open</h1>
+    <p id="failed-why">Something went wrong before the payment form loaded.</p>
+    <p>Nothing has been charged. You can close this tab and try again from the
+       billing screen.</p>
+    <p><a href="https://app.evnx.dev/organizations/">Back to evnx →</a></p>
+  </div>
+
+  <!-- ⛔ Repeated here because this is the page where someone worries about it. -->
+  <div class="panel">
+    <strong>Your secrets are not involved.</strong>
+    A subscription decides which plan&rsquo;s limits apply to your organisation.
+    It cannot grant or revoke access to a vault, and no payment problem can ever
+    lock you out of one &mdash; evnx holds only ciphertext it cannot read.
+  </div>
+</main>
+
+<!--
+  ⚠️ Loaded from cdn.paddle.com directly, as Paddle requires: "Always load
+  Paddle.js directly from https://cdn.paddle.com/. This makes sure that you're
+  running with the latest security and feature updates from Paddle."
+  Self-hosting a copy would pin a stale payment library.
+
+  The same URL serves both environments; `Paddle.Environment.set()` below picks
+  which backend it talks to.
+-->
+<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+<script>
+  (function () {
+    "use strict";
+
+    // Substituted at build time by `build.mjs` from PADDLE_* environment
+    // variables. The client-side token is designed to be public — it is a
+    // front-end credential that can only open checkouts, never read an account.
+    var ENVIRONMENT = "__PADDLE_ENVIRONMENT__";
+    var CLIENT_TOKEN = "__PADDLE_CLIENT_TOKEN__";
+
+    var show = function (id, why) {
+      ["loading", "nothing", "failed"].forEach(function (k) {
+        document.getElementById(k).hidden = k !== id;
+      });
+      if (why) document.getElementById("failed-why").textContent = why;
+    };
+
+    // ⚠️ Validated rather than trusted, even though Paddle put it there. This
+    // value is reflected into a third-party SDK call from a URL anyone can
+    // craft, and `txn_` + 26 lowercase alphanumerics is Paddle's own documented
+    // pattern. Anything else is treated as no transaction at all.
+    var ptxn = new URLSearchParams(window.location.search).get("_ptxn");
+    if (!ptxn) return show("nothing");
+    if (!/^txn_[a-z0-9]{26}$/.test(ptxn)) {
+      return show("failed", "That payment link is not valid.");
+    }
+
+    if (typeof window.Paddle === "undefined") {
+      // Reached when cdn.paddle.com is blocked — by an extension, a corporate
+      // proxy, or a Content-Security-Policy mistake on this origin. Saying so
+      // beats a spinner that never stops.
+      return show(
+        "failed",
+        "The payment library could not load. An ad blocker or network filter may be blocking cdn.paddle.com."
+      );
+    }
+
+    try {
+      // ⚠️ Explicit. Omitting this defaults to live, so a sandbox token would
+      // fail against the production API with an authentication error that reads
+      // like a broken key.
+      if (ENVIRONMENT === "sandbox") window.Paddle.Environment.set("sandbox");
+
+      window.Paddle.Initialize({
+        token: CLIENT_TOKEN,
+        eventCallback: function (event) {
+          if (event && event.name === "checkout.error") {
+            show("failed", "Paddle reported a problem with this checkout.");
+          }
+        },
+      });
+
+      // Paddle.js reads `_ptxn` from the URL and opens the overlay by itself —
+      // it is already initialized, so there is nothing further to call. The
+      // spinner stays until the overlay covers it.
+    } catch (e) {
+      show("failed", "The payment form could not be started.");
+    }
+  })();
+</script>
+</body>
+</html>

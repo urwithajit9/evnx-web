@@ -1,0 +1,42 @@
+# Response headers for pay.evnx.dev
+#
+# ─── This is the ONLY evnx origin that loads a third-party script ────────────
+#
+# It exists so that app.evnx.dev does not have to. Paddle Billing has no
+# Paddle-hosted checkout page for the web — the payment link is our own URL plus
+# `?_ptxn=`, and that page has to run Paddle.js. Putting Paddle.js on the origin
+# that holds the master key would let a compromised CDN render a fake
+# "re-enter your master password" prompt. So the script runs here, on an origin
+# that holds nothing: no session, no cookie, no key, no API credential, no
+# analytics.
+#
+# ⚠️ The policy below is wider than app.evnx.dev's ON PURPOSE, and that is only
+# acceptable while this origin stays empty. Adding a login, an API call or an
+# analytics tag here would make this the weakest origin we own AND give it
+# something worth stealing. Do not.
+#
+# ⚠️ `frame-src` is load-bearing and easy to omit. Paddle's overlay is an
+# iframe, and with `default-src 'self'` and no frame-src the browser blocks it
+# silently — the spinner simply never finishes and nothing appears in the
+# console except a CSP report most people never look at.
+#
+# The hosts are wildcards because Paddle fans the checkout across several
+# subdomains (buy., checkout-service., sandbox-* mirrors of each) and they are
+# not a documented, stable list. `*.paddle.com` and `*.paddle.io` is the
+# narrowest honest expression of "Paddle, and nothing else".
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.paddle.com https://*.paddle.com; style-src 'self' 'unsafe-inline' https://*.paddle.com; img-src 'self' data: https://*.paddle.com; font-src 'self' data: https://*.paddle.com; connect-src https://*.paddle.com https://*.paddle.io; frame-src https://*.paddle.com https://*.paddle.io; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  # ⚠️ NOT `payment=()` as on the other origins. Paddle Checkout uses the
+  # Payment Request API for Apple Pay and Google Pay, and denying it here would
+  # silently remove those options from the payment form.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=()
+  # Nothing here is cacheable: the page is tiny and a stale copy with an old
+  # client token would fail in a way nobody could reproduce.
+  Cache-Control: no-store
+  # A payment page has no business in a search index.
+  X-Robots-Tag: noindex, nofollow
