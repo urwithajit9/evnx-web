@@ -12,8 +12,18 @@
 //
 // ⚠️ NOT REVIEWED BY A LAWYER. Accurate, plain-English, and written by the
 // people who built the thing — which is the right starting point, not the
-// finish line. Have them reviewed before billing goes live: Paddle is
-// merchant of record and will ask for the privacy policy and terms.
+// finish line.
+//
+// ⚠️ **This is now the gate on taking real money**, not a background task.
+// Paddle is the merchant of record and asks for the privacy policy, the terms
+// and a refund policy as part of approving an account for the LIVE environment.
+// Sandbox needs none of it, so the billing screens can ship and be exercised
+// with test cards while this is outstanding — but a live price cannot.
+//
+// ⚠️ The refund terms in `terms` below contain two numbers somebody has to
+// actually decide rather than inherit from a draft: the 14-day window, and
+// "no refunds for part-used periods on renewal". Both are the ordinary SaaS
+// answer and both are safe defaults; neither is a considered choice yet.
 
 export interface LegalSection {
   heading: string;
@@ -154,9 +164,28 @@ export const terms: LegalDoc = {
     {
       heading: "Plans and payment",
       body: [
-        "The free tier has enforced limits, published on the pricing page and read directly from the server that enforces them. Paid plans are billed per user.",
-        "Self-serve checkout is not live yet. When it is, payments will be handled by a merchant of record, and their terms will apply to the transaction itself.",
+        "The free tier has enforced limits, published on the pricing page and read directly from the server that enforces them. Paid plans are billed per seat, per month or per year.",
+        // ⚠️ Paddle must be named. They are the seller on the customer's bank
+        // statement, and an unrecognised name on a statement is the most common
+        // cause of a chargeback — which costs more than the subscription.
+        "Payments are handled by Paddle.com Market Ltd, who act as the merchant of record and are the seller for the transaction. Paddle's own terms apply to the payment itself, Paddle is responsible for VAT and sales tax, and Paddle is the name that appears on your statement. evnx never receives or stores your card details.",
+        "A plan is bought by an organisation and applies to whoever holds its seats. Changing the seat count takes effect immediately and Paddle prorates the difference.",
       ],
+      callout:
+        "A subscription decides which plan's limits apply. It cannot grant or revoke access to a vault, and nothing is ever deleted for non-payment — the server holds only ciphertext it cannot read.",
+    },
+    {
+      // ⚠️ Its own section rather than a sentence inside the one above. A
+      // merchant of record's onboarding review looks for a refund policy
+      // specifically, and so do customers — burying it reads as hiding it.
+      heading: "Refunds and cancellation",
+      body: [
+        "You can cancel at any time from the billing screen, which hands you to Paddle. Cancelling stops the next renewal; it does not end the period you have already paid for. Your plan runs to the end of that period and your limits change only when it expires.",
+        "If evnx is not what you expected, write to support@evnx.dev within 14 days of a first payment and we will refund it in full. After that, and on renewals, we do not refund part-used periods by default — but if something went wrong on our side, tell us and we will put it right.",
+        "Refunds are issued by Paddle, back to the original payment method.",
+      ],
+      callout:
+        "Cancelling never deletes anything. Your vaults stay where they are, your limits return to the free tier when the period ends, and evnx cloud export works on every plan including free.",
     },
     {
       heading: "Availability, and what we do not promise",

@@ -62,21 +62,40 @@ const limits = limitsData.plans as Record<PlanId, PlanLimits>;
  * checkout, which is what keeps that rule enforced rather than remembered.
  */
 /**
- * ⚠️ BILLING IS NOT BUILT. `app.evnx.dev/billing` returns 404 today.
+ * Whether the Upgrade button goes to checkout or to registration.
  *
- * The pricing page shipped ahead of the product — a deliberate choice at the
- * time, flagged as "marketing at week six against something that cannot take
- * money" — but a paid CTA pointing at a 404 is where that choice stops being
- * a trade-off and starts being a broken button on the conversion path.
+ * ⚠️ **An environment variable, not a constant, and deliberately so.**
  *
- * So until Chain 3 lands, upgrade sends people to registration, which exists
- * and is the honest first step anyway: you need an account before you can buy
- * a seat on it. Flip this to `true` in the same commit that deploys
- * /billing — and not before, because nothing else will tell you.
+ * It was a constant while `app.evnx.dev/billing` did not exist. It does now —
+ * it is built, and the server, the checkout origin and the Paddle webhook are
+ * all in place. What remains is purely a question of *deploy order*, and a
+ * constant makes that order a commit:
+ *
+ *   app.evnx.dev/billing  →  pay.evnx.dev  →  api.evnx.dev (migration 012)
+ *   →  **then** this
+ *
+ * Flipping it before those are live points a paid CTA at a 404; flipping it
+ * back after an incident should take a minute, not a pull request. So it is
+ * `NEXT_PUBLIC_BILLING_LIVE=true` in the host's environment — set it, redeploy,
+ * and unset it to roll back.
+ *
+ * ⚠️ **This is not the same thing as taking real money.** It controls where a
+ * button goes. Whether a payment is real is decided entirely by the *server's*
+ * `PADDLE_ENVIRONMENT`, so this can be `true` against a Paddle sandbox and the
+ * checkout will accept test cards only. Going live is a separate migration of
+ * the Paddle account — and that one does gate on the legal review, because
+ * Paddle asks for the privacy policy, terms and refund policy before approving
+ * a live account. See `@evnx/content`'s `legal.ts`.
+ *
+ * ⚠️ Defaults to `false`. A missing or misspelled variable must not turn
+ * checkout on by accident.
  */
-export const BILLING_LIVE = false;
+export const BILLING_LIVE = process.env.NEXT_PUBLIC_BILLING_LIVE === "true";
 
 export function checkoutUrl(plan: PlanId): string {
+  // ⚠️ `appUrl` adds the trailing slash before the query — `app.evnx.dev` is a
+  // static export with `trailingSlash: true`, so `/billing?plan=team` would be
+  // a redirect rather than a page. Verified in `site.ts`.
   return BILLING_LIVE ? appUrl(`/billing?plan=${plan}`) : appUrl("/register");
 }
 

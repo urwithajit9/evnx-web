@@ -38,6 +38,7 @@ evnx org members
 evnx org invite colleague@example.com --role member
 evnx org accept evnx_inv_…
 evnx org seats --set 10
+evnx org billing
 evnx org assign colleague@example.com
 evnx org release colleague@example.com
 evnx org role colleague@example.com --set admin
@@ -130,6 +131,10 @@ evnx org release colleague@example.com
 ```
 
 <Callout type="warning">
+**Once the organisation has a paid subscription, `--set` stops working here** — and that is deliberate. The seat count is what the invoice is computed from, so changing it locally would either grant seats nobody is billed for or bill for seats nobody has, and the next event from the payment provider would silently undo it either way. `evnx org seats --set` says so and points you at the billing screen.
+</Callout>
+
+<Callout type="warning">
 **Assigning a seat is a plan change for the person named.** Their limits become the organisation's. Releasing it drops them back to their own plan — and `evnx auth status` will show the new numbers without them doing anything.
 
 Nothing is ever deleted by a seat change. A vault that is over the new limit stays readable; the next push to it is what gets refused.
@@ -164,6 +169,46 @@ Lowering the seat count below what is already assigned is allowed, and reported 
 Nobody loses a seat automatically. This is deliberate — a billing downgrade must never be rejected, or billing and the database end up disagreeing with no way to reconcile them.
 
 ---
+
+## Billing
+
+```bash
+evnx org billing
+```
+
+Shows what the organisation is on and until when:
+
+```
+  acme — team plan
+  seats 7 / 10
+  renews 2026-11-03
+```
+
+It is **read-only**. Buying a plan, changing the seat count and updating a card all happen at [app.evnx.dev/billing](https://app.evnx.dev/billing/), because a card form does not belong in a terminal and Paddle — the merchant of record — owns the transaction either way. What a terminal is the right place for is the question this answers: *why are my limits what they are, and is that about to change?*
+
+### Cancelled is not the same as over
+
+<Callout type="warning">
+A cancelled subscription keeps running to the end of the period you have paid for. `evnx org billing` distinguishes the two, because the dates are identical and the meanings are opposite:
+
+```
+  renews 2026-11-03          ← it will be charged again
+  ! this plan ENDS on 2026-11-03   ← it will not
+```
+
+Until that date nothing changes: the plan applies, every limit is the one you paid for, and no vault is affected.
+</Callout>
+
+### A failed payment changes nothing immediately
+
+```
+  ! a payment did not go through.
+  Paddle will retry. Your limits have not changed yet.
+```
+
+<Callout type="info">
+**Nothing is ever deleted for non-payment, and nothing can be.** The server holds only ciphertext it cannot read — it could not delete a secret selectively if it wanted to. A lapsed subscription changes which plan's limits apply, and that is the entire effect. A vault already over the new limit stays readable; the next push to it is refused.
+</Callout>
 
 ## Roles
 

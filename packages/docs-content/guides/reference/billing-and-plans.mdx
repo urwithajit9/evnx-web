@@ -1,0 +1,159 @@
+---
+title: "Billing"
+section: reference
+order: 13
+publishedAt: "2026-10-05"
+updatedAt: "2026-10-05"
+excerpt: "How a paid plan is bought, who can change it, what a failed payment does — and the one thing a subscription can never do, which is reach a secret."
+difficulty: beginner
+timeToComplete: "6 minutes"
+tags: ["cloud", "billing", "plans", "seats", "organisation", "paddle", "evnx"]
+evnxVersion: "0.9.0"
+prerequisites:
+  - commands/org
+draft: true
+---
+
+A paid plan is bought by an **organisation**, not by an account. Whoever holds one of its seats gets that plan's limits.
+
+<Callout type="warning">
+**No subscription can reach a secret, in any state.** Billing decides which plan's limits apply. It cannot grant or revoke access to a vault, and nothing is deleted for non-payment — the server holds only ciphertext it cannot read, so it could not delete a secret selectively even if someone wanted that.
+
+That is worth reading twice, because billing trouble on a secrets product *feels* like losing access to secrets. It never is.
+</Callout>
+
+---
+
+## Why an organisation and not an account
+
+A seat is transferable; an account is not. Buying per-account would mean a plan dying with the person who left, and a new colleague starting from scratch. An organisation holds the plan, assigns a seat to whoever needs it today, and takes it back when they move on.
+
+It also means the person paying and the person benefiting can be different people — which is how every team actually works.
+
+<Callout type="info">
+**An organisation still gives nobody access to a vault.** It is a plan and a directory. Sharing a vault stays a deliberate act by someone who holds its key, because the server cannot wrap a vault key for anyone. See [evnx org](/cli/commands/org).
+</Callout>
+
+---
+
+## Buying a plan
+
+At [app.evnx.dev/billing](https://app.evnx.dev/billing/), as the organisation's **owner**.
+
+1. Choose a plan and a billing interval.
+2. Choose how many seats. You can change this later; the difference is prorated.
+3. **Continue to payment** hands you to Paddle.
+
+<Callout type="info">
+**Payment opens in a new tab, on a different domain.** That is not an accident. Your master key lives only in this browser's memory — navigating away from `app.evnx.dev` loses it, and you would come back from paying to a sign-in screen. The checkout runs on `pay.evnx.dev`, an origin that holds no session, no key and no credential, so that no payment script ever runs where your key does.
+</Callout>
+
+### Paddle is the seller
+
+Payments are handled by **Paddle**, who act as the merchant of record. They are the seller for the transaction, they handle VAT and sales tax, and **Paddle is the name that appears on your bank statement** — not evnx. evnx never receives or stores your card details.
+
+---
+
+## Seats
+
+Two numbers, and they can differ:
+
+| | |
+|---|---|
+| **assigned** | How many people currently hold a seat |
+| **purchased** | How many the subscription pays for |
+
+```bash
+evnx org billing
+#   acme — team plan
+#   seats 7 / 10
+```
+
+### More assigned than purchased
+
+Allowed, reported, never enforced.
+
+<Callout type="warning">
+Lowering the seat count below what is already assigned does **not** take anyone's seat away. Everyone keeps theirs, and the organisation simply reports as over-seated until someone is released.
+
+This is deliberate. A downgrade arriving from the payment provider must never be refused by us, or the provider's records and ours end up disagreeing with no way to reconcile them. So the system records the state, says so plainly, and leaves the decision to a person.
+</Callout>
+
+Release one with `evnx org release <email>`, or buy more from the billing screen.
+
+### Changing the count
+
+Once a subscription exists, the seat count is changed **on the billing screen**, not with `evnx org seats --set`. The CLI command will tell you so rather than failing: the count is what the invoice is computed from, so a local edit would be undone by the next event from Paddle.
+
+---
+
+## Cancelling
+
+From the billing screen → **Manage payment & cancellation**, which opens Paddle's own portal.
+
+<Callout type="warning">
+**Cancelled is not the same as over.** Your plan runs to the end of the period you have already paid for. Until that date nothing changes at all — every limit is the one you bought.
+
+Both the app and the CLI distinguish the two, because the dates are identical and the meanings are opposite:
+
+```
+  renews 2026-11-03                 ← it will be charged again
+  ! this plan ENDS on 2026-11-03    ← it will not
+```
+</Callout>
+
+On the end date, everyone holding a seat drops to the free plan's limits. **Nothing is deleted.** A vault already over the new limit stays readable and exportable; the next *push* to it is what gets refused.
+
+You can undo a cancellation any time before that date — **Resume subscription** on the billing screen.
+
+---
+
+## When a payment fails
+
+The subscription goes **past due** and Paddle retries on its own schedule.
+
+<Callout type="info">
+**Your limits do not change when a payment fails.** Not immediately, and not while Paddle is still retrying. Update the payment method from the billing screen; nothing else is required of you, and nothing of yours is at risk in the meantime.
+</Callout>
+
+---
+
+## Invoices
+
+Listed on the billing screen, each linking out to Paddle for the receipt.
+
+<Callout type="info">
+**We store none of it.** Paddle is the merchant of record and holds the billing details; this list is a pass-through. Keeping a copy would make evnx a processor of payment data it has no reason to hold.
+</Callout>
+
+---
+
+## Who can do what
+
+| | Member | Admin | Owner |
+|---|:---:|:---:|:---:|
+| See the plan and whether it is paid up | ✅ | ✅ | ✅ |
+| Assign and release seats | ❌ | ✅ | ✅ |
+| Buy a plan, change the seat count, change the card, cancel | ❌ | ❌ | ✅ |
+
+An admin sees an explanation naming the owner rather than a row of greyed-out buttons — a disabled control looks broken, a sentence says who to ask.
+
+---
+
+## Refunds
+
+See the [terms](https://www.evnx.dev/terms). In short: cancel any time, the period you paid for still runs, and if evnx is not what you expected, write to support@evnx.dev within 14 days of a first payment for a full refund.
+
+---
+
+## Self-hosting
+
+If you run your own evnx server, billing is **optional and off by default**. With no payment provider configured, the billing routes answer "not configured on this deployment" and plans are set by whoever runs it. Nothing else changes.
+
+---
+
+## Related guides
+
+- [evnx org](/cli/commands/org) — organisations, seats and invitations
+- [Plan limits](/cli/reference/plan-limits) — what each plan actually allows
+- [Cloud architecture](/cli/reference/cloud-architecture) — what the server holds, and what it cannot
