@@ -121,9 +121,17 @@ export function index(surface) {
   // Aliases are real invocations. `evnx surface` must not be reported as wrong
   // just because the command is now called `commands`.
   const aliasPaths = new Set();
+  // ⚠️ And the reverse direction, which the alias Set alone cannot answer:
+  // `evnx surface` and `evnx commands` are ONE command, so anything counting
+  // coverage must fold them together or it reports a command twice and a guide
+  // as documenting two things it mentions once.
+  const canonicalOf = new Map();
   for (const c of visible) {
+    const canonical = c.path.join(" ");
     for (const a of c.visible_aliases ?? []) {
-      aliasPaths.add([...c.path.slice(0, -1), a].join(" "));
+      const aliased = [...c.path.slice(0, -1), a].join(" ");
+      aliasPaths.add(aliased);
+      canonicalOf.set(aliased, canonical);
     }
   }
 
@@ -137,7 +145,10 @@ export function index(surface) {
     }
   }
   for (const c of roots) {
-    for (const a of c.visible_aliases ?? []) aliasPaths.add(a);
+    for (const a of c.visible_aliases ?? []) {
+      aliasPaths.add(a);
+      canonicalOf.set(a, c.path.join(" "));
+    }
   }
 
   const flagsOf = new Map();
@@ -150,5 +161,5 @@ export function index(surface) {
     flagsOf.set(c.path.join(" "), set);
   }
 
-  return { visible, roots, paths, aliasPaths, subsOf, flagsOf };
+  return { visible, roots, paths, aliasPaths, canonicalOf, subsOf, flagsOf };
 }

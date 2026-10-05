@@ -41,6 +41,12 @@ import { findBinary, readSurface, index } from "./lib/surface.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const listOnly = process.argv.includes("--list");
+// 5.2 reads this: the per-file set of commands each page actually demonstrates,
+// as resolved by the walk above. Read-only, and it says nothing about whether
+// the invocations were VALID — a page documenting a command that no longer
+// exists still demonstrates it, and that is the check's job to report, not this
+// mode's job to hide.
+const emitCommands = process.argv.includes("--emit-commands");
 
 // ─── The baseline ────────────────────────────────────────────────────────────
 //
@@ -102,6 +108,19 @@ const SHELL_LANGS = new Set(["bash", "sh", "shell", "console", "zsh"]);
 const FENCE = /```([a-zA-Z0-9]*)\n([\s\S]*?)```/g;
 const INLINE = /`([^`\n]+)`/g;
 
+/**
+ * ⚠️ `<CommandSignature>` holds commands, and missing it cost a real finding.
+ *
+ * It is a JSX block, not a fence, so neither regex above saw inside it — and it
+ * is precisely where a guide lists the full command set it covers. 40
+ * invocations across 7 guides were invisible, which made `evnx org list` and
+ * `evnx org members` look undocumented when they were sitting in the first
+ * block of their own guide.
+ *
+ * `<TerminalOutput>` is deliberately NOT here: it holds what evnx printed back.
+ */
+const COMMAND_SIGNATURE = /<CommandSignature[^>]*>([\s\S]*?)<\/CommandSignature>/g;
+
 /** A value the reader is meant to replace. Checking it would be guessing. */
 function isPlaceholder(tok) {
   return (
@@ -160,7 +179,12 @@ function checkInvocation({ text, file, where }) {
     .map((t) => t.replace(/[)\]},;"']+$/, "").replace(/^[("'`]+/, ""))
     .filter(Boolean);
   if (toks[0] !== "evnx") return;
-  seen.push({ text, file });
+  // ⚠️ `record` is filled in below once the tree walk has resolved how deep the
+  // command actually goes. 5.2 consumes that resolution rather than re-deriving
+  // it: two parsers that disagree about what `evnx auth token create` is would
+  // be worse than one that is occasionally wrong in a single place.
+  const record = { text, file, path: null };
+  seen.push(record);
 
   // ⚠️ Everything after a bare `--` belongs to the CHILD process.
   //
@@ -171,7 +195,7 @@ function checkInvocation({ text, file, where }) {
   const dashdash = toks.indexOf("--");
   if (dashdash !== -1) toks.length = dashdash;
 
-  const { paths, aliasPaths, subsOf, flagsOf, roots } = SURF;
+  const { paths, aliasPaths, canonicalOf, subsOf, flagsOf, roots } = SURF;
 
   const rest = toks.slice(1).filter((t) => !t.startsWith("-"));
   if (rest.length === 0) return; // bare `evnx`, or only flags
@@ -216,6 +240,10 @@ function checkInvocation({ text, file, where }) {
     path = `${path} ${next}`;
     i += 1;
   }
+  // Resolved. An alias resolves to the alias as written; `aliasPaths` maps it
+  // to the canonical name for the caller that cares.
+  record.path = canonicalOf.get(path) ?? path;
+
   const known = flagsOf.get(path);
   if (known) {
     for (const t of toks.slice(1)) {
@@ -275,6 +303,11 @@ for (const file of files) {
       checkInvocation({ text: seg, file: rel, where: "code block" });
     }
   }
+  for (const m of text.matchAll(COMMAND_SIGNATURE)) {
+    for (const seg of segments(m[1])) {
+      checkInvocation({ text: seg, file: rel, where: "command signature" });
+    }
+  }
   for (const m of text.matchAll(INLINE)) {
     const t = m[1].trim();
     if (!t.startsWith("evnx")) continue;
@@ -284,6 +317,18 @@ for (const file of files) {
     if (/[.,;:!?]/.test(t) || t.split(/\s+/).length > 8) continue;
     checkInvocation({ text: t, file: rel, where: "inline code" });
   }
+}
+
+if (emitCommands) {
+  const byFile = {};
+  for (const s of seen) {
+    if (!s.path) continue;
+    (byFile[s.file] ??= new Set()).add(s.path);
+  }
+  const out = {};
+  for (const [f, set] of Object.entries(byFile)) out[f] = [...set].sort();
+  console.log(JSON.stringify(out, null, 2));
+  process.exit(0);
 }
 
 if (listOnly) {

@@ -34,6 +34,16 @@ export type Guide = {
   timeToComplete: string
   tags: string[]
   evnxVersion: string
+  /**
+   * Every command this guide demonstrates, as full paths (`"auth token create"`).
+   *
+   * ⚠️ **Generated, not authored** — `pnpm guide:commands` derives it from the
+   * `evnx …` invocations in the page, resolved against a real binary. Editing
+   * it by hand is overwritten on the next run, and `--check` fails in CI. A
+   * guide claims a command by showing it; the fix for a missing entry is to add
+   * the example, not the key.
+   */
+  commands?: string[]
   prerequisites?: string[]
   draft: boolean
   content: string

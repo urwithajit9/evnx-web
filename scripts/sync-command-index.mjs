@@ -22,12 +22,14 @@
 //   `cloud delete-version` shipped with no row in its own table
 //   `evnx vault rekey` was documented before it existed
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findBinary, readSurface, index } from "./lib/surface.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, "..");
 const GUIDES = join(HERE, "..", "packages", "docs-content", "guides", "commands");
 const OUT = join(HERE, "..", "packages", "docs-content", "src", "command-index.json");
 
@@ -80,8 +82,25 @@ try {
   process.exit(1);
 }
 
-const { visible, roots } = index(surface);
+const { visible, roots, subsOf } = index(surface);
 const guides = guidesOnDisk();
+
+// What each guide actually demonstrates, resolved by the one parser that knows
+// how to read a shell fence — see sync-guide-commands.mjs for why this is not
+// re-derived here.
+let demonstratedByFile = {};
+try {
+  demonstratedByFile = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [join(HERE, "check-cli-invocations.mjs"), "--emit-commands"],
+      { cwd: ROOT, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+    ),
+  );
+} catch {
+  // Advisory: without it the index still builds, it just cannot report
+  // subcommand coverage.
+}
 
 const commands = roots.map((r) => {
   const g = guides.get(r.name);
@@ -102,6 +121,23 @@ const commands = roots.map((r) => {
 });
 
 const undocumented = commands.filter((c) => !c.guide).map((c) => c.name);
+
+// ─── Subcommand coverage, which the per-file guide map alone cannot see ──────
+//
+// A root command having a guide says nothing about whether that guide shows
+// its fifteen subcommands. `evnx org` shipped in 0.9.0 with a guide covering
+// twelve of them; the four it missed were `list`, `members`, `invites` and
+// `uninvite` — the entire READ side, so the guide taught people to create
+// things they could not then see.
+//
+// ⚠️ Parents are excluded. `evnx auth token` takes a subcommand and is never
+// invoked alone, so "nobody demonstrates it" is correct rather than a gap, and
+// counting it would bury the four real findings under three false ones.
+const demonstrated = new Set(Object.values(demonstratedByFile).flat());
+const leaves = visible
+  .map((c) => c.path.join(" "))
+  .filter((p) => !(subsOf.get(p)?.size > 0));
+const unshown = leaves.filter((p) => !demonstrated.has(p)).sort();
 const orphanGuides = [...guides.keys()].filter(
   (name) => !roots.some((r) => r.name === name),
 );
@@ -115,6 +151,9 @@ const payload = {
   // the DIFF of this file. A number recomputed on every page load is a number
   // nobody ever reviews.
   undocumented,
+  // Leaf commands no guide demonstrates. Baked in for the same reason as
+  // `undocumented`: a new gap then shows up in this file's diff.
+  unshown_subcommands: unshown,
   orphan_guides: orphanGuides,
 };
 
@@ -137,6 +176,17 @@ if (undocumented.length) {
   // across two repositories. The number is in the file, so it is reviewable.
   console.log(
     `⚠ ${undocumented.length} command(s) have no guide: ${undocumented.join(", ")}`,
+  );
+}
+
+if (unshown.length) {
+  // ⚠️ Also a warning, for the same reason: a subcommand can ship ahead of the
+  // paragraph that shows it. But unlike `undocumented`, this one is easy to
+  // never notice — the root command HAS a guide, so every other check is green
+  // while a quarter of the command is invisible.
+  console.log(
+    `⚠ ${unshown.length} subcommand(s) are demonstrated in no guide: ` +
+      unshown.map((p) => `evnx ${p}`).join(", "),
   );
 }
 

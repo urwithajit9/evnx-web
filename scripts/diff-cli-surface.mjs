@@ -129,35 +129,49 @@ for (const [k, c] of is) {
 
 // ─── Which guides those touch ────────────────────────────────────────────────
 //
-// By the root command: `evnx vault share` is documented inside commands/vault,
-// not at a page of its own. ⚠️ Reference and use-case guides are matched by
-// SEARCHING them, because nothing declares which commands they cover — that is
-// 5.2, which has not been built. Stated so the output is not over-trusted.
-function guidesMentioning(roots) {
+// ✅ **Exact since 5.2.** Every guide declares, in its `commands:` frontmatter,
+// the full command paths it demonstrates — generated from the page itself and
+// checked in CI, so it cannot drift from what the page shows.
+//
+// ⚠️ This used to regex the body for `evnx <root>`, which was over-broad in
+// both directions: a guide that says "evnx vault" once in passing was listed
+// as needing a new badge, and a change to `vault share` could not be
+// distinguished from a change to `vault create`. Matching on the full path
+// means a release that touched only `vault share` names only the pages that
+// actually show `vault share`.
+function guidesFor(paths) {
+  const want = new Set(paths);
   const hits = new Map();
   const walk = (dir) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, e.name);
       if (e.isDirectory()) { walk(p); continue; }
       if (!e.name.endsWith(".mdx")) continue;
-      const body = readFileSync(p, "utf8");
-      for (const r of roots) {
-        if (new RegExp(`\\bevnx ${r}\\b`).test(body)) {
-          const rel = p.slice(GUIDES.length + 1);
-          if (!hits.has(rel)) hits.set(rel, new Set());
-          hits.get(rel).add(r);
-        }
+      const m = readFileSync(p, "utf8").match(/^---\n([\s\S]*?)\n---/);
+      if (!m) continue;
+      const line = m[1].split("\n").find((l) => /^commands:/.test(l));
+      if (!line) continue;
+      let declared;
+      try {
+        declared = JSON.parse(line.slice(line.indexOf("[")));
+      } catch {
+        continue; // malformed; `pnpm guide:commands:check` is what reports it
       }
+      const matched = declared.filter((d) => want.has(d));
+      if (matched.length) hits.set(p.slice(GUIDES.length + 1), new Set(matched));
     }
   };
   walk(GUIDES);
   return hits;
 }
 
-const touchedRoots = new Set(
-  [...added, ...removed, ...changed.map((c) => c.path)].map((p) => p.split(" ")[0]),
-);
-const guides = guidesMentioning(touchedRoots);
+// ⚠️ Full paths, not root commands. That is the whole point of 5.2.
+const touchedPaths = new Set([
+  ...added,
+  ...removed,
+  ...changed.map((c) => c.path),
+]);
+const guides = guidesFor(touchedPaths);
 
 if (asJson) {
   console.log(

@@ -7,6 +7,7 @@ excerpt: "Organisations hold a plan and a set of seats. A seat decides which pla
 difficulty: intermediate
 timeToComplete: "8 minutes"
 tags: ["cloud", "organisation", "team", "seats", "billing", "invitations", "evnx"]
+commands: ["auth", "auth delete-account", "auth status", "org accept", "org assign", "org billing", "org create", "org delete", "org invite", "org invites", "org leave", "org list", "org members", "org release", "org remove", "org role", "org seats", "org uninvite", "vault", "vault revoke", "vault role", "vault share"]
 evnxVersion: "0.9.0"
 prerequisites:
   - commands/auth
@@ -36,6 +37,8 @@ evnx org create "Acme Corp" --slug acme
 evnx org list
 evnx org members
 evnx org invite colleague@example.com --role member
+evnx org invites
+evnx org uninvite evnx_inv_…
 evnx org accept evnx_inv_…
 evnx org seats --set 10
 evnx org billing
@@ -107,6 +110,28 @@ Roles are `member` or `admin`.
 </Callout>
 
 You may only invite at a rank you outrank, so an admin cannot invite another admin. That would create a pair neither of them can manage.
+
+### Seeing what is outstanding
+
+```bash
+evnx org invites
+```
+
+Invitations that have been sent and not yet redeemed, with the address, the role they carry and when they expire. An invitation that has been accepted is not listed here — it is a member now, so it shows up under `evnx org members`.
+
+### Withdrawing one
+
+```bash
+evnx org uninvite evnx_inv_b315944e8661…
+```
+
+Takes the invitation id printed by `evnx org invites`.
+
+<Callout type="warning">
+**Withdraw rather than wait.** An invitation is a bearer credential for seven days, and the usual reason to want it gone — the wrong address, or someone who has since left — is the reason it should not sit there until it expires on its own.
+
+The redemption check still applies, so only the invited address could ever use it. But "only one specific stranger can join your organisation" is not a reassurance worth relying on when withdrawing it is one command.
+</Callout>
 
 ### Accepting
 

@@ -19,7 +19,9 @@
     "cli:index": "node scripts/sync-command-index.mjs",
     "cli:index:check": "node scripts/sync-command-index.mjs --check",
     "cli:check": "node scripts/check-cli-invocations.mjs",
-    "cli:diff": "node scripts/diff-cli-surface.mjs"
+    "cli:diff": "node scripts/diff-cli-surface.mjs",
+    "guide:commands": "node scripts/sync-guide-commands.mjs",
+    "guide:commands:check": "node scripts/sync-guide-commands.mjs --check"
   },
   "devDependencies": {
     "turbo": "^2.3.3"
