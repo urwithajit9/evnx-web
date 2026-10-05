@@ -1,0 +1,422 @@
+{
+  "schema": 1,
+  "evnx_version": "0.9.0",
+  "features": [
+    "net",
+    "migrate",
+    "backup",
+    "cloud"
+  ],
+  "commands": [
+    {
+      "name": "init",
+      "about": "Interactive project setup — generates .env.example",
+      "aliases": [],
+      "guide": "/guides/commands/init",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "add",
+      "about": "Add environment variables to existing .env files",
+      "aliases": [],
+      "guide": "/guides/commands/add",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "add service",
+          "about": "Add variables for a specific service"
+        },
+        {
+          "path": "add framework",
+          "about": "Add variables for a framework"
+        },
+        {
+          "path": "add blueprint",
+          "about": "Add variables from a stack blueprint (without overwriting existing)"
+        },
+        {
+          "path": "add custom",
+          "about": "Add custom variables interactively"
+        }
+      ]
+    },
+    {
+      "name": "validate",
+      "about": "Check .env against .env.example, find issues",
+      "aliases": [],
+      "guide": "/guides/commands/validate",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "scan",
+      "about": "Detect secrets that look real (AWS keys, tokens, etc.)",
+      "aliases": [],
+      "guide": "/guides/commands/scan",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "diff",
+      "about": "Compare .env vs .env.example — show missing/extra vars",
+      "aliases": [],
+      "guide": "/guides/commands/diff",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "convert",
+      "about": "Transform `.env` files into multiple output formats",
+      "aliases": [],
+      "guide": "/guides/commands/convert",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "migrate",
+      "about": "Full migration workflow to secret managers",
+      "aliases": [],
+      "guide": "/guides/commands/migrate",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "sync",
+      "about": "Keep .env and .env.example in sync",
+      "aliases": [],
+      "guide": "/guides/commands/sync",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "template",
+      "about": "Generate config files from templates",
+      "aliases": [],
+      "guide": "/guides/commands/template",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "backup",
+      "about": "Create encrypted backup of .env",
+      "aliases": [],
+      "guide": "/guides/commands/backup",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "restore",
+      "about": "Restore from encrypted backup",
+      "aliases": [],
+      "guide": "/guides/commands/restore",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "auth",
+      "about": "Manage your evnx cloud account",
+      "aliases": [],
+      "guide": "/guides/commands/auth",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "auth register",
+          "about": "Create an evnx cloud account"
+        },
+        {
+          "path": "auth login",
+          "about": "Sign in to evnx cloud"
+        },
+        {
+          "path": "auth logout",
+          "about": "Sign out of evnx cloud"
+        },
+        {
+          "path": "auth token",
+          "about": "Manage API tokens for CI/CD"
+        },
+        {
+          "path": "auth token create",
+          "about": "Mint a token. Shown once, then only revocable"
+        },
+        {
+          "path": "auth token list",
+          "about": "List the account's live tokens"
+        },
+        {
+          "path": "auth token revoke",
+          "about": "Revoke a token by name or id"
+        },
+        {
+          "path": "auth totp",
+          "about": "Manage two-factor authentication"
+        },
+        {
+          "path": "auth totp enable",
+          "about": "Turn on two-factor authentication"
+        },
+        {
+          "path": "auth totp disable",
+          "about": "Turn two-factor authentication off"
+        },
+        {
+          "path": "auth totp recovery-codes",
+          "about": "Issue a fresh set of recovery codes, invalidating the old ones"
+        },
+        {
+          "path": "auth sessions",
+          "about": "List and revoke active sessions"
+        },
+        {
+          "path": "auth sessions list",
+          "about": "List active sessions"
+        },
+        {
+          "path": "auth sessions revoke",
+          "about": "Revoke one session by id, or by the short form the listing shows"
+        },
+        {
+          "path": "auth sessions revoke-others",
+          "about": "Revoke every session except this one"
+        },
+        {
+          "path": "auth devices",
+          "about": "Networks and browsers this account has signed in from"
+        },
+        {
+          "path": "auth devices list",
+          "about": "List the networks and browsers this account has signed in from"
+        },
+        {
+          "path": "auth devices disavow",
+          "about": "Report that a device was not you"
+        },
+        {
+          "path": "auth status",
+          "about": "Show your account as the server sees it"
+        },
+        {
+          "path": "auth rotate-master-password",
+          "about": "Change your master password"
+        },
+        {
+          "path": "auth undo-password-change",
+          "about": "Undo a master password change, by proving the previous password"
+        },
+        {
+          "path": "auth download-data",
+          "about": "Download everything the server holds about your account, as JSON"
+        },
+        {
+          "path": "auth delete-account",
+          "about": "Delete your account and everything only you can reach"
+        }
+      ]
+    },
+    {
+      "name": "org",
+      "about": "Manage organisations — billing and a directory",
+      "aliases": [],
+      "guide": "/guides/commands/org",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "org create",
+          "about": "Create an organisation. You become its owner"
+        },
+        {
+          "path": "org list",
+          "about": "List the organisations this account belongs to"
+        },
+        {
+          "path": "org members",
+          "about": "Who is in an organisation, and who holds a seat"
+        },
+        {
+          "path": "org invite",
+          "about": "Invite someone by email"
+        },
+        {
+          "path": "org invites",
+          "about": "Invitations sent but not yet redeemed"
+        },
+        {
+          "path": "org uninvite",
+          "about": "Withdraw an invitation"
+        },
+        {
+          "path": "org accept",
+          "about": "Redeem an invitation token"
+        },
+        {
+          "path": "org billing",
+          "about": "What this organisation is on, and until when"
+        },
+        {
+          "path": "org seats",
+          "about": "Show or set how many seats are purchased"
+        },
+        {
+          "path": "org assign",
+          "about": "Give someone a seat"
+        },
+        {
+          "path": "org release",
+          "about": "Take a seat back"
+        },
+        {
+          "path": "org role",
+          "about": "Change someone's role"
+        },
+        {
+          "path": "org remove",
+          "about": "Remove someone from an organisation"
+        },
+        {
+          "path": "org delete",
+          "about": "Delete an organisation"
+        },
+        {
+          "path": "org leave",
+          "about": "Leave an organisation"
+        }
+      ]
+    },
+    {
+      "name": "vault",
+      "about": "Manage encrypted vaults",
+      "aliases": [],
+      "guide": "/guides/commands/vault",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "vault create",
+          "about": "Create a vault"
+        },
+        {
+          "path": "vault list",
+          "about": "List the vaults you can reach"
+        },
+        {
+          "path": "vault delete",
+          "about": "Delete a vault and every version in it"
+        },
+        {
+          "path": "vault share",
+          "about": "Share a vault with another evnx account"
+        },
+        {
+          "path": "vault members",
+          "about": "List who can reach a vault"
+        },
+        {
+          "path": "vault role",
+          "about": "Change a member's role"
+        },
+        {
+          "path": "vault revoke",
+          "about": "Revoke a member's access, rotating the vault key"
+        },
+        {
+          "path": "vault rekey",
+          "about": "Rotate a vault's key without removing anyone"
+        }
+      ]
+    },
+    {
+      "name": "cloud",
+      "about": "Sync encrypted .env files with evnx cloud",
+      "aliases": [],
+      "guide": "/guides/commands/cloud",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "cloud push",
+          "about": "Encrypt a .env and upload it as a new version"
+        },
+        {
+          "path": "cloud pull",
+          "about": "Download a version and decrypt it"
+        },
+        {
+          "path": "cloud run",
+          "about": "Run a command with a vault's variables in its environment"
+        },
+        {
+          "path": "cloud history",
+          "about": "List a vault's versions, newest first"
+        },
+        {
+          "path": "cloud delete-version",
+          "about": "Delete one version of a vault, and its encrypted blob"
+        },
+        {
+          "path": "cloud link",
+          "about": "Bind this directory to a vault, so push and pull need no --vault"
+        },
+        {
+          "path": "cloud unlink",
+          "about": "Remove this directory's vault binding"
+        },
+        {
+          "path": "cloud export",
+          "about": "Write a vault's secrets to a directory, decrypted — the way out"
+        },
+        {
+          "path": "cloud status",
+          "about": "Show whether this machine is set up for cloud sync"
+        }
+      ]
+    },
+    {
+      "name": "doctor",
+      "about": "Check .env files, Git config, project structure, and security",
+      "aliases": [],
+      "guide": "/guides/commands/doctor",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "spec",
+      "about": "Declare what each variable is: required, format, secret",
+      "aliases": [],
+      "guide": "/guides/commands/spec",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "spec init",
+          "about": "Generate a first spec from this project, or from named components"
+        }
+      ]
+    },
+    {
+      "name": "commands",
+      "about": "Every command this build has, and which features it was compiled with",
+      "aliases": [
+        "surface"
+      ],
+      "guide": "/guides/commands/commands",
+      "guide_draft": true,
+      "subcommands": []
+    },
+    {
+      "name": "completions",
+      "about": "Generate shell completions",
+      "aliases": [],
+      "guide": "/guides/commands/completions",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "update",
+      "about": "Show how to upgrade, and optionally whether a newer release exists",
+      "aliases": [],
+      "guide": "/guides/commands/update",
+      "guide_draft": false,
+      "subcommands": []
+    }
+  ],
+  "undocumented": [],
+  "orphan_guides": []
+}

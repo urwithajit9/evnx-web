@@ -1,0 +1,70 @@
+{
+  "_comment": [
+    "Invocations that check-cli-invocations.mjs is allowed to find.",
+    "",
+    "\u26a0\ufe0f EVERY ENTRY IS A DELIBERATE MENTION OF SOMETHING THAT DOES NOT EXIST.",
+    "The guides name a removed command or flag in order to say it is gone \u2014",
+    "the output of the per-command review (task 15). A check that failed on",
+    "those would teach people to delete the retraction, which is worse than the",
+    "error it corrects.",
+    "",
+    "\u26a0\ufe0f Adding an entry here is a claim that the prose around it tells the",
+    "reader the thing does not exist. Read the surrounding paragraph before",
+    "adding one; if it reads as an instruction, fix the guide instead.",
+    "",
+    "The checker also reports entries that no longer occur, so this file cannot",
+    "quietly keep permissions for text somebody removed."
+  ],
+  "accepted": [
+    {
+      "file": "packages/docs-content/guides/commands/scan.mdx",
+      "invocation": "evnx scan --exit-code --severity high",
+      "why": "Listed among flags that 'have appeared on this page in the past. None of them exist.'"
+    },
+    {
+      "file": "packages/docs-content/guides/commands/scan.mdx",
+      "invocation": "evnx validate --pattern",
+      "why": "A callout titled 'Not to be confused with evnx validate --pattern', explaining it was removed."
+    },
+    {
+      "file": "packages/docs-content/guides/commands/update.mdx",
+      "invocation": "evnx update --apply",
+      "why": "'There is no evnx update --apply and there will not be one.' \u2014 a deliberate limitation."
+    },
+    {
+      "file": "packages/docs-content/guides/commands/validate.mdx",
+      "invocation": "evnx validate --pattern .env.production",
+      "why": "In a before/after block, annotated '# gone', beside the v0.5.0+ replacement."
+    },
+    {
+      "file": "packages/docs-content/guides/getting-started/installation.mdx",
+      "invocation": "evnx doctor --check-updates",
+      "why": "'Corrected September 2026: this block ended with evnx doctor --check-updates, which does not exist.'"
+    },
+    {
+      "file": "packages/docs-content/guides/getting-started/quick-start.mdx",
+      "invocation": "evnx sync --generate-example",
+      "why": "Named as a removed flag, with the current spelling given beside it."
+    },
+    {
+      "file": "packages/docs-content/guides/reference/exporting-your-data.mdx",
+      "invocation": "evnx auth export",
+      "why": "Named as a command that does not exist; the real one is evnx cloud export."
+    },
+    {
+      "file": "packages/docs-content/guides/reference/sync-configuration.mdx",
+      "invocation": "evnx sync --reverse",
+      "why": "Named as a removed flag; --direction reverse replaced it."
+    },
+    {
+      "file": "packages/docs-content/guides/use-cases/use-cases-add-production.mdx",
+      "invocation": "evnx validate --category",
+      "why": "Named among flags that never existed on validate."
+    },
+    {
+      "file": "packages/docs-content/guides/use-cases/use-cases-add-production.mdx",
+      "invocation": "evnx validate --recursive",
+      "why": "Named among flags that never existed on validate."
+    }
+  ]
+}

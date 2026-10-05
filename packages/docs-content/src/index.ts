@@ -7,6 +7,7 @@
 // split promises that only the URL changes.
 
 export * from "./guides";
+export * from "./commands";
 
 /** The five sections, in the order a reader should meet them. */
 export const GUIDE_SECTION_KEYS = [

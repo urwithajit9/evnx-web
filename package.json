@@ -15,7 +15,11 @@
     "check:links": "node scripts/check-content-links.mjs",
     "baseline:analytics": "node scripts/export-analytics.mjs",
     "baseline:crawl": "node scripts/crawl-inventory.mjs",
-    "verify:redirects": "node scripts/verify-redirects.mjs"
+    "verify:redirects": "node scripts/verify-redirects.mjs",
+    "cli:index": "node scripts/sync-command-index.mjs",
+    "cli:index:check": "node scripts/sync-command-index.mjs --check",
+    "cli:check": "node scripts/check-cli-invocations.mjs",
+    "cli:diff": "node scripts/diff-cli-surface.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.3"
