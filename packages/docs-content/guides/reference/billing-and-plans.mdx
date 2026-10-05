@@ -1,7 +1,7 @@
 ---
 title: "Billing"
 section: reference
-order: 13
+order: 15
 publishedAt: "2026-10-05"
 updatedAt: "2026-10-05"
 excerpt: "How a paid plan is bought, who can change it, what a failed payment does — and the one thing a subscription can never do, which is reach a secret."
@@ -11,7 +11,7 @@ tags: ["cloud", "billing", "plans", "seats", "organisation", "paddle", "evnx"]
 evnxVersion: "0.9.0"
 prerequisites:
   - commands/org
-draft: true
+draft: false
 ---
 
 A paid plan is bought by an **organisation**, not by an account. Whoever holds one of its seats gets that plan's limits.
@@ -31,7 +31,7 @@ A seat is transferable; an account is not. Buying per-account would mean a plan 
 It also means the person paying and the person benefiting can be different people — which is how every team actually works.
 
 <Callout type="info">
-**An organisation still gives nobody access to a vault.** It is a plan and a directory. Sharing a vault stays a deliberate act by someone who holds its key, because the server cannot wrap a vault key for anyone. See [evnx org](/cli/commands/org).
+**An organisation still gives nobody access to a vault.** It is a plan and a directory. Sharing a vault stays a deliberate act by someone who holds its key, because the server cannot wrap a vault key for anyone. See [evnx org](/guides/commands/org).
 </Callout>
 
 ---
@@ -154,6 +154,6 @@ If you run your own evnx server, billing is **optional and off by default**. Wit
 
 ## Related guides
 
-- [evnx org](/cli/commands/org) — organisations, seats and invitations
-- [Plan limits](/cli/reference/plan-limits) — what each plan actually allows
-- [Cloud architecture](/cli/reference/cloud-architecture) — what the server holds, and what it cannot
+- [evnx org](/guides/commands/org) — organisations, seats and invitations
+- [Plan limits](/guides/reference/plan-limits) — what each plan actually allows
+- [Cloud architecture](/guides/reference/cloud-architecture) — what the server holds, and what it cannot
