@@ -83,5 +83,9 @@ export const footer: {
   legal: [
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
+    // ⚠️ Linked, not merely published. Paddle's website verification requires
+    // the site to LINK to its refund policy, not just host one — an unlinked
+    // page can fail review even though the URL resolves.
+    { label: "Refunds", href: "/refunds" },
   ],
 };

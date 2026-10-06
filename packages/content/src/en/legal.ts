@@ -207,6 +207,51 @@ export const terms: LegalDoc = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⚠️ **A refund policy needs its own URL, not just its own section.**
+ *
+ * Paddle's website verification asks for a refund policy as a link, alongside
+ * terms and privacy. The policy was written as a section inside `terms` and the
+ * go-live runbook recorded it as "now exists" — which was true of the text and
+ * not of a URL. `/refund-policy` and `/refunds` both 404'd when someone finally
+ * pasted one into the form.
+ *
+ * ⚠️ **This derives from `terms`, it does not copy it.** Two refund policies
+ * that can disagree is worse than one that is hard to find: the one a customer
+ * reads and the one a payment processor approved would eventually differ, and
+ * nothing would catch it.
+ */
+function sectionOf(doc: LegalDoc, heading: string): LegalSection {
+  const found = doc.sections.find((s) => s.heading === heading);
+  if (!found) {
+    // Throws at module load, so a renamed heading fails the BUILD rather than
+    // publishing an empty legal page that a verification review then reads.
+    throw new Error(
+      `@evnx/content: no section "${heading}" in "${doc.title}". ` +
+        `The refunds page is derived from it — rename it there too, or the page ships empty.`,
+    );
+  }
+  return found;
+}
+
+export const refunds: LegalDoc = {
+  title: "Refund policy",
+  lede: "How cancellation and refunds work. This is the same text as the corresponding section of the Terms — it has its own page because a refund policy should be findable without reading an agreement.",
+  updated: terms.updated,
+  sections: [
+    sectionOf(terms, "Refunds and cancellation"),
+    // Included because a refund policy that does not say who issues the refund
+    // is incomplete — Paddle is the merchant of record and the refund comes
+    // back from them, which is the first thing a customer needs to know.
+    sectionOf(terms, "Plans and payment"),
+    sectionOf(terms, "Contact"),
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const security: LegalDoc = {
   title: "Security",
   lede: "How evnx is built, how to report a problem, and what we have deliberately not claimed.",
