@@ -64,7 +64,19 @@ export function PlanCards() {
               }
             >
               {plan.highlighted && copy.ribbon && (
-                <div className="absolute -top-3 left-4">
+                // ⚠️ `bg-bg-base` on the WRAPPER, not the badge.
+                //
+                // `variant="brand"` is `bg-brand-500 bg-opacity-10` — a 90%
+                // transparent fill, which is right for a badge sitting inline in
+                // text and wrong for one straddling a border. This ribbon sits on
+                // the card's 2px brand border, and the line was clearly visible
+                // straight through the pill.
+                //
+                // Making the variant opaque would have fixed this card and
+                // flattened every other `brand` badge on the site, where the
+                // translucency is deliberate. An opaque wrapper masks the border
+                // behind this one badge and changes nothing else.
+                <div className="absolute -top-3 left-4 rounded-full bg-bg-base">
                   <Badge variant="brand">{copy.ribbon}</Badge>
                 </div>
               )}

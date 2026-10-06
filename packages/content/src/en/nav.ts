@@ -1,3 +1,19 @@
+// ⚠️ ⚠️  NOTHING IN THIS FILE IS RENDERED.  ⚠️ ⚠️
+//
+// `nav` and `footer` below are exported and imported by **zero** files. The
+// live header and footer each hardcode their own link list:
+//
+//     apps/web/components/layout/header.tsx
+//     apps/web/components/layout/footer.tsx
+//
+// This cost a real mistake on 2026-10-06: a refund-policy link was added here
+// to satisfy a payment processor's "your site must link to this" requirement,
+// the build passed, the deploy went out, and the link was nowhere on the site.
+// The two components were the only things that mattered and neither reads this.
+//
+// Changing a nav or footer link means editing those two components. Edit this
+// file only if you are also wiring them up to it.
+
 // ─── Navigation and footer ────────────────────────────────────────────────────
 //
 // ⚠️ `href` is left empty for anything that points at documentation. The
@@ -83,9 +99,5 @@ export const footer: {
   legal: [
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    // ⚠️ Linked, not merely published. Paddle's website verification requires
-    // the site to LINK to its refund policy, not just host one — an unlinked
-    // page can fail review even though the URL resolves.
-    { label: "Refunds", href: "/refunds" },
   ],
 };

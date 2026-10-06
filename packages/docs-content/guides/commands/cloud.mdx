@@ -7,7 +7,7 @@ excerpt: "Push and pull encrypted .env files across machines and CI. Encryption 
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth status", "auth token create", "cloud", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "convert"]
+commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "convert", "diff"]
 evnxVersion: "0.8.0"
 prerequisites:
   - commands/auth
@@ -33,6 +33,8 @@ evnx cloud push
 evnx cloud pull
 evnx cloud run --vault my-api/production -- ./deploy.sh
 evnx cloud history
+evnx cloud diff
+evnx cloud audit
 </CommandSignature>
 
 | Subcommand | What it does |
@@ -276,6 +278,104 @@ VERSION   PUSHED BY          KEYS   WHEN
 </TerminalOutput>
 
 `history` is **read-only in the strongest sense**: no password prompt, no decryption, no blob download. It reads metadata the server already holds in the clear, which is why it is safe to run from a script or a read-only token.
+
+---
+
+## What changed between two versions — **v0.10.0+**
+
+```bash
+evnx cloud diff
+evnx cloud diff --from 5 --to 7
+evnx cloud diff --vault my-api/production --from 1 --to 12
+```
+
+With no arguments it compares the two newest versions, which is usually the question: what did that last push change?
+
+<TerminalOutput title="evnx cloud diff">
+  evnx cloud diff  my-api/production   v2 → v3
+
+  + SENTRY_DSN
+  + STRIPE_KEY
+  - LEGACY_TOKEN
+
+  2 added  ·  1 removed  ·  2 unchanged
+</TerminalOutput>
+
+<Callout type="warning">
+**`+` means the opposite of what it means in `evnx diff`.**
+
+Here `+` is *added in the newer version*. In [`evnx diff`](/guides/commands/diff), which compares a `.env` against a template, `+` is *missing from your `.env`*. The two commands read in opposite directions, which is why this one always prints `v2 → v3` above the list — the header is what tells you which way you are reading.
+</Callout>
+
+### It cannot see that a value changed
+
+The server stores key **names** and ciphertext. It has never held a value. So rotating `DATABASE_URL` without renaming it produces two versions whose key sets are identical, and a comparison by name alone would report "no changes" — which would be confidently wrong about the exact thing you asked.
+
+So when the names match, the blob hashes are compared instead:
+
+<TerminalOutput title="evnx cloud diff — a rotated value">
+  evnx cloud diff  my-api/production   v1 → v2
+
+  Same keys — but the contents differ.
+
+  Both versions hold the same 2 keys, so something changed inside a
+  value. evnx cannot tell you which: the server stores key names and
+  ciphertext, never a value, so there is nothing here to compare.
+</TerminalOutput>
+
+To see *which* value changed, the comparison has to happen where the values exist — on your machine:
+
+```bash
+evnx cloud export --vault my-api/production --all-versions --output ./versions
+```
+
+<Callout type="info">
+A BLAKE3 digest of ciphertext says only *that* bytes differ, never what they are. Reporting it leaks nothing the server did not already hold.
+</Callout>
+
+---
+
+## Who did what — the audit trail — **v0.10.0+**
+
+```bash
+evnx cloud audit
+evnx cloud audit --last 7d
+evnx cloud audit --vault my-api/production --event pull
+```
+
+Pushes, pulls, member changes, re-keys and token creation, newest first. Any member of a vault can read it — the trail is how a team notices something it did not expect.
+
+<TerminalOutput title="evnx cloud audit">
+  WHEN                 WHAT            WHO                   DETAIL
+  2026-10-05 14:02:11  push            you@example.com       version 3
+  2026-10-04 09:41:55  pull            ci@example.com        version 2
+  2026-09-24 16:20:03  member_grant    you@example.com       bob@example.com as developer
+  2026-09-16 11:07:40  vault_rekey     (deleted account)     re-wrapped for 2 members
+</TerminalOutput>
+
+`--event` takes any of `push`, `pull`, `version_deleted`, `member_grant`, `member_role_change`, `member_revoke`, `vault_rekey` or `token_create`.
+
+<Callout type="warning">
+**Retention limits what you can see, not what is kept.**
+
+`audit_events` is append-only in the database — nothing prunes it and nothing can. Your plan decides how far back the API will *return*. When events are withheld the command says so and gives the count, because a trail that silently stops is indistinguishable from a vault that was quiet.
+
+Asking for a window wider than your plan is not an error, and the output tells you which one applied:
+
+```
+⚠ 14 older events are not shown on this plan.
+  This plan shows the last 7 days. The events are kept — this is a
+  limit on what the API will return, not on what is stored.
+
+ⓘ You asked for 30 days; this plan shows 7.
+```
+</Callout>
+
+<Callout type="info">
+**What the trail deliberately does not show.** The server records a hashed client address and user agent against each event, and never returns them. They are stable digests, so they would correlate a colleague's activity across events without naming them — worth holding to detect an unfamiliar device, not worth handing to everyone who shares a vault.
+</Callout>
+
+Read-only: no password, no decryption.
 
 ---
 

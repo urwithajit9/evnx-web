@@ -43,11 +43,17 @@ const LINKS: Record<string, NavLink[]> = {
     { href: NPM_URL, label: "NPM", external: true },
     { href: PYPI_URL, label: "PyPI", external: true },
     { href: AGENT_SKILLS_URL, label: "Agent Skills", external: true },
-    // { href: "/pricing", label: "Pricing", external: false },
+    { href: "/pricing", label: "Pricing", external: false },
     { href: "/install", label: "Install", external: false },
     { href: "/security", label: "Security", external: false },
     { href: "/privacy", label: "Privacy", external: false },
     { href: "/terms", label: "Terms", external: false },
+    // ⚠️ Linked, not merely published. A payment processor's website review
+    // checks that the site LINKS to its refund policy — a page that resolves
+    // but is unreachable from the site can still fail verification. The same
+    // applies to /pricing above, which was commented out while there was
+    // nothing to buy and had to be restored for exactly this reason.
+    { href: "/refunds", label: "Refunds", external: false },
   ],
 };
 

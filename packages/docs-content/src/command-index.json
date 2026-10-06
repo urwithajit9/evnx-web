@@ -348,6 +348,14 @@
           "about": "List a vault's versions, newest first"
         },
         {
+          "path": "cloud diff",
+          "about": "What changed between two versions — key names only, never values"
+        },
+        {
+          "path": "cloud audit",
+          "about": "Who did what to a vault, newest first"
+        },
+        {
           "path": "cloud delete-version",
           "about": "Delete one version of a vault, and its encrypted blob"
         },

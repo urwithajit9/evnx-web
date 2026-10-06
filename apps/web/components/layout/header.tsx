@@ -19,7 +19,7 @@ const NAV_LINKS = [
   { href: docsUrl(), label: "Guides" },
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
-  // { href: "/pricing", label: "Pricing" },
+  { href: "/pricing", label: "Pricing" },
   // { href: "/login", label: "Login"},
   ...(TESTIMONIALS_ENABLED
     ? [{ href: "/testimonials", label: "Testimonials" }]
