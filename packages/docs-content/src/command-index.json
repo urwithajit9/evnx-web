@@ -348,6 +348,10 @@
           "about": "List a vault's versions, newest first"
         },
         {
+          "path": "cloud watch",
+          "about": "Watch a vault and report when someone pushes a new version"
+        },
+        {
           "path": "cloud diff",
           "about": "What changed between two versions — key names only, never values"
         },

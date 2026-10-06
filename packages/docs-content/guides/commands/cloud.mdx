@@ -7,7 +7,7 @@ excerpt: "Push and pull encrypted .env files across machines and CI. Encryption 
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "convert", "diff"]
+commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff"]
 evnxVersion: "0.8.0"
 prerequisites:
   - commands/auth
@@ -35,6 +35,7 @@ evnx cloud run --vault my-api/production -- ./deploy.sh
 evnx cloud history
 evnx cloud diff
 evnx cloud audit
+evnx cloud watch
 </CommandSignature>
 
 | Subcommand | What it does |
@@ -332,6 +333,48 @@ evnx cloud export --vault my-api/production --all-versions --output ./versions
 <Callout type="info">
 A BLAKE3 digest of ciphertext says only *that* bytes differ, never what they are. Reporting it leaks nothing the server did not already hold.
 </Callout>
+
+---
+
+## Watching for someone else's push — **v0.10.0+**
+
+```bash
+evnx cloud watch
+evnx cloud watch --vault my-api/production --interval 30
+```
+
+Runs in the foreground until Ctrl-C, like `tail -f`. It tells you when a new version appears and names what changed:
+
+<TerminalOutput title="evnx cloud watch">
+  evnx cloud watch  my-api/production
+  At v2. Watching for newer versions.
+  Polling every 15s · metadata only, no password · Ctrl-C to stop
+
+  ▲ v3 · +STRIPE_KEY, -LEGACY_TOKEN · 2026-10-04 18:28
+    evnx cloud pull --vault my-api/production
+  ▲ v4 · same keys, different contents · 2026-10-05 06:28
+    evnx cloud pull --vault my-api/production
+</TerminalOutput>
+
+The point is finding out a teammate changed a secret **before** your next deploy picks it up silently — not saving you from typing `pull`.
+
+<Callout type="warning">
+**It never pulls, and that is deliberate.**
+
+Overwriting your `.env` because someone else pushed would destroy local edits with no undo — it is a file you change constantly while working.
+
+And pulling needs your master password. A watcher that auto-pulled would hold the vault key in memory for its whole lifetime — hours, in a terminal pane, on an unlocked laptop. That is a different threat model from a one-shot `evnx cloud pull` that derives a key, uses it and exits.
+
+So it polls **metadata only**: no password, no decryption, no blob download. Taking a change stays a deliberate `evnx cloud pull`.
+</Callout>
+
+<Callout type="info">
+**`--interval` has a 5-second floor.** A one-second poll against a shared API is a denial of service someone writes by accident, and knowing two seconds sooner is worth nothing.
+
+A failed poll is reported under `--verbose` and the loop continues — a watcher that exits on one network blip is one nobody trusts to leave running.
+</Callout>
+
+ⓘ Two pushes between polls are reported as one event, compared against the version you last saw rather than the one immediately before — otherwise a key that appeared and vanished would be invisible.
 
 ---
 
