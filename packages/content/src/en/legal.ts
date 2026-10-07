@@ -82,12 +82,13 @@ export const privacy: LegalDoc = {
     {
       heading: "What the server can see",
       body: [
-        "The server stores ciphertext and wrapped keys. Full database access does not reveal a single secret value. But a zero-knowledge claim is only worth what its exceptions are worth, so here they are:",
+        "The server stores ciphertext and wrapped keys. Full database READ access does not reveal a single secret value. But a zero-knowledge claim is only worth what its exceptions are worth, so here they are:",
       ],
       list: [
         "Variable names are visible. This is a deliberate trade — it lets a dashboard list a vault's contents without decrypting it. The values are not.",
         "Timing and size are visible. We can see that you pushed, when, and roughly how much.",
-        "For a shared vault, the recipient's public keys are fetched from the server. A malicious server could substitute its own and read what you share. There is nothing to verify them against yet, so for shared vaults the guarantee narrows to: the server cannot read your secrets passively.",
+        "Database WRITE access is the serious one, and it is broader than sharing. The client decides how to unwrap a vault key from two fields the server sends — both absent means your own copy, both present means shared with you — and nothing on your machine records which vaults you own. So an attacker who can write to the database can set those fields on a vault you created and never shared, to a wrap of a key they chose, and read what you push next. Data already stored stays closed; what a writable breach influences is what future pushes are encrypted under. Cloud sync is beta while this is open, and fixing it needs signed wraps and locally pinned identities. Corrected 8 October 2026 — this previously said the guarantee narrowed only for shared vaults.",
+        "Relatedly, a recipient's public keys are fetched from the server with nothing to verify them against, so a malicious server could substitute its own and read what you share.",
         "A compromised machine sees plaintext. Zero knowledge is a claim about the server, not about your laptop.",
       ],
     },

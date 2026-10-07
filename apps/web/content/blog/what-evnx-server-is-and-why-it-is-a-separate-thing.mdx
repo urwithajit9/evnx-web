@@ -24,6 +24,19 @@ This is not a policy or a promise to behave. There is no code path from what the
 
 Which means the honest version of the sales pitch is: *breaching this server gets you ciphertext.* Not "gets you encrypted data we would decrypt only with a warrant." Ciphertext, and no key.
 
+<Callout type="warning" title="Corrected 8 October 2026">
+That holds for **reading** what the server already stores, which is what this
+section is about. It does not hold for an attacker who can **write** to the
+database.
+
+The client decides how to unwrap a vault key from fields the server sends, and
+nothing locally records which vaults you own — so a hostile server can present a
+key it chose and read what you push next, including for a vault you never shared.
+
+Cloud sync is beta while that is open. The full statement is in
+[SECURITY.md](https://github.com/urwithajit9/evnx/blob/main/SECURITY.md#what-the-threat-model-actually-claims).
+</Callout>
+
 ## What it actually holds
 
 | Stored | Not stored |

@@ -235,7 +235,31 @@ It is worth naming the trade plainly, because a token that cannot decrypt is obj
 
 What you give up: a pipeline cannot fetch secrets with one scoped, revocable credential. The master password has to reach the runner for any job that needs plaintext.
 
-What you get: **a breach of evnx's server does not expose your secrets.** Not the database, not the blob storage, not both together. The operator cannot read them, a subpoena cannot compel them, and an attacker who takes the whole box gets ciphertext and wrapped keys that no amount of server-side access unwraps.
+What you get: **a breach of evnx's server does not expose the secrets it is already storing.** Not the database, not the blob storage, not both together. The operator cannot read them, a subpoena cannot compel them, and an attacker who takes the whole box gets ciphertext and wrapped keys that no amount of *read* access unwraps.
+
+<Callout type="danger" title="Corrected 8 October 2026">
+This paragraph originally ended "no amount of server-side access unwraps", with no
+distinction between read and write. That was wrong, and it is worth saying exactly
+how.
+
+The client decides how to unwrap a vault key from two fields the **server** sends.
+Both absent means "your own copy, under your master key"; both present means
+"shared with you, under the hybrid wrap". That wrap is not authenticated to a
+sender, and nothing on your machine records which vaults you own — so the client
+cannot tell a real share from a fabricated one.
+
+An attacker who can **write** to the database can therefore set those fields on a
+vault you created and never shared, to a wrap of a key they chose, and read what
+you push **next**.
+
+What the paragraph gets right is unchanged: data already stored stays closed, and
+a subpoena or a database dump still yields nothing. What it got wrong is treating
+a writable breach the same as a readable one.
+
+Cloud sync is labelled beta while this is open. Fixing it needs signed wraps and
+locally pinned identities, which are not built. See
+[SECURITY.md](https://github.com/urwithajit9/evnx/blob/main/SECURITY.md#what-the-threat-model-actually-claims).
+</Callout>
 
 Every secret manager that hands your pipeline plaintext on a token alone is, necessarily, one that can read your secrets itself. That is not an accusation — it is arithmetic. If the server can produce plaintext for your runner, it can produce plaintext.
 

@@ -242,7 +242,7 @@ Most importantly, this architecture enables **zero-knowledge synchronization**:
 * The backend stores the encrypted payload but **never receives the decryption key**.
 * Decryption is performed only on the client using the locally derived master key.
 
-This ensures the server cannot read environment variables even if storage is compromised.
+This ensures the server cannot read environment variables even if **storage** is compromised. ⚠️ A compromise that can *write* to the database is different — see the caveat further down.
 
 Example initialization in the web UI:
 
@@ -345,10 +345,29 @@ no X25519-only path anywhere — not in the crate, not in the CLI, and not in th
 where a CHECK constraint makes half a wrap unstorable. Sharing with an account that has no
 ML-KEM key on file is refused rather than downgraded.
 
-⚠️ One caveat that sharing introduces and is worth stating plainly: **the recipient's
-public keys come from the server.** A malicious server could substitute its own and read
-what you share. Out-of-band fingerprint verification is not built, so "the server cannot
-read your secrets" becomes "…cannot read them *passively*" the moment you share.
+⚠️ One caveat worth stating plainly: **the recipient's public keys come from the server.**
+A malicious server could substitute its own and read what you share. Out-of-band
+fingerprint verification is not built.
+
+<Callout type="warning" title="Corrected 8 October 2026 — this is broader than sharing">
+This caveat originally ended "…the moment you share". That scoped it too narrowly, and
+the reason is worth having: **the client cannot tell a real share from a fabricated one.**
+
+It decides how to unwrap a vault key from two fields the server sends — both absent means
+"your own copy, under your master key", both present means "shared with you, under the
+hybrid wrap". Nothing on your machine records which vaults you own.
+
+So an attacker who can write to the database can set those fields on a vault you created
+and **never shared**, to a wrap of a key they chose, and read what you push next.
+
+What still holds is the part this article is mostly about: data already stored stays
+closed, and a storage compromise or a subpoena yields ciphertext. What a *writable*
+compromise can influence is what future pushes are encrypted under.
+
+Cloud sync is beta while this is open; fixing it needs signed wraps and locally pinned
+identities. Current statement:
+[SECURITY.md](https://github.com/urwithajit9/evnx/blob/main/SECURITY.md#what-the-threat-model-actually-claims).
+</Callout>
 
 **Vault key rotation shipped too**, as part of revocation: `evnx vault revoke` re-encrypts
 every version under a fresh key and re-wraps it for everyone who stays. What it cannot do is

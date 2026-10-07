@@ -46,7 +46,11 @@ const releases: Release[]  = [
     highlights: [
       {
         type: "feature",
-        text: "evnx cloud — zero-knowledge encrypted sync for .env files. Push and pull secrets across machines and CI, with the server mathematically unable to read them",
+        // ⚠️ Corrected 2026-10-08: this said "mathematically unable to read
+        // them". A server that can write its own database can choose the key
+        // your next push is encrypted under, so the guarantee is about data
+        // already stored. See SECURITY.md in the CLI repo.
+        text: "evnx cloud — zero-knowledge encrypted sync for .env files. Push and pull secrets across machines and CI; the server stores ciphertext and holds no key that opens it",
       },
       {
         type: "feature",
