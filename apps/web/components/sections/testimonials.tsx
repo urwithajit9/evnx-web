@@ -40,7 +40,12 @@ export async function Testimonials() {
     <>
       <SectionHeading
         heading="What engineers are saying"
-        lede="Unedited, and only published once the person who wrote it has confirmed it."
+        // ⚠️ This used to claim each testimonial was "only published once the
+        // person who wrote it has confirmed it". The form collects no email
+        // and no other contact field, so there is nothing to confirm WITH —
+        // the claim was unkeepable by construction. Restore it when the form
+        // collects an address and the approval step actually writes to it.
+        lede="Unedited, and reviewed by a human before it appears here."
       />
       <TestimonialsGrid limit={6} />
     </>

@@ -68,6 +68,16 @@ export type Database = {
           message:     string
           approved:    boolean
           created_at:  string
+          // ⚠️ NOT readable with the anon key — `grant select (…)` names the
+          // public columns and omits these four. They are typed here because
+          // the service-role route writes them; a `select('*')` from the
+          // browser or a server component using the anon key will FAIL with
+          // 42501, which is the intended behaviour and not a bug to route
+          // around. See issue_triage/testimonials-email-consent.sql.
+          email:        string | null
+          consent_at:   string | null
+          consent_text: string | null
+          confirmed_at: string | null
         }
         Insert: {
           type:         'user' | 'company'
@@ -80,6 +90,10 @@ export type Database = {
           logo_url?:    string | null
           social_url?:  string | null
           approved?:    boolean
+          email?:        string | null
+          consent_at?:   string | null
+          consent_text?: string | null
+          confirmed_at?: string | null
           id?:          string
           created_at?:  string
         }
@@ -94,6 +108,10 @@ export type Database = {
           logo_url?:    string | null
           social_url?:  string | null
           approved?:    boolean
+          email?:        string | null
+          consent_at?:   string | null
+          consent_text?: string | null
+          confirmed_at?: string | null
         }
         Relationships: []
       }

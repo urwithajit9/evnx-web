@@ -14,7 +14,27 @@ import { Building2, User, ExternalLink } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import type { Database } from '@/lib/supabase'
 
-type Testimonial = Database['public']['Tables']['testimonials']['Row']
+/**
+ * ⚠️ The columns anon is actually granted — NOT the whole Row.
+ *
+ * `select('*')` here used to be harmless because every column was public. It
+ * stopped being harmless the moment the table grew an `email`: a table-level
+ * SELECT grant covers columns added later, so `*` is how a contact address
+ * reaches a public page. The grant is now per-column and this list mirrors it,
+ * so adding a private column cannot silently widen what the site reads.
+ *
+ * Keep in step with `grant select (…)` in
+ * issue_triage/testimonials-email-consent.sql.
+ */
+const PUBLIC_COLUMNS =
+  'id, type, name, role, company, website_url, avatar_url, logo_url, social_url, message, created_at'
+
+type Testimonial = Pick<
+  Database['public']['Tables']['testimonials']['Row'],
+  | 'id' | 'type' | 'name' | 'role' | 'company'
+  | 'website_url' | 'avatar_url' | 'logo_url' | 'social_url'
+  | 'message' | 'created_at'
+>
 
 async function getTestimonials(limit: number): Promise<Testimonial[]> {
   // ⚠️ This runs at BUILD time. Without the guard a missing env var took the
@@ -23,7 +43,7 @@ async function getTestimonials(limit: number): Promise<Testimonial[]> {
 
   const { data, error } = await supabase
     .from('testimonials')
-    .select('*')
+    .select(PUBLIC_COLUMNS)
     .eq('approved', true)
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -33,8 +53,8 @@ async function getTestimonials(limit: number): Promise<Testimonial[]> {
     return []
   }
 
-  // Cast needed: supabase-js v2 sometimes infers {}[] for .select('*')
-  // even with a fully typed Database generic on the client.
+  // Cast needed: supabase-js v2 sometimes infers {}[] for a string column
+  // list even with a fully typed Database generic on the client.
   return (data ?? []) as Testimonial[]
 }
 
