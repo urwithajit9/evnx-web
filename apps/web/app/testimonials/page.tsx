@@ -29,12 +29,20 @@ export default function TestimonialsPage() {
       {/* ⚠️ The h1 lives here, NOT in the grid — the grid renders nothing when
           there are no approved rows, and for as long as that is true the page
           had no h1 at all. Every other page in this app has one. */}
+      {/* ⚠️ Not `section-padding` (py-16 md:py-24). On a phone that is 64px of
+          nothing above the title and 64px below it, and this page's whole job
+          is to get someone into the form. Measured: the first input sat at
+          y=823 on an 812px-tall screen — a full screen of scrolling before
+          anything could be typed. */}
       <section className="bg-bg-surface border-b border-border-muted">
-        <div className="container-base section-padding">
-          <h1 className="text-5xl md:text-6xl font-serif font-bold mb-4">
+        <div className="container-base py-10 sm:py-16 md:py-24">
+          {/* ⚠️ 4xl on a phone, not 5xl. "What engineers are saying" wrapped to
+              four lines at 5xl/360px and pushed the form a full screen down —
+              on the one device most of this page's traffic arrives on. */}
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-bold mb-4">
             What engineers are saying
           </h1>
-          <p className="text-xl text-text-secondary max-w-2xl leading-relaxed">
+          <p className="text-lg sm:text-xl text-text-secondary max-w-2xl leading-relaxed">
             Unedited, and reviewed by a human before it appears here. If evnx
             has saved you a bad afternoon, tell us about it below.
           </p>
@@ -46,20 +54,22 @@ export default function TestimonialsPage() {
       <TestimonialsGrid limit={24} />
 
       {/* Submission form */}
-      <section className="py-24 border-t border-border-subtle">
-        <div className="container-base max-w-2xl">
-          <div className="mb-10">
-            <p className="font-mono text-xs text-brand-500 uppercase tracking-widest mb-3">
-              Share your experience
-            </p>
-            <h2 className="font-serif text-3xl font-bold mb-4">
-              Add your testimonial
-            </h2>
-            <p className="text-text-secondary leading-relaxed">
-              Tell us how evnx helped you or your team. Testimonials are reviewed
-              before appearing on the site — usually within 24–48 hours.
-            </p>
-          </div>
+      {/* ⚠️ max-w-3xl, and the form no longer caps itself at max-w-xl inside
+          it. The two limits used to compound into a ~36rem column of stacked
+          fields sitting in the middle of a 1280px page — mostly empty space,
+          and twice as tall as it needed to be. */}
+      <section className="py-16 sm:py-24 border-t border-border-subtle">
+        <div className="container-base max-w-3xl">
+          {/* ⚠️ The eyebrow and the intro paragraph that used to sit here are
+              gone, and nothing was lost. "Share your experience" said the same
+              thing as the h2 directly beneath it, and the paragraph's two
+              claims are both already on the page — the hero asks for the
+              testimonial, and the note under the submit button states the
+              review and the email confirmation. Three headings stacked above
+              the first field is how a short form reads as a long one. */}
+          <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-6 sm:mb-8">
+            Add your testimonial
+          </h2>
           <TestimonialForm />
         </div>
       </section>

@@ -4,8 +4,9 @@
  *
  * Two-mode form: personal user OR company.
  * Uploads avatar/logo to Supabase Storage, stores metadata in testimonials table.
- * Submitted testimonials are NOT shown until approved = true (set manually in
- * Supabase dashboard or via a private admin route).
+ * Submitted testimonials are NOT shown until `is_public` turns true, which
+ * needs `approved` AND the email round-trip recorded — see
+ * issue_triage/testimonials-provenance.sql.
  *
  * ⚠️ Submits to POST /api/testimonials, NOT to Supabase directly. It used to
  * insert with the public anon key, which let anyone who read that key out of
@@ -13,12 +14,31 @@
  * type checks and the image upload are all decided server-side now; nothing
  * here is a security boundary, and nothing here needs to be.
  *
+ * ── Layout notes, because they are not arbitrary ──────────────────────────
+ *
+ * ⚠️ Most people reach this from a phone, usually from a link someone sent
+ * them, with no particular intention of filling in a form. Two things follow.
+ *
+ * 1. EVERY control is at least 16px (`text-base`). Below that, iOS Safari
+ *    zooms the viewport on focus and does not zoom back out — the page jumps,
+ *    the layout is suddenly too wide, and the rest of the form is filled in
+ *    while panning sideways. The old form used `text-sm` (14px) throughout,
+ *    so this happened on the very first tap, on every iPhone.
+ *
+ * 2. The required path is five things: who, where to reach you, what happened,
+ *    the tick, submit. Everything else is behind a disclosure. The old form
+ *    showed nine stacked fields, which on a phone is a scroll with no visible
+ *    end — and the thing people abandon is not a hard form, it is a long one.
+ *    Nothing was removed; the optional half just does not greet you.
+ *
  * Usage:
  *   <TestimonialForm />
  */
 
 import { useId, useRef, useState } from 'react'
-import { Upload, User, Building2, Check, Loader2, X } from 'lucide-react'
+import {
+  Upload, User, Building2, Check, Loader2, X, Plus, Minus,
+} from 'lucide-react'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { CONSENT_TEXT, CONSENT_PRIVACY_HREF } from '@/lib/testimonial-consent'
 
@@ -33,6 +53,26 @@ const ROLE_MAX       = 120
 const URL_MAX        = 200
 const EMAIL_MAX      = 254
 
+/**
+ * ⚠️ Keys must match the CHECK on `testimonials.use_cases` in
+ * issue_triage/testimonials-provenance.sql, and the mirror list in the API
+ * route. Three places, because the database is the one that must not be
+ * wrong and the other two are allowed to lag by a deploy.
+ *
+ * These are chips rather than a text field on purpose: one tap, skippable,
+ * and the answers stay comparable. "CI", "ci/cd", "pipelines" and "github
+ * actions" are one facet, and a free-text box collects all four.
+ */
+const USE_CASES = [
+  { value: 'scan',     label: 'Secret scanning' },
+  { value: 'validate', label: 'Validation' },
+  { value: 'cloud',    label: 'Cloud sync' },
+  { value: 'ci',       label: 'CI/CD' },
+  { value: 'migrate',  label: 'Migration' },
+  { value: 'convert',  label: 'Format conversion' },
+  { value: 'diff',     label: 'Diffing' },
+] as const
+
 export function TestimonialForm() {
   const [mode, setMode]         = useState<Mode>('user')
   const [status, setStatus]     = useState<Status>('idle')
@@ -41,7 +81,23 @@ export function TestimonialForm() {
   const [imageFile, setImageFile]       = useState<File | null>(null)
   const [imageError, setImageError]     = useState<string | null>(null)
   const [consent, setConsent]           = useState(false)
+  const [useCases, setUseCases]         = useState<string[]>([])
+  const [detailsOpen, setDetailsOpen]   = useState(false)
+  /**
+   * ⚠️ ONE useId, with the second id derived from it — not two useId calls.
+   *
+   * A second `useId()` in this component body made the server and the client
+   * generate different ids for EVERY control on the form, and React threw a
+   * hydration mismatch naming all of them. Bisected: baseline (one call) was
+   * clean, adding a second broke it, replacing the second with a constant
+   * fixed it again.
+   *
+   * Deriving is better than the constant that proved the point — it stays
+   * unique if this form is ever rendered twice on one page, which a
+   * hardcoded string would not. Same trick `Field` uses for its hint id.
+   */
   const consentId = useId()
+  const detailsId = `${consentId}-details`
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
@@ -56,6 +112,12 @@ export function TestimonialForm() {
 
   function set(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  function toggleUseCase(value: string) {
+    setUseCases(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value],
+    )
   }
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -120,6 +182,9 @@ export function TestimonialForm() {
     // value used to survive a mode switch and be submitted invisibly.
     if (mode === 'company') fd.set('website_url', form.website_url)
     fd.set('message', form.message)
+    // ⚠️ append, not set — one entry per value, which is what the route's
+    // fd.getAll expects. `set` in a loop would leave only the last chip.
+    for (const u of useCases) fd.append('use_cases', u)
     if (imageFile) fd.set('image', imageFile)
 
     try {
@@ -144,30 +209,39 @@ export function TestimonialForm() {
 
   if (status === 'success') {
     return (
-      <div className="flex flex-col items-center gap-4 py-12 text-center">
-        <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
-          <Check className="w-6 h-6 text-success" />
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <div className="w-14 h-14 rounded-full bg-success/20 flex items-center justify-center">
+          <Check className="w-7 h-7 text-success" />
         </div>
-        <h3 className="font-serif text-xl font-bold">Thank you!</h3>
-        <p className="font-mono text-sm text-text-muted max-w-sm">
+        <h3 className="font-serif text-2xl font-bold">Thank you!</h3>
+        <p className="text-base text-text-muted max-w-sm leading-relaxed">
           Your testimonial is in review. We&apos;ll email you at{' '}
-          <span className="text-text-secondary">{form.email}</span> to confirm before
-          it appears on the site — usually within 24–48 hours.
+          <span className="text-text-secondary break-all">{form.email}</span> to confirm
+          before it appears on the site — usually within 24–48 hours.
         </p>
       </div>
     )
   }
 
-  const messageShort = form.message.trim().length > 0 && form.message.trim().length < MESSAGE_MIN
+  const trimmed      = form.message.trim().length
+  const messageShort = trimmed > 0 && trimmed < MESSAGE_MIN
+  const canSubmit =
+    status !== 'loading' &&
+    consent &&
+    form.name.trim() !== '' &&
+    form.email.trim() !== '' &&
+    trimmed >= MESSAGE_MIN
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-xl">
+    <form onSubmit={handleSubmit} className="space-y-7">
 
-      {/* Mode toggle */}
+      {/* ── Mode toggle ───────────────────────────────────────────────────
+          ⚠️ 48px tall. This is the first thing a thumb lands on, and the old
+          one was 36px — under every platform's minimum target size. */}
       <div
         role="radiogroup"
         aria-label="Submitting as"
-        className="flex gap-2 p-1 bg-bg-surface border border-border-muted rounded-lg"
+        className="grid grid-cols-2 gap-1.5 p-1.5 bg-bg-surface border border-border-muted rounded-xl"
       >
         {(['user', 'company'] as const).map(m => (
           <button
@@ -176,10 +250,10 @@ export function TestimonialForm() {
             role="radio"
             aria-checked={mode === m}
             onClick={() => setMode(m)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-mono text-sm transition-all ${
+            className={`flex items-center justify-center gap-2 h-12 rounded-lg text-base font-medium transition-all ${
               mode === m
-                ? 'bg-bg-overlay text-text-primary border border-border-muted'
-                : 'text-text-muted hover:text-text-primary'
+                ? 'bg-brand-500 text-black shadow-sm'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-overlay'
             }`}
           >
             {m === 'user' ? <User className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
@@ -188,85 +262,29 @@ export function TestimonialForm() {
         ))}
       </div>
 
-      {/* Image upload */}
-      <div>
-        <label
-          htmlFor="image-upload"
-          className="block font-mono text-xs text-text-muted uppercase tracking-widest mb-2"
-        >
-          {mode === 'user' ? 'Profile photo' : 'Company logo'} (optional)
-        </label>
-        <div className="flex items-center gap-4">
-          {imagePreview ? (
-            <div className="relative">
-              <img
-                src={imagePreview}
-                alt=""
-                className="w-16 h-16 rounded-full object-cover border border-border-muted"
-              />
-              <button
-                type="button"
-                onClick={clearImage}
-                aria-label="Remove selected image"
-                className="absolute -top-1 -right-1 w-5 h-5 bg-danger rounded-full flex items-center justify-center"
-              >
-                <X className="w-3 h-3 text-white" />
-              </button>
-            </div>
-          ) : (
-            <div
-              aria-hidden="true"
-              className="w-16 h-16 rounded-full bg-bg-surface border-2 border-dashed border-border-muted flex items-center justify-center text-text-muted"
-            >
-              {mode === 'user' ? <User className="w-6 h-6" /> : <Building2 className="w-6 h-6" />}
-            </div>
-          )}
-          <div>
+      {/* ── Name + email, side by side from 640px ─────────────────────────
+          Two short fields in one row halve the height of the required path on
+          anything wider than a phone, and stack cleanly below it. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label={mode === 'user' ? 'Your name' : 'Company name'} required>
+          {id => (
             <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-              id="image-upload"
-              aria-describedby="image-hint"
+              id={id}
+              type="text"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              placeholder={mode === 'user' ? 'Jane Smith' : 'Acme Corp'}
+              required
+              maxLength={NAME_MAX}
+              autoComplete={mode === 'user' ? 'name' : 'organization'}
+              enterKeyHint="next"
+              className={INPUT}
             />
-            <label
-              htmlFor="image-upload"
-              className="flex items-center gap-2 font-mono text-xs px-4 py-2 border border-border-muted rounded cursor-pointer hover:border-brand-500 hover:text-brand-400 transition-colors w-fit"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              Upload image
-            </label>
-            <p id="image-hint" className="font-mono text-xs text-text-muted mt-1">PNG, JPG up to 2MB</p>
-            {imageError && (
-              <p role="alert" className="font-mono text-xs text-danger mt-1">{imageError}</p>
-            )}
-          </div>
-        </div>
-      </div>
+          )}
+        </Field>
 
-      {/* Name */}
-      <Field label="Your name" required>
-        {id => (
-          <input
-            id={id}
-            type="text"
-            value={form.name}
-            onChange={e => set('name', e.target.value)}
-            placeholder={mode === 'user' ? 'Jane Smith' : 'Acme Corp'}
-            required
-            maxLength={NAME_MAX}
-            autoComplete={mode === 'user' ? 'name' : 'organization'}
-            className={INPUT}
-          />
-        )}
-      </Field>
-
-      {/* Email */}
-      <Field label="Your email" required>
-        {id => (
-          <>
+        <Field label="Your email" required hint="Not published. We email you before this goes live.">
+          {(id, hintId) => (
             <input
               id={id}
               type="email"
@@ -276,64 +294,21 @@ export function TestimonialForm() {
               required
               maxLength={EMAIL_MAX}
               autoComplete="email"
-              aria-describedby={`${id}-hint`}
-              className={INPUT}
-            />
-            <p id={`${id}-hint`} className="font-mono text-xs text-text-muted mt-1">
-              Not published. We email you before this goes live, and nowhere else.
-            </p>
-          </>
-        )}
-      </Field>
-
-      {/* Role / title */}
-      <Field label={mode === 'user' ? 'Role & company' : 'Industry / tagline'}>
-        {id => (
-          <input
-            id={id}
-            type="text"
-            value={form.role}
-            onChange={e => set('role', e.target.value)}
-            placeholder={mode === 'user' ? 'Senior Engineer at Stripe' : 'B2B SaaS · 200 employees'}
-            maxLength={ROLE_MAX}
-            className={INPUT}
-          />
-        )}
-      </Field>
-
-      {/* Website (company only) */}
-      {mode === 'company' && (
-        <Field label="Company website">
-          {id => (
-            <input
-              id={id}
-              type="url"
-              value={form.website_url}
-              onChange={e => set('website_url', e.target.value)}
-              placeholder="https://acme.com"
-              maxLength={URL_MAX}
+              // ⚠️ inputMode drives the on-screen keyboard: an email layout
+              // puts @ and . on the first page instead of two shifts deep.
+              inputMode="email"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="next"
+              aria-describedby={hintId}
               className={INPUT}
             />
           )}
         </Field>
-      )}
+      </div>
 
-      {/* Social profile */}
-      <Field label={mode === 'user' ? 'GitHub / LinkedIn / Twitter URL' : 'Twitter / LinkedIn URL'}>
-        {id => (
-          <input
-            id={id}
-            type="url"
-            value={form.social_url}
-            onChange={e => set('social_url', e.target.value)}
-            placeholder="https://github.com/janesmith"
-            maxLength={URL_MAX}
-            className={INPUT}
-          />
-        )}
-      </Field>
-
-      {/* Message */}
+      {/* ── The message ───────────────────────────────────────────────────*/}
       <Field label="Your experience with evnx" required>
         {id => (
           <>
@@ -341,82 +316,280 @@ export function TestimonialForm() {
               id={id}
               value={form.message}
               onChange={e => set('message', e.target.value)}
-              placeholder="Tell us how evnx helped you or your team..."
+              placeholder="Tell us how evnx helped you or your team…"
               required
-              rows={4}
+              rows={5}
               minLength={MESSAGE_MIN}
               maxLength={MESSAGE_MAX}
+              enterKeyHint="enter"
               aria-describedby={`${id}-count`}
-              className={`${INPUT} resize-none`}
+              className={`${INPUT} resize-y min-h-[8rem]`}
             />
             {/* ⚠️ The floor is stated, not just enforced. minLength={30} was
                 silently blocking submit with a browser tooltip and the counter
                 showed only "0/500" — nothing told anyone 30 was the bar. */}
             <p
               id={`${id}-count`}
-              className={`font-mono text-xs mt-1 text-right ${messageShort ? 'text-danger' : 'text-text-muted'}`}
+              aria-live="polite"
+              className={`text-xs mt-1.5 text-right tabular-nums ${messageShort ? 'text-danger' : 'text-text-muted'}`}
             >
               {messageShort
-                ? `${MESSAGE_MIN - form.message.trim().length} more character${MESSAGE_MIN - form.message.trim().length === 1 ? '' : 's'} needed`
+                ? `${MESSAGE_MIN - trimmed} more character${MESSAGE_MIN - trimmed === 1 ? '' : 's'} needed`
                 : `${form.message.length}/${MESSAGE_MAX}`}
             </p>
           </>
         )}
       </Field>
 
+      {/* ── Use-case chips ────────────────────────────────────────────────
+          ⚠️ Real checkboxes under the styling, not buttons. The chip is the
+          <label>, so a tap anywhere on it toggles, the keyboard reaches it,
+          and a screen reader announces checked state — all of which a styled
+          <button role="checkbox"> has to reimplement and usually gets wrong. */}
+      <fieldset>
+        <legend className="block text-xs text-text-muted uppercase tracking-widest mb-3">
+          What did it help with?{' '}
+          <span className="normal-case tracking-normal text-text-muted/70">(optional)</span>
+        </legend>
+        <div className="flex flex-wrap gap-2">
+          {USE_CASES.map(({ value, label }) => {
+            const on = useCases.includes(value)
+            return (
+              <label
+                key={value}
+                className={`cursor-pointer select-none rounded-full border px-4 h-10 inline-flex items-center text-sm transition-colors ${
+                  on
+                    ? 'bg-brand-500/15 border-brand-500 text-brand-300'
+                    : 'bg-bg-surface border-border-muted text-text-muted hover:border-border-default hover:text-text-secondary'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => toggleUseCase(value)}
+                  className="sr-only"
+                />
+                {label}
+              </label>
+            )
+          })}
+        </div>
+      </fieldset>
+
+      {/* ── Everything optional, folded away ──────────────────────────────*/}
+      <div className="border-t border-border-subtle pt-5">
+        <button
+          type="button"
+          onClick={() => setDetailsOpen(o => !o)}
+          aria-expanded={detailsOpen}
+          aria-controls={detailsId}
+          // ⚠️ items-start + text-left, and the label is ONE span. As three
+          // flex children on a centred row it wrapped mid-phrase with
+          // "(optional)" flung to the right margin — flex was distributing the
+          // wrapped line rather than the sentence flowing.
+          className="flex items-start gap-2 text-left text-sm text-text-secondary hover:text-brand-400 transition-colors"
+        >
+          {detailsOpen
+            ? <Minus className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            : <Plus  className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+          <span>
+            {mode === 'user' ? 'Add a photo, your role and links' : 'Add a logo, website and links'}{' '}
+            <span className="text-text-muted">(optional)</span>
+          </span>
+        </button>
+
+        {/* ⚠️ Values live in `form` above, so collapsing this does NOT discard
+            what is in it — and anything typed here is still submitted. The
+            one exception is website_url, which handleSubmit drops outside
+            company mode, because a value left behind by a mode switch was
+            being submitted invisibly. */}
+        {detailsOpen && (
+          <div id={detailsId} className="mt-6 space-y-5">
+
+            {/* Image — compact row, not a block */}
+            <div>
+              <span className="block text-xs text-text-muted uppercase tracking-widest mb-2">
+                {mode === 'user' ? 'Profile photo' : 'Company logo'}
+              </span>
+              <div className="flex items-center gap-4">
+                {imagePreview ? (
+                  <div className="relative flex-shrink-0">
+                    <img
+                      src={imagePreview}
+                      alt=""
+                      className="w-14 h-14 rounded-full object-cover border border-border-muted"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      aria-label="Remove selected image"
+                      className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-danger rounded-full flex items-center justify-center"
+                    >
+                      <X className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    className="flex-shrink-0 w-14 h-14 rounded-full bg-bg-surface border-2 border-dashed border-border-muted flex items-center justify-center text-text-muted"
+                  >
+                    {mode === 'user' ? <User className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    id="image-upload"
+                    aria-describedby="image-hint"
+                  />
+                  <label
+                    htmlFor="image-upload"
+                    className="inline-flex items-center gap-2 text-sm h-10 px-4 border border-border-muted rounded-lg cursor-pointer hover:border-brand-500 hover:text-brand-400 transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {imagePreview ? 'Change' : 'Upload'}
+                  </label>
+                  <p id="image-hint" className="text-xs text-text-muted mt-1.5">PNG, JPG, GIF or WebP, up to 2MB</p>
+                  {imageError && (
+                    <p role="alert" className="text-xs text-danger mt-1">{imageError}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field label={mode === 'user' ? 'Role & company' : 'Industry / tagline'}>
+                {id => (
+                  <input
+                    id={id}
+                    type="text"
+                    value={form.role}
+                    onChange={e => set('role', e.target.value)}
+                    placeholder={mode === 'user' ? 'Senior Engineer at Stripe' : 'B2B SaaS · 200 employees'}
+                    maxLength={ROLE_MAX}
+                    enterKeyHint="next"
+                    className={INPUT}
+                  />
+                )}
+              </Field>
+
+              <Field label={mode === 'user' ? 'GitHub / LinkedIn / X' : 'LinkedIn / X'}>
+                {id => (
+                  <input
+                    id={id}
+                    type="url"
+                    value={form.social_url}
+                    onChange={e => set('social_url', e.target.value)}
+                    placeholder="https://github.com/janesmith"
+                    maxLength={URL_MAX}
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint={mode === 'company' ? 'next' : 'done'}
+                    className={INPUT}
+                  />
+                )}
+              </Field>
+
+              {mode === 'company' && (
+                <Field label="Company website">
+                  {id => (
+                    <input
+                      id={id}
+                      type="url"
+                      value={form.website_url}
+                      onChange={e => set('website_url', e.target.value)}
+                      placeholder="https://acme.com"
+                      maxLength={URL_MAX}
+                      inputMode="url"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      enterKeyHint="done"
+                      className={INPUT}
+                    />
+                  )}
+                </Field>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ⚠️ Unticked by default, and the submit button respects it. A
           pre-ticked box is not consent, and this one is the record that we
-          were allowed to publish someone's name and employer. */}
-      <div className="flex gap-3 items-start pt-2">
+          were allowed to publish someone's name and employer.
+          The whole row is the label, so the tap target is the sentence rather
+          than a 16px square. */}
+      <label
+        htmlFor={consentId}
+        className="flex gap-3 items-start p-4 bg-bg-surface border border-border-muted rounded-xl cursor-pointer hover:border-border-default transition-colors"
+      >
         <input
           id={consentId}
           type="checkbox"
           checked={consent}
           onChange={e => setConsent(e.target.checked)}
           required
-          className="mt-0.5 w-4 h-4 flex-shrink-0 accent-brand-500 cursor-pointer"
+          className="mt-0.5 w-5 h-5 flex-shrink-0 accent-brand-500 cursor-pointer"
         />
-        <label htmlFor={consentId} className="font-mono text-xs text-text-secondary leading-relaxed cursor-pointer">
+        <span className="text-sm text-text-secondary leading-relaxed">
           {CONSENT_TEXT}{' '}
-          <a href={CONSENT_PRIVACY_HREF} className="text-brand-400 hover:underline">
+          <a
+            href={CONSENT_PRIVACY_HREF}
+            className="text-brand-400 hover:underline"
+            onClick={e => e.stopPropagation()}
+          >
             Privacy policy
           </a>
           .
-        </label>
-      </div>
+        </span>
+      </label>
 
       {status === 'error' && errorMsg && (
-        <p role="alert" className="font-mono text-xs text-danger">
+        <p role="alert" className="text-sm text-danger">
           {errorMsg}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={
-          status === 'loading' ||
-          !consent ||
-          !form.name.trim() ||
-          !form.email.trim() ||
-          form.message.trim().length < MESSAGE_MIN
-        }
-        className="w-full flex items-center justify-center gap-2 font-mono font-semibold text-sm bg-brand-500 text-black py-3 rounded-lg hover:bg-brand-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {status === 'loading'
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
-          : 'Submit testimonial'}
-      </button>
+      <div className="space-y-3">
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="w-full flex items-center justify-center gap-2 font-semibold text-base bg-brand-500 text-black h-14 rounded-xl hover:bg-brand-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {status === 'loading'
+            ? <><Loader2 className="w-5 h-5 animate-spin" /> Submitting…</>
+            : 'Submit testimonial'}
+        </button>
 
-      <p className="font-mono text-xs text-text-muted text-center">
-        Reviewed by a human, and confirmed with you by email, before anything appears.
-      </p>
+        <p className="text-xs text-text-muted text-center leading-relaxed">
+          Reviewed by a human, and confirmed with you by email, before anything appears.
+        </p>
+      </div>
     </form>
   )
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const INPUT = 'w-full font-mono text-sm bg-bg-surface border border-border-muted rounded-lg px-4 py-2.5 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors'
+/**
+ * ⚠️ `text-base` is 16px and is load-bearing, not a style preference. iOS
+ * Safari zooms the viewport whenever a focused input renders below 16px and
+ * never zooms back out, so `text-sm` here meant the page jumped sideways on
+ * the first tap of every iPhone visit and stayed there for the rest of the
+ * form. h-12 for the same family of reasons: 48px clears every platform
+ * minimum tap target.
+ */
+const INPUT =
+  'w-full text-base bg-bg-surface border border-border-muted rounded-lg px-4 h-12 ' +
+  'text-text-primary placeholder:text-text-muted/70 focus:outline-none ' +
+  'focus:border-brand-500 focus:ring-1 focus:ring-brand-500/40 transition-colors'
 
 /**
  * ⚠️ Takes a render prop so the generated id reaches the control.
@@ -429,24 +602,35 @@ const INPUT = 'w-full font-mono text-sm bg-bg-surface border border-border-muted
  *
  * The required marker is drawn here and ONLY here. Passing `label="Your name *"`
  * alongside `required` rendered "YOUR NAME **", which was live on the site.
+ *
+ * `hint` renders below the control and hands its id to the render prop, so the
+ * caller can wire aria-describedby without inventing a second id scheme.
  */
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string
   required?: boolean
-  children: (id: string) => React.ReactNode
+  hint?: string
+  children: (id: string, hintId: string | undefined) => React.ReactNode
 }) {
   const id = useId()
+  const hintId = hint ? `${id}-hint` : undefined
   return (
     <div>
-      <label htmlFor={id} className="block font-mono text-xs text-text-muted uppercase tracking-widest mb-2">
+      <label htmlFor={id} className="block text-xs text-text-muted uppercase tracking-widest mb-2">
         {label}
         {required && <span className="text-danger ml-1" aria-hidden="true">*</span>}
       </label>
-      {children(id)}
+      {children(id, hintId)}
+      {hint && (
+        <p id={hintId} className="text-xs text-text-muted mt-1.5 leading-relaxed">
+          {hint}
+        </p>
+      )}
     </div>
   )
 }

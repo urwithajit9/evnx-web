@@ -57,6 +57,25 @@ const ALLOWED: Record<string, { ext: string; magic: Signature[] }> = {
   },
 };
 
+/**
+ * ⚠️ Mirrors the CHECK on `testimonials.use_cases` in
+ * issue_triage/testimonials-provenance.sql. An unknown value is DROPPED here
+ * rather than rejected: the chips are optional garnish, and failing a
+ * submission someone spent five minutes writing because a facet name drifted
+ * would trade their work for a constraint they cannot see. The database still
+ * refuses one if this list ever falls behind, so the honest failure mode is
+ * preserved — it just is not the submitter's problem.
+ */
+const USE_CASES = ["scan", "validate", "cloud", "ci", "migrate", "convert", "diff"] as const;
+
+function cleanUseCases(values: FormDataEntryValue[]): string[] {
+  const seen = new Set<string>();
+  for (const v of values) {
+    if (typeof v === "string" && (USE_CASES as readonly string[]).includes(v)) seen.add(v);
+  }
+  return Array.from(seen);
+}
+
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
@@ -222,6 +241,9 @@ export async function POST(req: NextRequest) {
     role: clean(fd.get("role"), ROLE_MAX),
     company: clean(fd.get("company"), ROLE_MAX),
     social_url: cleanUrl(fd.get("social_url")),
+    // Optional chips. getAll, because a multi-select posts one entry per
+    // value and fd.get would silently keep only the first.
+    use_cases: cleanUseCases(fd.getAll("use_cases")),
     // ⚠️ PII. Never granted to anon, never rendered — see
     // issue_triage/testimonials-email-consent.sql, which revokes the
     // table-level select grant and re-issues it column by column.
@@ -239,6 +261,12 @@ export async function POST(req: NextRequest) {
     logo_url: type === "company" ? (upload?.url ?? null) : null,
     // ⚠️ NOT taken from the request. This is the whole point of the route.
     approved: false,
+    // ⚠️ Also not from the request. Anything arriving here came through the
+    // form, so it carries consent_at and still needs the email round-trip
+    // before `is_public` turns true. 'harvested' is a claim only the site
+    // owner can make, by hand, in the dashboard — if the browser could set
+    // it, the confirmation gate would be one form field away from bypassed.
+    provenance: "form" as const,
   });
 
   if (error) {
