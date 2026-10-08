@@ -204,7 +204,40 @@ KEY=value            # stripped — the value is "value"
 KEY="value # here"   # kept — the value is "value # here"
 ```
 
-An unquoted `#` starts a comment. Inside any quoted form it is part of the value.
+An unquoted `#` starts a comment. Inside any quoted form it is part of the
+value. After a **closing** quote it is a comment again — the quote is what ends
+the value:
+
+```bash
+KEY="value" # this is a comment, not part of the value
+KEY='value' # the same for single quotes and backticks
+```
+
+Anything else after a closing quote is an error rather than silently discarded,
+because dropping it would hide a missing quote or a stray paste:
+
+```bash
+KEY="value" junk
+#  → Invalid format at line 1: unexpected text after the closing ": `junk`
+#    — quote the whole value, or start a comment with #
+```
+
+<Callout type="warning" title="Fixed in v0.10.0">
+Both examples at the top of this section are correct and **the second one did
+not work.** `KEY="value # here"   # kept` was read as an *unclosed* quote,
+because the parser asked whether the line ended with a quote rather than where
+the quote closed. The value came out as
+
+```text
+value # here"   # kept — the value is "value # here
+```
+
+— this page's own annotation, swallowed into it, with exit 0. When the following
+lines happened to contain another quote, the runaway value closed there and
+whole variables disappeared from the parse without an error: five lines became
+three. `convert`, `cloud push`, `cloud run` and `cloud export` all read through
+that parser.
+</Callout>
 
 ---
 

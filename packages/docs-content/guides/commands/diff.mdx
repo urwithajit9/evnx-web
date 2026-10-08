@@ -24,7 +24,7 @@ Compare `.env` and `.env.example` files to identify missing, extra, and mismatch
 </Prerequisites>
 
 <Callout type="info">
-  <strong>Security by Default:</strong> Variable values are hidden in output unless <code>--show-values</code> is explicitly passed. Sensitive keys (containing <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>, etc.) are auto-redacted even when <code>--show-values</code> is enabled, showing only the first 2 characters followed by <code>***</code>.
+  <strong>Security by Default:</strong> Variable values are hidden unless <code>--show-values</code> is explicitly passed, in <em>every</em> format. Credential-shaped keys are masked as <code>***</code> even with <code>--show-values</code> — the flag cannot reveal them. <strong>v0.10.0+</strong>: before that, <code>--format json</code> printed every differing value in full regardless of the flag, and the mask carried the value's first two characters.
 </Callout>
 
 ---
@@ -61,7 +61,7 @@ and `--reverse`. **They do not exist** — `-i` for `--interactive` is the only 
 | `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--example` | `path` | `.env.example` | Path to the file to compare against |
 | `--against` | `string` | — | **v0.5.0+** — compare against `.env.<NAME>`. Conflicts with `--example` |
-| `--show-values` | `bool` | `false` | Display variable values in output (⚠️ may expose sensitive data) |
+| `--show-values` | `bool` | `false` | Show values for keys that are **not** credential-shaped. Cannot reveal a credential-shaped key — those are always `***` |
 | `--format` | `enum` | `pretty` | Output format: `pretty` (colored terminal), `json` (machine-readable), or `patch` (unified diff) |
 | `--reverse` | `bool` | `false` | Reverse comparison direction: compare example → env instead of env → example |
 | `--ignore-keys` | `list` | `[]` | Comma-separated list of keys to exclude from comparison (e.g., `DATABASE_URL,REDIS_URL`) |
@@ -207,10 +207,9 @@ Machine-readable output for programmatic consumption:
   "different": [
     {
       "key": "DATABASE_URL",
-      "example_value": "postgresql://localhost:5432/dev",
-      "env_value": "postgresql://prod-server:5432/prod",
-      "example_value_redacted": null,
-      "env_value_redacted": null
+      "example_value": null,
+      "env_value": null,
+      "values_redacted": false
     }
   ],
   "stats": {
@@ -252,21 +251,57 @@ Unified diff-style output for automation:
 
 ## Sensitive key auto-redaction
 
-Keys matching these patterns (case-insensitive) have values auto-redacted in output:
+A key is credential-shaped if its name **contains** any of `PASSWORD`, `PASSWD`,
+`PWD`, `SECRET`, `TOKEN`, `API_KEY`, `APIKEY`, `PRIVATE_KEY`, `AUTH`,
+`CREDENTIAL` — or **ends with** `_KEY`, `_SECRET`, `_PASSWORD`, `_TOKEN`,
+`_PASSWD`.
 
-| Pattern | Example keys | Redacted output |
-|---------|-------------|-----------------|
-| `PASSWORD`, `PASSWD`, `PWD` | `DB_PASSWORD`, `ADMIN_PWD` | `ab***` |
-| `SECRET` | `SECRET_KEY`, `APP_SECRET` | `su***` |
-| `TOKEN` | `API_TOKEN`, `AUTH_TOKEN` | `to***` |
-| `KEY`, `API_KEY`, `APIKEY` | `AWS_ACCESS_KEY`, `STRIPE_APIKEY` | `AK***` |
-| `PRIVATE_KEY` | `RSA_PRIVATE_KEY` | `pr***` |
-| `AUTH`, `CREDENTIAL` | `OAUTH_SECRET`, `DB_CREDENTIAL` | `oa***` |
+| Example key | Why |
+|---|---|
+| `DB_PASSWORD`, `ADMIN_PWD` | contains `PASSWORD` / `PWD` |
+| `SECRET_KEY`, `APP_SECRET` | contains `SECRET` |
+| `API_TOKEN`, `AUTH_TOKEN` | contains `TOKEN` |
+| `AWS_ACCESS_KEY`, `STRIPE_KEY` | ends with `_KEY` |
+| `STRIPE_APIKEY` | contains `APIKEY` |
+| `RSA_PRIVATE_KEY` | contains `PRIVATE_KEY` |
+| `OAUTH_SECRET`, `DB_CREDENTIAL` | contains `AUTH` / `CREDENTIAL` |
 
-Redaction behavior:
-- Default mode (`--show-values` not set): All values shown as `***`
-- With `--show-values`: Non-sensitive keys show full values; sensitive keys show first 2 chars + `***`
-- JSON output: Includes both original (`example_value`) and redacted (`example_value_redacted`) fields when applicable
+<Callout type="warning" title="Three of those rows were wrong until v0.10.0">
+`ADMIN_PWD`, `AWS_ACCESS_KEY` and `STRIPE_APIKEY` were listed here as redacted
+and **were not**: `PWD` and `APIKEY` were never patterns, and `API_KEY` carries
+an underscore that `AWS_ACCESS_KEY` does not have. The table described the
+intent; the code did not implement it. All three are matched now.
+
+The suffix rule is deliberately broader than the one `evnx validate` uses for
+weak-secret checks. Masking `SECRET_KEY_ROTATION_DAYS` costs a line of
+information; printing `SIGNING_KEY` costs the key. `KEY` is a *suffix* rather
+than a substring so that `KEYBOARD_LAYOUT` and `MONKEY_COUNT` stay out.
+</Callout>
+
+Redaction behaviour:
+- **Without `--show-values`**: credential-shaped keys print `***`; every other
+  value is withheld entirely. Only key names appear.
+- **With `--show-values`**: keys that are not credential-shaped print their
+  value. Credential-shaped keys still print `***` — the flag has no power over
+  them, in any format.
+- **`--format json`**: `example_value` and `env_value` carry only what is safe
+  to print, and are `null` when withheld. `values_redacted` tells a mask from a
+  literal. **v0.10.0+** — see the breaking-change note below.
+- **`--format patch`**: prints real values, because a patch exists to be applied
+  and a masked one would write `***` into your file. This is the one format that
+  does, and it is reachable only by asking for it.
+
+<Callout type="warning" title="Breaking in v0.10.0: the JSON shape">
+`example_value` and `env_value` are now nullable and hold only what is safe to
+print. `values_redacted` is new. **`example_value_redacted` and
+`env_value_redacted` are gone.**
+
+Holding the raw value beside the mask was the bug: every consumer had to know to
+prefer the second, and `--format json` did not — so it printed the secret while
+the human output printed the mask. If you parsed `*_redacted`, read
+`example_value` / `env_value` instead; if you parsed `env_value` expecting a raw
+value, pass `--show-values` and note that credential-shaped keys will be `***`.
+</Callout>
 
 ---
 
