@@ -36,7 +36,8 @@ evnx validate [OPTIONS]
 | `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--example` | `string` | `.env.example` | Path to your example/template file |
 | `--strict` | `bool` | `false` | Warn about variables not declared. Measured against `.env.example`, or against `[vars]` when the project has a [contract](/guides/commands/spec) |
-| `--fix` | `bool` | `false` | Auto-fix common issues (placeholders, booleans, weak secrets) |
+| `--fix` | `bool` | `false` | Auto-fix common issues (placeholders, booleans, missing variables). Keeps the original as `.env.bak`. **Will not overwrite a value that is not a placeholder — v0.10.0+** |
+| `--rotate-weak-secrets` | `bool` | `false` | **v0.10.0+** — with `--fix`, also replace weak secrets that hold a **real value**. Destroys credentials, deliberately. Rotate at the provider first |
 | `--format` | `pretty\|json\|github-actions` | `pretty` | Output format |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (useful for CI) |
 | `--ignore` | `string[]` | `[]` | Comma-separated issue types to suppress |
@@ -69,7 +70,7 @@ evnx validate runs these checks automatically:
 | `placeholder_value` | `error` | sometimes | Value looks like `changeme`, `your_key_here`, or anything starting `your_` — which is what `evnx init` generates. **v0.5.0+** |
 | `duplicate_key` | `warning` | ❌ | The same key is assigned more than once. Names the lines and says which one takes effect. **v0.5.0+** |
 | `boolean_trap` | `warning` | ✅ | `DEBUG=False` (string) vs `DEBUG=false` (boolean) |
-| `weak_secret` | `error` | ✅ | **Any** credential-shaped name — `*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_TOKEN` — whose value is too short or too predictable. **v0.5.0+**, was `SECRET_KEY` alone |
+| `weak_secret` | `error` | sometimes | **Any** credential-shaped name — `*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_TOKEN` — whose value is too short or too predictable. **v0.5.0+**, was `SECRET_KEY` alone. ⛔ `--fix` repairs it only when the value is a *placeholder* — **v0.10.0+**, see below |
 | `localhost_in_docker` | `warning` | ❌ | localhost URL when Docker files detected |
 | `invalid_url` | `warning` | ❌ | Not a valid URL under any scheme. `postgresql://`, `redis://` and `amqp://` all pass — **v0.5.0+**, this was `https?://` only |
 | `invalid_port` | `error` | ❌ | Port variable not in range 1-65535 |
@@ -80,8 +81,14 @@ evnx validate runs these checks automatically:
 
 <Callout type="info" title="Auto-fix behavior">
 `--fix` only touches issues it can actually resolve. It generates a real secret from the
-OS CSPRNG for credential-shaped variables, supplies a URL, email or port where the name
-implies one, and fixes boolean formatting.
+OS CSPRNG for credential-shaped variables **whose value is still a placeholder**, supplies
+a URL, email or port where the name implies one, and fixes boolean formatting.
+
+It rewrites only the lines it repairs. Every other line — quoting, trailing comments, an
+`export ` prefix, indentation — is copied byte for byte, and the file as it arrived is kept
+beside it as `.env.bak`. **Both are v0.10.0+**; before that a single repair round-tripped
+the whole file through the parser, so `FOO="has spaces and #hash"` came back out as
+`FOO=has spaces and #hash`, which `sh` cannot parse and a dotenv parser truncates.
 
 ⚠️ **It declines what it cannot invent — changed in v0.5.0.** A placeholder in `DB_NAME`
 is left exactly as it is and still reported, because evnx has no way to know your database
