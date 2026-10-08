@@ -10,7 +10,7 @@
  *   <TestimonialsGrid limit={6} /> — landing page preview
  *   <TestimonialsGrid limit={24} /> — full /testimonials page
  */
-import { Building2, User, ExternalLink } from 'lucide-react'
+import { Building2, User, ExternalLink, Link2 } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import type { Database } from '@/lib/supabase'
 
@@ -26,14 +26,21 @@ import type { Database } from '@/lib/supabase'
  * Keep in step with `grant select (…)` in
  * issue_triage/testimonials-email-consent.sql.
  */
+// ⚠️ ONE string literal, not a concatenation. supabase-js types the result
+// by parsing this at the type level, and it can only do that for a literal —
+// splitting it across a `+` makes the row type collapse to
+// GenericStringError[] and the cast below stops compiling. Long line, but the
+// alternative is casting through `unknown`, which would also swallow a real
+// mismatch between this list and the Row type.
 const PUBLIC_COLUMNS =
-  'id, type, name, role, company, website_url, avatar_url, logo_url, social_url, message, created_at'
+  'id, type, name, role, company, website_url, avatar_url, logo_url, social_url, message, created_at, headline, use_cases, provenance, source_url'
 
 type Testimonial = Pick<
   Database['public']['Tables']['testimonials']['Row'],
   | 'id' | 'type' | 'name' | 'role' | 'company'
   | 'website_url' | 'avatar_url' | 'logo_url' | 'social_url'
   | 'message' | 'created_at'
+  | 'headline' | 'use_cases' | 'provenance' | 'source_url'
 >
 
 async function getTestimonials(limit: number): Promise<Testimonial[]> {
@@ -44,7 +51,16 @@ async function getTestimonials(limit: number): Promise<Testimonial[]> {
   const { data, error } = await supabase
     .from('testimonials')
     .select(PUBLIC_COLUMNS)
-    .eq('approved', true)
+    // ⚠️ `is_public`, NOT `approved`. Generated in Postgres as
+    // `approved AND (provenance = 'harvested' OR confirmed_at IS NOT NULL)`,
+    // so ticking `approved` alone no longer publishes anything: a form
+    // submission needs the email round-trip recorded, and a quote taken from
+    // somewhere public needs to say so. Filtering on `confirmed_at` here
+    // instead would have required granting that column to anon — PostgREST
+    // needs the privilege to filter, not just to read — which would publish
+    // the moment each person answered their email.
+    // See issue_triage/testimonials-provenance.sql.
+    .eq('is_public', true)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -87,6 +103,22 @@ export async function TestimonialsGrid({ limit = 12 }: Props) {
   )
 }
 
+/**
+ * ⚠️ The chips show a LABEL, never the stored value. The column is
+ * constrained to this exact set in Postgres, so a value appearing here that
+ * the map does not know is a schema change nobody finished — rendering the
+ * raw key would quietly ship `convert` as a chip reading "convert".
+ */
+const USE_CASE_LABELS: Record<string, string> = {
+  scan:     'Secret scanning',
+  validate: 'Validation',
+  cloud:    'Cloud sync',
+  ci:       'CI/CD',
+  migrate:  'Migration',
+  convert:  'Format conversion',
+  diff:     'Diffing',
+}
+
 function TestimonialCard({ t }: { t: Testimonial }) {
   const imageUrl = t.type === 'user' ? t.avatar_url : t.logo_url
   const linkUrl  = t.website_url ?? t.social_url ?? null
@@ -97,9 +129,32 @@ function TestimonialCard({ t }: { t: Testimonial }) {
         "
       </span>
 
-      <p className="text-sm text-text-secondary leading-relaxed mb-6 relative z-10">
+      {/* A headline is written at review time, not submitted. When one exists
+          it carries the card and the full quote sits under it. */}
+      {t.headline && (
+        <p className="font-serif text-lg font-bold text-text-primary leading-snug mb-3 relative z-10">
+          {t.headline}
+        </p>
+      )}
+
+      <p className="text-sm text-text-secondary leading-relaxed mb-4 relative z-10">
         &ldquo;{t.message}&rdquo;
       </p>
+
+      {t.use_cases?.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5 mb-5 relative z-10">
+          {t.use_cases.map(u =>
+            USE_CASE_LABELS[u] ? (
+              <li
+                key={u}
+                className="font-mono text-[10px] uppercase tracking-wider text-brand-400/80 bg-brand-500/10 border border-brand-500/20 rounded px-2 py-0.5"
+              >
+                {USE_CASE_LABELS[u]}
+              </li>
+            ) : null,
+          )}
+        </ul>
+      )}
 
       <div className="flex items-center gap-3">
         {imageUrl ? (
@@ -141,6 +196,22 @@ function TestimonialCard({ t }: { t: Testimonial }) {
           {t.company && <p className="font-mono text-xs text-brand-500/70 truncate">{t.company}</p>}
         </div>
       </div>
+
+      {/* ⚠️ Shown, not hidden. A harvested quote was never confirmed by email,
+          so the link to where it was actually said is the only thing a reader
+          can check it against. Saying nothing would make it indistinguishable
+          from one the person approved directly. */}
+      {t.provenance === 'harvested' && t.source_url && (
+        <a
+          href={t.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center gap-1.5 font-mono text-[10px] text-text-muted hover:text-brand-400 transition-colors"
+        >
+          <Link2 className="w-3 h-3" />
+          Said publicly here
+        </a>
+      )}
     </div>
   )
 }

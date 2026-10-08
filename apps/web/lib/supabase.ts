@@ -68,6 +68,24 @@ export type Database = {
           message:     string
           approved:    boolean
           created_at:  string
+          /** Short pull-quote, written at review time — the form never sends one. */
+          headline:    string | null
+          /** Which evnx features the quote is about. Empty array, never null. */
+          use_cases:   string[]
+          /** 'form' (consent + email confirmation) or 'harvested' (source_url). */
+          provenance:  'form' | 'harvested'
+          /** Where a harvested quote came from. NULL for form submissions. */
+          source_url:  string | null
+          /**
+           * ⚠️ GENERATED in Postgres, read-only here: `approved AND (harvested
+           * OR confirmed_at IS NOT NULL)`. The only thing the site filters on.
+           * It exists so `confirmed_at` can stay ungranted to anon — PostgREST
+           * needs a column privilege to FILTER on a column, not just to read
+           * it, so filtering on confirmed_at directly would have meant exposing
+           * when each person answered their email.
+           * See issue_triage/testimonials-provenance.sql.
+           */
+          is_public:   boolean
           // ⚠️ NOT readable with the anon key — `grant select (…)` names the
           // public columns and omits these four. They are typed here because
           // the service-role route writes them; a `select('*')` from the
@@ -94,8 +112,15 @@ export type Database = {
           consent_at?:   string | null
           consent_text?: string | null
           confirmed_at?: string | null
+          headline?:    string | null
+          use_cases?:   string[]
+          provenance?:  'form' | 'harvested'
+          source_url?:  string | null
           id?:          string
           created_at?:  string
+          // ⚠️ `is_public` is absent on purpose — Postgres refuses a
+          // non-DEFAULT value for a generated column, so listing it here
+          // would only let a caller write something the database rejects.
         }
         Update: {
           type?:        'user' | 'company'
@@ -112,6 +137,10 @@ export type Database = {
           consent_at?:   string | null
           consent_text?: string | null
           confirmed_at?: string | null
+          headline?:    string | null
+          use_cases?:   string[]
+          provenance?:  'form' | 'harvested'
+          source_url?:  string | null
         }
         Relationships: []
       }
