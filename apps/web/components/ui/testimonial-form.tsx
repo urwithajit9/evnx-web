@@ -71,6 +71,7 @@ const USE_CASES = [
   { value: 'migrate',  label: 'Migration' },
   { value: 'convert',  label: 'Format conversion' },
   { value: 'diff',     label: 'Diffing' },
+  { value: 'env-workflow',     label: '.env Workflow' },
 ] as const
 
 export function TestimonialForm() {

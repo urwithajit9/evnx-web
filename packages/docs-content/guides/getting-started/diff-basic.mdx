@@ -43,7 +43,7 @@ As your project evolves, `.env` and `.env.example` can drift apart:
 The `diff` command compares these files and shows exactly what's out of sync — with security-first defaults.
 
 <Callout type="danger" title="Values are hidden by default">
-For security, `evnx diff` does NOT show variable values unless you pass <code>--show-values</code>. Even then, sensitive keys (like <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>) are auto-redacted to <code>ab***</code> format.
+For security, `evnx diff` does NOT show variable values unless you pass <code>--show-values</code>, in <em>any</em> format. Even then, credential-shaped keys (like <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>, or anything ending <code>_KEY</code>) are masked as <code>***</code> — the flag cannot reveal them.
 </Callout>
 
 ---
@@ -119,17 +119,27 @@ evnx diff
 # With --show-values: non-sensitive keys show full values
 evnx diff --show-values
 # Output:
-#   + NEW_API_KEY = sk_test_abc123
+#   + LOG_LEVEL = debug
 
-# Sensitive keys are always redacted, even with --show-values
+# Credential-shaped keys are masked, even with --show-values,
+# and in every section — missing, extra and different alike.
 evnx diff --show-values
 # Output:
-#   + DB_PASSWORD = ab***
-#   + API_TOKEN = to***
+#   + DB_PASSWORD = ***
+#   + API_TOKEN = ***
+#   + NEW_API_KEY = ***
 ```
 
+<Callout type="warning" title="v0.10.0 changed this">
+This example used to read `+ NEW_API_KEY = sk_test_abc123`, and that was an
+accurate description of a bug: the mask was only applied to keys that appeared
+in the **different** section, so a key present in only one file printed its
+value in full under `--show-values`. The mask also used to carry the value's
+first two characters (`ab***`), which named the credential's issuer.
+</Callout>
+
 <Callout type="info" title="Sensitive key patterns">
-Keys containing these substrings (case-insensitive) are auto-redacted: <code>PASSWORD</code>, <code>SECRET</code>, <code>TOKEN</code>, <code>KEY</code>, <code>AUTH</code>, <code>CREDENTIAL</code>, <code>PRIVATE_KEY</code>.
+Masked if the name <strong>contains</strong> <code>PASSWORD</code>, <code>PASSWD</code>, <code>PWD</code>, <code>SECRET</code>, <code>TOKEN</code>, <code>API_KEY</code>, <code>APIKEY</code>, <code>PRIVATE_KEY</code>, <code>AUTH</code> or <code>CREDENTIAL</code> — or <strong>ends with</strong> <code>_KEY</code>, <code>_SECRET</code>, <code>_PASSWORD</code>, <code>_TOKEN</code> or <code>_PASSWD</code>. <code>KEY</code> is a suffix rather than a substring so that <code>KEYBOARD_LAYOUT</code> stays out. Full list and the reasoning: <a href="/guides/commands/diff">the diff reference</a>.
 </Callout>
 
 ---
@@ -169,10 +179,9 @@ evnx diff --format json
   "different": [
     {
       "key": "API_TIMEOUT",
-      "example_value": "30",
-      "env_value": "60",
-      "example_value_redacted": null,
-      "env_value_redacted": null
+      "example_value": null,
+      "env_value": null,
+      "values_redacted": false
     }
   ]
 }

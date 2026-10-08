@@ -123,6 +123,7 @@ cat .env
 - ✅ New devs get a working `.env` in seconds
 - ✅ Auto-fix handles placeholders and formatting
 - ✅ Clear guidance on what still needs manual input
+- ✅ Real credentials are reported, never overwritten (**v0.10.0+**)
 
 ---
 
@@ -381,6 +382,18 @@ evnx validate --fix --format json | jq '.fixed'
 # Check file permissions
 ls -la .env
 ```
+
+**The most likely answer is a weak secret with a real value behind it.** Since
+**v0.10.0** `--fix` reports those and leaves them alone, because the check judges length
+and wording and cannot tell your actual short password from a placeholder nobody filled
+in. Rotate it where it is issued and paste the new value in — or, if nothing outside this
+file holds it, say so explicitly:
+
+```bash
+evnx validate --fix --rotate-weak-secrets
+```
+
+Either way the file as it arrived is kept beside it as `.env.bak`.
 
 ### "Port validation rejects valid port 0"
 
