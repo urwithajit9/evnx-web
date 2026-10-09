@@ -37,7 +37,7 @@
 
 import { useId, useRef, useState } from 'react'
 import {
-  Upload, User, Building2, Check, Loader2, X, Plus, Minus,
+  User, Building2, Check, Loader2, X, Plus, Minus, Camera,
 } from 'lucide-react'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { CONSENT_TEXT, CONSENT_PRIVACY_HREF } from '@/lib/testimonial-consent'
@@ -407,59 +407,92 @@ export function TestimonialForm() {
         {detailsOpen && (
           <div id={detailsId} className="mt-6 space-y-5">
 
-            {/* Image — compact row, not a block */}
+            {/* ── Photo ────────────────────────────────────────────────
+                ⚠️ Rebuilt after real feedback: people tapped the circle and
+                nothing happened, then skipped the photo entirely.
+
+                The circle was `aria-hidden` decoration and the only live
+                target was the small "Upload" button beside it. The big round
+                outline is what reads as a photo slot — on a phone it is also
+                simply the biggest thing there — so it was being tapped first,
+                silently doing nothing, and the written instruction next to it
+                went unread. Written instructions lose to an obvious shape
+                every time.
+
+                Now the whole row IS the label: circle, wording and hint are
+                one tap target, with a camera badge so the circle looks like
+                something that takes a photo rather than a place one appears.
+
+                ⚠️ The remove button has to stay OUTSIDE the label. Nested in
+                it, clearing the image would re-open the file picker on the
+                same tap. */}
             <div>
               <span className="block text-xs text-text-muted uppercase tracking-widest mb-2">
                 {mode === 'user' ? 'Profile photo' : 'Company logo'}
               </span>
-              <div className="flex items-center gap-4">
-                {imagePreview ? (
-                  <div className="relative flex-shrink-0">
-                    <img
-                      src={imagePreview}
-                      alt=""
-                      className="w-14 h-14 rounded-full object-cover border border-border-muted"
-                    />
-                    <button
-                      type="button"
-                      onClick={clearImage}
-                      aria-label="Remove selected image"
-                      className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-danger rounded-full flex items-center justify-center"
-                    >
-                      <X className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className="flex-shrink-0 w-14 h-14 rounded-full bg-bg-surface border-2 border-dashed border-border-muted flex items-center justify-center text-text-muted"
+
+              <div className="relative">
+                <label
+                  htmlFor="image-upload"
+                  className="group flex items-center gap-4 p-3 -m-3 rounded-xl cursor-pointer hover:bg-bg-surface transition-colors"
+                >
+                  <span className="relative flex-shrink-0">
+                    {imagePreview ? (
+                      <img
+                        src={imagePreview}
+                        alt=""
+                        className="w-16 h-16 rounded-full object-cover border border-border-muted"
+                      />
+                    ) : (
+                      <span className="flex w-16 h-16 rounded-full bg-bg-surface border-2 border-dashed border-border-muted group-hover:border-brand-500 items-center justify-center text-text-muted group-hover:text-brand-400 transition-colors">
+                        {mode === 'user'
+                          ? <User className="w-6 h-6" />
+                          : <Building2 className="w-6 h-6" />}
+                      </span>
+                    )}
+                    {/* The badge is the affordance. Without it the dashed ring
+                        reads as an empty slot rather than a button. */}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-brand-500 border-2 border-bg-base flex items-center justify-center">
+                      <Camera className="w-3.5 h-3.5 text-black" />
+                    </span>
+                  </span>
+
+                  <span className="min-w-0">
+                    <span className="block text-base text-text-primary group-hover:text-brand-400 transition-colors">
+                      {imagePreview
+                        ? 'Change photo'
+                        : mode === 'user' ? 'Add a photo' : 'Add a logo'}
+                    </span>
+                    <span id="image-hint" className="block text-xs text-text-muted mt-0.5">
+                      PNG, JPG, GIF or WebP · up to 2MB · optional
+                    </span>
+                  </span>
+                </label>
+
+                {imagePreview && (
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    aria-label="Remove selected image"
+                    className="absolute top-0 left-12 w-6 h-6 bg-danger rounded-full flex items-center justify-center border-2 border-bg-base"
                   >
-                    {mode === 'user' ? <User className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
-                  </div>
+                    <X className="w-3 h-3 text-white" />
+                  </button>
                 )}
-                <div className="min-w-0">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/gif,image/webp"
-                    onChange={handleImageChange}
-                    className="hidden"
-                    id="image-upload"
-                    aria-describedby="image-hint"
-                  />
-                  <label
-                    htmlFor="image-upload"
-                    className="inline-flex items-center gap-2 text-sm h-10 px-4 border border-border-muted rounded-lg cursor-pointer hover:border-brand-500 hover:text-brand-400 transition-colors"
-                  >
-                    <Upload className="w-4 h-4" />
-                    {imagePreview ? 'Change' : 'Upload'}
-                  </label>
-                  <p id="image-hint" className="text-xs text-text-muted mt-1.5">PNG, JPG, GIF or WebP, up to 2MB</p>
-                  {imageError && (
-                    <p role="alert" className="text-xs text-danger mt-1">{imageError}</p>
-                  )}
-                </div>
               </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                onChange={handleImageChange}
+                className="hidden"
+                id="image-upload"
+                aria-describedby="image-hint"
+              />
+              {imageError && (
+                <p role="alert" className="text-xs text-danger mt-2">{imageError}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

@@ -66,7 +66,21 @@ const ALLOWED: Record<string, { ext: string; magic: Signature[] }> = {
  * refuses one if this list ever falls behind, so the honest failure mode is
  * preserved — it just is not the submitter's problem.
  */
-const USE_CASES = ["scan", "validate", "cloud", "ci", "migrate", "convert", "diff"] as const;
+// ⚠️ Three places must agree: this list, USE_CASES in
+// components/ui/testimonial-form.tsx, and the CHECK on testimonials.use_cases.
+// `env-workflow` was added to the form alone, so the chip rendered, the visitor
+// could tick it, and this function dropped it on arrival — a control that
+// silently does nothing. Adding one means editing all three.
+const USE_CASES = [
+  "scan",
+  "validate",
+  "cloud",
+  "ci",
+  "migrate",
+  "convert",
+  "diff",
+  "env-workflow",
+] as const;
 
 function cleanUseCases(values: FormDataEntryValue[]): string[] {
   const seen = new Set<string>();
@@ -76,14 +90,50 @@ function cleanUseCases(values: FormDataEntryValue[]): string[] {
   return Array.from(seen);
 }
 
+/**
+ * ⛔ **The anon fallback is development-only, and that is now enforced.**
+ *
+ * This used to read
+ *
+ *     SUPABASE_SERVICE_ROLE_KEY ?? NEXT_PUBLIC_SUPABASE_ANON_KEY // fallback for dev
+ *
+ * with nothing confining it to dev. `testimonials-rls.sql` revoked anon INSERT
+ * on this table — correctly, that is the whole point of this route existing —
+ * so in production the fallback produced a client that **cannot write**. Every
+ * submission then died at `.insert()` with Postgres 42501 and the visitor was
+ * told "Could not save your testimonial", while the only record of the real
+ * cause sat in a server log nobody reads.
+ *
+ * A missing secret is a deployment fault. It should be loud, and it should be
+ * loud in a way that names itself.
+ */
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; // fallback for dev
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const isProd = process.env.NODE_ENV === "production";
 
-  if (!url || !key) throw new Error("Missing Supabase env vars");
-  return createClient(url, key);
+  if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set");
+
+  if (serviceKey) return createClient(url, serviceKey);
+
+  if (isProd) {
+    // ⚠️ Deliberately not falling back. An anon client here cannot insert, so
+    // the fallback only converts a clear configuration error into a confusing
+    // runtime one.
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is not set. The anon key cannot INSERT into " +
+        "testimonials (RLS revokes it), so submissions would fail at the " +
+        "database with 42501. Set the service role key on this deployment.",
+    );
+  }
+
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!anon) throw new Error("No Supabase key available");
+  console.warn(
+    "[testimonials route] SUPABASE_SERVICE_ROLE_KEY unset — using the anon key. " +
+      "Inserts will fail unless RLS still grants anon INSERT.",
+  );
+  return createClient(url, anon);
 }
 
 /** Trim, collapse whitespace, cap length. Empty becomes null, never "". */
@@ -271,6 +321,25 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error("[testimonials route] insert:", error);
+
+    // ⚠️ 42501 is not the submitter's problem and should not read like it.
+    // It means this deployment is holding a key that cannot write — almost
+    // always a missing SUPABASE_SERVICE_ROLE_KEY. Saying "try again" to
+    // someone who did nothing wrong wastes their second attempt too.
+    if ((error as { code?: string }).code === "42501") {
+      console.error(
+        "[testimonials route] permission denied on INSERT — this deployment's " +
+          "Supabase key cannot write to testimonials. Check SUPABASE_SERVICE_ROLE_KEY.",
+      );
+      return NextResponse.json(
+        {
+          error:
+            "Submissions are temporarily unavailable — this is on our side, not yours. " +
+            "Please email support@evnx.dev and we will add your testimonial by hand.",
+        },
+        { status: 503 },
+      );
+    }
     // The service role can actually delete, so unlike the old client-side
     // path this cleanup is a guarantee rather than a hope.
     if (upload) {

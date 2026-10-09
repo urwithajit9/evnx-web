@@ -117,6 +117,11 @@ const USE_CASE_LABELS: Record<string, string> = {
   migrate:  'Migration',
   convert:  'Format conversion',
   diff:     'Diffing',
+  // ⚠️ A facet missing from this map is stored on the row and then never
+  // rendered — the chip just does not appear on the published card, with no
+  // error anywhere. `env-workflow` was added to the form alone and was missing
+  // from here, from the API route, and from the database CHECK.
+  'env-workflow': '.env workflow',
 }
 
 function TestimonialCard({ t }: { t: Testimonial }) {
