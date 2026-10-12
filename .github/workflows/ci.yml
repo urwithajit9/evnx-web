@@ -48,6 +48,28 @@ jobs:
       - name: Every internal link in content/ resolves
         run: node scripts/check-content-links.mjs
 
+      # ⚠️ `command-index.json` has had a `--check` mode since it was written and
+      # nothing ever ran it. Found stale on 2026-10-12, carrying `0.9.0` and a
+      # `guide_draft: true` for a page un-drafted two days earlier — both
+      # leftovers of the 0.10.0 release that no check could catch.
+      #
+      # ⓘ Same shape as `config-drift` below, and the difference in outcome is
+      # the whole argument: `versions.json` went stale too and was caught the
+      # same day, because a job ran its `--check`.
+      #
+      # ⛔ EVNX_BIN is set deliberately, and the index is a JOIN against the
+      # binary's own command tree. With no binary `findBinary()` returns null
+      # and `--check` prints "skipped" and exits **0** — so without this the job
+      # would pass vacuously forever, which is worse than not having it. Setting
+      # EVNX_BIN makes a missing binary exit 1 instead of skipping.
+      - name: Install the released CLI for the command-tree join
+        run: |
+          npm i -g @evnx/cli@latest
+          echo "EVNX_BIN=$(command -v evnx)" >> "$GITHUB_ENV"
+
+      - name: The command index matches the binary and the guides
+        run: node scripts/sync-command-index.mjs --check
+
   config-drift:
     runs-on: ubuntu-latest
     steps:
