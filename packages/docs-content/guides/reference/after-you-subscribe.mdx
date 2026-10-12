@@ -1,0 +1,144 @@
+---
+title: "After you subscribe"
+section: reference
+order: 16
+publishedAt: "2026-10-12"
+updatedAt: "2026-10-12"
+excerpt: "Paying starts the subscription. Assigning a seat is what changes anyone's limits — and they are two separate acts, so a paid plan can sit unused. Here is how to check yours in under a minute."
+difficulty: beginner
+timeToComplete: "2 minutes"
+tags: ["cloud", "billing", "seats", "organisation", "plans", "evnx"]
+commands: ["org billing", "org assign", "org members", "auth status"]
+evnxVersion: "0.10.0"
+prerequisites:
+  - reference/billing-and-plans
+draft: false
+---
+
+Your payment went through and the organisation is on a paid plan. There is **one more step**, and until it is done your own limits have not changed.
+
+<Callout type="warning">
+**Buying seats and holding one are separate acts.** The subscription belongs to the *organisation*. A seat is what connects it to a *person*. Pay for three seats and assign none, and all three of you are still on the free plan's limits — nothing is broken, the step simply has not happened yet.
+</Callout>
+
+---
+
+## Check it in one command
+
+```bash
+evnx auth status
+```
+
+With a seat assigned, the paid plan's limits apply and the counts go unlimited:
+
+```text
+plan (team)
+  vaults      4 (unlimited)
+  API tokens  1 (unlimited)
+  versions    unlimited per vault
+```
+
+Without one, you see your own account's plan instead — and this is what people read straight past, because nothing about it looks like an error:
+
+```text
+plan (free)
+  vaults      1 / 3
+  API tokens  0 / 2
+  versions    5 per vault
+```
+
+That second output is what "I paid and nothing happened" actually looks like.
+
+<Callout type="info">
+**`auth status` tells you what your limits are, not where they came from.** It prints a plan name and nothing about which organisation supplied it, so a `team` line looks identical whether it arrived with a seat or some other way. When you want the *why*, use `evnx org billing` below — that one names the organisation and both seat numbers.
+</Callout>
+
+---
+
+## Assign the seat
+
+```bash
+evnx org assign you@example.com
+```
+
+Then confirm:
+
+```bash
+evnx org billing
+#   acme — team plan
+#   seats 1 / 1
+```
+
+The first number is how many people hold a seat; the second is how many the subscription pays for. **`0 / 1` means you are paying for a seat nobody holds.**
+
+<Callout type="info">
+`--org <slug>` is optional when you belong to one organisation. With several, the command refuses and lists your slugs rather than guessing — picking wrong here would move somebody's billing or hand a seat to the wrong person.
+</Callout>
+
+You can do the same thing in the browser at [app.evnx.dev/organizations](https://app.evnx.dev/organizations/), and the seat count is on [the billing screen](https://app.evnx.dev/billing/).
+
+---
+
+## Assigning a seat to a colleague
+
+They need an account first, and being in the organisation's directory is not the same as holding a seat:
+
+```bash
+evnx org invite them@example.com     # they accept, and are now in the directory
+evnx org assign them@example.com     # now their limits are the paid plan's
+```
+
+<Callout type="warning">
+**One seat per person, ever.** A second seat for the same account cannot be stored at all — the database refuses it. That is deliberate: if a person could hold two, "which plan applies" would have no single answer, and anyone with an expensive organisation could raise the limits of every account they invited. Directory membership is unconstrained, so a contractor at two companies is fine — two memberships, one seat.
+</Callout>
+
+---
+
+## What a seat does not do
+
+<Callout type="danger">
+**A seat gives nobody access to a vault.** It decides which plan's *limits* apply to its holder, and nothing else. There is no column in the database that could express "this organisation can read that vault", and there is no code path that could use one if there were.
+
+The reason is the same one the whole product rests on: the server has never been able to unwrap a vault key, so it cannot grant access to a secret it cannot read. Sharing stays a deliberate act by somebody who holds the key:
+
+```bash
+evnx vault share <vault> --with them@example.com
+```
+</Callout>
+
+---
+
+## Email, and what to expect
+
+**Paddle sends the receipt.** Paddle is the merchant of record for the transaction, so the payment confirmation and the invoice come from them, and Paddle is also the name on the bank statement — not evnx.
+
+<Callout type="info">
+**evnx sends no email when a subscription starts.** If you were waiting for one before doing anything, that is why nothing arrived. The seat step above is the whole of what is left, and it takes about ten seconds.
+</Callout>
+
+---
+
+## If the plan still has not changed
+
+Work down this list; the first two cover almost everything.
+
+| Check | What you should see |
+|---|---|
+| `evnx org billing` | The plan name and `seats 1 / 1`. If it says `0 / 1`, the seat is simply unassigned — go back up. |
+| Are you signed in as the same account that was assigned? | A seat belongs to one account. `evnx auth status` prints which one you are. |
+| [app.evnx.dev/billing](https://app.evnx.dev/billing/) | The organisation's status. A plan bought minutes ago can take a moment to land. |
+
+<Callout type="tip">
+**A paid plan is not retroactive about refusals, and nothing is ever deleted for a plan change.** If you hit a limit before the seat was assigned, just retry — a push refused for being over a free-plan limit succeeds once the seat is in place. Going the other way, a vault that is over a lower plan's limit stays readable and exportable; it is the next *push* that is refused.
+</Callout>
+
+If none of that matches what you are seeing, write to [support@evnx.dev](mailto:support@evnx.dev) with the output of `evnx org billing` — it names the organisation, the plan and both seat numbers, which is usually enough to answer in one reply.
+
+---
+
+## Related guides
+
+- [Billing](/guides/reference/billing-and-plans) — how a plan is bought, cancelled and refunded, and who can do what
+- [evnx org](/guides/commands/org) — organisations, seats and invitations in full
+- [Plan limits](/guides/reference/plan-limits) — what each plan actually allows
+- [Sharing a vault with a teammate](/guides/use-cases/sharing-a-vault-with-a-teammate) — which is a separate act from a seat

@@ -3,7 +3,7 @@ title: "Billing"
 section: reference
 order: 15
 publishedAt: "2026-10-05"
-updatedAt: "2026-10-05"
+updatedAt: "2026-10-12"
 excerpt: "How a paid plan is bought, who can change it, what a failed payment does — and the one thing a subscription can never do, which is reach a secret."
 difficulty: beginner
 timeToComplete: "6 minutes"
@@ -44,6 +44,11 @@ At [app.evnx.dev/billing](https://app.evnx.dev/billing/), as the organisation's 
 1. Choose a plan and a billing interval.
 2. Choose how many seats. You can change this later; the difference is prorated.
 3. **Continue to payment** hands you to Paddle.
+4. **Assign a seat** — to yourself first.
+
+<Callout type="warning">
+**Step 4 is not optional, and skipping it looks like nothing happened.** Paying starts the subscription on the *organisation*; a seat is what connects it to a *person*. Until one is assigned, `evnx auth status` still reports your own account's plan and its limits — so a paid team plan can sit with `seats 0 / 1` while everyone wonders why nothing changed. [After you subscribe](/guides/reference/after-you-subscribe) walks through it in about a minute.
+</Callout>
 
 <Callout type="info">
 **Payment opens in a new tab, on a different domain.** That is not an accident. Your master key lives only in this browser's memory — navigating away from `app.evnx.dev` loses it, and you would come back from paying to a sign-in screen. The checkout runs on `pay.evnx.dev`, an origin that holds no session, no key and no credential, so that no payment script ever runs where your key does.
@@ -155,6 +160,7 @@ If you run your own evnx server, billing is **optional and off by default**. Wit
 
 ## Related guides
 
+- [After you subscribe](/guides/reference/after-you-subscribe) — the seat step, and how to check it took
 - [evnx org](/guides/commands/org) — organisations, seats and invitations
 - [Plan limits](/guides/reference/plan-limits) — what each plan actually allows
 - [Cloud architecture](/guides/reference/cloud-architecture) — what the server holds, and what it cannot

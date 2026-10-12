@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.9.0",
+  "evnx_version": "0.10.0",
   "features": [
     "net",
     "migrate",
@@ -409,7 +409,7 @@
         "surface"
       ],
       "guide": "/guides/commands/commands",
-      "guide_draft": true,
+      "guide_draft": false,
       "subcommands": []
     },
     {
