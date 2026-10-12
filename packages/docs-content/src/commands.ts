@@ -54,3 +54,75 @@ export const INDEXED_EVNX_VERSION = COMMAND_INDEX.evnx_version;
 export function commandCount(): number {
   return COMMAND_INDEX.commands.reduce((n, c) => n + 1 + c.subcommands.length, 0);
 }
+
+// ─── Resolving a guide's `commands:` frontmatter ──────────────────────────────
+
+/**
+ * Turn an author-form guide path into the one the site serves.
+ *
+ * ⚠️ **One rule, one place.** `IndexedCommand.guide` is author-form
+ * (`/guides/commands/scan`) because that is how guides link to each other in
+ * MDX, and the rendered site serves `/cli/…`. Writing the rendered form into
+ * the index would make every MDX cross-link dead; doing the rewrite inline at
+ * each call site is how one of them eventually gets forgotten.
+ */
+export function guideHref(authorPath: string): string {
+  return authorPath.replace("/guides/", "/cli/");
+}
+
+/** A command named by a guide's `commands:` frontmatter, resolved for display. */
+export interface ResolvedCommand {
+  /** The invocation without `evnx` — `"cloud pull"`. */
+  path: string;
+  about: string | null;
+  /** Where to link, or `null` when the command has no guide yet. */
+  href: string | null;
+  /** The guide exists but is unlisted. Still reachable, still worth linking. */
+  draft: boolean;
+}
+
+/**
+ * Resolve one entry of a guide's `commands:` frontmatter against the binary's
+ * own command tree.
+ *
+ * ⚠️ **Returns `null` for a command the binary does not have**, and callers are
+ * expected to drop those rather than render them. The frontmatter is generated
+ * from the page's real `evnx …` invocations and checked in CI, so today every
+ * entry resolves — but a command removed in a later release would leave entries
+ * behind, and a "commands covered" list that names something uninstallable is
+ * worse than no list.
+ *
+ * ⓘ A subcommand links to its **parent's** guide, because that is where it is
+ * documented: `cloud pull` lives inside `guides/commands/cloud`.
+ */
+export function resolveCommand(path: string): ResolvedCommand | null {
+  for (const c of COMMAND_INDEX.commands) {
+    if (c.name === path) {
+      return {
+        path,
+        about: c.about,
+        href: c.guide ? guideHref(c.guide) : null,
+        draft: c.guide_draft,
+      };
+    }
+    const sub = c.subcommands.find((s) => s.path === path);
+    if (sub) {
+      return {
+        path,
+        about: sub.about,
+        href: c.guide ? guideHref(c.guide) : null,
+        draft: c.guide_draft,
+      };
+    }
+  }
+  return null;
+}
+
+/** Resolve a whole `commands:` list, dropping anything the binary lacks. */
+export function resolveCommands(paths: readonly string[] | undefined): ResolvedCommand[] {
+  if (!paths?.length) return [];
+  return paths
+    .map(resolveCommand)
+    .filter((c): c is ResolvedCommand => c !== null)
+    .sort((a, b) => a.path.localeCompare(b.path));
+}

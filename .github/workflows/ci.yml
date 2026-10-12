@@ -70,6 +70,18 @@ jobs:
       - name: The command index matches the binary and the guides
         run: node scripts/sync-command-index.mjs --check
 
+      # ⚠️ Same gap, one file over. `commands:` frontmatter is **generated** from
+      # each page's real `evnx …` invocations, its own doc comment says so, and
+      # nothing ran the `--check` — so three guides had drifted, two of them
+      # because I hand-wrote the key on pages I had just written. One claimed a
+      # command it never demonstrates and omitted two it does.
+      #
+      # ⓘ It matters more now that a guide page *renders* this list. An
+      # unchecked generated field is a stale field; a stale field that is also
+      # displayed is a page telling the reader something untrue.
+      - name: Every guide's `commands:` matches what it demonstrates
+        run: node scripts/sync-guide-commands.mjs --check
+
   config-drift:
     runs-on: ubuntu-latest
     steps:

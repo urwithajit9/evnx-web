@@ -11,6 +11,7 @@ import {
   getGuide,
   getGuidesBySection,
   getAdjacentGuides,
+  resolveCommands,
   type GuideSection,
 } from "@evnx/docs-content";
 import { mdxComponents } from "@evnx/mdx";
@@ -115,6 +116,7 @@ export default async function DocsPage({ params }: Props) {
   const guide = getGuide(slug);
   if (!guide) notFound();
   const { prev, next } = getAdjacentGuides(guide);
+  const commands = resolveCommands(guide.commands);
 
   return (
     <article className="container-base section-padding max-w-3xl">
@@ -172,6 +174,51 @@ export default async function DocsPage({ params }: Props) {
                   >
                     {target?.title ?? slug}
                   </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* ⚠️ The `commands:` frontmatter has existed on every guide since 5.2 and
+          nothing rendered it. It is generated from the page's own `evnx …`
+          invocations and checked in CI, so it is the one list on the page that
+          cannot drift from what the guide actually demonstrates — which makes
+          it worth showing and made leaving it unshown a waste of the guarantee.
+
+          ⓘ Resolved against the binary's command tree rather than printed
+          verbatim: an entry naming a command that no longer exists is dropped
+          rather than rendered, because a "covered" list pointing at something
+          uninstallable is worse than no list. */}
+      {commands.length > 0 && (
+        <div className="mb-8">
+          <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-3">
+            Commands covered
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {commands.map((c) => {
+              const label = `evnx ${c.path}`;
+              return (
+                <li key={c.path}>
+                  {c.href ? (
+                    <Link
+                      href={c.href}
+                      title={c.about ?? undefined}
+                      className="inline-block font-mono text-xs px-2 py-1 rounded border border-border-muted text-brand-400 hover:border-brand-400 transition-colors"
+                    >
+                      {label}
+                    </Link>
+                  ) : (
+                    /* A command can ship before its guide. Naming it without a
+                       link is honest; inventing a destination is not. */
+                    <span
+                      title={c.about ?? undefined}
+                      className="inline-block font-mono text-xs px-2 py-1 rounded border border-border-muted text-text-muted"
+                    >
+                      {label}
+                    </span>
+                  )}
                 </li>
               );
             })}

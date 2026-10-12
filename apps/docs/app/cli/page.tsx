@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import {
   COMMAND_INDEX,
+  guideHref,
   GUIDE_SECTIONS,
   commandCount,
   getAllGuides,
@@ -66,7 +67,7 @@ export default function CliIndex() {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 {c.guide ? (
                   <Link
-                    href={c.guide.replace("/guides/", "/cli/")}
+                    href={guideHref(c.guide)}
                     className="font-mono text-sm text-brand-500 hover:underline"
                   >
                     evnx {c.name}
