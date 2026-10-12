@@ -3,7 +3,7 @@ title: "After you subscribe"
 section: reference
 order: 16
 publishedAt: "2026-10-12"
-updatedAt: "2026-10-12"
+updatedAt: "2026-10-13"
 excerpt: "Paying starts the subscription. Assigning a seat is what changes anyone's limits — and they are two separate acts, so a paid plan can sit unused. Here is how to check yours in under a minute."
 difficulty: beginner
 timeToComplete: "2 minutes"
@@ -112,8 +112,10 @@ evnx vault share <vault> --with them@example.com
 
 **Paddle sends the receipt.** Paddle is the merchant of record for the transaction, so the payment confirmation and the invoice come from them, and Paddle is also the name on the bank statement — not evnx.
 
+**evnx sends one too.** When a subscription starts and nobody is holding a seat, the organisation's owner gets a short message saying exactly that, with a link to assign one. It goes to the owner's evnx address — not the address on the payment — because the person who has to act is whoever can assign a seat.
+
 <Callout type="info">
-**evnx sends no email when a subscription starts.** If you were waiting for one before doing anything, that is why nothing arrived. The seat step above is the whole of what is left, and it takes about ten seconds.
+**You get at most one, and only while it is true.** It is sent once per subscription, so a renewal does not repeat it, and it is not sent at all if somebody already holds a seat. If you assign one before the mail arrives, it has already stopped being relevant — the seat is what matters, not the email.
 </Callout>
 
 ---
