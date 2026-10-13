@@ -9,7 +9,7 @@ difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["init", "reference", "cli", "setup"]
 commands: ["doctor", "init"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.1"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -18,6 +18,8 @@ draft: false
 # evnx init — Command Reference
 
 Initialize `.env.example` and `.env` files using Blank, Blueprint, or Architect modes with schema-driven variable generation.
+
+Run with no flags in a terminal, `init` shows a menu with **Blank** pre-selected (it was Blueprint before 0.10.1). Yes/no questions take their answer on Enter (since 0.10.1): type `y` or `n` and press Enter, or just Enter for the default. Esc or `q` cancels without writing anything (exit 0): at once in a list, and followed by Enter at a yes/no question. If the output is piped into a command that stops reading early (`| head`), init still finishes writing its files and exits 141, quietly, like other command-line tools. Without a terminal (CI, a pipe, an AI agent) the menu cannot be shown, so `init` stops with exit 2 and lists the flags to use instead; `--with` and `--blueprint` without `--yes` likewise stop and say to add `--yes`.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -40,10 +42,11 @@ evnx init [OPTIONS]
 | `--from-source` | `bool` | `false` | **v0.5.0+** — build the template from the variables the code reads |
 | `--list-components` | `bool` | `false` | **v0.5.0+** — print every name `--with` accepts, and exit |
 | `--blueprint <ID>` | `string` | — | generate from a named stack, e.g. `t3_modern` |
-| `--force` | `bool` | `false` | replace an existing `.env.example`. `.env` is never overwritten |
+| `--force` | `bool` | `false` | replace an existing `.env.example`. `.env` is never overwritten. Not valid with `--from-source`, which only appends (exit 2 since 0.10.1) |
 | `--path`, `-p` | `string` | `.` | output directory for generated files |
 | `--yes`, `-y` | `bool` | `false` | skip prompts and write blank files |
 | `--verbose`, `-v` | `bool` | `false` | detailed debug output |
+| `--quiet`, `-q` | `bool` | `false` | **v0.10.1+** — print nothing on success; warnings and errors still print |
 | `--help`, `-h` | `bool` | `false` | display help information |
 
 <Callout type="warning">
@@ -87,16 +90,37 @@ There are **51 components** — frameworks, services and infrastructure. See the
 evnx init --list-components
 ```
 
-An unknown name is an error that suggests near matches rather than sending you to
-the docs:
+Common short names are accepted as aliases (since 0.10.1) and write exactly what the
+full id writes: `postgres` and `pg` (postgresql), `mysql` and `mariadb`, `mongo`,
+`express` and `fastify`, `fastapi` and `flask`, `axum` and `actix`, `gin` and `echo`,
+`next` (nextjs), `k8s` (kubernetes). `--list-components` shows each alias beside its
+component. The same names work with the add and spec commands.
+
+An unknown name is an error that suggests near matches, typos included, rather than
+sending you to the docs:
 
 ```
-unknown component 'postgres'
+unknown component 'supabse'
 
-Did you mean: postgresql
+Did you mean: supabase
 
 Run `evnx init --list-components` for the full list.
 ```
+
+### Browser variables (since 0.10.1)
+
+A browser framework only exposes variables with its own prefix to client code:
+`VITE_` (Vite, and Laravel's Vite frontend), `NEXT_PUBLIC_` (Next.js), `PUBLIC_`
+(SvelteKit), `NUXT_PUBLIC_` (Nuxt). When the stack has one of these, `init` also writes a
+prefixed copy of each service value that is **designed to be public**: the Supabase URL and
+anon key, the Firebase web config, the Auth0 domain, client ID and audience, the Clerk
+publishable key, the Google OAuth client ID, the Sentry DSN, the Stripe publishable key, the
+Razorpay key ID and the Cloudinary cloud name. A Vite + Supabase stack therefore gets
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` next to `SUPABASE_URL` and
+`SUPABASE_ANON_KEY`.
+
+Secrets are never given a browser prefix, and nothing is removed: server code keeps reading
+the original names.
 
 <Callout type="info">
 A blueprint **is** a component list. `t3_modern` is
@@ -114,18 +138,29 @@ Run interactively with no flags and `init` reads `package.json`,
 
 ```
   Detected
-  ✓  Clerk            @clerk/nextjs           package.json
-  ✓  Next.js          next                    package.json
-  ✓  Stripe           stripe                  package.json
-  ✓  PostgreSQL       postgres:16             docker-compose.yml
-  ✓  Redis            valkey/valkey:9-alpine  docker-compose.yml
-  ✓  GitHub Actions   .github/workflows       .github/workflows
+  ✓  Clerk                  @clerk/nextjs           package.json
+  ✓  Next.js                next                    package.json
+  ✓  Stripe                 stripe                  package.json
+  ✓  PostgreSQL             postgres:16             docker-compose.yml
+  ✓  Redis                  valkey/valkey:9-alpine  docker-compose.yml
+  ✓  GitHub Actions         .github/workflows       .github/workflows
 
-  23 variables from 6 components
+  24 variables from 6 components
 ```
 
 The evidence sits beside every component so you can check the proposal rather than
 take it on faith.
+
+Services that ship one package per framework are recognised by each of them (since
+0.10.1): Clerk through `@clerk/nextjs`, `@clerk/react`, `@clerk/react-router`,
+`@clerk/remix`, `@clerk/astro`, `@clerk/express` and `@clerk/backend` (plus the
+deprecated `@clerk/clerk-react` and `@clerk/clerk-sdk-node`); Sentry through
+`@sentry/node`, `@sentry/nextjs`, `@sentry/react`, `@sentry/browser`, `@sentry/vue`
+and `@sentry/sveltekit`; Supabase through `@supabase/supabase-js` and
+`@supabase/ssr`. `@stripe/stripe-js` is deliberately **not** recognised: it is the
+browser SDK, and the Stripe component carries a secret key. A Stripe backend has the
+`stripe` package. `pom.xml` and Gradle files are not read; name a Spring Boot stack
+with `--with spring_boot`.
 
 <Callout type="warning">
 **Detection is a heuristic, and it proposes rather than applies.** A `stripe`
@@ -164,6 +199,23 @@ they all treat `.env.example` as the definition of "required", which is circular
 missing, so an existing `.env.example` keeps everything it already had. Running it
 twice changes nothing the second time.
 
+If the project has a `.env.example` but no `.env`, `--from-source` also writes the
+`.gitignore` rules and creates `.env` as a copy of the updated template (since 0.10.1):
+it asks first when run interactively, and does it without asking under `--yes`. An
+existing `.env` is never replaced.
+
+The appended block ends with a dated `# Added by evnx init --from-source …` line, so a
+reviewer can tell it apart from a block the add command wrote
+(`# Added by evnx add …`). Before 0.10.1 both carried the add stamp.
+
+It recognises direct reads in any source file: `process.env.X`, `env::var("X")`,
+`os.environ["X"]`, `os.Getenv("X")`, `ENV["X"]`, `env("X")`, and since 0.10.1
+`import.meta.env.X` (Vite, Astro, SvelteKit), `Deno.env.get("X")` and `Bun.env.X`.
+It also reads quoted names in config files (`config.*`, `settings.*`, `env.*` …).
+`.vue`, `.svelte` and `.astro` files are scanned for direct reads only, so a label in
+the markup is never mistaken for a variable. Directory symlinks are not followed, and
+the scan stops at 5,000 files with a warning (then nothing is called unused).
+
 <Callout type="warning">
 Variables consumed entirely inside a library — `RUST_LOG` reaching
 `tracing_subscriber`, say — and dynamic access like `process.env[key]` are
@@ -179,7 +231,7 @@ for you.
 
 | Code | Meaning |
 |------|---------|
-| `0` | files generated, or nothing to do: you answered `n` at a prompt, kept an existing `.env.example`, or `--from-source` found nothing new |
+| `0` | files generated, or nothing to do: you answered `n` or pressed Esc at a prompt, kept an existing `.env.example`, or `--from-source` found nothing new |
 | `2` | stopped: an existing `.env.example` under `--yes` without `--force`, an unknown component or blueprint, conflicting flags, no terminal to ask, or a write error (e.g. `--path` points at a file or an unwritable directory) |
 
 <Callout type="info">
@@ -223,7 +275,7 @@ evnx init --from-source
 
 | File | Purpose | Overwrite behavior |
 |------|---------|-------------------|
-| `.env.example` | Team template with placeholders + docs | **Refused** if it exists — `--force` to replace |
+| `.env.example` | Team template with placeholders + docs | **Refused** if it exists under `--yes` (`--force` to replace). Interactively you are asked; if you keep yours, init offers to create `.env` from it |
 | `.env` | Local secrets (gitignored) | Created only if missing. **Never** overwritten, even with `--force` |
 | `.gitignore` | Appends `.env*` with the template family exempted | Appends if missing |
 
@@ -246,6 +298,10 @@ committable, and `evnx doctor` reported the setup as healthy.
 
 The order matters. A negation placed *before* the pattern it carves out of does nothing in
 gitignore, so `!.env.example` has to follow `.env*`.
+
+The reverse also holds: a line *after* `.env*` that re-includes `.env` (such as `!.env`)
+undoes the protection. Since 0.10.1 `init` checks what git would actually ignore and warns
+`.env is still not ignored` when that happens. It never edits your `.gitignore` lines.
 </Callout>
 
 ---
