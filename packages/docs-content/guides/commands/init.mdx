@@ -3,7 +3,7 @@ section: "commands"
 order: 1
 title: "evnx init"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
+updatedAt: "2026-10-13"
 excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
@@ -179,8 +179,13 @@ for you.
 
 | Code | Meaning |
 |------|---------|
-| `0` | files generated |
-| `1` | refused or failed — an existing `.env.example`, an unknown component or blueprint, a write error |
+| `0` | files generated, or nothing to do: you answered `n` at a prompt, kept an existing `.env.example`, or `--from-source` found nothing new |
+| `2` | stopped: an existing `.env.example` under `--yes` without `--force`, an unknown component or blueprint, conflicting flags, no terminal to ask, or a write error (e.g. `--path` points at a file or an unwritable directory) |
+
+<Callout type="info">
+Earlier versions of this page said `1` for refusals and failures. Every one of those cases exits `2`, the
+same code evnx uses for "did not finish" across commands. Scripts should test for non-zero, or for `2`.
+</Callout>
 
 `.env.example` is a tracked, hand-maintained file, so `init` refuses to replace one
 rather than clobbering it. Pass `--force` when you mean it. **`.env` is never
