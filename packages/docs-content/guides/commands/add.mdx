@@ -48,18 +48,23 @@ evnx add <SUBCOMMAND> [OPTIONS]
 |------------|--------|-------------|------------------|
 | `service` | `evnx add service <id>` | Add variables for infrastructure services (postgresql, redis, etc.) | ⚠️ Warns on conflicts |
 | `framework` | `evnx add framework --language <lang> <id>` | Add framework-specific variables (django, nextjs, etc.) | ⚠️ Warns on conflicts |
-| `blueprint` | `evnx add blueprint <id>` | Add pre-combined stack variables (t3_modern, fastapi_full, etc.) | ✅ Auto-skips conflicts |
+| `blueprint` | `evnx add blueprint <id>` | Add pre-combined stack variables (t3_modern, fastapi_ai, etc.) | ✅ Auto-skips conflicts |
 | `custom` | `evnx add custom` | Interactive mode for manual variable entry | ⚠️ Warns on conflicts |
 
 ---
 
 ## Exit codes
 
-| Code | Meaning | Use case |
-|------|---------|----------|
-| `0` | ✅ Variables appended successfully | Success in scripts/CI |
-| `1` | 🚨 Add failed (unknown service, resolution error) | Fail pipeline on invalid input |
-| `2+` | ⚠️ Runtime errors (IO, file permissions, parsing) | Debug tooling or environment issues |
+| Code | Meaning |
+|------|---------|
+| `0` | variables appended, or nothing to do: you answered `n` at the confirmation prompt |
+| `2` | stopped: an unknown service, framework, language or blueprint, a missing required argument, no terminal to ask (add `--yes`), or a write error (e.g. a read-only `.env`, or `--path` pointing at a folder that does not exist) |
+
+<Callout type="info">
+Earlier versions of this page said `1` for an unknown service and `2+` for runtime errors. Every one of
+those cases exits `2`, the same code evnx uses for "did not finish" across commands. Scripts should test
+for non-zero, or for `2`.
+</Callout>
 
 ---
 
@@ -80,7 +85,7 @@ evnx add service redis --yes
 evnx add framework --language python django
 
 # Add Next.js variables silently
-evnx add framework --language typescript nextjs --yes
+evnx add framework --language javascript_typescript nextjs --yes
 ```
 
 ### Add a blueprint
@@ -88,8 +93,8 @@ evnx add framework --language typescript nextjs --yes
 # Add T3 stack variables (conflicts auto-skipped)
 evnx add blueprint t3_modern
 
-# Preview without applying (combine with manual abort)
-evnx add blueprint fastapi_full --verbose
+# Shows a preview and asks before writing; answer n to cancel
+evnx add blueprint fastapi_ai
 ```
 
 ### Interactive custom variables

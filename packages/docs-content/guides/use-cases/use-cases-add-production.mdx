@@ -356,7 +356,7 @@ Your monorepo has 3 services (API, Worker, Frontend). Each needs its own environ
 # Use path flag to target each service directory
 evnx add service postgresql --path ./services/api --yes
 evnx add service postgresql --path ./services/worker --yes
-evnx add framework --language typescript nextjs --path ./services/frontend --yes
+evnx add framework --language javascript_typescript nextjs --path ./services/frontend --yes
 
 # Add shared config via blueprint (applied to all)
 for dir in ./services/*/; do
