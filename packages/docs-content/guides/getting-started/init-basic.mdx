@@ -3,7 +3,7 @@ section: "getting-started"
 order: 3
 title: "Init Basics — Start Your Project Right"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
+updatedAt: "2026-10-13"
 excerpt: "Learn how to use evnx init to generate .env.example and .env files. Perfect for beginners setting up a new project."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
@@ -124,7 +124,7 @@ evnx init
 ```
 
 <Callout type="info" title="Schema-driven">
-All options come from `schema.json`. Add new languages, services, or blueprints without changing code.
+All options come from `schema.json`, which is compiled into the binary. Adding a language, service or blueprint means editing that file and rebuilding evnx; see [init configuration](/guides/reference/init-configuration). Run `evnx init --list-components` to see what your installed version knows.
 </Callout>
 
 ---
@@ -206,8 +206,11 @@ evnx validate
 Use `--yes` for scripting, Docker builds, or CI/CD:
 
 ```bash
-# Quick start with default blueprint
+# Blank files, no prompts (add --blueprint <id> or --with <a,b,c> for a stack)
 evnx init --yes
+
+# A named stack, no prompts
+evnx init --yes --blueprint t3_modern
 
 # Custom output path for monorepos
 evnx init --yes --path ./packages/api
@@ -234,12 +237,15 @@ Always review the preview before confirming. A missing variable now saves hours 
 
 ### Ignoring the .gitignore update
 
-If you manually manage `.gitignore`, ensure these patterns are present:
+If you manually manage `.gitignore`, make sure it contains the rules `evnx init` writes, in this order:
 ```gitignore
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
+!.env.sample
+!.env.template
 ```
+
+`.env*` ignores every env file a project invents (`.env.production`, `.env.staging`, `.env.test` and so on), and the three negations keep the committed templates visible. The older `.env` / `.env.local` / `.env.*.local` set leaves `.env.production` committable. The negations must come **after** `.env*`: in `.gitignore` the last matching line wins. Check the result with `git check-ignore -v .env .env.production`.
 
 ### Using Blank mode for complex projects
 
