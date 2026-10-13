@@ -3,13 +3,13 @@ section: "use-cases"
 order: 1
 title: "Init in the Wild — Real Developer Scenarios"
 publishedAt: "2026-03-06"
-updatedAt: "2026-03-06"
+updatedAt: "2026-10-13"
 excerpt: "See how real developers use evnx init in daily workflows: Blank for scripts, Blueprint for quick starts, and Architect for custom stacks."
 difficulty: "beginner"
 timeToComplete: "12 minutes"
 tags: ["init", "use-cases", "tutorial", "workflow", "patterns"]
 commands: ["add", "add custom", "init", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.1"
 prerequisites:
   - getting-started/init-basic
   - commands/init
@@ -23,6 +23,9 @@ This guide shows **real-world scenarios** where developers choose different `ini
 - 📄 **Blank**: Quick scripts, internal tools, full control
 - 🔷 **Blueprint**: Hackathons, known stacks, team onboarding
 - 🏗️ **Architect**: Microservices, custom combos, experimental stacks
+
+The people are invented; every terminal block is real output from evnx 0.10.1
+(colours removed, answers shown as they look once chosen).
 </Callout>
 
 <Prerequisites>
@@ -37,58 +40,82 @@ This guide shows **real-world scenarios** where developers choose different `ini
 ### 👤 Who: Maya, Backend Engineer
 ### 🎯 Goal: Add config to a Python data script
 
-Maya is writing a one-off ETL script to migrate legacy data. She doesn't need a full framework — just a place to store `DATABASE_URL` and `API_KEY`.
+Maya is writing a one-off ETL script to migrate legacy data. She doesn't need a full framework — just a place to store `SOURCE_DB_URL` and `DEST_API_KEY`.
 
-```bash
-cd ~/projects/data-migration
-evnx init
-# Select: 📄 Blank (create empty .env files)
+```console
+$ cd ~/projects/data-migration
+$ evnx init
+How do you want to start?: Blank      — create empty .env files
 
+  Blank Template  Creating minimal .env files
+
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example (no variables yet)
-ℹ️  Tip: Run 'evnx add' to add variables interactively
+· Tip: Run 'evnx add' to add variables interactively
 ```
+
+Blank is pre-selected, so that was one Enter. `evnx init --yes` does the same with no prompt.
 
 **Maya adds her variables:**
 
-```bash
-evnx add custom
+```console
+$ evnx add custom
+· Enter variables one at a time. Empty name to finish.
+Variable name (or Enter to finish): SOURCE_DB_URL
+Example/placeholder value: postgresql://old-server:5432/legacy
+Add a description comment? no
+Assign to a category? no
+Is this variable required? yes
+Add another variable? yes
+Variable name (or Enter to finish): DEST_API_KEY
+Example/placeholder value: your_dest_api_key
+Add a description comment? no
+Assign to a category? no
+Is this variable required? yes
+Add another variable? no
 
-Variable name: SOURCE_DB_URL
-Example/placeholder: postgresql://old-server:5432/legacy
-Add another? yes
-
-Variable name: DEST_API_KEY
-Example/placeholder: sk_live_XXXXXXXX
-Add another? no
-
+Preview:
+  • 2 variables to add
+Append these variables to .env.example? yes
 ✓ Added 2 custom variables
 ```
 
+<Callout type="warning" title="evnx add: y answers at once">
+In `evnx add` (0.10.1), typing `y` or `n` answers a yes/no question immediately, so
+do **not** press Enter after it: that Enter answers the next question with its
+default. `evnx init` already waits for Enter (since 0.10.1); `add` gets the same
+fix in 0.10.2.
+</Callout>
+
 **Result:**
 ```env
-# .env.example
 # Add your environment variables here
 # Format: KEY=value
 
+# ── Custom Variables ──
+# (required)
 SOURCE_DB_URL=postgresql://old-server:5432/legacy
-DEST_API_KEY=sk_live_XXXXXXXX
+# (required)
+DEST_API_KEY=your_dest_api_key
+
+# Added by evnx add custom on 2026-10-13 21:47
 ```
+
+`evnx add` appends the same lines to `.env`, so both files stay in step.
 
 **Maya's workflow:**
 
 ```bash
-# 1. Copy template to local .env
-cp .env.example .env
-
-# 2. Edit with real credentials
+# 1. Put real credentials in .env (init created it; add filled in the names)
 nano .env
 
-# 3. Run her script
+# 2. Run her script
 python migrate.py
-# ✅ Reads from os.environ['SOURCE_DB_URL']
+# ✅ Reads os.environ['SOURCE_DB_URL'] (loaded from .env, e.g. by python-dotenv)
 
-# 4. Commit only the template
-git add .env.example
+# 3. Commit the template and the ignore rules, never .env
+git add .env.example .gitignore
 git commit -m "Add config template for migration script"
 ```
 
@@ -107,42 +134,44 @@ git commit -m "Add config template for migration script"
 
 Alex needs to prototype a new dashboard. His team uses the "T3 Turbo" stack (Next.js + Clerk + Prisma + Vercel). He wants to start coding immediately — no config decisions.
 
-```bash
-cd ~/projects/saas-dashboard
-evnx init
-# Select: 🔷 Blueprint (use pre-configured stack)
-# Choose: T3 Turbo (Next.js + Clerk + Prisma)
+```console
+$ cd ~/projects/saas-dashboard
+$ evnx init
+How do you want to start?: Blueprint  — use a pre-configured stack
 
-📋 Preview:
-  NEXTAUTH_URL=http://localhost:3000
-  NEXTAUTH_SECRET=CHANGE_ME
-  DATABASE_URL=postgresql://localhost:5432/app
-  CLERK_PUBLISHABLE_KEY=pk_test_XXX
-  CLERK_SECRET_KEY=sk_test_XXX
-  # ... 12 more variables
+  Blueprint Mode  Select a pre-configured stack
 
-? Generate .env files with these variables? Yes
+Choose a stack blueprint: T3 Turbo (Next.js + Clerk + Prisma)
+   The 2026 standard for type-safe fullstack apps.
 
-✓ Created .env.example with 15 variables
-✓ Added .env to .gitignore
+Preview:
+28 variables
+  • service ×18
+  • framework ×4
+  • infra ×6
+  Categories: API, Application, Authentication, CI/CD, Cloud Storage, Database, Deployment Platform, Payments
+Generate .env files with these variables? yes
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env.example with 28 variables
 ```
+
+Keys: Down, Enter (Blueprint); Enter (T3 Turbo is first); `y` Enter. Without
+prompts: `evnx init --blueprint t3_modern --yes`.
 
 **Alex's next steps:**
 
 ```bash
-# 1. Install dependencies (from package.json in blueprint)
-npm install
-
-# 2. Fill in real values for local dev
+# 1. Fill in real values for local dev (init writes env files only; the app is Alex's)
 nano .env
-# NEXTAUTH_SECRET=generated_secret_here
+# NEXTAUTH_SECRET=<output of: openssl rand -hex 32>
 # DATABASE_URL=postgresql://alex:local@localhost:5432/dashboard
 
-# 3. Start dev server
+# 2. Start dev server
 npm run dev
 # ✅ App loads at http://localhost:3000
 
-# 4. Commit the template for teammates
+# 3. Commit the template for teammates
 git add .env.example .gitignore
 git commit -m "Add env template for T3 stack"
 ```
@@ -155,21 +184,25 @@ When Alex's teammate Jordan clones the repo:
 git clone https://github.com/team/saas-dashboard
 cd saas-dashboard
 
-# Jordan sees the template
-cat .env.example
-# NEXTAUTH_SECRET=CHANGE_ME ← knows to generate one
-
-# Jordan creates local .env
+# Jordan creates a local .env from the template, then edits it
 cp .env.example .env
-# Edits with their local values
 
-# Runs validate to catch missing vars
+# validate lists every placeholder still to replace (exit 1 until done)
 evnx validate
-✓ All required variables present
+#   ✗  NEXTAUTH_SECRET is too weak or predictable
+#      →  Run: openssl rand -hex 32
+#   ...
+
+# once every value is real:
+evnx validate
+# ✓ All required variables present
+# ✓ All checks passed
 ```
 
 <Callout type="tip" title="Blueprint pro tip">
-Run `evnx init --yes` in CI/CD pipelines to auto-generate templates without human interaction. Combine with `evnx validate` to catch missing variables before deploy.
+`evnx init --yes` alone writes **blank** files. To script a blueprint, name it:
+`evnx init --blueprint t3_modern --yes`. Commit the generated `.env.example`; in CI,
+run `evnx validate` on the `.env` the job writes, rather than regenerating the template.
 </Callout>
 
 ---
@@ -179,46 +212,59 @@ Run `evnx init --yes` in CI/CD pipelines to auto-generate templates without huma
 ### 👤 Who: Sam, Platform Engineer
 ### 🎯 Goal: Create a Go microservice with Kafka, Redis, and Kubernetes
 
-Sam is building a new event-processor service. The stack isn't in any blueprint: Go + Gin + Kafka + Redis + Prometheus + Kubernetes. Time to architect.
+Sam is building a new event-processor service: Go + Gin + Kafka + Redis, errors to
+Sentry, deployed on Kubernetes. The closest blueprint, Go Cloud Native
+(`go_microservice`: Gin + Kafka + Postgres), brings a Postgres Sam doesn't use and no
+Redis. Time to architect.
 
-```bash
-cd ~/projects/event-processor
-evnx init
-# Select: 🏗️  Architect (build custom stack)
+```console
+$ cd ~/projects/event-processor
+$ evnx init
+How do you want to start?: Architect  — build a custom stack
 
-? Select your primary language:
-❯ Go
+  Architect Mode  Build your custom stack: language → framework → services → infra
 
-? Select your framework:
-❯ Gin
+Select your primary language: Go
+Select your framework: Gin / Echo
+Select services you'll use (Space to toggle, Enter to confirm): [Databases] Redis, [Messaging] Apache Kafka, [Monitoring] Sentry
+Select deployment/infrastructure (optional): [Infra] Kubernetes
 
-? Select services you'll use (Space to toggle):
-❯ [Message Queue] Kafka
-❯ [Cache] Redis
-❯ [Monitoring] Prometheus
-❯ [Logging] Loki
+Preview:
+19 variables
+  • service ×12
+  • framework ×4
+  • infra ×3
+  Categories: Application, Cache, Connection, Database, Error Tracking, Message Queue, Orchestration
+Generate .env files with these variables? yes
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env.example with 19 variables
+```
 
-? Select deployment/infrastructure (optional):
-❯ [Infra] Kubernetes
-❯ [Infra] Helm
+Services are a checklist: move with Up/Down, toggle with Space, confirm with Enter.
+The same variables without prompts: `evnx init --with gin,redis,kafka,sentry,kubernetes --yes`.
 
-[DEBUG] Selection summary:
-  Language: go
-  Framework: gin
-  Services: ["kafka", "redis", "prometheus", "loki"]
-  Infrastructure: ["kubernetes", "helm"]
+What Sam gets (excerpt of `.env.example`):
 
-📋 Preview:
-  KAFKA_BROKERS=localhost:9092
-  REDIS_URL=redis://localhost:6379/0
-  PROMETHEUS_ENDPOINT=/metrics
-  LOKI_URL=http://localhost:3100/loki
-  K8S_NAMESPACE=event-processor
-  # ... 8 more variables
+```env
+# ── Application ──
+# (required)
+APP_ENV=development
+# (required)
+GIN_MODE=debug
 
-? Generate .env files with these variables? Yes
+# ── Cache ──
+REDIS_URL=redis://localhost:6379/0
 
-✓ Created .env.example with 14 variables
+# ── Message Queue ──
+KAFKA_BROKERS=localhost:9092
+KAFKA_CLIENT_ID=your_kafka_client_id_value
+KAFKA_GROUP_ID=your_kafka_group_id_value
+
+# ── Orchestration ──
+K8S_CONTEXT=your_k8s_context_value
+K8S_NAMESPACE=default
+KUBECONFIG_PATH=~/.kube/config
 ```
 
 **Sam's custom workflow:**
@@ -228,8 +274,7 @@ evnx init
 cat .env.example
 # Sees well-documented vars with sensible defaults
 
-# 2. Create local .env for dev cluster
-cp .env.example .env
+# 2. Point .env (already created by init) at the dev cluster
 nano .env
 # KAFKA_BROKERS=kafka.dev-cluster:9092
 # REDIS_URL=redis://redis.dev-cluster:6379/0
@@ -250,9 +295,9 @@ git commit -m "Add env template for event-processor service"
 
 | Need | How Architect delivered |
 |------|------------------------|
-| Non-standard stack | Mixed Go + Gin + Kafka + Redis + K8s |
-| Service-specific vars | Kafka brokers, Redis URL, Prometheus endpoint |
-| Infra-aware config | Kubernetes namespace, Helm values |
+| Non-standard stack | Go + Gin + Kafka + Redis + Sentry + K8s, nothing else |
+| Service-specific vars | Kafka brokers and group, Redis URL, Sentry DSN |
+| Infra-aware config | Kubernetes context, namespace, kubeconfig path |
 | Team consistency | `.env.example` documents all required vars |
 
 <Callout type="warning" title="Architect mode complexity">
@@ -285,7 +330,7 @@ graph TD
 |----------|----------------|-----|
 | Quick Python script | 📄 Blank | Minimal overhead, full control |
 | Next.js + Supabase app | 🔷 Blueprint | Pre-configured, team-tested |
-| Rust + Actix + gRPC + Istio | 🏗️ Architect | Custom combo not in blueprints |
+| Rust + Actix + RabbitMQ + Sentry | 🏗️ Architect | Custom combo not in blueprints |
 | Hackathon prototype | 🔷 Blueprint | Fastest path to working code |
 | Internal CLI tool | 📄 Blank | No framework needed |
 | Microservice with 5+ services | 🏗️ Architect | Precise service selection |
@@ -309,9 +354,9 @@ setup:
 
 ```bash
 # Monorepo: different modes per package
-evnx init --yes --path ./frontend    # Blueprint: Next.js
-evnx init --yes --path ./backend     # Architect: Go + custom services
-evnx init --path ./scripts           # Blank: utility scripts
+evnx init --blueprint supabase_fullstack --yes --path ./frontend   # Next.js + Supabase
+evnx init --with gin,redis,kafka --yes --path ./backend             # custom Go services
+evnx init --yes --path ./scripts                                    # blank
 ```
 
 ### Tip 3: Preview before committing
@@ -365,12 +410,14 @@ To add new variables: `evnx add`
 
 **Fix:**
 ```bash
-# Check .gitignore first
-cat .gitignore | grep "^\.env$"
+# Ask git which rule ignores .env (prints nothing if .env is NOT ignored)
+git check-ignore -v .env
+# .gitignore:3:.env*	.env
 
-# Use git status to verify
-git status
-# Should show: .env.example (new), .env (ignored)
+# git status never lists ignored files: .env must not appear at all
+git status --short
+# ?? .env.example
+# ?? .gitignore
 ```
 
 ### ❌ Assuming Blank mode is "too simple"
@@ -378,6 +425,13 @@ git status
 **Problem:** You over-engineer a simple script with Architect mode.
 
 **Fix:** Start with Blank. You can always run `evnx add` later to extend.
+
+### ❌ Using `--yes` and expecting a stack
+
+**Problem:** `evnx init --yes` writes **blank** files: `--yes` only skips prompts.
+
+**Fix:** Name the stack: `--blueprint <id>` or `--with <a,b,c>` (short names like
+`postgres`, `next` and `k8s` work; mistyped names get a suggestion).
 
 ---
 

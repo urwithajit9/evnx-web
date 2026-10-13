@@ -9,7 +9,7 @@ difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["init", "tutorial", "beginner", "setup", "env"]
 commands: ["init", "sync", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.1"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -20,9 +20,11 @@ draft: false
 <Callout type="tip" title="What you'll learn">
 In this tutorial, you'll learn how to use `evnx init` to:
 - Choose between Blank, Blueprint, and Architect modes
-- Generate `.env.example` with smart placeholders
-- Auto-configure `.gitignore` for security
+- Generate `.env.example` and `.env` with placeholders
+- Get the `.gitignore` rules that keep `.env` out of git
 - Set up your project in under 2 minutes
+
+Every terminal block on this page is real output from evnx 0.10.1 (colours removed).
 </Callout>
 
 <Prerequisites>
@@ -41,7 +43,7 @@ Every project needs environment variables — but setting them up manually is er
 The `init` command generates both files automatically, with variables tailored to your stack.
 
 <Callout type="danger" title="Security first">
-`evnx init` automatically adds `.env` patterns to `.gitignore`. Never skip this step — leaking credentials is a critical security risk.
+`evnx init` writes the `.gitignore` rules **before** it writes any env file, so a `.env` never exists unprotected. If your `.gitignore` re-includes `.env` later (for example with `!.env`), `init` warns you instead of editing your lines.
 </Callout>
 
 ---
@@ -52,37 +54,53 @@ The `init` command generates both files automatically, with variables tailored t
 
 **Use when:** You want minimal templates or prefer manual configuration.
 
-```bash
-evnx init
-# Select: 📄 Blank (create empty .env files)
-
-✓ Created .env.example (no variables yet)
-ℹ️  Tip: Run 'evnx add' to add variables interactively
+```console
+$ evnx init
+How do you want to start?:
+> Blank      — create empty .env files
+  Blueprint  — use a pre-configured stack
+  Architect  — build a custom stack
 ```
 
-**Result:**
+Blank is pre-selected, so press Enter:
+
+```
+  Blank Template  Creating minimal .env files
+
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env.example (no variables yet)
+· Tip: Run 'evnx add' to add variables interactively
+```
+
+**Result** (`.env.example`):
 ```env
-# .env.example
 # Add your environment variables here
 # Format: KEY=value
 ```
 
-### Blueprint Mode — Pre-configured stacks (default)
+### Blueprint Mode — Pre-configured stacks
 
-**Use when:** You're using a common stack like Next.js, FastAPI, or Rails.
+**Use when:** You're using a common stack like Next.js, FastAPI, or Laravel (ten blueprints ship with evnx).
 
-```bash
-evnx init
-# Select: 🔷 Blueprint (use pre-configured stack)
-# Choose: T3 Turbo (Next.js + Clerk + Prisma)
+```console
+$ evnx init
+# Down once to Blueprint, Enter; then Enter on T3 Turbo (Next.js + Clerk + Prisma)
 
-📋 Preview:
-  NEXTAUTH_URL=http://localhost:3000
-  DATABASE_URL=postgresql://localhost:5432/app
-  # ... 12 more variables
-
-✓ Created .env.example with 15 variables
+Preview:
+28 variables
+  • service ×18
+  • framework ×4
+  • infra ×6
+  Categories: API, Application, Authentication, CI/CD, Cloud Storage, Database, Deployment Platform, Payments
+Generate .env files with these variables? yes
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env.example with 28 variables
 ```
+
+The same stack without prompts: `evnx init --blueprint t3_modern --yes`. A mistyped
+blueprint id is refused with a suggestion and the list of all ten ids.
 
 <Callout type="tip" title="Non-interactive default">
 `evnx init --yes` skips every prompt and creates a **blank** setup — an empty
@@ -102,26 +120,31 @@ choose one deliberately, or `--with django,postgres` to name components.
 
 **Use when:** You need a unique combination of language, framework, and services.
 
-```bash
-evnx init
-# Select: 🏗️  Architect (build custom stack)
+```console
+$ evnx init
+# Down twice to Architect, Enter
 
-? Select your primary language:
-❯ JavaScript / TypeScript
+  Architect Mode  Build your custom stack: language → framework → services → infra
 
-? Select your framework:
-❯ Next.js
+Select your primary language: JavaScript / TypeScript
+Select your framework: Next.js
+Select services you'll use (Space to toggle, Enter to confirm): [Databases] PostgreSQL, [Auth] Clerk, [Storage] AWS S3
+Select deployment/infrastructure (optional): [Infra] Vercel
 
-? Select services you'll use (Space to toggle):
-❯ [Databases] PostgreSQL
-❯ [Auth] Clerk
-❯ [Storage] AWS S3
-
-? Select deployment/infrastructure (optional):
-❯ [Infra] Vercel
-
-✓ Created .env.example with 18 variables
+Preview:
+22 variables
+  • service ×14
+  • framework ×4
+  • infra ×4
+  Categories: API, Application, Authentication, Cloud Storage, Database, Deployment Platform
+Generate .env files with these variables? yes
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env.example with 22 variables
 ```
+
+The answers above are shown as they look once chosen. The same variables (only the
+timestamp line differs) come from `evnx init --with nextjs,postgresql,clerk,aws_s3,vercel --yes`.
 
 <Callout type="info" title="Schema-driven">
 All options come from `schema.json`, which is compiled into the binary. Adding a language, service or blueprint means editing that file and rebuilding evnx; see [init configuration](/guides/reference/init-configuration). Run `evnx init --list-components` to see what your installed version knows.
@@ -143,58 +166,105 @@ evnx init
 **Step 2: Select Blueprint mode**
 
 ```
-? How do you want to start?
-❯ 🔷 Blueprint (use pre-configured stack)
+How do you want to start?:
+  Blank      — create empty .env files
+> Blueprint  — use a pre-configured stack
+  Architect  — build a custom stack
 ```
+
+Press Down once, then Enter.
 
 **Step 3: Choose your stack**
 
 ```
-? Choose a stack blueprint:
-❯ T3 Turbo (Next.js + Clerk + Prisma)
+Choose a stack blueprint:
+> T3 Turbo (Next.js + Clerk + Prisma)
    The 2026 standard for type-safe fullstack apps.
+  Modern MERN (Vite + Express + MongoDB)
+   The classic SPA stack, updated with Vite & TypeScript.
+  ...
 ```
+
+T3 Turbo is first; press Enter.
 
 **Step 4: Preview and confirm**
 
 ```
-📋 Preview:
-  NEXTAUTH_URL=http://localhost:3000
-  NEXTAUTH_SECRET=CHANGE_ME
-  DATABASE_URL=postgresql://localhost:5432/app
-  # ... more variables
-
-? Generate .env files with these variables? Yes
+Preview:
+28 variables
+  • service ×18
+  • framework ×4
+  • infra ×6
+  Categories: API, Application, Authentication, CI/CD, Cloud Storage, Database, Deployment Platform, Payments
+Generate .env files with these variables? [Y/n]
 ```
+
+Type `y` and press Enter, or press Enter alone (Yes is the default). Esc, then Enter,
+cancels without writing anything.
 
 **Step 5: Verify generated files**
 
-```bash
-ls -la .env*
-# Output:
-# -rw-r--r--  .env          # Created with placeholder values, ready to fill in
-# -rw-r--r--  .env.example  # Created with docs + examples
+```console
+$ ls -A
+.env  .env.example  .gitignore
 
-cat .gitignore | grep ".env"
-# Output: .env (auto-added!)
+$ cat .gitignore
+# ── evnx generated ─────────────────────────────────────────
+# Written by evnx. These files may contain secrets — do not commit.
+.env*
+!.env.example
+!.env.sample
+!.env.template
 ```
+
+`.env` starts with the same 28 placeholder values as the template. A few of them:
+
+```env
+NEXTAUTH_URL=http://localhost:3000
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key_value
+NEXTAUTH_SECRET=your_nextauth_secret_value
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_next_public_clerk_publishable_key_value
+NEXT_PUBLIC_STRIPE_PUBLIC_KEY=your_stripe_public_key_value
+```
+
+The `NEXT_PUBLIC_` lines are the browser copies of public values (since 0.10.1);
+secrets never get one.
 
 **Step 6: Edit .env with real values**
 
 ```bash
 nano .env
 # Replace:
-#   NEXTAUTH_SECRET=CHANGE_ME
-# With:
-#   NEXTAUTH_SECRET=your_generated_secret_here
+#   NEXTAUTH_SECRET=your_nextauth_secret_value
+# With the output of (evnx validate suggests the same):
+#   openssl rand -hex 32
 ```
 
 **Step 7: Validate your setup**
 
-```bash
-evnx validate
+Run it right after init and it fails on purpose, listing every placeholder and weak
+secret still in `.env` (exit 1). An `example.com` URL counts as a placeholder too:
+
+```console
+$ evnx validate
+  ✗  DB_NAME looks like a placeholder
+     .env
+
+  ✗  DB_PASSWORD looks like a placeholder
+     .env
+     ·  fixable with --fix
+  ...
+  27 errors
+Validation failed: 27 errors
+```
+
+Use it as your checklist. Once every value is real:
+
+```console
+$ evnx validate
 ✓ All required variables present
-✓ No placeholder values detected in .env
+✓ All checks passed
 ```
 
 ✅ **You're done!** Your project is ready for development.
@@ -215,12 +285,12 @@ evnx init --yes --blueprint t3_modern
 # Custom output path for monorepos
 evnx init --yes --path ./packages/api
 
-# Verbose output for debugging
-evnx init --yes --verbose
+# Quiet: no output unless something goes wrong (exit code still tells you)
+evnx -q init --yes
 ```
 
 <Callout type="tip" title="CI/CD best practice">
-In CI environments, combine `--yes` with `evnx validate` to ensure `.env.example` is complete before deployment.
+Without a terminal (CI, Docker, agents), `evnx init` never waits for input: with no flags it stops with exit 2 and names the flags to use. Exit codes are 0 (done) and 2 (refused or failed), so a script can rely on them.
 </Callout>
 
 ---
@@ -249,7 +319,7 @@ If you manually manage `.gitignore`, make sure it contains the rules `evnx init`
 
 ### Using Blank mode for complex projects
 
-Blank mode creates empty templates. For stacks with 10+ variables, Blueprint or Architect mode saves significant time.
+Blank mode creates empty templates. For stacks with 10+ variables, Blueprint or Architect mode saves significant time. `evnx init --with` accepts common short names too (`postgres`, `pg`, `next`, `k8s` …); `evnx init --list-components` shows them.
 
 ---
 
