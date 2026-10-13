@@ -1,7 +1,7 @@
 {
   "_comment": "GENERATED from GET https://api.evnx.dev/api/v1/plans by scripts/sync-config.mjs. Committed so the build is deterministic and works offline. `null` means unlimited. Hand-editing this makes the pricing page lie about what the server enforces.",
   "_source": "GET https://api.evnx.dev/api/v1/plans — live since 2026-10-02, so these are the quotas the server actually enforces, not the defaults in src/services/quota.rs",
-  "syncedAt": "2026-10-11T05:52:03.035Z",
+  "syncedAt": "2026-10-13T11:30:02.262Z",
   "plans": {
     "free": {
       "vaults": 3,
