@@ -9,7 +9,7 @@ difficulty: "intermediate"
 timeToComplete: "12 minutes"
 tags: ["add", "use-cases", "production", "workflow", "best-practices"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "scan", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.2"
 prerequisites:
   - getting-started/installation
   - getting-started/add-basic
@@ -81,26 +81,21 @@ REDIS_DB=0
 
 ### ✅ With `evnx add`
 
-```bash
-# Add Redis variables with schema validation
-evnx add service redis
+```console
+$ evnx add service redis
 
-📋 Preview:
-REDIS_URL=redis://localhost:6379
-REDIS_PASSWORD=your_password
-REDIS_DB=0
-
-? Add these 3 variables to .env.example?
-❯ Yes
-
-✓ Added 3 variables for Redis
-✓ Updated .env with TODO placeholders
+Preview:
+5 variables
+  • service ×5
+  Categories: Cache
+Add these 5 variables to .env.example? yes
+✓ Added 5 variables for Redis
 ```
 
 **Benefits:**
 - ✅ Variable names validated against schema
 - ✅ Existing `DATABASE_URL` preserved automatically
-- ✅ Consistent `# ── Service: redis ──` section header
+- ✅ Consistent `# ── Cache ──` section header, as `evnx init` writes
 - ✅ `.env` gets the variables with placeholder values, which `evnx validate` then names
 - ✅ Team members see documentation via `evnx validate`
 
@@ -144,32 +139,36 @@ cp .env.example .env  # Hope this file exists and is current
 ### ✅ With `evnx add`
 
 ```bash
-# Team lead shares a setup script:
 #!/bin/bash
-# setup-env.sh
-
-evnx add blueprint django_stripe_auth --yes
-evnx add service postgresql --yes
-evnx add custom --yes <<EOF
-LOCAL_DEV_MODE=true
-DEBUG_TOOLBAR_ENABLED=true
-EOF
-
-# New developer runs:
-./setup-env.sh
-
-✓ Added 24 variables from blueprint 'Django + Stripe + Auth'
-✓ Added 5 variables for PostgreSQL
-✓ Added 2 custom variables for local dev
-
-# Then they just fill in real values in .env:
-nano .env  # Only edit values, not structure
-
-# Validate setup:
-evnx validate
-✓ All required variables present
-✓ No secrets in .env.example
+# setup-env.sh: the team lead shares this
+evnx add blueprint django_enterprise --yes
+evnx add service stripe --yes
+evnx add custom LOCAL_DEV_MODE=true DEBUG_TOOLBAR_ENABLED=true --yes
 ```
+
+A new developer runs it in a fresh clone:
+
+```console
+$ ./setup-env.sh
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env from .env.example
+✓ Added 25 variables from blueprint 'Django Secure (Django + Postgres + Celery)'
+✓ Added 3 variables for Stripe
+✓ Added 2 custom variables
+```
+
+The script is safe to run again: names already there are skipped, and values
+the developer has filled in `.env` are never replaced.
+
+```console
+$ ./setup-env.sh
+· Nothing to add: 25 variables from blueprint 'Django Secure (Django + Postgres + Celery)' already in .env.example
+· Nothing to add: 3 variables for Stripe already in .env.example
+· Nothing to add: 2 custom variables already in .env.example
+```
+
+Then they fill in real values in `.env`, and `evnx validate` lists what is
+still a placeholder.
 
 **Benefits:**
 - ✅ New hires productive in minutes, not hours
@@ -214,31 +213,30 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 
 ### ✅ With `evnx add`
 
-```bash
-# Add Stripe variables from schema (test keys only)
-evnx add service stripe
+```console
+$ evnx add service stripe
 
-📋 Preview:
-STRIPE_SECRET_KEY=sk_test_YOUR_KEY_HERE
-STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE
-STRIPE_WEBHOOK_SECRET=whsec_YOUR_SECRET_HERE
-# ... 5 more with descriptions
-
-? Add these 8 variables to .env.example?
-❯ Yes
-
-✓ Added 8 variables for Stripe
-✓ Updated .env with TODO placeholders
-
-# Now safely add real values to .env (gitignored):
-nano .env
-# Replace sk_test_YOUR_KEY_HERE with actual test key
-# NEVER commit this file
-
-# Validate no secrets leaked:
-evnx scan
-✓ No secrets detected in .env.example
+Preview:
+3 variables
+  • service ×3
+  Categories: Payments
+Add these 3 variables to .env.example? yes
+✓ Added 3 variables for Stripe
 ```
+
+```env
+# ── Payments ──
+# Publishable key (safe for client-side)
+STRIPE_PUBLIC_KEY=your_stripe_public_key_value
+# Secret key (server-side only)
+STRIPE_SECRET_KEY=your_stripe_secret_key_value
+# Secret for verifying webhook signatures
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret_value
+```
+
+Real keys then go in `.env`, which is gitignored; `.env.example` keeps the
+placeholders. Run `evnx scan` before committing to check for anything that
+looks like a live key.
 
 **Benefits:**
 - ✅ Schema provides safe placeholder values (never real secrets)
@@ -280,32 +278,23 @@ echo "FEATURE_NEW_CHECKOUT=true" >> .env.example
 
 ### ✅ With `evnx add`
 
-```bash
-# Add feature flag with metadata via custom mode
-evnx add custom
-
-Variable name: FEATURE_NEW_CHECKOUT
-Example/placeholder: true
-Add a description? Yes
-Description: Enable new checkout flow for A/B test
-Assign to a category? Yes
-Select category: ▸ Feature Flags
-Is this variable required? No
-
+```console
+$ evnx add custom FEATURE_NEW_CHECKOUT=true --desc "Enable new checkout flow for A/B test" --category application --yes
 ✓ Added 1 custom variable
-
-# Result in .env.example:
-# ── Custom Variables ──
-# [Feature Flags] Enable new checkout flow for A/B test
-FEATURE_NEW_CHECKOUT=true
-
-# Team can now:
-# - See which flags are optional vs required, from the comments
-# - Avoid merge conflicts with structured section headers
 ```
 
+```env
+# ── Custom Variables ──
+
+# [Application] Enable new checkout flow for A/B test
+FEATURE_NEW_CHECKOUT=true
+```
+
+The categories are Application, Security, Database, Authentication, Service
+and Other. `--required` marks a variable `(required)` in the same comment.
+
 **Benefits:**
-- ✅ Optional variables clearly marked (`# (optional)` vs `# (required)`)
+- ✅ Required variables marked `(required)` in their comment
 - ✅ Category metadata enables filtering and auditing
 - ✅ Descriptions document flag purpose directly in config
 - ✅ Section headers reduce git merge conflicts
@@ -356,11 +345,11 @@ Your monorepo has 3 services (API, Worker, Frontend). Each needs its own environ
 # Use path flag to target each service directory
 evnx add service postgresql --path ./services/api --yes
 evnx add service postgresql --path ./services/worker --yes
-evnx add framework --language javascript_typescript nextjs --path ./services/frontend --yes
+evnx add framework nextjs --path ./services/frontend --yes
 
-# Add shared config via blueprint (applied to all)
+# Add shared config to every service (here: error tracking)
 for dir in ./services/*/; do
-  evnx add blueprint shared_observability --path "$dir" --yes
+  evnx add service sentry --path "$dir" --yes
 done
 
 # Validate all services — loop, since validate takes one file at a time:
