@@ -3,13 +3,13 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
-excerpt: "Reference documentation for the evnx add command: subcommands, options, and incremental environment variable management."
+updatedAt: "2026-10-14"
+excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
 tags: ["add", "reference", "cli", "environment-variables"]
-commands: ["add", "add blueprint", "add custom", "add framework", "add service", "doctor", "init", "spec init", "validate"]
-evnxVersion: "0.5.2"
+commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "spec init"]
+evnxVersion: "0.10.2"
 prerequisites:
   - getting-started/installation
   - commands/init
@@ -18,7 +18,10 @@ draft: false
 
 # evnx add — Command Reference
 
-Append environment variables to existing `.env.example` and `.env` files using predefined services, frameworks, blueprints, or custom interactive input.
+Add the variables a service, framework or whole stack needs to `.env.example`
+and `.env`, or your own, without retyping them. `add` uses the same catalogue
+and section headings as `evnx init`. Names already there are skipped, and a
+value you have set is never replaced.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -30,26 +33,36 @@ Append environment variables to existing `.env.example` and `.env` files using p
 ## Command signature
 
 ```bash
-evnx add <SUBCOMMAND> [OPTIONS]
+evnx add <SUBCOMMAND> [ID] [OPTIONS]
+evnx add --list
 ```
 
-### Options reference
+### Subcommands
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--path`, `-p` | `string` | `.` | Target directory for `.env` files |
-| `--yes`, `-y` | `bool` | `false` | Skip confirmation prompts (non-interactive) |
-| `--verbose`, `-v` | `bool` | `false` | Enable debug output for resolution steps |
-| `--help`, `-h` | `bool` | `false` | Display help information |
+| Subcommand | Takes | Adds |
+|------------|-------|------|
+| `service` (alias `infra`) | any catalogue id: a service (`postgresql`), an infrastructure target (`vercel`) or a framework (`nextjs`) | that component's variables |
+| `framework` | a framework id; `--language` is optional | the framework's variables |
+| `blueprint` | one of the stack ids | the whole stack |
+| `custom` | `NAME=value` or `NAME` arguments, or nothing to be asked | your own variables |
 
-### Subcommands (`<target>`)
+Leave the id out in a terminal (`evnx add blueprint`) and `add` offers a list
+to pick from. `evnx add --list` prints every id.
 
-| Subcommand | Syntax | Description | Conflict Handling |
-|------------|--------|-------------|------------------|
-| `service` | `evnx add service <id>` | Add variables for infrastructure services (postgresql, redis, etc.) | ⚠️ Warns on conflicts |
-| `framework` | `evnx add framework --language <lang> <id>` | Add framework-specific variables (django, nextjs, etc.) | ⚠️ Warns on conflicts |
-| `blueprint` | `evnx add blueprint <id>` | Add pre-combined stack variables (t3_modern, fastapi_ai, etc.) | ✅ Auto-skips conflicts |
-| `custom` | `evnx add custom` | Interactive mode for manual variable entry | ⚠️ Warns on conflicts |
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--path`, `-p` | Folder holding `.env.example` and `.env` (default `.`) |
+| `--yes`, `-y` | Do not ask; needed in scripts and CI |
+| `--dry-run` | Show what would be added, skipped and kept; write nothing |
+| `--json` | Print the result as one JSON document (with `--yes` or `--dry-run`) |
+| `--list` | List every id `add` takes |
+| `--language`, `-l` | `framework` only: check that the framework belongs to this language |
+| `--desc`, `--category`, `--required` | `custom` only: applied to every name given |
+| `--verbose`, `-v` | Say which files were appended to |
+| `--quiet`, `-q` | Print only warnings, conflicts and errors |
+| `--no-color` | Plain output (as `NO_COLOR` does) |
 
 ---
 
@@ -57,8 +70,8 @@ evnx add <SUBCOMMAND> [OPTIONS]
 
 | Code | Meaning |
 |------|---------|
-| `0` | variables appended, or nothing to do: you answered `n` at the confirmation prompt |
-| `2` | stopped: an unknown service, framework, language or blueprint, a missing required argument, no terminal to ask (add `--yes`), or a write error (e.g. a read-only `.env`, or `--path` pointing at a folder that does not exist) |
+| `0` | variables added, or nothing to do: they were already there, it was a `--dry-run`, or you answered `n` |
+| `2` | stopped: an unknown id or language, a bad argument, no terminal to ask (add `--yes`), or a write error (for example a read-only `.env`, or `--path` pointing at a folder that does not exist) |
 
 <Callout type="info">
 Earlier versions of this page said `1` for an unknown service and `2+` for runtime errors. Every one of
@@ -68,113 +81,183 @@ for non-zero, or for `2`.
 
 ---
 
-## Basic usage examples
+## Examples
 
-### Add a service
-```bash
-# Add PostgreSQL variables with confirmation prompt
-evnx add service postgresql
+### A service, then the same one again
 
-# Skip prompt for CI/CD
-evnx add service redis --yes
+```console
+$ evnx add service postgresql --yes
+✓ Added 6 variables for PostgreSQL
+
+$ evnx add service postgresql --yes
+· Nothing to add: 6 variables for PostgreSQL already in .env.example
 ```
 
-### Add a framework
-```bash
-# Add Django variables (Python language required)
-evnx add framework --language python django
+### A framework, and an id from another group
 
-# Add Next.js variables silently
-evnx add framework --language javascript_typescript nextjs --yes
+```console
+$ evnx add framework nextjs --yes
+✓ Added 4 variables for Next.js
+
+$ evnx add infra vercel --yes
+· vercel is an infra component; adding it.
+✓ Added 4 variables for Vercel
+
+$ evnx add framework --language python nextjs --yes
+Error: Unknown framework 'nextjs' for language 'python'.
+
+nextjs is a javascript_typescript framework: use --language javascript_typescript, or leave --language out.
 ```
 
-### Add a blueprint
-```bash
-# Add T3 stack variables (conflicts auto-skipped)
-evnx add blueprint t3_modern
+### Your own variables
 
-# Shows a preview and asks before writing; answer n to cancel
-evnx add blueprint fastapi_ai
+```console
+$ evnx add custom API_URL=https://api.example.com DEBUG=false --yes
+✓ Added 2 custom variables
+
+$ evnx add custom STRIPE_WEBHOOK_SECRET --desc "Stripe webhook signing secret" --category security --required --yes
+✓ Added 1 custom variable
 ```
 
-### Interactive custom variables
-```bash
-# Launch guided prompt for manual entry
-evnx add custom
+```env
+# ── Custom Variables ──
 
-# Add custom vars non-interactively (requires pre-seeded input)
-evnx add custom --yes
+# [Security] Stripe webhook signing secret (required)
+STRIPE_WEBHOOK_SECRET=your_value_here
 ```
 
-### Target custom directory
+A name without `=value` gets a placeholder. When it looks like a secret
+(`*_SECRET`, `*_TOKEN`, `*_KEY`, `*_PASSWORD`, …) and you run `add` in a
+terminal without `--yes`, it asks for the value instead, without echoing it.
+
+<Callout type="warning">
+A value given as an argument lands in your shell history. For a real secret,
+give the name alone and type the value at the hidden prompt, or fill it in
+`.env` afterwards.
+</Callout>
+
+With no arguments, `evnx add custom` asks for each variable: its name, its
+value, and `More options? (description, category, required)`. An empty name
+finishes.
+
+### A blueprint, into a project of its own folder
+
 ```bash
-# Add variables to ./backend config
-evnx add service postgresql --path ./backend --yes
+evnx add blueprint t3_modern --path ./apps/web --yes
 ```
 
 ---
 
-## File modification behavior
+## What `add` writes
 
-| File | Action | Notes |
-|------|--------|-------|
-| `.env.example` | ✅ Appends new variables | Preserves existing content; adds a section header |
-| `.env` | ✅ Appends the variables with placeholder values | **Changed in v0.5.0** — they used to be written as `# TODO:` comments, which meant `evnx validate` reported them missing the moment `add` finished. Only if the file exists; never overwrites real values |
-| `.gitignore` | ⚠️ Checked, never written | **v0.5.0+** — warns if the `.env` it just wrote to is committable |
+| File | What happens |
+|------|--------------|
+| `.env.example` | The names it lacks are appended, under the same section headings `init` writes, with a `# Added by evnx add on <date>` line |
+| `.env` | The names it lacks are appended with their placeholders. A name it already has is left alone, so a value you set stays the one in effect |
+| `.env`, when there is none | Created as a copy of `.env.example`, as `evnx init` does: asked in a terminal, done under `--yes` |
+| `.gitignore` | Written only when `add` creates `.env` (`.gitignore` first). Otherwise checked: `add` warns if the `.env` it wrote to could be committed |
 
-### Section formatting
-
-Variables are grouped by category, using the same headers `evnx init` writes:
-
-```env
-# ── Database ──
-# Full connection string (overrides individual DB_* vars)
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-DB_HOST=localhost
+```console
+$ evnx add service redis --yes
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env from .env.example
+✓ Added 5 variables for Redis
 ```
 
 <Callout type="warning">
-**v0.5.0 changed this format.** `add` used to write `# [ADDED] Database` while
-`init` wrote `# ── Database ──` — into the same file. One `.env.example` could
-carry both, and which header a section got recorded nothing except which command
-the author happened to type.
-
-Both now use one formatter, so **upgrading and running `evnx add` shows a format
-change in your diff**. `add` also gained the curated category order and the
-`# (required)` markers it had been silently dropping.
-
-A `# Added by evnx add on <date>` line still records when something arrived.
+**Before 0.10.2, `add` wrote every name again on every run.** A second
+`evnx add service redis` put `REDIS_URL` twice into both files, and because
+dotenv uses the last assignment, the placeholder appended to `.env` replaced
+the value you had set. 0.10.2 checks each file first.
 </Callout>
 
-### `.gitignore` is checked, not written
+### Names already there, and different values
 
+Each name is checked in each file:
+
+| In `.env.example` | What `add` does |
+|-------------------|-----------------|
+| missing | appended (and to `.env` if `.env` lacks it) |
+| present, same value | skipped |
+| present, different value | kept as it is, listed, and not added to `.env` either |
+
+`.env` catches up with names `.env.example` already had. Values in `.env` are
+never compared or printed: they are yours, and differ from the placeholders by
+design.
+
+```console
+$ evnx add service redis --yes
+! 1 variable with a different value in .env.example: kept as it is
+  • REDIS_URL (existing: "redis://cache.internal:6379/0", new: "redis://localhost:6379/0")
+✓ Added 4 variables for Redis, skipped 1 already present
 ```
-! .env is not covered by .gitignore — it can be committed
-     →  evnx doctor --fix
+
+### Browser copies
+
+In a Vite, Next.js, SvelteKit, Nuxt or Laravel project (`add` reads
+`package.json` the way `init --detect` does), the values a browser may see get
+a prefixed copy, exactly as `init --with` writes them:
+
+```console
+$ evnx add service supabase --yes
+· vite found (package.json): adding 2 VITE_ copies for the browser
+✓ Added 6 variables for Supabase
 ```
 
-⚠️ Before v0.5.0, `add` appended to `.env` without ever looking — so in an
-unprotected repository evnx itself added lines to a file holding live credentials,
-on its way into a commit, silently.
-
-It warns rather than writing, because `add` runs in a project that already exists
-where `.gitignore` is somebody's considered file. `evnx init` writes those entries;
-`evnx doctor --fix` repairs them.
-
-The check asks git, so the `.env*` that `evnx init` writes counts as protection —
-it will not nag about a project evnx set up correctly.
+Only values designed to be public get a copy (a project URL, an anon or
+publishable key, a client id, a DSN). Secrets never do.
 
 ---
 
-## Conflict handling modes
+## Scripts, CI and agents
 
-| Mode | Trigger | Behavior |
-|------|---------|----------|
-| **Warn** | `service`, `framework`, `custom` | Shows conflicting keys + values; user confirms before appending |
-| **Skip** | `blueprint` | Auto-excludes conflicting variables; reports skipped count |
-| **Preserve** | All modes | Existing values in `.env.example` are never overwritten |
+Give `--yes`, or check first with `--dry-run`, which needs no terminal and
+writes nothing:
 
-> 💡 **Conflict detection**: A variable conflicts only if the key exists *and* the existing value differs from the schema's example placeholder.
+```console
+$ evnx add service redis --dry-run
+Dry run (for Redis): nothing was written.
+  .env.example: would add 4 variables: REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+  different value, would keep: REDIS_URL (existing: "redis://cache.internal:6379/0", new: "redis://localhost:6379/0")
+  .env: would add 4 variables: REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+```
+
+`--json` prints one document and nothing else on stdout:
+
+```console
+$ evnx add service redis --dry-run --json
+{
+  "added": [],
+  "conflicts": [
+    {
+      "existing": "redis://cache.internal:6379/0",
+      "name": "REDIS_URL",
+      "new": "redis://localhost:6379/0"
+    }
+  ],
+  "dry_run": true,
+  "env_added": [],
+  "env_committable": false,
+  "env_created": false,
+  "skipped": [
+    "REDIS_DB",
+    "REDIS_HOST",
+    "REDIS_PASSWORD",
+    "REDIS_PORT"
+  ],
+  "written": false
+}
+```
+
+Without a terminal and without `--yes`, `add` stops and says what to run:
+
+```console
+$ evnx add service twilio
+Error: there is no terminal to confirm with.
+
+Add --yes to write without asking:
+  evnx add service twilio --yes
+```
 
 ---
 
@@ -185,33 +268,27 @@ it will not nag about a project evnx set up correctly.
 | `NO_COLOR` | any value | unset | Disable coloured output ([no-color.org](https://no-color.org/)) |
 
 <Callout type="warning">
-This table used to list `CI`. **evnx never read it** — interactivity is decided by
-asking whether stdin is a terminal, so `add` behaves correctly in CI without being
-told. Pass `--yes` to be explicit.
+This table used to list `CI`. **evnx never read it.** Whether `add` can ask is
+decided by whether stdin is a terminal. In CI it is not, so pass `--yes` (or
+`--dry-run`); without one, `add` stops with exit 2 and says so.
 </Callout>
 
 ---
 
 ## Keeping the contract current
 
-**v0.5.0+.** When the project has a [contract](/guides/commands/spec), `add`
-records what it introduces:
+When the project has a [contract](/guides/commands/spec), `add` records what it
+introduces in `[vars]` of `.evnx.toml`:
 
 ```console
 $ evnx add service redis --yes
   ✓ added 5 variable(s) to [vars] in .evnx.toml
 ```
 
-Without this, adopting a contract and then adding anything left it describing a
-project that no longer existed — `REDIS_PASSWORD` would be neither required, nor
-format-checked, nor declared secret.
-
 It **only appends**: a name already declared is left exactly as it is, so a
-hand-written `required = false` survives an unrelated `evnx add`.
-
-A project with no `.evnx.toml` sees nothing. One with a config but no `[vars]`
-gets a note on stderr pointing at `evnx spec init` — never fatal, so CI is
-unaffected.
+hand-written `required = false` survives an unrelated `evnx add`. A project with
+no `.evnx.toml` sees nothing. One with a config but no `[vars]` gets a note on
+stderr pointing at `evnx spec init`, never an error.
 
 ---
 
@@ -219,4 +296,4 @@ unaffected.
 
 - [Add Basics](/guides/getting-started/add-basic) — Walkthrough for common workflows
 - [Adding Production Variables](/guides/use-cases/use-cases-add-production) — Environment-specific values
-- [evnx init](/guides/commands/init) — `--list-components` prints the same catalogue `add` draws on
+- [evnx init](/guides/commands/init) — `--list-components` prints the same catalogue `add --list` does

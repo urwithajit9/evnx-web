@@ -3,13 +3,13 @@ section: "getting-started"
 order: 5
 title: "Add Basics — Incrementally Build Your Environment"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
+updatedAt: "2026-10-14"
 excerpt: "Learn how to use evnx add to incrementally add environment variables from services, frameworks, blueprints, or custom input. Perfect for beginners."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["add", "tutorial", "beginner", "environment-variables", "cli"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.2"
 prerequisites:
   - getting-started/installation
   - getting-started/init-basic
@@ -20,11 +20,10 @@ draft: false
 
 <Callout type="tip" title="What you'll learn">
 In this tutorial, you'll learn how to use `evnx add` to:
-- Add variables from predefined services (PostgreSQL, Redis)
-- Include framework-specific variables (Django, Next.js)
-- Use blueprints for complete stack setups
-- Add custom variables interactively
-- Avoid overwriting existing configuration
+- Add the variables of a service (PostgreSQL) and a framework (Django)
+- Check a whole stack before adding it, with `--dry-run`
+- Add your own variables, as arguments or at a prompt
+- Run it again safely: names already there are skipped
 </Callout>
 
 <Prerequisites>
@@ -32,322 +31,185 @@ In this tutorial, you'll learn how to use `evnx add` to:
   <Prerequisite href="/guides/getting-started/init-basic">Initialize a project</Prerequisite>
 </Prerequisites>
 
+Every block of output below was copied from a run of evnx 0.10.2.
+
 ---
 
 ## What is `add` and why use it?
 
-After initializing your project with `evnx init`, you'll often need to add more environment variables as your project evolves.
-
-The `add` command lets you **incrementally append variables** to your `.env.example` file without overwriting what's already there.
-
-```bash
-# Start with a blank slate
-evnx init --yes
-
-# Later, add what you need
-evnx add service postgresql
-evnx add framework --language python django
-```
-
-<Callout type="info" title="Key benefit">
-Unlike manual editing, `evnx add` provides:
-- ✅ Schema-validated variable names and examples
-- ✅ Automatic conflict detection
-- ✅ Consistent formatting with section headers
-- ✅ TODO placeholders in your real `.env` file
-</Callout>
+`evnx init` sets a project up. `evnx add` brings in what the project needs next
+(a database, a payment provider, a variable of your own) without retyping names
+from someone's README. It writes the same section headings `init` does, into
+`.env.example` (the template you commit) and `.env` (your values), and it never
+writes a name twice.
 
 ---
 
-## The four ways to add variables
+## Step 1: start from a blank project
 
-### 1. Add a service (infrastructure)
-
-**Use when:** You're adding a database, cache, or external service.
-
-```bash
-# See available services
-evnx add service --help
-
-# Add PostgreSQL variables
-evnx add service postgresql
-
-? Add these 5 variables to .env.example?
-❯ Yes
-
-✓ Added 5 variables for PostgreSQL
-✓ Updated .env with TODO placeholders
+```console
+$ evnx init --yes
+✓ Created .env from template
+✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
+✓ Created .env.example (no variables yet)
 ```
 
-**Result in `.env.example`:**
+## Step 2: add a service
+
+Without `--yes`, `add` shows what it will write and asks first:
+
+```console
+$ evnx add service postgresql
+
+  Add Service  Adding variables for 'postgresql'
+
+Preview:
+6 variables
+  • service ×6
+  Categories: Database
+Add these 6 variables to .env.example? yes
+✓ Added 6 variables for PostgreSQL
+```
+
+`.env.example` now has:
+
 ```env
-# ── Service: postgresql ──
-DATABASE_URL=postgres://user:pass@localhost:5432/db
-DB_USER=your_username
-DB_PASSWORD=your_password
+# ── Database ──
+# Full connection string (overrides individual DB_* vars)
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 DB_HOST=localhost
+# (required)
+DB_NAME=your_db_name_value
+# Database password (use strong value in production)
+DB_PASSWORD=your_db_password_value
 DB_PORT=5432
+# (required)
+DB_USER=your_db_user_value
+
+# Added by evnx add on 2026-10-14 04:34
 ```
 
-### 2. Add a framework (language + framework)
+`.env` gets the same names. Replace the placeholders there with your values;
+leave `.env.example` as the template your team shares.
 
-**Use when:** You're adopting a new framework or adding framework-specific config.
-
-```bash
-# See available frameworks for Python
-evnx add framework --language python --help
-
-# Add Django variables
-evnx add framework --language python django
-
-✓ Added 8 variables for Django
-```
-
-<Callout type="tip" title="Framework syntax">
-Always specify `--language <lang>` before the framework name. Language ids: `javascript_typescript`, `python`, `rust`, `go`, `ruby`, `php`, `java_kotlin`. JavaScript and TypeScript share one id, so Next.js is `--language javascript_typescript nextjs`.
+<Callout type="tip" title="Which ids are there?">
+`evnx add --list` prints every id: services, infrastructure, frameworks and
+blueprints. Aliases work too: `evnx add service postgres`. In a terminal you
+can also leave the id out (`evnx add service`) and pick from a list.
 </Callout>
 
-### 3. Add a blueprint (pre-combined stack)
+## Step 3: add a framework
 
-**Use when:** You want a complete, tested variable set for a known stack.
+`--language` is optional: framework ids are unique.
 
-```bash
-# See available blueprints
-evnx add blueprint --help
-
-# Add T3 stack (Next.js + tRPC + Prisma + PostgreSQL)
-evnx add blueprint t3_modern
-
-⚠️  2 conflicts detected
-  • DATABASE_URL (existing: "old_value", new: "postgres://...")
-  • NEXTAUTH_SECRET (existing: "xxx", new: "your_secret")
-
-ℹ️  Conflicting variables will be SKIPPED (not overwritten)
-
-? Add 12 new variables (skipping 2 conflicts)?
-❯ Yes
-
-✓ Added 12 variables from blueprint 'T3 Modern'
-ℹ️  Skipped 2 conflicting variables (preserved existing values)
+```console
+$ evnx add framework django --yes
+! 1 variable with a different value in .env.example: kept as it is
+  • DATABASE_URL (existing: "postgresql://user:password@localhost:5432/dbname", new: "https://example.com")
+✓ Added 4 variables for Django, skipped 1 already present
 ```
 
-<Callout type="success" title="Blueprints are safe">
-Blueprints automatically skip variables that already exist with different values. Your existing config is never overwritten.
-</Callout>
+Django also declares `DATABASE_URL`. `add` kept the line you already had, said
+so, and added the other four.
 
-### 4. Add custom variables (interactive)
+## Step 4: check a whole stack before adding it
 
-**Use when:** You need variables not covered by schemas.
+`--dry-run` shows what would happen and writes nothing:
 
-```bash
-evnx add custom
-
-Variable name (or Enter to finish): STRIPE_SECRET_KEY
-Example/placeholder value: sk_test_xxx
-Add a description comment? Yes
-Description: Stripe API key for payments
-Assign to a category? Yes
-Select category: ▸ Auth
-Is this variable required? Yes
-
-Add another variable? No
-
-📋 Preview:
-  • 1 variables to add
-  • Categories: Auth
-
-? Append these variables to .env.example?
-❯ Yes
-
-✓ Added 1 custom variables
+```console
+$ evnx add blueprint django_enterprise --dry-run
+Dry run (from blueprint 'Django Secure (Django + Postgres + Celery)'): nothing was written.
+  .env.example: would add 15 variables: AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SECRET_ACCESS_KEY, RABBITMQ_DEFAULT_PASS, RABBITMQ_DEFAULT_USER, RABBITMQ_URL, REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, REDIS_URL, SENTRY_AUTH_TOKEN, SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT
+  already there, would skip: ALLOWED_HOSTS, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEBUG, DJANGO_SETTINGS_MODULE, SECRET_KEY
+  different value, would keep: DATABASE_URL (existing: "postgresql://user:password@localhost:5432/dbname", new: "https://example.com")
+  .env: would add 15 variables: AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SECRET_ACCESS_KEY, RABBITMQ_DEFAULT_PASS, RABBITMQ_DEFAULT_USER, RABBITMQ_URL, REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, REDIS_URL, SENTRY_AUTH_TOKEN, SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT
 ```
 
-**Result:**
+Run it again without `--dry-run` (and with `--yes`, or answer the question) to
+add them.
+
+## Step 5: add your own variables
+
+As arguments, one or several at once:
+
+```bash
+evnx add custom API_URL=https://api.example.com DEBUG=false --yes
+```
+
+Or at the prompt: a name, a value, and `More options?` for a description, a
+category and whether it is required. An empty name finishes.
+
+```text
+Variable name (or Enter to finish): STRIPE_WEBHOOK_SECRET
+Example/placeholder value: whsec_test_123
+More options? (description, category, required) yes
+Description (Enter for none): Stripe webhook signing secret
+Category: Application
+Is this variable required? yes
+Variable name (or Enter to finish):
+Append these variables to .env.example? yes
+✓ Added 1 custom variable
+```
+
 ```env
 # ── Custom Variables ──
 
-# [Auth] Stripe API key for payments
-STRIPE_SECRET_KEY=sk_test_xxx
-  # (required)
-
-# Added by evnx add custom on 2026-03-05 14:30
+# [Application] Stripe webhook signing secret (required)
+STRIPE_WEBHOOK_SECRET=whsec_test_123
 ```
+
+<Callout type="warning" title="Real secrets">
+A value typed as an argument lands in your shell history. For a real secret,
+give the name alone (`evnx add custom STRIPE_WEBHOOK_SECRET`): in a terminal,
+`add` asks for the value without echoing it. Or keep the placeholder and fill
+in `.env`.
+</Callout>
+
+## Step 6: run it again
+
+```console
+$ evnx add service postgresql --yes
+· Nothing to add: 6 variables for PostgreSQL already in .env.example
+```
+
+Nothing is written twice, and a value you set in `.env` is never replaced.
 
 ---
 
-## Your first add: Step-by-step
+## In scripts and CI
 
-### Scenario: You just initialized a blank project
+`add` asks only when there is a terminal and no `--yes`. In CI there is no
+terminal, so give `--yes`, or `--dry-run` to check first. `--json` prints the
+result as one document for a script to read. Without either, `add` stops with
+exit code 2 and prints the command to run:
 
-**Step 1: Verify your starting point**
+```console
+$ evnx add service twilio
+Error: there is no terminal to confirm with.
 
-```bash
-ls -la .env*
-# Output:
-# -rw-r--r--  .env.example  (empty or minimal)
-# -rw-r--r--  .env          (may not exist yet)
+Add --yes to write without asking:
+  evnx add service twilio --yes
 ```
-
-**Step 2: Add your first service**
-
-```bash
-evnx add service postgresql --verbose
-
-[DEBUG] Resolving service: postgresql
-[DEBUG] Found 5 variables in schema
-
-📋 Preview:
-DATABASE_URL=postgres://user:pass@localhost:5432/db
-DB_USER=your_username
-DB_PASSWORD=your_password
-DB_HOST=localhost
-DB_PORT=5432
-
-? Add these 5 variables to .env.example?
-❯ Yes
-
-✓ Appended 5 variables to .env.example
-✓ Updated .env with TODO placeholders
-```
-
-**Step 3: Check the results**
-
-```bash
-cat .env.example
-# ── Service: postgresql ──
-DATABASE_URL=postgres://user:pass@localhost:5432/db
-# ... more vars
-
-cat .env
-# ── Service: postgresql ──
-DATABASE_URL=postgres://user:pass@localhost:5432/db
-# ... more vars
-```
-
-Both files carry the same variables. `.env` is yours to fill in; `.env.example` is
-the template you commit.
-
-**Step 4: Replace placeholders with real values**
-
-```bash
-nano .env
-# Replace each placeholder value with your actual credentials
-# Keep .env.example unchanged (it's your team template)
-
-evnx validate        # names exactly which values still need replacing
-```
-
-<Callout type="info">
-  **Changed in v0.5.0.** `.env` used to receive these as `# TODO:` comment lines. The
-  parser cannot see a commented assignment, so `evnx add` reported adding six variables
-  and `evnx validate`, run immediately after, reported all six *missing*. Both commands
-  now agree.
-</Callout>
-
-**Step 5: Validate your setup**
-
-```bash
-evnx validate
-✓ All required variables present
-✓ No secrets detected in .env.example
-```
-
-✅ **Done!** Your environment is configured.
-
----
-
-## Preview before applying changes
-
-Use `--verbose` to see resolution details, and remember that **all subcommands show a preview before applying** (unless you use `--yes`).
-
-```bash
-# See what would be added without committing
-evnx add service redis --verbose
-
-[DEBUG] Resolving service: redis
-[DEBUG] Found 4 variables in schema
-
-📋 Preview:
-REDIS_URL=redis://localhost:6379
-REDIS_PASSWORD=your_password
-# ...
-
-# Press Ctrl+C to abort, or confirm to proceed
-```
-
-<Callout type="tip" title="Non-interactive mode">
-Use `--yes` or `-y` to skip prompts in CI/CD:
-```bash
-evnx add service postgresql --yes --path ./backend
-```
-Always test with `--verbose` first to ensure the output is what you expect.
-</Callout>
 
 ---
 
 ## Common pitfalls to avoid
 
-### Assuming variables are overwritten
+### Real values in `.env.example`
 
-```bash
-# ❌ Wrong expectation:
-# If DATABASE_URL exists, it gets replaced
+`.env.example` is committed. Keep placeholders there; real values go in `.env`,
+which `init` and `add` keep out of git (`add` warns if it could be committed:
+`.env is not covered by .gitignore`).
 
-# ✅ Reality:
-# Existing values are ALWAYS preserved
-# New variables are appended with section headers
-```
+### Expecting `add` to change a value
 
-### Adding real values to `.env.example`
-
-When using `add custom`, the tool asks for an "example/placeholder value". **Never enter real credentials here**.
-
-```bash
-# ❌ Bad:
-Example/placeholder value: sk_live_abc123xyz
-
-# ✅ Good:
-Example/placeholder value: YOUR_STRIPE_KEY_HERE
-```
-
-### Forgetting to update `.env` after adding to `.env.example`
-
-```bash
-# After running:
-evnx add service postgresql
-
-# Don't forget:
-# 1. Open .env
-# 2. Replace TODO placeholders with real values
-# 3. Set secure file permissions: chmod 600 .env
-```
-
-### Ignoring conflict warnings
-
-```bash
-# If you see:
-⚠️  3 conflicts detected
-  • VAR_NAME (existing: "old", new: "new")
-
-# Review carefully! Conflicts mean:
-# - The variable already exists in .env.example
-# - The existing value differs from the schema default
-# - The existing value will be KEPT, new value skipped
-
-# If you need the new value, manually edit .env.example after sync
-```
+`add` adds names. It never changes a value that is already there, in either
+file. To change one, edit the file.
 
 ---
 
 ## Next steps
 
-Now that you can add variables confidently:
-
-1. **[Sync Basics](/guides/getting-started/sync-basic)** — Keep `.env` and `.env.example` in sync
-2. **[Validate Command](/guides/commands/validate)** — Check your environment for issues
-3. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share templates safely with your team
-4. **[Schema Reference](/guides/commands/spec)** — Learn to extend services and frameworks
-
-<Callout type="success" title="You're ready!">
-You now know how to incrementally build your environment configuration. Use `evnx add` to grow your `.env.example` safely, one variable at a time.
-</Callout>
+- [evnx add reference](/guides/commands/add): every option, the JSON fields, exit codes
+- [Adding Production Variables](/guides/use-cases/use-cases-add-production)
+- `evnx validate` checks `.env` against `.env.example` once you have filled it in

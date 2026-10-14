@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.1",
+  "evnx_version": "0.10.2",
   "features": [
     "net",
     "migrate",
@@ -25,7 +25,7 @@
       "subcommands": [
         {
           "path": "add service",
-          "about": "Add variables for a specific service"
+          "about": "Add variables for a service, infrastructure target or framework"
         },
         {
           "path": "add framework",
@@ -37,7 +37,7 @@
         },
         {
           "path": "add custom",
-          "about": "Add custom variables interactively"
+          "about": "Add your own variables: as arguments, or one prompt at a time"
         }
       ]
     },
