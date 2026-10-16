@@ -109,18 +109,18 @@ FEATURE_FLAG=false
 evnx add custom
 
 Variable name: DATABASE_URL
-Example/placeholder: postgresql://localhost:5432/mydb
+Value for DATABASE_URL (.env only; .env.example gets YOUR_URL_HERE): postgresql://localhost:5432/mydb
 Add another? yes
 
 Variable name: API_KEY
-Example/placeholder: YOUR_KEY_HERE
+Value for API_KEY (.env only; .env.example gets YOUR_KEY_HERE): YOUR_KEY_HERE
 Add another? no
 
 ✓ Added 2 custom variables
 ```
 
 <Callout type="info" title="What just happened?">
-The `add` command created `.env.example` with your variables and placeholder values. Now you need `.env` with real values.
+The `add` command wrote your values into `.env` (created readable by you only if it was missing) and placeholders — `DATABASE_URL=YOUR_URL_HERE`, `API_KEY=YOUR_KEY_HERE` — into `.env.example`, the file you commit. The steps below show the other way round: building a `.env` from a template someone else wrote.
 </Callout>
 
 **Step 2: Create .env from template**

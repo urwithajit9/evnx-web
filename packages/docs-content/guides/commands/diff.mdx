@@ -160,11 +160,10 @@ evnx diff --format json | jq -e '.summary.missing == 0 and .summary.extra == 0'
 evnx sync --check
 ```
 
-⚠️ **Two further edges.** A non-existent `--env-name` / `--against` target is a
-real error but exits `1`, not `2` — indistinguishable from drift by exit code
-alone. And on that path `--format json` writes **nothing** to stdout, so a `jq`
-consumer receives empty input rather than an error object. Check the JSON
-parsed before trusting the verdict.
+⚠️ **One further edge.** A non-existent `--env-name` / `--against` target exits
+`2` (since v0.10.3; it was `1`, indistinguishable from drift). On that path
+`--format json` writes **nothing** to stdout, so a `jq` consumer receives empty
+input rather than an error object — branch on the exit code first.
 </Callout>
 
 ---
@@ -233,7 +232,24 @@ Machine-readable output for programmatic consumption:
 
 ### `patch` format
 
-Unified diff-style output for automation:
+Unified diff-style output for automation. Values are withheld unless you ask
+for them with `--show-values` (since v0.10.3):
+
+```patch
+# Add these to .env:
++ NEW_FEATURE_FLAG=<withheld>
+
+# Remove these from .env:
+- DEPRECATED_VAR=<withheld>
+
+# Update these in .env:
+- DATABASE_URL=<withheld>
++ DATABASE_URL=<withheld>
+```
+
+A patch that applies needs the values, so `evnx diff --format patch --show-values`
+prints them exactly — passwords included, because a masked value would be
+written into your file — and warns on stderr that the output holds secrets:
 
 ```patch
 # Add these to .env:
@@ -287,9 +303,11 @@ Redaction behaviour:
 - **`--format json`**: `example_value` and `env_value` carry only what is safe
   to print, and are `null` when withheld. `values_redacted` tells a mask from a
   literal. **v0.10.0+** — see the breaking-change note below.
-- **`--format patch`**: prints real values, because a patch exists to be applied
-  and a masked one would write `***` into your file. This is the one format that
-  does, and it is reachable only by asking for it.
+- **`--format patch`**: prints `<withheld>` for every value. With
+  `--show-values` it prints the exact values, credentials included, because a
+  patch exists to be applied and a masked one would write `***` into your file —
+  and says on stderr that the output holds secrets. Before v0.10.3 it printed
+  real values without `--show-values`.
 
 <Callout type="warning" title="Breaking in v0.10.0: the JSON shape">
 `example_value` and `env_value` are now nullable and hold only what is safe to
@@ -334,22 +352,23 @@ This ensures predictable, reproducible output for:
 When both `--format patch` and `--interactive` are specified, evnx prompts for selective change application:
 
 ```
-🔧 Interactive Merge Mode
+Interactive merge
 Prompts: (y)es, (n)o, (s)kip rest
 
-➕ Add NEW_FEATURE_FLAG=placeholder? [y/n/s]: y
-   ✓ Queued: + NEW_FEATURE_FLAG=placeholder
-
-✏️  Update DATABASE_URL?
-   - postgresql://prod-server:5432/prod
-   + postgresql://localhost:5432/dev? [y/n/s]: n
+Add NEW_FEATURE_FLAG=<withheld>? [y/n/s]: y
+   ✓ Queued: + NEW_FEATURE_FLAG=<withheld>
+Update DATABASE_URL?
+   - <withheld>
+   + <withheld>? [y/n/s]: n
    ✗ Skipped
 
-📋 Applied changes:
-  + NEW_FEATURE_FLAG=placeholder
+Applied changes:
+  + NEW_FEATURE_FLAG=<withheld>
 
-💡 Tip: Save output and apply with: patch -p1 < changes.patch
+  →  save it and apply with: patch -p1 < changes.patch
 ```
+
+As with `--format patch`, values are withheld unless `--show-values` is given.
 
 <Callout type="warning">
   Interactive mode only works with <code>--format patch</code>. Other formats ignore the <code>--interactive</code> flag.
@@ -380,7 +399,6 @@ Similarity interpretation:
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive behavior (affects interactive mode) |
 
 ---
 

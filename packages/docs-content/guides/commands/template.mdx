@@ -285,8 +285,7 @@ evnx template \
 | Code | Meaning | Use case |
 |------|---------|----------|
 | `0` | ✅ Template processed successfully | Success in scripts/CI |
-| `1` | 🚨 Processing failed | Missing files, parse errors, or invalid filter values (e.g. non-integer for `\|int`) |
-| `2+` | ⚠️ Runtime error | I/O failures, file permission issues, or unexpected OS-level errors |
+| `2` | 🚨 Nothing was written | Missing files, parse errors, invalid filter values (e.g. non-integer for `\|int`), I/O or permission errors |
 
 ---
 
@@ -393,7 +392,6 @@ If `DESCRIPTION = hello "world"`, the output will be:
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode (affects verbose output formatting) |
 
 ---
 

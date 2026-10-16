@@ -287,8 +287,11 @@ $ evnx add custom FEATURE_NEW_CHECKOUT=true --desc "Enable new checkout flow for
 # ── Custom Variables ──
 
 # [Application] Enable new checkout flow for A/B test
-FEATURE_NEW_CHECKOUT=true
+FEATURE_NEW_CHECKOUT=YOUR_VALUE_HERE
 ```
+
+That is `.env.example`; `.env` gets `FEATURE_NEW_CHECKOUT=true`. The value never goes
+into the committed file (**v0.10.3+**).
 
 The categories are Application, Security, Database, Authentication, Service
 and Other. `--required` marks a variable `(required)` in the same comment.

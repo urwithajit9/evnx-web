@@ -149,7 +149,6 @@ pick one, or `--with <components>` to name them.
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive defaults |
 
 **Usage:**
 
@@ -157,12 +156,15 @@ pick one, or `--with <components>` to name them.
 # Disable colors for CI logs
 NO_COLOR=1 evnx init --verbose
 
-# Auto-enable --yes in CI environments
-CI=1 evnx init
+# In CI, say what you want: there is no terminal to ask
+evnx init --yes
 ```
 
-<Callout type="info" title="CI detection">
-When `CI=true` is detected, `init` behaves as if `--yes` was passed, but still respects explicit CLI flags.
+<Callout type="warning" title="There is no CI detection">
+An earlier version of this page said `CI=true` makes `init` behave as if `--yes`
+was passed. evnx has never read `CI`. Without a terminal, `init` stops before
+writing anything, exits `2`, and names the flags to use instead — pass `--yes`
+(and `--blueprint`, `--with` or `--from-source` to choose what is written).
 </Callout>
 
 ---

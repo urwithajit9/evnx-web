@@ -63,13 +63,13 @@ Blank is pre-selected, so that was one Enter. `evnx init --yes` does the same wi
 $ evnx add custom
 · Enter variables one at a time. Empty name to finish.
 Variable name (or Enter to finish): SOURCE_DB_URL
-Example/placeholder value: postgresql://old-server:5432/legacy
+Value for SOURCE_DB_URL (.env only; .env.example gets YOUR_URL_HERE): postgresql://old-server:5432/legacy
 Add a description comment? no
 Assign to a category? no
 Is this variable required? yes
 Add another variable? yes
 Variable name (or Enter to finish): DEST_API_KEY
-Example/placeholder value: your_dest_api_key
+Value for DEST_API_KEY (.env only; .env.example gets YOUR_KEY_HERE): your_dest_api_key
 Add a description comment? no
 Assign to a category? no
 Is this variable required? yes
@@ -95,14 +95,14 @@ fix in 0.10.2.
 
 # ── Custom Variables ──
 # (required)
-SOURCE_DB_URL=postgresql://old-server:5432/legacy
+SOURCE_DB_URL=YOUR_URL_HERE
 # (required)
-DEST_API_KEY=your_dest_api_key
+DEST_API_KEY=YOUR_KEY_HERE
 
 # Added by evnx add custom on 2026-10-13 21:47
 ```
 
-`evnx add` appends the same lines to `.env`, so both files stay in step.
+That is `.env.example`. `evnx add` appends the same names to `.env` with the values Maya typed, so both files stay in step and only `.env` holds the values (**v0.10.3+**).
 
 **Maya's workflow:**
 

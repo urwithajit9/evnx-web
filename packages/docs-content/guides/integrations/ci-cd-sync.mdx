@@ -68,7 +68,13 @@ output rather than the exit code.
 |------|---------|
 | `0` | In sync |
 | `1` | Out of sync — run `evnx sync` and commit the result |
-| `2` | Error — a source file is missing, or a file will not parse |
+| `2` | Could not run — a file will not parse, or there was nothing to compare |
+
+⚠️ **CI usually has no `.env`.** Since v0.10.3, `--check` then checks `.env.example`
+against the required `[vars]` in `.evnx.toml`, and `1` names any it does not declare.
+With no `.env` and no spec there is nothing to compare, and the answer is `2` — not a
+pass. (`--skip-without-env` turns that into an announced skip; it is meant for
+pre-commit hooks, not for CI.)
 
 Three rather than two, so a pipeline can distinguish a stale template from a broken run.
 Full detail in the [`evnx sync` reference](/guides/commands/sync#exit-codes).

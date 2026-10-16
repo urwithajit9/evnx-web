@@ -141,7 +141,7 @@ category and whether it is required. An empty name finishes.
 
 ```text
 Variable name (or Enter to finish): STRIPE_WEBHOOK_SECRET
-Example/placeholder value: whsec_test_123
+Value for STRIPE_WEBHOOK_SECRET (.env only; .env.example gets YOUR_KEY_HERE): whsec_test_123
 More options? (description, category, required) yes
 Description (Enter for none): Stripe webhook signing secret
 Category: Application
@@ -155,8 +155,11 @@ Append these variables to .env.example? yes
 # ── Custom Variables ──
 
 # [Application] Stripe webhook signing secret (required)
-STRIPE_WEBHOOK_SECRET=whsec_test_123
+STRIPE_WEBHOOK_SECRET=YOUR_KEY_HERE
 ```
+
+That is `.env.example`, the file you commit. The value you typed went into `.env`
+only (**v0.10.3+**; it used to go into both).
 
 <Callout type="warning" title="Real secrets">
 A value typed as an argument lands in your shell history. For a real secret,

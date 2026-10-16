@@ -169,7 +169,7 @@ producing nothing.
 | `--env` | `path` | `.env` | Where to read sample values from, for inferring formats |
 | `--example` | `path` | `.env.example` | Which template decides membership and `required` |
 | `--stdout` | `bool` | `false` | Print the block instead of writing it |
-| `--force` | `bool` | `false` | Append even when `[vars]` already exists |
+| `--merge` | `bool` | `false` | Add only the variables `[vars]` does not declare yet (**v0.10.3+**) |
 | `--verbose`, `-v` | `bool` | `false` | Name each variable and where it came from |
 
 ### It appends, and refuses rather than corrupting
@@ -177,18 +177,27 @@ producing nothing.
 `spec init` adds its block to the end of `.evnx.toml`, leaving every other
 section — and every comment — byte for byte intact.
 
-Because it appends rather than merges, a second run would write `[vars]` twice,
-which TOML refuses to read back. So it stops:
+A second plain run would write `[vars]` twice, which TOML refuses to read back.
+So it stops:
 
 ```text
 Error: .evnx.toml already has a [vars] section.
-  Appending a second one would produce a file TOML refuses to read.
-  Review the existing entries, or pass --force to append anyway and
-  merge them by hand.
+  Pass --merge to add only the variables it does not declare yet;
+  existing entries are kept as they are.
 ```
 
-`--force` does append the second block. The file will then need merging by hand
-before anything can read it.
+`--merge` (**v0.10.3+**) appends only the names that are not declared yet, under
+an `# Added by evnx spec init --merge` comment. Entries you have edited stay
+exactly as you wrote them, and the rest of the file is untouched byte for byte.
+Nothing is written that would not parse: if `[vars]` is an inline
+`vars = { … }` table, which cannot be extended, the file is left alone and the
+error says so.
+
+<Callout type="warning" title="`--force` was removed in v0.10.3">
+It appended a second `[vars]` block "to be merged by hand", and until someone
+did, every command that reads the config exited 2. It now exits 2 with a pointer
+to `--merge`.
+</Callout>
 
 To regenerate cleanly, delete the existing `[vars]` entries first, or use
 `--stdout` and diff:
@@ -388,8 +397,7 @@ before v0.5.0 sees the same document.
 | Code | Meaning |
 |---|---|
 | `0` | The spec was written, or printed with `--stdout` |
-| `1` | Nothing to read, an unknown component, or `[vars]` already exists |
-| `2` | Argument error (unknown flag, bad value) |
+| `2` | Nothing was written — nothing to read, an unknown component, `[vars]` already exists (use `--merge`), a result that would not parse, or an argument error |
 
 A format that will not compile as a regex is refused when the **config is read**,
 not the first time a value happens to be checked against it — so a broken
