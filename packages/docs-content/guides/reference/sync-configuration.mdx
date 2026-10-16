@@ -270,83 +270,53 @@ Control sync behavior via environment variables.
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode |
-| `EVNX_SYNC_DRY_RUN` | `1`, `true` | `false` | Force dry-run mode |
-| `EVNX_SYNC_FORCE` | `1`, `true` | `false` | Force non-interactive mode |
 
 **Usage:**
 
 ```bash
 # Disable colors for CI logs
 NO_COLOR=1 evnx sync --verbose
-
-# Force dry-run via env var (overrides CLI)
-EVNX_SYNC_DRY_RUN=1 evnx sync
 ```
+
+<Callout type="warning" title="Corrected in v0.10.3">
+This table listed `CI`, `EVNX_SYNC_DRY_RUN` and `EVNX_SYNC_FORCE`. evnx has never
+read any of them. Use `--dry-run`, `--check` or `--force`; a run without a
+terminal never prompts.
+</Callout>
 
 ---
 
-## Atomic write implementation
+## How sync writes files
 
-Sync uses atomic file writes to prevent corruption:
+Every file is written to a temporary file beside it and renamed into place, so an
+interrupted run leaves the old file intact rather than half a new one.
 
-```rust
-fn atomic_write(path: &str, content: &str) -> Result<()> {
-    let temp = NamedTempFile::new_in(parent_dir)?;
-    temp.write_all(content)?;
-    temp.sync_all()?;
-    temp.persist(path)?;
-
-    if path.ends_with(".env") {
-        set_permissions(path, 0o600)?;
-    }
-    Ok(())
-}
-```
-
-**Benefits:**
-
-- No partial writes if process interrupted
-- No race conditions with concurrent access
-- Secure permissions set atomically
+- A new `.env` is created readable by you only (0600); a new `.env.example` is 0644,
+  because it is meant to be committed.
+- An existing file keeps the mode you gave it (**v0.10.3+**; sync used to force 0600
+  onto a `.env` you had set to 0640).
+- A symlink is written through to its target, and the link stays (**v0.10.3+**; it
+  used to be replaced by a plain file).
 
 ---
 
 ## Security audit logging
 
-When `--verbose` is enabled, sync logs sensitive operations:
-
-```bash
-evnx sync --direction forward --verbose
-```
-
-**Audit log format:**
+Whenever real values are written into `.env.example` — through the interactive
+"actual values" choice or `allow_actual` — one line goes to stderr, with or without
+`--verbose`, and `-q` does not hide it (**v0.10.3+**):
 
 ```
-[AUDIT] timestamp=2024-03-20T10:30:00Z user=alice action=sync_forward
-  keys_added=["STRIPE_API_KEY"] placeholder=true file=.env.example
-
-[AUDIT] timestamp=2024-03-20T10:31:00Z user=alice action=actual_values_warning
-  keys=["DATABASE_PASSWORD"] confirmed=false
-
-[AUDIT] timestamp=2024-03-20T10:32:00Z user=alice action=actual_values_confirmed
-  keys=["DATABASE_PASSWORD"] file=.env.example
+[AUDIT] actual values written to .env.example for: APP_NAME, LOG_LEVEL
 ```
 
-### Log fields
+A credential never gets there, by the same detectors `evnx scan` uses: the
+interactive choice writes it as a placeholder and names it in a warning, and
+`allow_actual` refuses the whole run (exit 2, nothing written).
 
-| Field | Description |
-|-------|-------------|
-| `timestamp` | ISO 8601 UTC timestamp |
-| `user` | Current system user (from `whoami`) |
-| `action` | Operation type: `sync_forward`, `actual_values_warning`, etc. |
-| `keys` | Environment variable names affected |
-| `file` | Target file path |
-| `placeholder` | Whether placeholder values were used |
-| `confirmed` | Whether user explicitly confirmed risky action |
-
-<Callout type="tip" title="Parse audit logs">
-Use `grep '^\[AUDIT\]'` to filter audit entries, or pipe to a log aggregator for security monitoring.
+<Callout type="warning" title="Corrected in v0.10.3">
+An earlier version of this page showed audit lines with a timestamp, a user and an
+action. evnx has never written those; the line above is the whole of it.
 </Callout>
 
 ---
@@ -357,31 +327,26 @@ Use `grep '^\[AUDIT\]'` to filter audit entries, or pipe to a log aggregator for
 
 | Code | Meaning | Typical cause |
 |------|---------|--------------|
-| `0` | Success | Sync completed without errors |
-| `1` | Validation error | Missing files, naming policy violation |
-| `2` | IO error | File read/write failure, permission denied |
-| `3` | Parse error | Invalid JSON in config, malformed .env |
-| `4` | Git error | Not a git repo, merge conflict |
-| `126+` | System error | Command not found, signal received |
+| `0` | Success | Sync completed; under `--check`, the files are in sync |
+| `1` | Out of sync | `--check` only: run `evnx sync` and commit the result |
+| `2` | Could not run | A missing or unparseable file, invalid JSON in `--template-config`, `--naming-policy error` refusing a name, a credential in `allow_actual` |
 
 ### Error message format
 
-```
-✗ [error_type] human-readable message
-
-Caused by:
-    0: lower-level context
-    1: root cause (OS error, etc.)
-```
-
-**Example:**
+An error is one `Error:` line on stderr, then the line every evnx command ends a
+failed run with, and exit `2`:
 
 ```
-✗ [file_not_found] File not found: .env
+✗ File not found: .env
+Error: .env file not found - run 'evnx init' to get started
 
-Caused by:
-    0: Failed to parse .env
-    1: No such file or directory (os error 2)
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+```
+Error: Failed to parse placeholder config as JSON: key must be a string at line 1 column 2
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
 ---

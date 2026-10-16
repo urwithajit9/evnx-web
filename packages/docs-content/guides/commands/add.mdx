@@ -123,8 +123,14 @@ $ evnx add custom STRIPE_WEBHOOK_SECRET --desc "Stripe webhook signing secret" -
 # ── Custom Variables ──
 
 # [Security] Stripe webhook signing secret (required)
-STRIPE_WEBHOOK_SECRET=your_value_here
+STRIPE_WEBHOOK_SECRET=YOUR_KEY_HERE
 ```
+
+A name given without a value gets the same placeholder in both files. Given a value
+(`API_URL=https://api.example.com`), the value goes into `.env` only, and
+`.env.example` — the file you commit — gets a placeholder (**v0.10.3+**; the value
+used to go into both). If `.env` does not exist, it is created, readable by you
+only.
 
 A name without `=value` gets a placeholder. When it looks like a secret
 (`*_SECRET`, `*_TOKEN`, `*_KEY`, `*_PASSWORD`, …) and you run `add` in a

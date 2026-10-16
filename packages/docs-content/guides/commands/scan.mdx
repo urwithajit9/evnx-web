@@ -37,6 +37,7 @@ evnx scan [OPTIONS] [PATH]
 | `--severity` | `high\|medium\|low` (`all` = `low`) | `low` | **v0.5.0+** — lowest confidence worth reporting. Filters the findings, the counts and the exit code together |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (advisory mode) |
 | `--exclude` | `string[]` | `[]` | Glob or substring patterns to skip |
+| `--extensions` | `string[]` | — | **v0.10.3+** — read only files with these extensions in folders (`env,yml,json`). Opt-in, and announced on every run. `[scan] extensions` in `.evnx.toml` sets it per project |
 | `--pattern` | `regex[]` | `[]` | **v0.5.0+** — also report values matching this expression. Repeatable. Combines with `[[scan.patterns]]` |
 | `--ignore-placeholders` | `bool` | `false` | Skip values that look like placeholders (`changeme`, `your_key_here`) |
 
@@ -609,6 +610,9 @@ never one token, so the `Private Key` rule could not fire in any file that was n
 `.env` — including the `.pem` files private keys live in. Built-ins and custom rules now
 run on the same engine, so both see the whole line.
 
+⚠️ That applied to a `.pem` file you **named**. A folder scan did not open `.pem` files
+at all until **v0.10.3** — see *Scanning a whole project*.
+
 ### Performance
 
 Declaring rules is close to free. Every pattern is compiled into a single automaton that
@@ -720,8 +724,10 @@ evnx scan --severity high
 
 ## Scanning a whole project
 
-`evnx scan` is **already recursive**, and it scans every text file it recognises — not
-only `.env` files. Paths are positional:
+`evnx scan` is **already recursive**, and since **v0.10.3** it reads **every file** in a
+folder. Binary files and files over 1024 KiB are skipped, and the scan says how many on
+stderr (`-v` lists each, with the reason; `--format json` has a `skipped` list). A file
+you name is always read. Paths are positional:
 
 ```bash
 # The default: this directory and everything under it
@@ -736,6 +742,25 @@ evnx scan .env config/ src/
 
 `.git/`, `node_modules/`, `target/`, `dist/`, `build/`, the `.env.example` family and
 `evnx backup` output are always skipped.
+
+<Callout type="warning" title="Before v0.10.3 a folder scan read only some extensions">
+The walk read only files whose extension was on a built-in list, so `config/id_rsa.pem`
+— a private key — or a live key in `app.swift` was never opened, and the scan said
+"No secrets detected" and exited `0`. To limit a walk on purpose, opt in:
+
+```bash
+evnx scan --extensions env,yml,json
+```
+
+```toml
+# .evnx.toml
+[scan]
+extensions = ["env", "yml", "json"]
+```
+
+Either way the run says it is limited — `scanning only files ending in .env, .yml, .json
+in folders` — so a narrowed scan is never mistaken for a full one.
+</Callout>
 
 <Callout type="success">
 **v0.5.0+** — a path that cannot be scanned is an error, exit `2`, not a clean result.

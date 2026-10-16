@@ -124,10 +124,12 @@ Order of operations: filter → prefix → transform.
 | Code | Meaning |
 |------|---------|
 | `0` | Conversion completed successfully |
-| `1` | Failure — unknown format, parse error, or I/O error |
+| `2` | Nothing was converted — unknown format, parse error, I/O error, an existing `--output` file without `--force`, an output path that is the input, or names that collide after `--transform` |
 
 <Callout type="info">
-  Exit code <code>2</code> is used only by <code>evnx diff</code>, not by <code>convert</code>.
+  Since v0.10.3 every failure is <code>2</code>, the same "could not run" code every
+  evnx command uses; it was <code>1</code>. <code>convert</code> has no findings, so it
+  never exits <code>1</code>.
 </Callout>
 
 ---

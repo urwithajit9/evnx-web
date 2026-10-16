@@ -197,7 +197,7 @@ Use <code>--with-stats</code> to include similarity metrics:
 Unified diff format compatible with `patch` and scripts:
 
 ```bash
-evnx diff --format patch
+evnx diff --format patch --show-values
 ```
 
 ```patch
@@ -208,6 +208,10 @@ evnx diff --format patch
 - API_TIMEOUT=60
 + API_TIMEOUT=30
 ```
+
+Without `--show-values` every value prints as `<withheld>` (**v0.10.3+**). A patch
+that applies needs the real values, so `--show-values` prints them exactly —
+secrets included — and warns on stderr. Keep that output out of logs.
 
 <Callout type="info" title="Interactive merge">
 Add <code>--interactive</code> to patch mode for selective application:

@@ -396,7 +396,9 @@ These shell environment variables affect `evnx convert` behaviour:
 | Variable | Values | Effect |
 |----------|--------|--------|
 | `NO_COLOR` | `1`, `true` | Disables all ANSI colour in terminal output |
-| `CI` | `1`, `true` | Interactive TUI is disabled; `--to` becomes required |
+
+The interactive format picker needs a terminal: without one, give `--to`, or the
+run exits `2`. evnx does not read `CI`; an earlier version of this table said it did.
 
 ---
 

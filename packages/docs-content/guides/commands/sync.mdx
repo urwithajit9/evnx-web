@@ -59,8 +59,9 @@ were hardcoded, so keeping a template in step with `.env.production` was not exp
 | `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files. Always exits `0`, whatever it finds |
 | `--check` | `bool` | `false` | **v0.5.0+** — report whether the files are in step through the [exit code](#exit-codes). Implies `--dry-run`; never writes |
 | `--format` | `enum` | `pretty` | **v0.5.0+** — `json` reports *what* drifted, not only that something did. Requires `--check` |
+| `--skip-without-env` | `bool` | `false` | **v0.10.3+** — forward only: with no `.env` and nothing else to compare, skip (exit `0`) and say so on stderr. For pre-commit hooks on a fresh clone; not for CI |
 | `--force`, `-f` | `bool` | `false` | Skip interactive prompts; auto-use placeholders (safe for CI/CD) |
-| `--template-config` | `path` | — | Path to custom placeholder JSON config for regex-based pattern matching |
+| `--template-config` | `path` | — | Path to custom placeholder JSON config for regex-based pattern matching. Applies in both directions (**v0.10.3+**; reverse used to ignore it) |
 | `--naming-policy` | `enum` | `warn` | Handle non-standard variable names: `warn`, `error`, or `ignore` |
 | `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
 | `--help`, `-h` | `bool` | `false` | Display help information |
@@ -189,15 +190,15 @@ answer from a stale one, and a pipeline branching on the code must not confuse t
 | Code | Meaning |
 |------|---------|
 | `0` | The command completed. **This includes a `--dry-run` that found pending changes** |
-| `1` | The command failed — a missing source file, an unparseable file, a user abort |
+| `2` | The command could not run — a missing source file, an unparseable file, `--naming-policy error` refusing a name |
 
 `--dry-run` is a *preview*: the output is the product, and the exit code only says
 whether evnx ran. It will not fail your pipeline when `.env.example` is stale, which is
 why it is the wrong tool for a CI gate.
 
 <Callout type="warning">
-An earlier version of this page listed `2+` for runtime errors. That was never true —
-every failure exited `1`. The table above is what the CLI actually does.
+Before v0.10.3 every failure exited `1`, which under `--check` was also the code for
+"out of sync". Failures are `2` now, in both modes.
 </Callout>
 
 ### With `--check` — **v0.5.0+**
@@ -222,9 +223,15 @@ adding `--check` is how you ask for the detailed answer, the same way
 
 <Callout type="info">
 **Absent target vs absent source.** If `.env.example` does not exist, `--check` returns
-`1` — running `evnx sync` would create it, so the files are simply out of step. If `.env`
-does not exist, it returns `2`: there is nothing to sync *from*, so no verdict is
-possible. Reverse direction, reversed roles.
+`1` — running `evnx sync` would create it, so the files are simply out of step.
+
+If `.env` does not exist — the normal state of CI and of a fresh clone — **v0.10.3+**
+checks `.env.example` against the spec instead: every required `[vars]` name in
+`.evnx.toml` must be declared in the template, and `1` names the ones that are not.
+With no spec either, there is nothing to compare, and the answer is `2`. Add
+`--skip-without-env` where a missing `.env` is expected (a pre-commit hook): then
+"nothing to compare" is a skip, said on stderr, with exit `0`. Do not use it in CI —
+there, a check that compared nothing must not pass.
 </Callout>
 
 ---
@@ -361,14 +368,24 @@ This prevents file corruption from interrupted operations or power loss.
 ### Force mode safety
 When `--force` is used:
 - Interactive prompts are skipped entirely
-- Placeholder values are **always** used (actual values option disabled)
+- Forward: placeholder values are used, except for keys you list in
+  `allow_actual` in a `--template-config` file. If one of those holds a
+  credential, the whole run is refused — exit 2, nothing written
+- Reverse (**v0.10.3+**): the template's own values are copied; a placeholder is
+  generated only where the template has none
 - Suitable for CI/CD pipelines where non-interactive execution is required
 
 ### Audit logging
-When actual values are added to `.env.example` (interactive mode only), a security audit message is logged to stderr in verbose mode:
+Whenever real values are written into `.env.example` — through the interactive
+"actual values" choice or `allow_actual` — one line goes to stderr, with or
+without `--verbose` (**v0.10.3+**; it was verbose-only):
 ```
-[AUDIT] User added actual values to .env.example for keys: ["SECRET_KEY", "API_TOKEN"]
+[AUDIT] actual values written to .env.example for: APP_NAME, LOG_LEVEL
 ```
+
+A credential is never among them, by the same detectors `evnx scan` uses: the
+interactive choice writes it as a placeholder and names it in a warning, and
+`allow_actual` refuses the whole run (exit 2, nothing written).
 
 ---
 
@@ -377,7 +394,6 @@ When actual values are added to `.env.example` (interactive mode only), a securi
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
-| `CI` | `1`, `true` | `false` | Auto-enable non-interactive mode (equivalent to `--force`) |
 
 ---
 
