@@ -3,7 +3,7 @@ title: ".evnx.toml Configuration"
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-09-21"
+updatedAt: "2026-10-18"
 excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
@@ -80,6 +80,17 @@ replaces the root one for commands run there rather than layering on top of it.
 <Callout type="info">
 The filename is `.evnx.toml` exactly. Bare `evnx.toml` is not accepted — two spellings would
 need a rule about which one wins, for no gain.
+
+It is not ignored silently either (**v0.10.6+**). With no `.evnx.toml` beside it, every
+command stops, exit `2`:
+
+```text
+Error: /home/you/my-repo/evnx.toml is not read: evnx reads only .evnx.toml, with the leading dot.
+  rename it:  mv evnx.toml .evnx.toml
+```
+
+Beside a `.evnx.toml`, it is a warning: `evnx.toml is ignored: .evnx.toml beside it is the
+config; merge the two and remove evnx.toml`.
 </Callout>
 
 ---
@@ -437,6 +448,14 @@ The file is committed and teams run mixed versions, so a config written for a la
 must keep working on an earlier one. That means unknown keys cannot be fatal — but a typo
 must not be silent either, so the warning names the key and gives the full path to the file
 to edit.
+
+One exception (**v0.10.6+**): a key evnx does not know under `[vars.NAME]` changes what the
+contract says — `requird = false` left the variable required — so the warning names the key
+meant, and `evnx validate` counts it as an error (`unknown_spec_key`, exit `1`):
+
+```text
+! /home/you/my-repo/.evnx.toml: unknown key `vars.EXTRA.requird` (ignored) — did you mean `required`?
+```
 
 The schema is **additive only**: keys are added, never repurposed or removed.
 

@@ -3,7 +3,7 @@ section: "commands"
 order: 4
 title: "evnx diff"
 publishedAt: "2026-03-11"
-updatedAt: "2026-03-11"
+updatedAt: "2026-10-18"
 excerpt: "Reference documentation for the evnx diff command: compare .env and .env.example with auto-redaction, ordered output, and CI/CD exit codes."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
@@ -105,30 +105,21 @@ meaning, or gate on the two structural counts as above.
 
 ---
 
-## Differences the contract explains
+## `diff` does not read the contract
 
-**v0.5.0+.** A variable declared `environments = ["production"]` is *supposed* to
-be absent from staging. Reporting it as drift is noise:
+A variable declared `environments = ["production"]` in `[vars]` is reported like
+any other when it is absent from staging:
 
 ```console
 $ evnx diff --env-name production --against staging
-  1 different value  ·  1 explained by [vars] environments: SENTRY_DSN
+...
+Extra in .env.production (not in .env.staging):
+  - SENTRY_DSN
 ```
 
-It is named rather than silently dropped — a reader who knows the files differ
-needs to see that evnx noticed and had a reason.
-
-This applies only when **both** sides are named environments. `.env.example` is a
-template, so an `environments` list has nothing to say about it.
-
-<Callout type="info">
-An explained difference does **not** affect the exit code. It is not drift, so a
-CI gate will not fail over it — and when it is the only difference, the output
-says so rather than claiming the files are identical.
-
-The JSON gains a `by_design` array, omitted when empty, so a consumer written
-before v0.5.0 sees the same document.
-</Callout>
+and it counts towards the exit code. Earlier versions of this page described an
+`explained by [vars] environments` line and a `by_design` array in the JSON;
+neither has ever existed in evnx (checked against 0.10.7).
 
 See [`evnx spec`](/guides/commands/spec) for the contract itself.
 

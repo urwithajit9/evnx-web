@@ -3,11 +3,12 @@ title: "evnx cloud"
 section: commands
 order: 9
 publishedAt: "2026-09-16"
+updatedAt: "2026-10-18"
 excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff"]
+commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "spec init"]
 evnxVersion: "0.8.0"
 prerequisites:
   - commands/auth
@@ -59,6 +60,8 @@ evnx cloud link my-api/production
 ```
 
 This writes `[cloud] vault` into `.evnx.toml`, preserving everything else already in the file. After it, `push` and `pull` need no `--vault`.
+
+The file is the project's one `.evnx.toml`: the config in force, found at or above the current folder, or, with none, a new one at the git root — where `evnx spec init` writes too (**v0.10.6+**; run from a subfolder with no config, it used to create one in that subfolder).
 
 <Callout type="tip" title="Safe to commit">
 `.evnx.toml` is project-level and meant to be committed — a vault name is not a secret. Credentials never go there; they live in `~/.config/evnx/` at mode 0600.
