@@ -3,11 +3,12 @@ title: "Cloud Sync in 10 Minutes"
 section: getting-started
 order: 6
 publishedAt: "2026-09-16"
+updatedAt: "2026-10-18"
 excerpt: "From no account to a .env pulled byte-identical on a second machine. Every encryption step happens locally — the server only ever holds ciphertext."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["cloud", "sync", "getting-started", "encryption", "evnx"]
-commands: ["auth login", "auth register", "auth status", "cloud", "cloud history", "cloud link", "cloud pull", "cloud push", "vault create"]
+commands: ["auth login", "auth register", "auth status", "cloud", "cloud history", "cloud link", "cloud pull", "cloud push", "update", "vault create"]
 evnxVersion: "0.5.2"
 prerequisites:
   - getting-started/installation
@@ -26,9 +27,11 @@ Run `evnx cloud --help`. Every prebuilt binary — Homebrew, Scoop, npm, PyPI, w
 Only `cargo install` needs the feature flag, because it builds from source with no features on by default:
 
 ```bash
-cargo install evnx --features cloud
+cargo install evnx --all-features
 ```
 
+That is every feature, as the prebuilt binaries have, and the line `evnx update` prints.
+`--features cloud` alone also works but leaves out `migrate`, `backup` and `restore`.
 Note that `--features full` is **not** enough: `full` is `migrate` plus `backup`, and deliberately excludes `cloud`.
 </Callout>
 
