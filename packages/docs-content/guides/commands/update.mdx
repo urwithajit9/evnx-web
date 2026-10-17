@@ -3,13 +3,13 @@ section: "commands"
 order: 18
 title: "evnx update"
 publishedAt: "2026-09-29"
-updatedAt: "2026-09-29"
+updatedAt: "2026-10-18"
 excerpt: "Find out whether a newer evnx exists, and get the upgrade command for the way you installed it."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["update", "upgrade", "install", "version", "cli"]
 commands: ["update"]
-evnxVersion: "0.7.0"
+evnxVersion: "0.10.7"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -18,36 +18,37 @@ draft: false
 # evnx update
 
 <Callout type="tip" title="Requires evnx 0.7.0">
-`evnx update` shipped in **0.7.0**. `evnx --version` will tell you what you have. On
-an earlier version the upgrade commands on this page still work — pick the one
-matching how you installed.
+`evnx update` shipped in **0.7.0**; `--json` and the exit code `1` for a newer release
+in **0.10.7**. `evnx --version` will tell you what you have. On an earlier version the
+upgrade commands on this page still work — pick the one matching how you installed.
 </Callout>
 
-evnx ships through nine channels, and until now none of them told you when a new
-version appeared. `evnx update` answers two questions: **how do I upgrade this
-installation**, and **is there anything to upgrade to**.
+`evnx update` answers two questions: **how do I upgrade this installation**, and
+**is there anything to upgrade to**.
 
 ---
 
 ## Command signature
 
 ```bash
-evnx update [--check]
+evnx update [--check [--json]]
 ```
 
 | Flag | What it does |
 |---|---|
 | *(none)* | Works out how evnx was installed and prints that channel's upgrade command. **Contacts nothing.** |
-| `--check` | Asks `api.github.com` for the latest release and compares it with the running version. |
+| `--check` | Asks `api.github.com` for the latest release and compares it with the running version |
+| `--json` | **v0.10.7+** — with `--check`, the answer as JSON on stdout |
+| `--quiet`, `-q` | Only the upgrade command; with `--check`, the status line and the command |
 
 ---
 
 ## Without `--check`, it makes no network request
 
-```bash
+```console
 $ evnx update
 
-  evnx 0.6.0
+  evnx 0.10.7
 
   Installed via Homebrew. Upgrade with:
 
@@ -56,31 +57,66 @@ $ evnx update
   To see whether a newer version exists:  evnx update --check
 ```
 
-The channel is read from the **path of the running binary** — there is nothing to
-fetch. `~/.cargo/bin/evnx` is a cargo install, `…/Cellar/evnx/…` is Homebrew,
-`…/scoop/apps/evnx/…` is Scoop, and so on.
+The channel is read from the **path of the running binary**, and from the files pip
+leaves beside it — there is nothing to fetch. It tells seven channels apart: cargo,
+Homebrew, Scoop, winget, npm, pip and the install script. `~/.cargo/bin/evnx` is a
+cargo install, `…/Cellar/evnx/…` is Homebrew, `…/scoop/apps/evnx/…` is Scoop, and so on.
+
+With `-q`, only the command:
+
+```console
+$ evnx update -q
+brew upgrade evnx
+```
 
 <Callout type="info" title="Why not record the channel at build time">
-Because it would not work. All nine channels package the **same** binaries —
-`release.yml` builds one artefact per target and Homebrew, Scoop, winget, npm and
-PyPI all wrap that identical file. A constant compiled into it cannot tell them apart.
-The install *location* is the only thing that differs.
+Because it would not work. The channels package the **same** binaries —
+`release.yml` builds one artefact per target and Homebrew, Scoop, winget and npm all
+wrap that identical file (PyPI builds the same source, with the same features, into
+its wheels). A constant compiled into it cannot tell them apart. The install
+*location* is the only thing that differs.
 </Callout>
+
+### pip and the install script
+
+**v0.10.7+** — a pip install is recognised by what pip leaves: a virtual environment
+of any name (a `pyvenv.cfg` beside its `bin/` or `Scripts\`), or an
+`evnx-*.dist-info` record in the prefix's `site-packages`. Before 0.10.7 a
+`pip install --user` or a system pip install read as the install script, and pip
+users were told to run the curl installer.
+
+`pip install --user` and the install script both write to `~/.local/bin` (and system
+pip and the script to `/usr/local/bin`). With no pip record there, evnx cannot tell
+them apart and says so:
+
+```text
+  evnx 0.10.7
+
+  Installed via the install script or pip: both write to this folder.
+  Upgrade with the one you used:
+
+      pip            pip install --upgrade evnx
+      script         curl -fsSL https://dotenv.space/install.sh | bash
+```
 
 ### When it cannot tell
 
-```
+```text
+  evnx 0.10.7
+
   note: could not tell how evnx was installed.
 
   Pick the one that matches how you got it:
 
-      cargo          cargo install evnx --features cloud --force
+      cargo          cargo install evnx --all-features --force
       Homebrew       brew upgrade evnx
       Scoop          scoop update evnx
       winget         winget upgrade urwithajit9.evnx
       npm            npm install -g @evnx/cli@latest
       pip            pip install --upgrade evnx
       script         curl -fsSL https://dotenv.space/install.sh | bash
+
+  To see whether a newer version exists:  evnx update --check
 ```
 
 <Callout type="warning" title="It admits this rather than guessing">
@@ -94,21 +130,38 @@ not obvious to read. So an unrecognised path lists every command and lets you ch
 
 <Callout type="warning" title="The cargo command is not just `cargo install evnx`">
 `cargo install evnx` compiles with **no default features**, so a plain reinstall would
-silently drop `auth`, `vault` and `cloud`. The suggested command carries
-`--features cloud`, and `--force` because the crate is already installed.
+silently drop `auth`, `vault`, `cloud`, `migrate`, `backup` and `restore`. The
+suggested command is `cargo install evnx --all-features --force`: every feature, and
+`--force` because the crate is already installed. Before 0.10.7 it was
+`--features cloud --force`, which rebuilt an `--all-features` install without
+`migrate`, `backup` and `restore`.
 </Callout>
 
 ---
 
 ## `--check` asks once, when you ask it to
 
-```bash
+On the latest release:
+
+```console
 $ evnx update --check
 
   asking api.github.com for the latest release…
 
-  installed   0.6.0
-  latest      0.7.0
+  installed   0.10.7
+  latest      0.10.7
+
+  ✓ you are on the latest release.
+```
+
+When a newer release exists — here a hypothetical 0.10.8 — it says how to get it, and
+exits `1`:
+
+```text
+  asking api.github.com for the latest release…
+
+  installed   0.10.7
+  latest      0.10.8
 
   → a newer release is available.
 
@@ -116,14 +169,63 @@ $ evnx update --check
 
       brew upgrade evnx
 
-  Release notes: https://github.com/urwithajit9/evnx/releases/tag/v0.7.0
+  Release notes: https://github.com/urwithajit9/evnx/releases/tag/v0.10.8
 
   note: a channel can lag behind the release by minutes or days. If the
   command above cannot find it yet, it has not propagated.
 ```
 
+The `asking api.github.com…` line goes to stderr; the rest to stdout. With `-q`, only
+the status line and the command:
+
+```text
+→ a newer release is available.
+brew upgrade evnx
+```
+
 Nothing is sent but the request. No account identifier, no machine identifier, no
 telemetry — it is an unauthenticated `GET` for one public release record.
+
+### Exit codes
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Without `--check`, always. With it: this is the latest release, or newer |
+| `1` | `--check`: a newer release exists (**v0.10.7+**; it was `0` either way) |
+| `2` | `--check` could not tell — no network support, no answer, or a rate limit |
+
+So a CI step can gate on it:
+
+```bash
+evnx update --check -q || echo "evnx is out of date (or could not check)"
+```
+
+### `--check --json`
+
+```console
+$ evnx update --check --json
+{
+  "schema": 1,
+  "installed": "0.10.7",
+  "latest": "0.10.7",
+  "status": "current",
+  "channel": "homebrew",
+  "command": "brew upgrade evnx",
+  "release_url": "https://github.com/urwithajit9/evnx/releases/tag/v0.10.7"
+}
+```
+
+| Field | Values |
+|---|---|
+| `schema` | `1` |
+| `status` | `current`, `behind` or `ahead` (a build newer than the latest release) |
+| `channel` | `cargo`, `homebrew`, `scoop`, `winget`, `npm`, `pip`, `script-or-pip` or `unknown` |
+| `command` | the upgrade command, or `null` when evnx cannot name one (`script-or-pip`, `unknown`) |
+| `release_url` | the release page |
+
+The exit code is the same as without `--json`. When the check cannot run, nothing is
+printed on stdout and the exit code is `2`. `--json` without `--check` is a usage
+error.
 
 ### Why it asks GitHub and not a package registry
 
@@ -147,10 +249,10 @@ it yet.
 <Callout type="warning" title="This is a deliberate limitation">
 There is no `evnx update --apply` and there will not be one.
 
-Nine package managers ship evnx, and a binary that overwrites itself fights whichever
-one owns the file. Homebrew and winget would report a version they did not install,
-and the next `brew upgrade` would either clobber it or refuse. Printing the channel's
-own command cooperates with the system instead of racing it.
+Each package manager owns the file it installed, and a binary that overwrites itself
+fights it. Homebrew and winget would report a version they did not install, and the
+next `brew upgrade` would either clobber it or refuse. Printing the channel's own
+command cooperates with the system instead of racing it.
 </Callout>
 
 ---
@@ -167,13 +269,13 @@ convenient upgrade nag is not worth giving that up.
 
 ### `--check` needs a build with network support
 
-```
+```console
 $ evnx update --check
 Error: `--check` needs network support, and this build has none.
-  It was compiled without the `cloud` or `migrate` feature — most likely with
-  `cargo install evnx`, which uses no default features.
-  Reinstall with `cargo install evnx --features cloud`, or run `evnx update` on its
-  own, which works offline.
+  It was compiled without the `cloud` or `migrate` feature — most likely with `cargo install evnx`, which uses no default features.
+  Reinstall with `cargo install evnx --all-features`, or run `evnx update` on its own, which works offline.
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
 `default = []` means exactly that: with no features enabled, **no HTTP code is
@@ -184,14 +286,10 @@ Every prebuilt binary has network support — `release.yml` builds with
 `--features net` enables just the HTTP stack if you want `--check` without the cloud
 commands.
 
-| Exit code | Meaning |
-|---|---|
-| `0` | Advice printed, or the check completed |
-| `2` | The check could not run — no network support, unreachable host, or a rate limit |
-
 ---
 
 ## Related guides
 
 - [Installation](/guides/getting-started/installation) — every channel, and which to pick
+- [evnx commands](/guides/commands/commands) — which commands and features your build has
 - [Verifying the round trip](/guides/reference/verifying-the-round-trip) — confirming a build does what it claims
