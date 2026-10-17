@@ -127,9 +127,11 @@ const TROUBLE_ITEMS: TroubleItem[] = [
     q: "migrate, backup, or restore are missing from evnx --help",
     a: (
       <>
-        These commands are behind feature flags. If you installed via{" "}
-        <IC>cargo install evnx</IC> without <IC>--features full</IC>, they won&apos;t appear.
-        Reinstall with: <IC>cargo install evnx --features full --force</IC>
+        These commands, and <IC>auth</IC>, <IC>org</IC>, <IC>vault</IC> and <IC>cloud</IC>, are
+        behind feature flags, and <IC>cargo install evnx</IC> compiles with none of them.
+        Reinstall with: <IC>cargo install evnx --all-features --force</IC>. Not{" "}
+        <IC>--features full</IC>: that is <IC>migrate</IC> and <IC>backup</IC> only, with no
+        cloud commands. <IC>evnx commands</IC> lists what your build has.
         <br />
         If you installed via npm, pipx, Homebrew, Scoop, or the curl script, all features are
         included &mdash; update with <IC>pipx upgrade evnx</IC>,{" "}
@@ -165,9 +167,11 @@ const TROUBLE_ITEMS: TroubleItem[] = [
     q: "npm install @evnx/cli (local) doesn't expose the evnx binary",
     a: (
       <>
-        A local <IC>npm install</IC> (without <IC>-g</IC>) places the binary at{" "}
-        <IC>./node_modules/.bin/evnx</IC>, only accessible inside npm scripts. Install
-        globally: <IC>npm install -g @evnx/cli</IC>, or run without installing:{" "}
+        From evnx 0.10.6, <IC>npm install --save-dev @evnx/cli</IC> places the command at{" "}
+        <IC>./node_modules/.bin/evnx</IC>: run it with <IC>npx evnx</IC> or from an npm
+        script. Up to 0.10.5 only <IC>npm install -g</IC> created an <IC>evnx</IC> command
+        &mdash; upgrade with <IC>npm install --save-dev @evnx/cli@latest</IC>. Or install
+        globally, <IC>npm install -g @evnx/cli</IC>, or run without installing:{" "}
         <IC>npx @evnx/cli --version</IC>.
       </>
     ),
@@ -188,9 +192,11 @@ const TROUBLE_ITEMS: TroubleItem[] = [
     q: "winget install evnx \u2014 \u201cNo package found matching input criteria\u201d",
     a: (
       <>
-        The winget manifest is still pending acceptance into the Windows Package Manager
-        Community Repository. Until it merges, use Cargo, npm, or Scoop as the primary Windows
-        installation path: <IC>cargo install evnx --features full</IC>
+        Use the full package id: <IC>winget install urwithajit9.evnx</IC>. The manifest
+        declares no moniker, so <IC>winget install evnx</IC> falls back to matching by name.
+        A new release reaches winget once Microsoft merges its manifest, which can take a few
+        days; until then winget offers the previous version. Scoop and npm carry a release
+        sooner: <IC>npm install -g @evnx/cli</IC>
       </>
     ),
   },
@@ -366,7 +372,9 @@ function CargoPanel({
         <>
           <CmdLine code="cargo install evnx" />
           <p className="text-sm text-text-secondary mb-4 leading-relaxed">
-            Includes validate, scan, diff, and convert commands. Requires Rust 1.70+.{" "}
+            The local commands &mdash; init, add, validate, scan, diff, convert, sync,
+            template, doctor and spec &mdash; with no network code compiled in. Requires Rust
+            1.85+.{" "}
             <a
               href="https://rustup.rs"
               target="_blank"
@@ -380,10 +388,11 @@ function CargoPanel({
         </>
       ) : (
         <>
-          <CmdLine code="cargo install evnx --features full" />
+          <CmdLine code="cargo install evnx --all-features" />
           <p className="text-sm text-text-secondary mb-4 leading-relaxed">
-            Adds <IC>migrate</IC> and <IC>backup</IC> / <IC>restore</IC> on top of the core
-            command set.
+            Adds <IC>migrate</IC>, <IC>backup</IC> / <IC>restore</IC> and the cloud commands
+            (<IC>auth</IC>, <IC>org</IC>, <IC>vault</IC>, <IC>cloud</IC>) &mdash; what every
+            prebuilt binary has.
           </p>
         </>
       )}
@@ -397,12 +406,17 @@ function CargoPanel({
           <p className="font-mono text-xs text-text-secondary mb-1">--features backup</p>
           <p className="text-xs text-text-tertiary">adds backup + restore</p>
         </div>
+        <div className="col-span-2 rounded-lg border border-border-muted bg-bg-surface p-3">
+          <p className="font-mono text-xs text-text-secondary mb-1">--features cloud</p>
+          <p className="text-xs text-text-tertiary">adds auth, org, vault + cloud</p>
+        </div>
         <div className="col-span-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20 p-3">
           <p className="font-mono text-xs text-green-800 dark:text-green-300 mb-1">
-            --features full
+            --all-features
           </p>
           <p className="text-xs text-green-700 dark:text-green-400">
-            both of the above &mdash; recommended
+            all of the above &mdash; recommended. <span className="font-mono">--features full</span>{" "}
+            is migrate + backup only, with no cloud commands
           </p>
         </div>
       </div>
@@ -522,7 +536,7 @@ function PipPanel({
                   <IC>pipx install evnx</IC>.
                 </InfoBox>
                 <p className="text-xs text-text-tertiary mt-1">
-                  Alternatively, use <IC>cargo install evnx --features full</IC> or{" "}
+                  Alternatively, use <IC>cargo install evnx --all-features</IC> or{" "}
                   <IC>npm install -g @evnx/cli</IC> on Windows &mdash; simpler if you already
                   have Rust or Node.js installed.
                 </p>
@@ -567,13 +581,13 @@ cd evnx
 # Core build
 cargo build --release
 
-# Full build (migrate + backup features)
-cargo build --release --features full
+# Every feature, as the prebuilt binaries have
+cargo build --release --all-features
 
 # Copy to a directory on your PATH
 cp target/release/evnx ~/.local/bin/`}</CodeBlock>
       <p className="mt-3 text-sm text-text-secondary">
-        Requires Rust 1.70+. Install Rust via{" "}
+        Requires Rust 1.85+. Install Rust via{" "}
         <a
           href="https://rustup.rs"
           target="_blank"
@@ -672,18 +686,19 @@ function ScoopPanel() {
 function WingetPanel() {
   return (
     <>
-      <CmdLine code="winget install evnx" />
-      <InfoBox variant="warn">
-        <strong>Status: pending.</strong> The winget manifest has not yet been merged into the
-        Windows Package Manager Community Repository. This command may fail with &ldquo;No
-        package found&rdquo;. Use Cargo, npm, or Scoop as the primary Windows installation
-        path in the meantime.
+      <CmdLine code="winget install urwithajit9.evnx" />
+      <CmdLine label="Update to the latest release" code="winget upgrade urwithajit9.evnx" />
+      <InfoBox variant="info">
+        Use the full package id. The manifest declares no moniker, so{" "}
+        <IC>winget install evnx</IC> falls back to matching by name and can ask you to choose.
+        A new release reaches winget once Microsoft merges its manifest, which can take a few
+        days; until then winget installs the previous version.
       </InfoBox>
       <p className="text-sm text-text-secondary mt-2 mb-3">
-        Recommended Windows alternatives:
+        Other Windows options:
       </p>
       <div className="space-y-2">
-        <CmdLine label="Cargo (if you have Rust)" code="cargo install evnx --features full" />
+        <CmdLine label="Cargo (if you have Rust)" code="cargo install evnx --all-features" />
         <CmdLine label="npm (if you have Node.js)" code="npm install -g @evnx/cli" />
         <CmdLine
           label="Scoop (no admin required)"

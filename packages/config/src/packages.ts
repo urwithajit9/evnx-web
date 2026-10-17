@@ -70,13 +70,16 @@ export const INSTALL_CHANNELS: readonly InstallChannel[] = [
     id: "cargo",
     label: "cargo",
     // ⚠️ `cargo install evnx` compiles from source with `default = []`, so the
-    // cloud commands are absent unless the feature is named. Every other
-    // channel ships a `--all-features` binary and already has them. Advertising
-    // the bare command here is what made people think cloud sync was missing.
-    command: "cargo install evnx --features cloud",
+    // cloud, migrate and backup commands are absent unless features are named.
+    // Every other channel ships a `--all-features` binary and already has them.
+    // Advertising the bare command here is what made people think cloud sync
+    // was missing. `--all-features` is the one cargo line the CLI itself prints
+    // since 0.10.7 (`evnx update`, `evnx commands`, `--help`); `--features cloud`
+    // alone leaves out `migrate`, `backup` and `restore`.
+    command: "cargo install evnx --all-features",
     registryUrl: REGISTRIES.crates,
     featured: true,
-    note: "Builds from source. `--features cloud` is required here and only here.",
+    note: "Builds from source. `--all-features` is required here and only here.",
   },
   {
     id: "npm",
@@ -95,7 +98,9 @@ export const INSTALL_CHANNELS: readonly InstallChannel[] = [
   {
     id: "homebrew",
     label: "Homebrew",
-    command: `brew install ${GITHUB_ORG}/tap/evnx`,
+    // The tap repository is `homebrew-evnx`, so the tap is `urwithajit9/evnx`.
+    // ⚠️ This said `urwithajit9/tap/evnx`, a tap that does not exist.
+    command: `brew install ${GITHUB_ORG}/evnx/evnx`,
     featured: false,
   },
   {

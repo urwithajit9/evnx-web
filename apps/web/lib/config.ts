@@ -80,9 +80,10 @@ export const INSTALL_COMMANDS = {
   windows: channel("winget"),
   npm: channel("npm"),
   // ⚠️ `cargo install evnx` builds from source with `default = []`, so it has
-  // no cloud commands. `INSTALL_CHANNELS` ships the `--features cloud` form,
-  // which is why these three now resolve to the same correct string.
+  // no cloud commands. `INSTALL_CHANNELS` ships the `--all-features` form,
+  // which is why these three resolve to the same correct string. ⛔ Never
+  // `--features full`: `full = ["migrate", "backup"]` leaves out `cloud`.
   cargo: channel("cargo"),
-  cargoFull: "cargo install evnx --features full",
+  cargoFull: channel("cargo"),
   cargoCloud: channel("cargo"),
 } as const;
