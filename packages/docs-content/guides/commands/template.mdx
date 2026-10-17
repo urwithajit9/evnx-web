@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx template"
 publishedAt: "2026-03-11"
-updatedAt: "2026-03-12"
+updatedAt: "2026-10-18"
 excerpt: "Reference documentation for the evnx template command: generate configuration files from templates with variable substitution and filters."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["template", "reference", "cli", "config", "env", "gitignore"]
 commands: ["template"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.7"
 prerequisites:
   - getting-started/installation
   - reference/env-file-syntax
@@ -18,11 +18,13 @@ draft: false
 
 # evnx template — Command Reference
 
-Generate configuration files from templates using `.env` variables, with support for flexible substitution syntax and powerful filter transformations.
+Render a configuration file (YAML, JSON, TOML, or any other text) from a template,
+filling in values from `.env`. The result holds real values, so evnx creates it
+readable by you only and offers to keep it out of git.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/reference/configuration-file">Understanding .env syntax</Prerequisite>
+  <Prerequisite href="/guides/reference/env-file-syntax">Understanding .env syntax</Prerequisite>
 </Prerequisites>
 
 <Callout type="info">
@@ -31,32 +33,135 @@ Generate configuration files from templates using `.env` variables, with support
 
 ---
 
+## Quick example
+
+```env
+# .env
+APP_ENV=production
+APP_NAME=billing api
+DB_HOST=db.internal
+DB_PORT=5432
+DB_SSL=on
+```
+
+```yaml
+# config.yaml.template
+app:
+  env: {{APP_ENV|upper}}
+  name: {{APP_NAME|title}}
+database:
+  host: ${DB_HOST}
+  port: {{ DB_PORT | int }}
+  ssl: {{DB_SSL|bool}}
+  pool: {{DB_POOL|default:10}}
+```
+
+In a terminal, evnx asks whether to add the result to `.gitignore`; Enter answers yes:
+
+```console
+$ evnx template --input config.yaml.template --output config.yaml
+
+  Generate config from template
+
+✓ Loaded 5 variables from .env
+✓ Read template from config.yaml.template
+✓ Generated config at config.yaml
+'config.yaml' may contain secrets — add it to .gitignore? yes
+✓ Added 'config.yaml' to .gitignore
+  Docs: https://docs.evnx.dev/cli/commands/template
+
+$ cat config.yaml
+app:
+  env: PRODUCTION
+  name: Billing Api
+database:
+  host: db.internal
+  port: 5432
+  ssl: true
+  pool: 10
+
+$ ls -l config.yaml | cut -c1-10
+-rw-------
+```
+
+`DB_POOL` is not in `.env`, so `|default:10` supplied the value.
+
+---
+
 ## Command signature
 
 ```bash
-evnx template --input <TEMPLATE> --output <OUTPUT> [--env <ENV_FILE>] [--verbose]
+evnx template --input <TEMPLATE> --output <OUTPUT> [OPTIONS]
 ```
 
 ### Required arguments
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `--input` | `path` | Path to the template file (e.g., `config.yaml.template`) |
-| `--output` | `path` | Path where the generated configuration file will be written |
+| `--input` | `path` | The template to render |
+| `--output` | `path` or `-` | Where to write the result. `-` prints it on stdout and writes no file |
 
 ### Optional options
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--env` | `path` | `.env` | Path to the environment file containing variable definitions |
-| `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
-| `--gitignore` | `bool` | `false` | Automatically add the output file to `.gitignore`. No prompt. Mutually exclusive with `--no-gitignore` |
-| `--no-gitignore` | `bool` | `false` | Skip all `.gitignore` checks and warnings. Mutually exclusive with `--gitignore` |
-| `--strict` | `bool` | `false` | **v0.5.0+** — refuse to write when a placeholder has no value |
-| `--verbose`, `-v` | `bool` | `false` | Enable detailed progress output to stderr |
-| `--help`, `-h` | `bool` | `false` | Display help information |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--env` | `.env` | The env file to take values from. Without `--env`, `[defaults] env_name` in `.evnx.toml` applies when it is set |
+| `--env-name` | — | Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
+| `--strict` | off | Refuse to write when a placeholder has no value |
+| `--dry-run` | off | **v0.10.5+** — render and report what would be written; write nothing |
+| `--mkdir` | off | **v0.10.5+** — create the output's missing directories |
+| `--mode` | `0600` for a new file | **v0.10.3+** — the output's file mode in octal (`0640`), applied to a new or an existing file |
+| `--gitignore` | — | Add the output to `.gitignore` without asking. Conflicts with `--no-gitignore` |
+| `--no-gitignore` | — | Skip the `.gitignore` check and its warnings. Conflicts with `--gitignore` |
+| `--verbose`, `-v` | off | Verbose output |
+| `--quiet`, `-q` | off | Print nothing on success; warnings and errors still print |
+| `--no-color` | off | Plain output (as `NO_COLOR` does) |
+| `--help`, `-h` | — | Display help information |
 
-### `--strict`
+<Callout type="warning">
+`-i`, `-o` and `-e` have been listed on this page as short forms for `--input`,
+`--output` and `--env`. **None of them exist** — `template` has no short forms of its own.
+</Callout>
+
+---
+
+## What gets written
+
+- **A new output is created readable by you only** (`0600`, **v0.10.3+**). Pass
+  `--mode 0640` to choose another mode.
+- **An existing output is replaced** and keeps its mode. evnx says `Replaced app.conf`,
+  and warns when that mode lets other users read it:
+
+  ```text
+  $ evnx template --input in.tmpl --output app.conf --no-gitignore
+  ...
+  Replaced app.conf
+  ! app.conf is readable by other users (mode 640); evnx keeps the mode you set
+       →  chmod 600 app.conf
+  ```
+
+- **An output that is a symlink is written through**: the file it points to is
+  replaced, the link stays, and evnx says `· wrote through current.conf -> shared/app.conf`.
+- **`--output -` prints the rendered text on stdout** and writes no file. Everything
+  else evnx prints then goes to stderr, so the text can be piped.
+- **The template and the env file are never overwritten.** An `--output` that is
+  the same file — by path, symlink or hard link — is refused:
+
+  ```console
+  $ evnx template --input in.tmpl --output .env
+  Error: --output '.env' is the same file as the env file '.env'. Nothing was written; choose another --output.
+
+  No verdict: evnx did not finish. This is not a clean result.
+  ```
+
+- **A missing directory is an error** that names `--mkdir` (see below).
+- **Nothing is written when a run fails** — an unknown filter, a bad `|bool` or
+  `|int` value, or `--strict` with an unresolved placeholder all stop the run before
+  the file is touched.
+
+---
+
+## `--strict`
 
 Without it, a placeholder with no value is **copied through literally** and the command
 exits `0`:
@@ -66,53 +171,152 @@ exits `0`:
 database_url = {{DATABASE_URL}}
 ```
 
-```bash
-evnx template --input in.tmpl --output app.conf   # exit 0
-cat app.conf
-# database_url = {{DATABASE_URL}}
+```console
+$ evnx template --input in.tmpl --output app.conf --no-gitignore
+
+  Generate config from template
+
+✓ Loaded 1 variables from .env
+✓ Read template from in.tmpl
+! Variable 'DATABASE_URL' referenced in template but not defined in .env
+✓ Generated config at app.conf
+· 1 placeholder was left unresolved and written through literally. Use --strict to make this an error.
+  Docs: https://docs.evnx.dev/cli/commands/template
+
+$ cat app.conf
+database_url = {{DATABASE_URL}}
 ```
 
 That file is no longer a template — it is a config file whose `database_url` is the
-seven-character string `{{DATABASE_URL}}`, and whatever reads it next treats that as the
+literal string `{{DATABASE_URL}}`, and whatever reads it next treats that as the
 setting. `--strict` makes it an error:
 
-```bash
-evnx template --input in.tmpl --output app.conf --strict
-# Error: 1 variable referenced in in.tmpl has no value in .env: DATABASE_URL
-#
-# Define it there, or give it a fallback with {{NAME|default:value}}.
-# Nothing was written to app.conf.
+```console
+$ evnx template --input in.tmpl --output app.conf --strict --no-gitignore
+
+  Generate config from template
+
+✓ Loaded 1 variables from .env
+✓ Read template from in.tmpl
+! Variable 'DATABASE_URL' referenced in template but not defined in .env
+Error: 1 variable referenced in in.tmpl has no value in .env: DATABASE_URL
+
+Define it there, or give it a fallback with {{NAME|default:value}}.
+Nothing was written to app.conf.
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
 <Callout type="info">
 The refusal happens **before** the output is written, so a failed run leaves no
 half-built config behind for the next step in your pipeline to pick up.
 
-A placeholder with a `|default:` is not undefined, so `--strict` accepts it. That is how you
-keep a variable optional under a strict build.
+A placeholder with a `|default:` is not undefined, so `--strict` accepts it:
+`{{DATABASE_URL|default:sqlite://local.db}}` renders as `sqlite://local.db`. That is
+how you keep a variable optional under a strict build.
 </Callout>
 
 ---
 
-<Callout type="warning">
-`-i`, `-o` and `-e` have been listed on this page as short forms for `--input`,
-`--output` and `--env`. **None of them exist** — `template` has no short forms of its own.
-</Callout>
+## `--dry-run`
+
+**v0.10.5+** — render the template and say what the real run would do, without
+writing anything: whether the file would be created or replaced, through which
+link, and which directory `--mkdir` would create.
+
+```console
+$ evnx template --input config.yaml.template --output config.yaml --dry-run
+
+  Generate config from template
+
+✓ Loaded 1 variables from .env
+✓ Read template from config.yaml.template
+! Variable 'REGION' referenced in template but not defined in .env
+Dry run: nothing was written.
+  would create config.yaml
+  1 placeholder would be left unresolved
+```
+
+The report for an output that exists, for one that is a symlink, and for stdout:
+
+```text
+  would replace config.yaml
+  would create shared/config.yaml through the link current.yaml
+Dry run: nothing was printed.
+  would print 2 lines, 1 placeholder unresolved to stdout
+```
+
+A dry run:
+
+- **never prints a value** — not the rendered text, not even with `--output -`;
+- **leaves `.gitignore` alone**, with or without `--gitignore`;
+- **fails where the real run would**, with the same message and exit `2`: an unknown
+  filter, a bad `|bool` or `|int` value, `--strict` with an unresolved placeholder, a
+  missing directory without `--mkdir`, an `--output` that is the template or the env
+  file.
+
+That makes `--dry-run --strict` a check that a template renders against an env file,
+without leaving a file full of secrets on the CI runner.
+
+---
+
+## `--mkdir`
+
+**v0.10.5+** — an output whose directory does not exist is an error, and the error
+says how to fix it:
+
+```console
+$ evnx template --input config.yaml.template --output deploy/k8s/config.yaml
+...
+Error: Failed to write generated config to: deploy/k8s/config.yaml: the directory deploy/k8s does not exist. Add --mkdir to create it.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+With `--mkdir`, evnx creates the missing directories and names them:
+
+```console
+$ evnx template --input config.yaml.template --output deploy/k8s/config.yaml --mkdir --no-gitignore
+...
+Created directories deploy, deploy/k8s
+✓ Generated config at deploy/k8s/config.yaml
+
+$ stat -c '%a %n' deploy deploy/k8s deploy/k8s/config.yaml
+700 deploy
+700 deploy/k8s
+600 deploy/k8s/config.yaml
+```
+
+Every directory `--mkdir` creates is readable by you only (`0700`). A directory that
+already exists keeps its mode: with an existing `infra`, `--output infra/app/config.yaml
+--mkdir` creates `infra/app` as `0700` and leaves `infra` alone. With `--dry-run`, the
+report says `would create the directory deploy/k8s (--mkdir)` and nothing is created.
+
+---
 
 ## Gitignore protection
 
-Generated config files contain real values injected from `.env` and must never be committed. After writing the output file, `evnx template` can automatically add it to `.gitignore`.
+Generated config files contain real values injected from `.env` and must never be
+committed. After writing the output, `evnx template` checks whether git would pick it
+up, and can add it to `.gitignore`.
+
+**git decides, not the text of `.gitignore`** (**v0.10.3+**). evnx asks git whether the
+output is ignored, so a `*.yml` or `config/` rule that already covers it counts, a
+later `!out.yml` that re-includes it does not, and a file git already tracks is
+recognised as such.
 
 ### Behaviour by flag and context
 
 | Context | `--gitignore` | `--no-gitignore` | No flag |
 |---------|--------------|-----------------|---------|
-| **Interactive terminal** | Auto-write, no prompt | Skip, no warning | Prompt: `Add config.toml to .gitignore? [Y/n]` |
-| **CI / non-interactive** | Auto-write, no prompt | Skip, no warning | Warn only — does not prompt, does not write |
-| **Already in `.gitignore`** | Print "already in .gitignore" | Skip silently | Skip silently |
-| **No git repository found** | Warn "not a git repository" | Skip silently | Skip silently |
+| **Interactive terminal** | Add it, no question | Skip, no warning | Ask: `'config.toml' may contain secrets — add it to .gitignore? [Y/n]`. Enter answers yes; `n` then Enter answers no |
+| **CI / non-interactive** | Add it, no question | Skip, no warning | Warn only: `! 'config.toml' may contain secrets and is not in .gitignore`. Nothing is written |
+| **Already ignored by git** | `✓ 'config.toml' is already ignored by git` | Skip silently | `✓ 'config.toml' is already ignored by git` |
+| **Tracked by git** | Warn and suggest `git rm --cached`; no line added | Skip silently | Warn and suggest `git rm --cached`; no line added |
+| **No git repository** | Warn `Not a git repository — cannot update .gitignore` | Skip silently | Skip silently |
 
-The default (`--no-gitignore` absent) is safe in both contexts: interactive users get a one-keystroke prompt, CI pipelines get a visible warning without a blocking prompt.
+The default is safe in both contexts: interactive users get a one-keystroke question,
+CI pipelines get a visible warning without a blocking prompt.
 
 ### What gets written
 
@@ -120,21 +324,34 @@ Entries are grouped under a labelled section so they are easy to identify:
 
 ```gitignore
 # ── evnx generated ─────────────────────────────────────────
-# Files generated by `evnx template` may contain secrets — do not commit.
+# Written by evnx. These files may contain secrets — do not commit.
 config.toml
 k8s/configmap.yaml
 ```
 
-Running `evnx template` again with the same `--output` detects the existing entry and prints "already in `.gitignore`" without adding a duplicate.
+The entry is always relative to the repository root, wherever you run the command
+from, with any `..` resolved: `--output sub/../out.yml --gitignore` adds `out.yml`.
+Running `evnx template` again with the same `--output` finds the file ignored and adds
+nothing.
+
+### A file git already tracks
+
+A `.gitignore` line does not stop git from committing a file it already tracks, so
+evnx does not add one. It says what does work:
+
+```text
+! 'tracked.conf' is tracked by git: a commit includes it whatever .gitignore says
+     →  git rm --cached tracked.conf
+```
 
 ### Git root detection
 
-evnx walks ancestor directories from the current working directory looking for a `.git` entry (directory or file, so worktrees are supported). The `.gitignore` is located at that root. If no `.git` ancestor is found, the check is skipped with a warning when `--gitignore` is explicitly set.
-
-The entry written to `.gitignore` is always relative to the git root, regardless of where you run the command from.
+evnx walks ancestor directories from the current working directory looking for a `.git`
+entry (directory or file, so worktrees are supported). The `.gitignore` it updates is
+the one at that root.
 
 <Callout type="danger">
-  <strong>Output files outside the repository root cannot be protected.</strong> If <code>--output</code> points to a path outside the directory containing <code>.git/</code>, evnx warns and skips the <code>.gitignore</code> update — gitignore patterns cannot cover paths outside the repository.
+  <strong>Output files outside the repository cannot be protected.</strong> <code>.gitignore</code> patterns cannot reach above the repository root, so for an <code>--output</code> such as <code>/srv/app/config.yaml</code> or <code>../config.yaml</code> evnx warns — <code>'/srv/app/config.yaml' is outside the git repository — .gitignore cannot protect it</code> — and leaves <code>.gitignore</code> alone, even with <code>--gitignore</code>.
 </Callout>
 
 ---
@@ -145,19 +362,27 @@ The template engine supports three styles for referencing variables from your `.
 
 | Syntax | Example | Description |
 |--------|---------|-------------|
-| `\${VAR}` | `\${DATABASE_URL}` | Shell-style (bash-like); most portable |
-| `{{VAR}}` | `{{DATABASE_URL}}` | Template-style (Jinja-like); recommended for filters |
-| `$VAR` | `$DATABASE_URL` | Simple prefix style; use with word boundaries |
+| `{{VAR}}` | `{{DATABASE_URL}}` | Template style; the only one that takes a filter |
+| `${VAR}` | `${DATABASE_URL}` | Shell style |
+| `$VAR` | `$DATABASE_URL` | Bare; the name is the letters, digits and `_` that follow the `$` |
 
-<Callout type="warning">
-  <strong>Pattern precedence:</strong> Filters are processed <em>before</em> simple substitution. This ensures <code>{"{{VAR|upper}}"}</code> is not accidentally replaced by a plain <code>{"{{VAR}}"}</code> pattern.
-</Callout>
+Spaces inside the braces are allowed (**v0.5.0+**), so these all render the same value:
+
+```text
+{{PORT}}  {{ PORT }}  ${PORT}  ${ PORT }  $PORT
+{{APP_ENV|upper}}  {{ APP_ENV | upper }}
+```
+
+A `$` that is not followed by a name, as in `price=$5`, is left alone. A name that is
+not in the env file — `$PATHNAME` in `https://example.com/$PATHNAME` — gets the same
+warning as `{{PATHNAME}}` and is written through unchanged, or stops the run under
+`--strict`.
 
 ---
 
 ## Filter transformations
 
-Apply transformations to variable values using the pipe (`|`) operator within double braces:
+Apply a transformation to a value with a pipe (`|`) inside double braces:
 
 ```text
 {{VAR|filter}}
@@ -165,51 +390,137 @@ Apply transformations to variable values using the pipe (`|`) operator within do
 
 ### Supported filters
 
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `\|upper` | Convert to uppercase | Input: `production` → Output: `PRODUCTION` |
-| `\|lower` | Convert to lowercase | Input: `PRODUCTION` → Output: `production` |
-| `\|title` | Capitalize first letter | Input: `hello world` → Output: `Hello world` |
-| `\|bool` | Convert to boolean string | Input: `yes` or `1` → Output: `true`; others → `false` |
-| `\|int` | Parse as 64-bit integer | Input: `8000` → Output: `8000`; errors on invalid input |
-| `\|json` | JSON-escape for safe embedding | See example below |
-| `\|default:value` | Fallback if variable is empty or undefined | Input: `""` → Output: `value`; Input: `actual` → Output: `actual` |
+| Filter | Result | Example |
+|--------|--------|---------|
+| `\|upper` | Uppercase | `production` → `PRODUCTION` |
+| `\|lower` | Lowercase | `PRODUCTION` → `production` |
+| `\|title` | **v0.10.5+** — Title Case: each word's first letter upper, the rest lower | `hello wORLD` → `Hello World` |
+| `\|capitalize` | **v0.10.5+** — First character upper, the rest unchanged (what `\|title` did before 0.10.5) | `hello wORLD` → `Hello wORLD` |
+| `\|bool` | **v0.10.5+** — `true` or `false` from a fixed list of words; anything else is an error | `on` → `true`, `n` → `false` |
+| `\|int` | A whole number; anything else is an error | `8000` → `8000` |
+| `\|json` | A quoted, escaped JSON string | `hello "world"` → `"hello \"world\""` |
+| `\|default:VALUE` | `VALUE` when the variable is empty or not defined; its own value otherwise | `{{POOL\|default:10}}` → `10` |
 
-<Callout type="warning">
-  <strong>Filters are not chainable.</strong> Each filter is applied independently — <code>{"|int"}</code> and <code>{"|default:value"}</code> cannot be combined on the same variable reference. Use separate template variables or validate values in your <code>.env</code> file before templating.
-</Callout>
+`evnx template --help` prints the same list.
 
-<Callout type="info" title="Whitespace inside a placeholder">
-**v0.5.0+** — spaces around the name and the pipe are allowed, so all of these are the same
-placeholder:
+### One filter per placeholder
 
-```text
-{{PORT}}    {{ PORT }}    ${PORT}    ${ PORT }
-{{APP_ENV|upper}}    {{ APP_ENV | upper }}
+Chained filters are an **error** (**v0.10.5+**), and nothing is written:
+
+```console
+$ evnx template --input chain.tmpl --output app.yaml
+...
+Error: chain.tmpl has a filter evnx cannot apply:
+  line 1: {{APP_ENV|upper|json}}: chained filters are not supported; use one filter per placeholder
+
+Filters: upper, lower, title, capitalize, bool, int, json, default:VALUE.
+Nothing was written to app.yaml.
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
-Before v0.5.0 only the tight forms were recognised. A spaced one matched nothing and was
-written into the output file as literal text, with no warning and a zero exit code.
+A filter after a default is a chain too: `{{PORT|default:8080|int}}` and
+`{{APP_ENV|default:x | upper}}` are reported the same way. A pipe followed by anything
+that is not a filter name stays part of the default's text, so `{{SEP|default:a|b}}`
+renders `a|b` when `SEP` is empty.
 
-Also fixed in v0.5.0: **`|default:` now applies when the variable is genuinely absent.** It
-previously fired only when the variable already had a value — the one case a fallback is not
-needed — so `{{NOPE|default:1234}}` rendered as itself. If you worked around this by defining
-every variable in `.env`, nothing changes for you.
+Before 0.10.5, `{{APP_ENV|upper|json}}` was copied into the output unchanged with exit
+`0`, and `{{PORT|default:8080|int}}` rendered `8080|int`. Chaining is planned for
+0.11.0. Until then, a value that needs both a fallback and `|int` or `|bool` gets its
+fallback in `.env`.
+
+### Unknown filters are errors
+
+**v0.10.5+** — a filter evnx does not know stops the run. Every one is named with its
+line, with a suggestion when a known filter is close:
+
+```console
+$ evnx template --input bad.tmpl --output app.yaml
+
+  Generate config from template
+
+✓ Loaded 2 variables from .env
+✓ Read template from bad.tmpl
+Error: bad.tmpl has 3 filters evnx cannot apply:
+  line 1: {{PORT|innt}}: unknown filter `innt` — did you mean `int`?
+  line 2: {{ APP_ENV | Upper }}: unknown filter `Upper` — did you mean `upper`?
+  line 3: {{REGION|bogus}}: unknown filter `bogus`
+
+Filters: upper, lower, title, capitalize, bool, int, json, default:VALUE.
+Nothing was written to app.yaml.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+Filter names are lowercase: `Upper` is not `upper`. The check applies to every
+`{{NAME|filter}}` whose name is a variable name, whether or not the variable is
+defined — `REGION` above is not. Before 0.10.5 all three were written into the output
+unchanged, with exit `0`.
+
+Placeholders of other template languages are not evnx references and pass through
+untouched, so a Helm chart can be rendered in two stages:
+
+```text
+image: {{ .Values.image | quote }}    →    image: {{ .Values.image | quote }}
+env: {{APP_ENV}}                      →    env: staging
+```
+
+### `|title` and `|capitalize`
+
+`|title` follows Jinja: a word starts after whitespace or one of `-`, `(`, `[`, `{`,
+`<`, and each word gets its first letter upper and the rest lower. `|capitalize`
+changes the first character only.
+
+| Value | `\|title` | `\|capitalize` |
+|-------|-----------|----------------|
+| `hello wORLD` | `Hello World` | `Hello wORLD` |
+| `my API key` | `My Api Key` | `My API key` |
+| `mary-jane o'neil` | `Mary-Jane O'neil` | `Mary-jane o'neil` |
+
+<Callout type="info">
+Before 0.10.5, `|title` changed only the first character. If a template relied on
+that — an acronym such as `API` that must stay uppercase — switch it to `|capitalize`.
 </Callout>
+
+### `|bool`
+
+| Value, in any case | Result |
+|--------------------|--------|
+| `true`, `yes`, `on`, `1`, `y` | `true` |
+| `false`, `no`, `off`, `0`, `n` | `false` |
+| anything else, including an empty value | error, nothing written |
+
+```console
+$ evnx template --input flags.tmpl --output flags.yaml
+...
+Error: Failed to process template substitutions: Variable 'FEATURE_BETA' value 'enabled' is not a boolean for |bool: use true/yes/on/1/y or false/no/off/0/n
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+Before 0.10.5 every value outside `true`, `yes` and `1` — `on`, `y`, `enabled`, a
+typo, an empty value — became `false`, silently.
+
+### Bad values are not printed when the name looks secret
+
+A bad `|bool` or `|int` value is shown in the error, unless the variable's name looks
+like a secret:
+
+```text
+Error: Failed to process template substitutions: Variable 'PORT' value '80a' is not a valid integer for |int filter: invalid digit found in string
+Error: Failed to process template substitutions: Variable 'DB_PASSWORD' value '***' is not a boolean for |bool: use true/yes/on/1/y or false/no/off/0/n
+```
 
 ### JSON filter example
 
-The `|json` filter properly escapes values for embedding in JSON structures:
+The `|json` filter returns a quoted JSON string literal, with the surrounding double
+quotes and any quotes inside escaped:
 
 ```text
-# If VALUE = hello "world"
-# Template:  "desc": {{VALUE|json}}
-# Output:    "desc": "hello \"world\""
+# If DESCRIPTION = hello "world"
+# Template:  "description": {{DESCRIPTION|json}}
+# Output:    "description": "hello \"world\""
 ```
-
-<Callout type="danger">
-  <strong>Integer filter errors:</strong> The <code>{"|int"}</code> filter will <em>fail</em> if the value cannot be parsed as an integer. This prevents silent configuration errors. Use the <code>{"|default:8000"}</code> filter on a separate variable reference as a fallback if the variable might be missing.
-</Callout>
 
 ---
 
@@ -218,36 +529,58 @@ The `|json` filter properly escapes values for embedding in JSON structures:
 ### Generate a config file from template
 
 ```bash
-# Simple substitution: replace ${VAR} patterns with .env values
 evnx template --input config.yaml.template --output config.yaml
 ```
 
 ### Use a custom environment file
 
 ```bash
-# Generate production config using .env.production
 evnx template --input deploy.yaml.tpl --output deploy.yaml --env .env.production
 ```
 
-### Enable verbose output for debugging
+`--env-name production` does the same:
+
+```console
+$ evnx template --input in.tmpl --output app.conf --env-name production --no-gitignore
+
+  Generate config from template
+
+✓ Loaded 1 variables from .env.production
+✓ Read template from in.tmpl
+✓ Generated config at app.conf
+  Docs: https://docs.evnx.dev/cli/commands/template
+```
+
+The file is named `.env.production`, as `.env` is (**v0.10.5+**; it was
+`./.env.production`).
+
+### Print to stdout
+
+```console
+$ evnx template --input in.tmpl --output - 2>/dev/null
+database_url = postgres://localhost/dev
+```
+
+Only the rendered text reaches stdout, so it can be piped to the next command.
+
+### Check a template in CI without writing it
 
 ```bash
-# See detailed progress and variable loading info
-evnx template --input template.json --output output.json --verbose
+evnx template --input config.yaml.template --output config.yaml --env-name production --strict --dry-run
 ```
 
 ### Generate multiple configs in a script
 
 ```bash
 #!/bin/bash
-# Generate configs for multiple environments — auto-protect output files in CI
+# One template, one config per environment — each output added to .gitignore
 for env in dev staging prod; do
   evnx template \
     --input config.yaml.template \
     --output "config.${env}.yaml" \
-    --env ".env.${env}" \
+    --env-name "$env" \
     --gitignore \
-    --verbose
+    --quiet
 done
 ```
 
@@ -284,8 +617,10 @@ evnx template \
 
 | Code | Meaning | Use case |
 |------|---------|----------|
-| `0` | ✅ Template processed successfully | Success in scripts/CI |
-| `2` | 🚨 Nothing was written | Missing files, parse errors, invalid filter values (e.g. non-integer for `\|int`), I/O or permission errors |
+| `0` | ✅ Written — or, with `--dry-run`, it would have been | Success in scripts/CI. Also returned when placeholders were left unresolved without `--strict` |
+| `2` | 🚨 Nothing was written | A missing template or env file, a bad line in the env file, an unknown or chained filter, a bad `\|bool` or `\|int` value, an unresolved placeholder under `--strict`, a missing directory without `--mkdir`, an `--output` that is the template or the env file, I/O or permission errors |
+
+`--dry-run` exits with the code the real run would.
 
 ---
 
@@ -293,22 +628,20 @@ evnx template \
 
 ### "Failed to parse environment file" error
 
+```text
+Error: Failed to parse environment file: .env: .env does not exist
+Error: Failed to parse environment file: .env.production: Invalid format at line 2: missing '=' separator
 ```
-✗ Failed to parse environment file: .env.production
-```
 
-**Solution**: Validate your `.env` file syntax or run `evnx validate --env .env.production` to check for issues. Ensure the file uses valid `KEY=VALUE` syntax:
+**Solution**: Create the file, point `--env` at the right one, or fix the line named.
+Each line is `KEY=value` (spaces around `=` are accepted), `#` starts a comment, and a
+value with spaces can be quoted: `KEY="value with spaces"`.
 
-- One variable per line
-- No spaces around `=` (`KEY=value`, not `KEY = value`)
-- Quote values with spaces: `KEY="value with spaces"`
-- Use `#` for comments
+### "Variable 'X' referenced in template but not defined" warning
 
-### "Variable 'X' referenced but not defined" warning
-
-```
-⚠️ Variable 'MISSING_VAR' referenced in template but not defined in .env
-ℹ️ 1 placeholder was left unresolved and written through literally. Use --strict to make this an error.
+```text
+! Variable 'MISSING_VAR' referenced in template but not defined in .env
+· 1 placeholder was left unresolved and written through literally. Use --strict to make this an error.
 ```
 
 **Solution**: Add the missing variable to your `.env` file, or give it a fallback:
@@ -320,47 +653,59 @@ evnx template \
 In CI, add `--strict` so this fails the build instead of producing a config file with
 `{{MISSING_VAR}}` in it.
 
-### Filter transformation errors
-
-```
-✗ Failed to process template substitutions
-Caused by: Variable 'PORT' value 'not-a-number' is not a valid integer for |int filter
-```
-
-**Solution**: Ensure the variable value in your `.env` file is a valid integer. If the variable might be absent or malformed, provide a validated default in `.env` rather than relying on the template:
-
-```bash
-# In .env — validate and set a safe default before templating
-PORT=${PORT:-8000}
-```
-
-Or use the `|default` filter on a separate variable:
+### "filters evnx cannot apply" error
 
 ```text
-# Only use |default — filters cannot be chained
-{{PORT|default:8000}}
+Error: bad.tmpl has 3 filters evnx cannot apply:
+  line 1: {{PORT|innt}}: unknown filter `innt` — did you mean `int`?
 ```
+
+**Solution**: Correct the filter on the line named; the list of filters follows the
+error. A chained filter (`{{X|upper|json}}`) is reported the same way: keep one.
+
+### Filter value errors
+
+```text
+Error: Failed to process template substitutions: Variable 'PORT' value '80a' is not a valid integer for |int filter: invalid digit found in string
+```
+
+**Solution**: Fix the value in your `.env` file. `|default:` covers a variable that is
+missing or empty, not one that holds a bad value, and it cannot be combined with
+`|int` or `|bool` on the same placeholder. For `|bool`, the accepted words are listed
+in the error.
+
+### "the directory … does not exist" error
+
+```text
+Error: Failed to write generated config to: deploy/k8s/config.yaml: the directory deploy/k8s does not exist. Add --mkdir to create it.
+```
+
+**Solution**: Add `--mkdir`, or create the directory yourself.
 
 ### "Not a git repository" warning with `--gitignore`
 
-```
-⚠️  Not a git repository — cannot update .gitignore
+```text
+! Not a git repository — cannot update .gitignore
 ```
 
-**Cause**: evnx walks ancestor directories looking for `.git/` and reached the filesystem root without finding one. This happens when running outside a git repository or from a temp directory in CI.
+**Cause**: evnx walks ancestor directories looking for `.git` and reached the
+filesystem root without finding one. This happens when running outside a git repository
+or from a temp directory in CI.
 
 **Solutions**:
-- Run the command from within your repository root
-- If you are not using git, add `--no-gitignore` to silence the warning
+- Run the command from within your repository
+- If you are not using git, drop `--gitignore` (without it the check is silent outside a repository), or add `--no-gitignore`
 - If using git worktrees, the `.git` file (not directory) is also detected correctly
 
-### Output file already in `.gitignore`
+### Output file already ignored
 
-```
-✓ 'config.toml' is already in .gitignore
+```text
+✓ 'config.toml' is already ignored by git
 ```
 
-**This is correct behavior** — idempotent. evnx checks for an exact line match before writing. Running `evnx template` multiple times with the same `--output` and `--gitignore` will never produce duplicate entries.
+**This is correct behavior** — git already ignores the file, by an entry evnx wrote or
+by a rule of your own such as `*.toml`, so nothing is added. Running `evnx template`
+repeatedly never produces duplicate entries.
 
 ### JSON filter output has unexpected quotes
 
@@ -391,15 +736,14 @@ If `DESCRIPTION = hello "world"`, the output will be:
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
+| `NO_COLOR` | set, to any value | unset | Disable colored output for terminals or log files |
 
 ---
 
 ## See also
 
-- [Template Syntax Guide](/guides/commands/template) — Deep dive into substitution patterns and filter reference
-- [Gitignore Protection](/guides/use-cases/prevent-secret-leaks) — How evnx detects git roots, writes entries, and handles edge cases
+- [Filters in templates](/guides/reference/filter-in-template) — Deep dive into substitution patterns and filters
+- [Gitignore Protection](/guides/use-cases/prevent-secret-leaks) — Keeping generated files and secrets out of git
 - [Configuration Management](/guides/use-cases/use-case-template-to-config) — Strategies for managing configs across environments
 - [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automating config generation in pipelines
-- [Security Best Practices](/guides/use-cases/prevent-secret-leaks) — Safely handling sensitive values in templates
 - [evnx sync](/guides/commands/sync) — Keep `.env` and `.env.example` synchronized before templating

@@ -3,7 +3,7 @@ title: "Writing Templates and Using Filters"
 section: guides
 order: 3
 publishedAt: "2026-03-11"
-updatedAt: "2026-03-11"
+updatedAt: "2026-10-18"
 excerpt: "Learn to write template files and use every evnx filter correctly — with precise input/output behavior, config-format guidance, and the pitfalls that cause silent misconfiguration."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
@@ -102,7 +102,7 @@ debug: $DEBUG
 ```
 
 <Callout type="warning">
-  <strong>Filters only work with double-brace syntax.</strong> Writing <code>{"${APP_ENV|upper}"}</code> is not a filter expression — the engine will try to look up a variable literally named <code>APP_ENV|upper</code>, which will not be found, and emit a warning.
+  <strong>Filters only work with double-brace syntax.</strong> Writing <code>{"${APP_ENV|upper}"}</code> is not a filter expression — it is left in the output exactly as written, with no warning (checked on evnx 0.10.7).
 </Callout>
 
 ---
@@ -112,7 +112,11 @@ debug: $DEBUG
 Filters transform a variable's value at substitution time. They are written inside double braces, separated from the variable name by a pipe: `{{VAR|filter}}`.
 
 <Callout type="danger">
-  <strong>Filters are not chainable.</strong> <code>{"{{PORT|int|default:8080}}"}</code> is not valid — the engine applies one filter per reference. If you need a default and a type assertion, handle the value in your <code>.env</code> file (e.g. <code>PORT=8080</code>) rather than in the template.
+  <strong>Filters are not chainable.</strong> <code>{"{{PORT|int|default:8080}}"}</code> and <code>{"{{PORT|default:8080|int}}"}</code> are errors (<strong>v0.10.5+</strong>): the run names the line and writes nothing. They used to be written through or, for a filter after a default, rendered as <code>8080|int</code>. If you need a default and a type assertion, handle the value in your <code>.env</code> file (e.g. <code>PORT=8080</code>) rather than in the template. Chaining is planned for 0.11.0.
+</Callout>
+
+<Callout type="warning">
+  <strong>An unknown filter is an error</strong> (<strong>v0.10.5+</strong>). <code>{"{{PORT|innt}}"}</code> or <code>{"{{ APP_ENV | Upper }}"}</code> stops the run with the line and a suggestion (<code>did you mean `int`?</code>) instead of being copied into the output. Filter names are lowercase. Placeholders of other template languages, such as Helm's <code>{"{{ .Values.image | quote }}"}</code>, are not evnx references and pass through.
 </Callout>
 
 ---
@@ -161,9 +165,10 @@ region:      eu-west-1
 
 ---
 
-### `|title` — Capitalize the first character
+### `|title` — Title Case
 
-Converts the first character of the value to uppercase and leaves the rest unchanged.
+**v0.10.5+.** Each word's first letter upper, the rest lower — Jinja's rule. A word
+starts after whitespace or one of `-`, `(`, `[`, `{`, `<`.
 
 ```text
 # Template
@@ -173,29 +178,45 @@ service_name: {{SERVICE_NAME|title}}
 SERVICE_NAME=my api service
 
 # Output
-service_name: My api service
+service_name: My Api Service
 ```
-
-<Callout type="warning">
-  <strong><code>|title</code> only uppercases the very first character</strong> — not the first letter of every word. <code>my api service</code> becomes <code>My api service</code>, not <code>My Api Service</code>. Use it for display names and short labels where sentence-style capitalization is appropriate.
-</Callout>
 
 | Input | Output |
 |-------|--------|
-| `hello world` | `Hello world` |
-| `HELLO` | `HELLO` |
-| `my api` | `My api` |
+| `hello wORLD` | `Hello World` |
+| `my API key` | `My Api Key` |
+| `mary-jane o'neil` | `Mary-Jane O'neil` |
 | `a` | `A` |
+
+<Callout type="warning">
+  <strong>Before 0.10.5, <code>|title</code> changed only the first character</strong>: <code>my api service</code> became <code>My api service</code>. That behaviour is now <code>|capitalize</code>. An acronym that must stay uppercase (<code>API</code>) needs <code>|capitalize</code>, since <code>|title</code> lowers the rest of each word.
+</Callout>
+
+---
+
+### `|capitalize` — Capitalize the first character
+
+**v0.10.5+.** The first character upper, the rest unchanged.
+
+| Input | Output |
+|-------|--------|
+| `hello wORLD` | `Hello wORLD` |
+| `my API key` | `My API key` |
 
 ---
 
 ### `|bool` — Normalize to a boolean string
 
-Converts the value to the literal string `true` or `false`. This is the most permissive filter — it never fails, and any value that is not recognized as truthy becomes `false`.
+Converts the value to the literal string `true` or `false`, from a fixed list of words
+(**v0.10.5+**, any case):
 
-**Truthy values** (case-insensitive): `true`, `yes`, `1`
+**True:** `true`, `yes`, `on`, `1`, `y`
 
-**Everything else** is `false` — including `false`, `no`, `0`, empty string, or any unrecognized value like `maybe`.
+**False:** `false`, `no`, `off`, `0`, `n`
+
+**Anything else is an error** — `enabled`, `maybe`, a typo, an empty value: the run stops
+and writes nothing, as for a bad `|int`. Before 0.10.5 every value outside `true`, `yes`
+and `1` became `false`, silently.
 
 ```text
 # Template
@@ -218,17 +239,14 @@ feature_beta:   false
 
 | `.env` value | Output |
 |--------------|--------|
-| `true` | `true` |
-| `True` | `true` |
-| `TRUE` | `true` |
-| `yes` | `true` |
-| `Yes` | `true` |
+| `true`, `True`, `TRUE` | `true` |
+| `yes`, `Yes` | `true` |
+| `on`, `ON` | `true` |
 | `1` | `true` |
-| `false` | `false` |
-| `no` | `false` |
-| `0` | `false` |
-| `maybe` | `false` |
-| *(empty)* | `false` |
+| `y`, `Y` | `true` |
+| `false`, `no`, `off`, `0`, `n` (any case) | `false` |
+| `maybe`, `enabled` | **error**, nothing written |
+| *(empty)* | **error**, nothing written |
 
 **When to use it:** YAML boolean fields, TOML boolean fields, and any config format where the target field must be the literal `true` or `false`. Without this filter, a `.env` value of `yes` would be substituted as the string `"yes"` — which YAML parses as a boolean `true` but TOML and most JSON parsers do not.
 
@@ -236,7 +254,7 @@ feature_beta:   false
 
 ### `|int` — Parse and validate as an integer
 
-Parses the value as a 64-bit signed integer and substitutes the parsed number. Unlike other filters, **`|int` fails hard** if the value cannot be parsed — the command exits with an error and the output file is not written.
+Parses the value as a 64-bit signed integer and substitutes the parsed number. Like `|bool`, **`|int` fails hard** if the value cannot be parsed — the command exits with an error and the output file is not written.
 
 ```text
 # Template
@@ -441,8 +459,9 @@ debug: {{DEBUG|bool}}
 # .env — any of these work:
 # DEBUG=yes  →  debug: true
 # DEBUG=1    →  debug: true
-# DEBUG=true →  debug: true
+# DEBUG=on   →  debug: true
 # DEBUG=no   →  debug: false
+# DEBUG=enabled  →  error, nothing written
 ```
 
 Without `|bool`, `DEBUG=yes` would produce `debug: yes` in YAML — which YAML 1.1 parses as boolean `true` but YAML 1.2 and many strict parsers do not. Using `|bool` makes the output unambiguous.
@@ -467,7 +486,7 @@ Because filters run before plain substitution, you can reference the same variab
 ```yaml
 # Template
 environment:  "{{APP_ENV|lower}}"   # normalized lowercase label
-display_name: "{{APP_ENV|title}}"   # first-char capitalized display name
+display_name: "{{APP_ENV|title}}"   # Title Case display name
 env_code:     "{{APP_ENV|upper}}"   # uppercase enum value
 raw_value:    "{{APP_ENV}}"         # raw, exactly as set in .env
 ```
@@ -688,7 +707,7 @@ format = "json"
 [features]
 enable_beta    = true
 enable_metrics = false
-service_label  = "My service"
+service_label  = "My Service"
 ```
 
 Every field is correctly typed for TOML: integers are unquoted, booleans are `true`/`false`, strings are quoted. `DB_SSL_MODE` was undefined in `.env.dev` — the `|default:require` filter covered it, and the warning in verbose output confirms that was the path taken.
@@ -701,8 +720,9 @@ Every field is correctly typed for TOML: integers are unquoted, booleans are `tr
 |--------|--------|--------------------|------------------------|--------|
 | `\|upper` | `{{VAR\|upper}}` | No | No | YAML, TOML, Nginx, any |
 | `\|lower` | `{{VAR\|lower}}` | No | No | YAML, TOML, Nginx, any |
-| `\|title` | `{{VAR\|title}}` | No | No | YAML, TOML, any (first char only) |
-| `\|bool` | `{{VAR\|bool}}` | No | No | YAML, TOML (produces `true`/`false`) |
+| `\|title` | `{{VAR\|title}}` | No | No | YAML, TOML, any (Title Case, v0.10.5+) |
+| `\|capitalize` | `{{VAR\|capitalize}}` | No | No | YAML, TOML, any (first char only, v0.10.5+) |
+| `\|bool` | `{{VAR\|bool}}` | **Yes** (v0.10.5+) | No | YAML, TOML (produces `true`/`false`) |
 | `\|int` | `{{VAR\|int}}` | **Yes** | No | YAML, TOML (produces unquoted integer) |
 | `\|json` | `{{VAR\|json}}` | No | **Yes** | JSON only |
 | `\|default:val` | `{{VAR\|default:val}}` | No | No | Any format, any filter context |
