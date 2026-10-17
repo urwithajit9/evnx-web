@@ -3,13 +3,13 @@ section: "getting-started"
 order: 5
 title: "Add Basics — Incrementally Build Your Environment"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-14"
+updatedAt: "2026-10-18"
 excerpt: "Learn how to use evnx add to incrementally add environment variables from services, frameworks, blueprints, or custom input. Perfect for beginners."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["add", "tutorial", "beginner", "environment-variables", "cli"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "validate"]
-evnxVersion: "0.10.2"
+evnxVersion: "0.10.7"
 prerequisites:
   - getting-started/installation
   - getting-started/init-basic
@@ -67,7 +67,7 @@ Preview:
 6 variables
   • service ×6
   Categories: Database
-Add these 6 variables to .env.example? yes
+Add these 6 variables to .env.example and .env? yes
 ✓ Added 6 variables for PostgreSQL
 ```
 
@@ -86,7 +86,7 @@ DB_PORT=5432
 # (required)
 DB_USER=your_db_user_value
 
-# Added by evnx add on 2026-10-14 04:34
+# Added by evnx add on 2026-10-17 12:14
 ```
 
 `.env` gets the same names. Replace the placeholders there with your values;
@@ -105,11 +105,12 @@ can also leave the id out (`evnx add service`) and pick from a list.
 ```console
 $ evnx add framework django --yes
 ! 1 variable with a different value in .env.example: kept as it is
-  • DATABASE_URL (existing: "postgresql://user:password@localhost:5432/dbname", new: "https://example.com")
+  • DATABASE_URL (existing: "postgresql://user:password@localhost:5432/dbname", new: "sqlite:///db.sqlite3")
 ✓ Added 4 variables for Django, skipped 1 already present
 ```
 
-Django also declares `DATABASE_URL`. `add` kept the line you already had, said
+Django also declares `DATABASE_URL`, defaulting to SQLite, Django's own
+out-of-the-box database. `add` kept the PostgreSQL line you already had, said
 so, and added the other four.
 
 ## Step 4: check a whole stack before adding it
@@ -120,13 +121,13 @@ so, and added the other four.
 $ evnx add blueprint django_enterprise --dry-run
 Dry run (from blueprint 'Django Secure (Django + Postgres + Celery)'): nothing was written.
   .env.example: would add 15 variables: AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SECRET_ACCESS_KEY, RABBITMQ_DEFAULT_PASS, RABBITMQ_DEFAULT_USER, RABBITMQ_URL, REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, REDIS_URL, SENTRY_AUTH_TOKEN, SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT
-  already there, would skip: ALLOWED_HOSTS, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEBUG, DJANGO_SETTINGS_MODULE, SECRET_KEY
-  different value, would keep: DATABASE_URL (existing: "postgresql://user:password@localhost:5432/dbname", new: "https://example.com")
+  already there, would skip: ALLOWED_HOSTS, DATABASE_URL, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEBUG, DJANGO_SETTINGS_MODULE, SECRET_KEY
   .env: would add 15 variables: AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SECRET_ACCESS_KEY, RABBITMQ_DEFAULT_PASS, RABBITMQ_DEFAULT_USER, RABBITMQ_URL, REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, REDIS_URL, SENTRY_AUTH_TOKEN, SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT
 ```
 
-Run it again without `--dry-run` (and with `--yes`, or answer the question) to
-add them.
+The blueprint includes PostgreSQL, so its `DATABASE_URL` is the PostgreSQL URL
+you already have, and it is simply skipped. Run it again without `--dry-run`
+(and with `--yes`, or answer the question) to add the rest.
 
 ## Step 5: add your own variables
 
@@ -141,13 +142,13 @@ category and whether it is required. An empty name finishes.
 
 ```text
 Variable name (or Enter to finish): STRIPE_WEBHOOK_SECRET
-Value for STRIPE_WEBHOOK_SECRET (.env only; .env.example gets YOUR_KEY_HERE): whsec_test_123
+Value for STRIPE_WEBHOOK_SECRET (hidden; .env only; Enter for YOUR_KEY_HERE): [hidden]
 More options? (description, category, required) yes
 Description (Enter for none): Stripe webhook signing secret
 Category: Application
 Is this variable required? yes
 Variable name (or Enter to finish):
-Append these variables to .env.example? yes
+Append these variables to .env.example and .env? yes
 ✓ Added 1 custom variable
 ```
 
@@ -158,8 +159,9 @@ Append these variables to .env.example? yes
 STRIPE_WEBHOOK_SECRET=YOUR_KEY_HERE
 ```
 
-That is `.env.example`, the file you commit. The value you typed went into `.env`
-only (**v0.10.3+**; it used to go into both).
+That is `.env.example`, the file you commit. The value you typed (`whsec_test_123`
+here, not shown on screen because the name looks like a secret, **v0.10.4+**) went
+into `.env` only (**v0.10.3+**; it used to go into both).
 
 <Callout type="warning" title="Real secrets">
 A value typed as an argument lands in your shell history. For a real secret,

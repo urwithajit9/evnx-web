@@ -3,13 +3,13 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-14"
+updatedAt: "2026-10-18"
 excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
 tags: ["add", "reference", "cli", "environment-variables"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "spec init"]
-evnxVersion: "0.10.2"
+evnxVersion: "0.10.7"
 prerequisites:
   - getting-started/installation
   - commands/init
@@ -130,11 +130,13 @@ A name given without a value gets the same placeholder in both files. Given a va
 (`API_URL=https://api.example.com`), the value goes into `.env` only, and
 `.env.example` — the file you commit — gets a placeholder (**v0.10.3+**; the value
 used to go into both). If `.env` does not exist, it is created, readable by you
-only.
+only, and `.gitignore` is updated first (**v0.10.4+**; 0.10.3 created this `.env`
+without touching `.gitignore`).
 
 A name without `=value` gets a placeholder. When it looks like a secret
-(`*_SECRET`, `*_TOKEN`, `*_KEY`, `*_PASSWORD`, …) and you run `add` in a
+(`*_SECRET`, `*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_PWD`, …) and you run `add` in a
 terminal without `--yes`, it asks for the value instead, without echoing it.
+Public values such as `SENTRY_DSN` or `API_URL` are not hidden.
 
 <Callout type="warning">
 A value given as an argument lands in your shell history. For a real secret,
@@ -144,7 +146,15 @@ give the name alone and type the value at the hidden prompt, or fill it in
 
 With no arguments, `evnx add custom` asks for each variable: its name, its
 value, and `More options? (description, category, required)`. An empty name
-finishes.
+finishes. A secret-looking name's value is read without echo here too
+(**v0.10.4+**), and Enter keeps the placeholder:
+
+```text
+Value for STRIPE_WEBHOOK_SECRET (hidden; .env only; Enter for YOUR_KEY_HERE): [hidden]
+```
+
+The final question names every file the run writes, for example
+`Append these variables to .env.example and .env?`.
 
 ### A blueprint, into a project of its own folder
 
@@ -288,13 +298,23 @@ introduces in `[vars]` of `.evnx.toml`:
 
 ```console
 $ evnx add service redis --yes
+  config    .evnx.toml
   ✓ added 5 variable(s) to [vars] in .evnx.toml
+✓ Added 5 variables for Redis
 ```
 
+The `config` line names the file from where you are (`../.evnx.toml` from a
+subfolder); a symlinked config is written through, with a notice. New names are
+recorded the way `evnx spec init` infers them (**v0.10.6+**): a format the
+catalogue's example value would fail is left out, and a URL with a password in
+it, or a `*_PWD` name, is declared secret.
+
 It **only appends**: a name already declared is left exactly as it is, so a
-hand-written `required = false` survives an unrelated `evnx add`. A project with
+hand-written `required = false` survives an unrelated `evnx add`. With `--path`,
+the contract is the nearest `.evnx.toml` at or above that folder. A project with
 no `.evnx.toml` sees nothing. One with a config but no `[vars]` gets a note on
-stderr pointing at `evnx spec init`, never an error.
+stderr pointing at `evnx spec init`, never an error. An inline
+`vars = { … }` table cannot be extended, and `add` says so.
 
 ---
 
