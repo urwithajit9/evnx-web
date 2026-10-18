@@ -32,11 +32,6 @@
       "why": "'There is no evnx update --apply and there will not be one.' \u2014 a deliberate limitation."
     },
     {
-      "file": "packages/docs-content/guides/commands/validate.mdx",
-      "invocation": "evnx validate --pattern .env.production",
-      "why": "In a before/after block, annotated '# gone', beside the v0.5.0+ replacement."
-    },
-    {
       "file": "packages/docs-content/guides/getting-started/installation.mdx",
       "invocation": "evnx doctor --check-updates",
       "why": "'Corrected September 2026: this block ended with evnx doctor --check-updates, which does not exist.'"

@@ -3,20 +3,22 @@ title: "Validate your environment: A practical guide"
 section: guides
 order: 12
 publishedAt: "2026-03-09"
-updatedAt: "2026-09-22"
+updatedAt: "2026-10-18"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["validate", "tutorial", "best-practices", "ci-cd", "evnx"]
-commands: ["validate"]
-evnxVersion: "0.5.2"
+commands: ["init", "validate"]
+evnxVersion: "0.10.8"
 prerequisites:
   - getting-started/installation
   - commands/validate
 draft: false
 ---
 
-This guide walks through practical use cases for `evnx validate` — from local development to CI/CD pipelines. You'll learn how to catch misconfigurations early, auto-fix common issues, and integrate validation into your workflow.
+This guide walks through practical use cases for `evnx validate`, from local development
+to CI/CD pipelines. You'll learn how to catch misconfigurations early, fix what can be
+fixed automatically, and build validation into your workflow.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -29,23 +31,24 @@ This guide walks through practical use cases for `evnx validate` — from local 
 
 Environment variables are easy to misconfigure:
 
-```bash
+```env
 # .env
 DATABASE_URL=postgres://localhost:5432/myapp
-SECRET_KEY=changeme          # ❌ Weak placeholder
+SECRET_KEY=changeme          # ❌ Placeholder, not a secret
 DEBUG=True                   # ❌ String, not boolean
-API_KEY=                     # ❌ Missing value
-AWS_REGION=us-east-          # ❌ Incomplete
+API_KEY=                     # ❌ Empty
 ```
 
-These issues might work locally but fail in production. `evnx validate` catches them before deployment.
+These might work locally and fail in production. `evnx validate` catches them before
+deployment.
 
 <Callout type="info" title="What validation prevents">
 - 🚫 Deploying with placeholder secrets
 - 🚫 Boolean parsing bugs (`"False"` is truthy in Python!)
 - 🚫 Missing required configuration
 - 🚫 localhost URLs in Docker deployments
-- 🚫 Weak or predictable SECRET_KEY values
+- 🚫 Weak or predictable secrets
+- 🚫 A `.env` that git is about to commit, or already has (**v0.10.8+**)
 </Callout>
 
 ---
@@ -56,38 +59,97 @@ These issues might work locally but fail in production. `evnx validate` catches 
 
 **What**: Catch missing or misconfigured variables early
 
-```bash
-# Run validation
-evnx validate
+With this `.env.example` beside the `.env` above:
+
+```env
+# .env.example
+DATABASE_URL=postgres://localhost:5432/myapp
+SECRET_KEY=
+DEBUG=false
+API_KEY=
 ```
 
-```text
+```console
+$ evnx validate
+
   evnx validate  Check environment configuration
 
-  ✗  Missing required variable: STRIPE_SECRET_KEY
+  ✗  SECRET_KEY looks like a placeholder
      .env
-     →  Add STRIPE_SECRET_KEY=<value> to .env
+     →  Run: openssl rand -hex 32
      ·  fixable with --fix
 
-  ✗  DEBUG is set to "yes" (string, not boolean)
+  ✗  API_KEY looks like a placeholder
      .env
-     →  Use true or false for proper boolean handling
+
+  !  DEBUG is set to "True" (string, not boolean)
+     .env
+     →  Use true or 1 for proper boolean handling
      ·  fixable with --fix
 
-  2 errors
+  2 errors  ·  1 warning
+
+Next steps:
+  1. Review and fix the errors above
+  2. Run with --fix to auto-correct common issues
+  3. Use --ignore issue_type to suppress specific warnings
+Validation failed: 2 errors
+  Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
-**Fix it**:
+Exit code `1`. `✗` is an error and fails the run; `!` is a warning and does not.
 
-```bash
-# Auto-fix common issues
-evnx validate --fix
+**Fix it**: preview first, then apply.
 
-# Review changes
-git diff .env
+```console
+$ evnx validate --fix --dry-run
+...
+Would fix (2):
+  • SECRET_KEY: "changeme" → (a new random secret)
+  • DEBUG: "True" → true
 
-# Commit after review
-git commit -m "fix: apply env validation fixes"
+  Dry run — nothing was written: .env is unchanged and no backup was made
+...
+
+$ evnx validate --fix
+
+  evnx validate  Check environment configuration
+
+✓ Saved fixes to .env — original kept at .env.bak
+
+Fixed (2):
+  • SECRET_KEY: "changeme" → <64 hex chars>
+  • DEBUG: "True" → true
+
+  ✗  API_KEY looks like a placeholder
+     .env
+
+  1 error  ·  2 fixed
+
+Next steps:
+  1. Review and fix the errors above
+  2. Run with --fix to auto-correct common issues
+  3. Use --ignore issue_type to suppress specific warnings
+Validation failed: 1 error
+  Docs: https://docs.evnx.dev/cli/commands/validate
+```
+
+(`...` marks report lines left out; `<64 hex chars>` stands for the generated secret,
+which evnx prints in full.)
+
+`SECRET_KEY` is the app's own signing key, so evnx can generate one. `API_KEY` comes from
+a provider, so evnx leaves it for you, and the run keeps exiting `1` until you paste the
+real key in. Review what changed against the backup. `.env` is not in git, so `git diff`
+has nothing to show:
+
+```console
+$ diff .env.bak .env
+2,3c2,3
+< SECRET_KEY=changeme
+< DEBUG=True
+---
+> SECRET_KEY=<64 hex chars>
+> DEBUG=true
 ```
 
 ---
@@ -96,34 +158,73 @@ git commit -m "fix: apply env validation fixes"
 
 **When**: A teammate clones the repo for the first time
 
-**What**: Help them set up their environment correctly
+**What**: Get them from `.env.example` to a working `.env`
 
 ```bash
 # In your project README.md:
 
 ## Setup
 
-#1. Copy the example environment file:
-
+# 1. Copy the example environment file:
 cp .env.example .env
 
-
-# 2. Validate and auto-fix common issues:
-
+# 2. Fill in what evnx can, and see what it cannot:
 evnx validate --fix
 
+# 3. Fill in the values it lists, then check again:
+evnx validate
+```
 
-#3. Review the changes and fill in any remaining values:
+With this template:
 
-cat .env
+```env
+# .env.example
+APP_NAME=myapp
+DATABASE_URL=postgres://localhost:5432/myapp
+PORT=8000
+DEBUG=false
+SECRET_KEY=
+DB_PASSWORD=
+STRIPE_SECRET_KEY=
+```
 
+```console
+$ cp .env.example .env
+$ evnx validate --fix
+
+  evnx validate  Check environment configuration
+
+✓ Saved fixes to .env — original kept at .env.bak
+
+Fixed (2):
+  • SECRET_KEY: "" → <64 hex chars>
+  • DB_PASSWORD: "" → <64 hex chars>
+
+  ✗  STRIPE_SECRET_KEY looks like a placeholder
+     .env
+     →  Get from Stripe Dashboard
+
+  1 error  ·  2 fixed
+
+Next steps:
+  1. Review and fix the errors above
+  2. Run with --fix to auto-correct common issues
+  3. Use --ignore issue_type to suppress specific warnings
+Validation failed: 1 error
+  Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
 **Why this works**:
-- ✅ New devs get a working `.env` in seconds
-- ✅ Auto-fix handles placeholders and formatting
-- ✅ Clear guidance on what still needs manual input
-- ✅ Real credentials are reported, never overwritten (**v0.10.0+**)
+- ✅ The app's own secrets and passwords get strong random values in one run
+- ✅ Keys a provider issues are never invented, and the run says where to get them
+- ✅ The run exits `1` until everything is filled in
+- ✅ A real value is reported, never overwritten (**v0.10.0+**)
+
+<Callout type="warning">
+`--fix` generates a password for any name ending `_PASSWORD`, `_PASSWD` or `_PWD`. That
+is right when the database is created from this file, for example by Docker Compose.
+When the database already exists, paste its password in instead.
+</Callout>
 
 ---
 
@@ -132,6 +233,21 @@ cat .env
 **When**: Before deploying to staging or production
 
 **What**: Block deployments with configuration errors
+
+`.env` is not in the repository, so a CI job has none until it makes one. Run validate
+with no `.env` and it stops with exit `2`, which means it could not check:
+
+```console
+$ evnx validate --format github-actions --fail-on warning
+Error: .env does not exist
+
+Create it with `evnx init`, or point at another file with --env.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+So write the file first, here from a repository secret holding the whole file, then
+validate it.
 
 ### GitHub Actions
 
@@ -153,31 +269,56 @@ jobs:
       - name: Install evnx
         run: curl -fsSL https://dotenv.space/install.sh | bash
 
-      - name: Validate .env.example
-        run: evnx validate --format github-actions --strict
+      - name: Write .env from the ENV_FILE secret
+        run: printf '%s\n' "$ENV_FILE" > .env
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
 
-      - name: Validate production config
-        run: evnx validate --env-name production --validate-formats --format json
+      - name: Validate
+        run: evnx validate --format github-actions --fail-on warning
 ```
 
-**Result**: Inline annotations appear on PR diffs:
+**Result**: annotations on the pull request. For a file holding a short `SECRET_KEY`,
+`DEBUG=False` and a localhost `DATABASE_URL`, in a project with a `compose.yaml`:
 
+```console
+$ evnx validate --format github-actions --fail-on warning
+::warning file=.env,line=3::DEBUG is set to "False" (string, not boolean)%0ASuggestion: Use false or 0 for proper boolean handling
+::error file=.env,line=2::SECRET_KEY is too weak or predictable%0ASuggestion: Rotate SECRET_KEY where it is issued, then replace it here. `--fix` will not: it cannot tell a real credential from an unfilled placeholder. Pass --fix --rotate-weak-secrets if nothing else holds this value
+::warning file=.env,line=1::DATABASE_URL uses localhost/127.0.0.1%0ASuggestion: In Docker, use service name instead (e.g., db:5432)
+Validation failed: 1 error, 2 warnings
+  Docs: https://docs.evnx.dev/cli/commands/validate
 ```
-::error file=.env.production,line=5::SECRET_KEY is too weak or predictable
-::warning file=.env.production,line=12::DATABASE_URL uses localhost/127.0.0.1
-```
+
+`--fail-on warning` (**v0.10.8+**) makes the two warnings fail the job as well. Without
+it, only errors do. `--strict` adds findings but never changes what fails.
 
 ### Generic CI (Jenkins, CircleCI, GitLab)
 
+Use the exit code: `0` passed, `1` findings, `2` could not check.
+
 ```bash
-# Script snippet
-if ! evnx validate --format json --strict | jq -e '.summary.errors == 0' > /dev/null; then
-    echo "❌ Environment validation failed"
-    evnx validate --format json | jq -r '.issues[] | select(.severity == "error") | "  • \(.message)"'
-    exit 1
+evnx validate --format json > validate.json
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo "Environment validation failed (exit $status)"
+  jq -r '.issues[] | "  \(.severity): \(.message)"' validate.json
+  exit 1
 fi
-echo "✅ Environment validation passed"
+echo "Environment validation passed"
 ```
+
+```text
+Validation failed: 1 error
+  Docs: https://docs.evnx.dev/cli/commands/validate
+Environment validation failed (exit 1)
+  warning: DEBUG is set to "False" (string, not boolean)
+  error: SECRET_KEY is too weak or predictable
+  warning: DATABASE_URL uses localhost/127.0.0.1
+```
+
+Test the exit code, not the JSON `status` field. `status` says `passed` whenever there is
+no error, even when `--fail-on warning` makes the run exit `1`.
 
 ---
 
@@ -187,18 +328,17 @@ echo "✅ Environment validation passed"
 
 **What**: Validate each environment with appropriate strictness
 
-<Callout type="warning">
-**`--pattern` was removed in v0.5.0 — this page used it eleven times.** Use
-`--env-name`, which takes the name rather than the filename:
-`--env-name production` resolves `.env.production`.
+`--env-name production` checks `.env.production`. A name with no file is exit `2`, with a
+suggestion:
 
-The replacement is not cosmetic. `--pattern`'s whole implementation was a
-`starts_with(".env.")` test — anything else printed *"Pattern 'x' not
-recognized, using default"* and validated `.env` instead, **exiting `0`**. So a
-CI job with a typo'd pattern silently checked the wrong file and passed.
-`--env-name` errors on a name that resolves to nothing, and lists the
-environments that do exist.
-</Callout>
+```console
+$ evnx validate --env-name prod
+Error: .env.prod does not exist — did you mean 'production'?
+
+Available: local, production, staging
+
+No verdict: evnx did not run. This is not a clean result.
+```
 
 ```bash
 # Development: lenient, skip Docker warnings
@@ -233,9 +373,18 @@ validate-all: validate-dev validate-staging validate-prod
 ```
 
 Then run:
+
 ```bash
 make validate-all
 ```
+
+`make` stops at the first environment that fails, and exits non-zero.
+
+<Callout type="info">
+**`--pattern` was removed in v0.5.0.** It validated `.env` and exited `0` for any value it
+did not recognise, so a typo'd pattern in CI checked the wrong file and passed. Use
+`--env-name`, which takes the name rather than the filename.
+</Callout>
 
 ---
 
@@ -263,7 +412,18 @@ evnx validate --strict --ignore extra_variable --format json
 | Local Docker development | `localhost_in_docker` | localhost is expected locally |
 | Legacy code with string booleans | `boolean_trap` | Refactor planned, not blocking |
 | Developer-specific env vars | `extra_variable` | Personal overrides are OK |
-| Example values in docs | `placeholder_value` | `.env.example` intentionally has placeholders |
+
+A misspelt type is an error (**v0.10.8+**), so a typo cannot silently suppress nothing:
+
+```console
+$ evnx validate --ignore localhost-in-docker
+Error: unknown issue type 'localhost-in-docker' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+To make an ignore permanent for the project, put it in `.evnx.toml` as
+`[validate] ignore = ["localhost_in_docker"]`.
 
 <Callout type="warning" title="Don't ignore everything">
 Using `--ignore` to suppress all warnings defeats the purpose of validation. Only ignore issues you've consciously reviewed and accepted.
@@ -284,15 +444,23 @@ evnx validate --strict --validate-formats --format json > audit.json
 # Extract only security-relevant errors
 jq '[.issues[] | select(.severity == "error" and (.type == "weak_secret" or .type == "placeholder_value"))]' audit.json
 
-# Check specifically for weak secrets
-evnx validate --format json | jq -r '.issues[] | select(.type == "weak_secret") | "🔐 \(.variable): \(.message)"'
+# One line per weak or unfilled secret
+evnx validate --format json | jq -r '.issues[] | select(.type == "weak_secret" or .type == "placeholder_value") | "\(.variable): \(.message)"'
+```
+
+On the file from use case 1, the last command prints:
+
+```text
+SECRET_KEY: SECRET_KEY looks like a placeholder
+API_KEY: API_KEY looks like a placeholder
 ```
 
 **Security checks performed**:
-- ✅ SECRET_KEY length ≥ 32 characters
-- ✅ No weak patterns (`password`, `secret`, `1234`, `changeme`)
-- ✅ No placeholder values in sensitive variables
-- ✅ AWS/Stripe keys not set to example values
+- ✅ No empty values or placeholders (`changeme`, `your_…`, `<…>`)
+- ✅ Secret-shaped names (`*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_TOKEN`, …) hold at least
+  16 characters, and `SECRET_KEY`, `*_SECRET_KEY` and `NEXTAUTH_SECRET` at least 32
+- ✅ No secret made mostly of a weak word (`password`, `secret`, `1234`, `changeme`, …)
+- ✅ The env file is covered by `.gitignore` and not tracked by git (**v0.10.8+**)
 
 ---
 
@@ -300,45 +468,40 @@ evnx validate --format json | jq -r '.issues[] | select(.type == "weak_secret") 
 
 ### Pre-commit hook
 
-```bash
+```sh
+#!/bin/sh
 # .git/hooks/pre-commit
-#!/bin/bash
-set -e
+[ -f .env ] || exit 0    # nothing to check on a machine with no .env
 
-echo "🔍 Validating environment configuration..."
-
-if ! evnx validate --format json --exit-zero | jq -e '.summary.errors == 0' > /dev/null; then
-    echo "❌ Environment validation failed!"
-    echo "💡 Run 'evnx validate' to see details"
-    echo "💡 Or run 'evnx validate --fix' to auto-correct common issues"
+if ! evnx validate -q; then
+    echo "evnx validate failed: run 'evnx validate' for details, 'evnx validate --fix --dry-run' to preview fixes"
     exit 1
 fi
-
-echo "✅ Environment validation passed"
 ```
 
 Make it executable:
+
 ```bash
 chmod +x .git/hooks/pre-commit
 ```
 
-### Docker build integration
+`-q` prints nothing when the file is clean. Since **v0.10.8** the hook also stops the one
+commit that matters most, a `.env` that has been staged:
 
-```dockerfile
-# Dockerfile
-FROM node:20-alpine
+```console
+$ git add -f .env
+$ git commit -m "add env"
+  ✗  .env is tracked by git: its values are in the repository history
+     .env
+     →  git rm --cached .env, commit, then rotate every secret it held (`evnx scan .` lists them)
 
-# Install evnx
-RUN curl -fsSL https://dotenv.space/install.sh | bash
-
-# Copy and validate environment template
-COPY .env.example /app/.env.example
-RUN evnx validate --example /app/.env.example --format github-actions || true
-
-# Continue with build...
-COPY . /app
-WORKDIR /app
+  1 error
+Validation failed: 1 error
+evnx validate failed: run 'evnx validate' for details, 'evnx validate --fix --dry-run' to preview fixes
 ```
+
+The commit is refused. Here the file was only staged, so `git rm --cached .env` is
+enough. Rotating the secrets is only needed once it has been committed.
 
 ### npm script integration
 
@@ -359,41 +522,53 @@ WORKDIR /app
 
 ### "Validation failed but I don't see errors"
 
+Three things fail a run without an error line:
+
+- **`--fail-on warning`**, or `[validate] fail_on = "warning"` in `.evnx.toml`: warnings
+  exit `1`. The summary line names them: `Validation failed: 1 warning`.
+- **After `--fix`, a variable that needs your input**: listed under "Needs your input",
+  and the run exits `1` until you fill it in.
+- **Exit `2`**: evnx could not check at all. Missing template or env file, or an unknown
+  `--ignore` type. Read the `Error:` line.
+
 ```bash
-# Check output format
-evnx validate --format pretty
-
-# Enable verbose mode
-evnx validate -v
-
-# Check exit code explicitly
+# Check the exit code explicitly
 evnx validate; echo "Exit code: $?"
 ```
 
 ### "Auto-fix didn't change my file"
 
 ```bash
-# --fix only applies to auto-fixable issues
-evnx validate --format json | jq '.issues[] | select(.auto_fixable == false)'
+# Findings --fix will not touch
+evnx validate --format json | jq -c '.issues[] | select(.auto_fixable == false) | {type, variable}'
 
-# Review which issues were fixed
-evnx validate --fix --format json | jq '.fixed'
-
-# Check file permissions
-ls -la .env
+# What a fix run changed, and what it left for you
+evnx validate --fix --format json | jq -c '{fixed: [.fixed[].variable], needs_input: [.needs_input[].variable]}'
 ```
 
-**The most likely answer is a weak secret with a real value behind it.** Since
-**v0.10.0** `--fix` reports those and leaves them alone, because the check judges length
-and wording and cannot tell your actual short password from a placeholder nobody filled
-in. Rotate it where it is issued and paste the new value in — or, if nothing outside this
-file holds it, say so explicitly:
+On the file from use case 1:
+
+```text
+{"type":"placeholder_value","variable":"API_KEY"}
+{"fixed":["SECRET_KEY","DEBUG"],"needs_input":[]}
+```
+
+`--fix` never invents a value someone else issues. A placeholder in `API_KEY`,
+`STRIPE_KEY` or `AWS_SECRET_ACCESS_KEY` stays until you paste the real key in
+(**v0.10.8+**; before, it generated a fake one).
+
+The other common case is a weak secret with a real value behind it. Since **v0.10.0**
+`--fix` reports those and leaves them alone, because the check judges length and wording
+and cannot tell your actual short password from a placeholder nobody filled in. Rotate it
+where it is issued and paste the new value in. If nothing outside this file holds it, say
+so explicitly:
 
 ```bash
 evnx validate --fix --rotate-weak-secrets
 ```
 
-Either way the file as it arrived is kept beside it as `.env.bak`.
+That replaces the app's own secrets and passwords only, never a provider's key. Either
+way the file as it was is kept beside it as `.env.bak`.
 
 ### "Port validation rejects valid port 0"
 
@@ -412,7 +587,7 @@ MY_PORT=0     # ❌ Invalid (reserved)
 <Callout type="success" title="Do this">
 - ✅ Commit `.env.example`, never `.env`
 - ✅ Run `evnx validate` in CI before deployment
-- ✅ Use `--fix` for onboarding, then review changes
+- ✅ Use `--fix --dry-run` first, then `--fix`, then fill in what it lists
 - ✅ Validate formats for production configs
 - ✅ Add validation to pre-commit hooks
 </Callout>
@@ -426,29 +601,32 @@ MY_PORT=0     # ❌ Invalid (reserved)
 
 ---
 
-## 🔄 Migration: Upgrading validate
+## 🔄 Migration: Upgrading to 0.10.8
 
-If you're upgrading from an older version:
+What changed for scripts that read validate's exit code or JSON:
 
-### Breaking changes
-| Old behavior | New behavior | Action |
-|-------------|--------------|--------|
-| Boolean message mentioned Python | Language-agnostic message | Update test assertions if you check output |
-| UI headers in all output formats | UI only in `pretty` format | No action needed (improvement) |
-| `--fix` was unimplemented | `--fix` now works | Try `--fix` for faster onboarding |
+| Before | 0.10.8 | Action |
+|--------|--------|--------|
+| A git-tracked `.env` passed | Error `env_tracked`, exit `1`. An unignored one is warning `env_not_ignored` | `git rm --cached .env` and rotate, or add it to `.gitignore` |
+| An unknown `--ignore` type was accepted | Exit `2`, listing the valid types | Fix the spelling |
+| `--fix` counted a placeholder as fixed | Placeholders are in `needs_input` / `summary.needs_input`; the run exits `1` | Fill them in, or read `needs_input` |
+| `--fix` generated provider keys | Never; only the app's own secrets and passwords | Paste the real key |
+| `SECRET_KEY=changeme` was two errors | One, the placeholder | Update expected counts |
+| Docker files only in the current directory | Beside the env file, up to the repository root; `compose.yaml` counts | Expect `localhost_in_docker` in more places |
 
 ### New features to explore
+
 ```bash
-# Try auto-fix
-evnx validate --fix
+# Preview a fix
+evnx validate --fix --dry-run
+
+# Fail on warnings too
+evnx validate --fail-on warning
 
 # Validate formats
 evnx validate --validate-formats
 
-# Suppress specific warnings
-evnx validate --ignore boolean_trap
-
-# Use environment patterns
+# A named environment
 evnx validate --env-name production
 ```
 
@@ -476,7 +654,8 @@ https://github.com/urwithajit9/evnx/issues
 # Local Development
 # ─────────────────────────────────────
 evnx validate                          # Quick check
-evnx validate --fix                    # Auto-fix issues
+evnx validate --fix --dry-run          # Preview fixes
+evnx validate --fix                    # Apply them
 evnx validate --ignore localhost_in_docker  # Skip Docker warnings
 
 # ─────────────────────────────────────
@@ -484,7 +663,8 @@ evnx validate --ignore localhost_in_docker  # Skip Docker warnings
 # ─────────────────────────────────────
 evnx validate --format github-actions  # GitHub annotations
 evnx validate --format json            # Machine-readable
-evnx validate --strict --exit-zero     # Warnings OK, errors fail
+evnx validate --fail-on warning        # Warnings fail too
+evnx validate --format json --exit-zero  # Report, never fail
 
 # ─────────────────────────────────────
 # Multi-Environment
@@ -519,4 +699,3 @@ Add `evnx validate` to your `pre-commit` hook and CI pipeline to catch environme
 - **[Setting up .env.example](/guides/commands/sync)** — best practices for environment templates
 - **[Secrets management](/guides/use-cases/prevent-secret-leaks)** — when to use evnx vs. cloud secret managers
 - **[CI/CD integration](/guides/integrations/ci-cd-sync)** — full pipeline examples with evnx
-
