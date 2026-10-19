@@ -56,7 +56,7 @@ echo -n "${STRIPE_SECRET_KEY}" | \
 The value is passed through `--data-file=-` (stdin), which avoids logging the secret value in shell history or process lists.
 
 <Callout type="info">
-  <strong>Alternative with evnx convert.</strong> For GCP, evnx offers a second path: <code>evnx convert --to gcp-secrets {">"} upload.sh && bash upload.sh</code>. Both produce equivalent <code>gcloud</code> commands. Use <code>migrate</code> when you want filtering and key transforms; use <code>convert</code> when you want a static shell script to commit or share.
+  <strong>Alternative with evnx convert.</strong> For GCP, evnx offers a second path: <code>evnx convert --to gcp-secrets --project my-gcp-project {">"} upload.sh && bash upload.sh</code>. The script carries the values itself, creates each secret or adds a new version when it exists, and names secrets in lowercase with <code>-</code> (<code>DATABASE_URL</code> becomes <code>database-url</code>), where <code>migrate</code> keeps the names as they are and reads the values from your exported variables. Pick one, or the two will create differently named secrets.
 </Callout>
 
 ---
