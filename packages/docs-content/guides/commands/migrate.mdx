@@ -155,8 +155,9 @@ echo -n "${DATABASE_URL}" | \
 ```
 
 So you must have those variables exported when you run it. The command also
-suggests `evnx convert --to gcp-secrets > upload.sh`, which writes a script with
-the values inlined and the names lowercased.
+suggests `evnx convert --to gcp-secrets --project <PROJECT> > upload.sh`, which writes
+a script with the values inlined, the names lowercased with `-` for `_`, and each
+secret created or given a new version when it exists.
 
 ### `azure-keyvault`
 

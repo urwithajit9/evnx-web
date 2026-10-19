@@ -250,4 +250,4 @@ rm .env
 | AWS | Generates JSON or CLI snippets | Prints `aws secretsmanager` commands with full JSON |
 | Interaction | No prompts | Interactive conflict resolution (GitHub), or command review |
 
-For GCP specifically, `evnx convert --to gcp-secrets > upload.sh && bash upload.sh` is an equivalent alternative to `evnx migrate --to gcp` — both are mentioned in the tool output.
+For GCP specifically, `evnx convert --to gcp-secrets --project my-gcp-project > upload.sh && bash upload.sh` is an alternative to `evnx migrate --to gcp` — both are mentioned in the tool output. The secret names differ: `convert` lowercases them with `-` for `_` (`database-url`), `migrate` keeps them as they are (`DATABASE_URL`).

@@ -161,11 +161,19 @@ evnx validate --strict
 
 ## Step 5 — Convert to another format
 
-Convert your `.env` to a Kubernetes Secret manifest:
+Convert your `.env` to a Kubernetes Secret manifest. A Secret needs a name, so
+`--name` is required:
 
 ```bash
-evnx convert --to kubernetes --output secret.yaml
+evnx convert --to kubernetes --name my-app-secrets --output secret.yaml
 ```
+
+```text
+✓ Converted successfully
+Output written to: secret.yaml
+```
+
+`secret.yaml` is readable by you only (`0600`), because it holds every value:
 
 ```yaml
 apiVersion: v1
@@ -173,20 +181,28 @@ kind: Secret
 metadata:
   name: my-app-secrets
 type: Opaque
-data:
-  APP_NAME: bXktYXBw
-  APP_ENV: cHJvZHVjdGlvbg==
-  DATABASE_URL: cG9zdGdyZXM6Ly9hZG1pbjpwYXNzd29yZDEyM0Bsb2NhbGhvc3Q6NTQzMi9teWRi
+stringData:
+  APP_NAME: "my-app"
+  APP_ENV: "production"
+  DEBUG: "true"
+  DATABASE_URL: "postgres://admin:password123@localhost:5432/mydb"
+  AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+  AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  STRIPE_SECRET_KEY: "sk_live_your-stripe-key-here"
+  SENDGRID_API_KEY: "your-sendgrid-key"
+  JWT_SECRET: "secret"
 ```
 
-All values are base64-encoded automatically. Try other targets:
+Values are written as they are under `stringData:`, and Kubernetes encodes them when
+you apply the file (`--base64` writes encoded `data:` instead). Try other targets:
 
 ```bash
 evnx convert --to json        # flat JSON object
-evnx convert --to github      # GitHub Actions secrets format
-evnx convert --to doppler     # Doppler import format
+evnx convert --to github      # GitHub Actions secrets, to paste into the web form
 evnx convert --to terraform   # Terraform variables file
 ```
+
+[evnx convert](/guides/commands/convert) lists all 14.
 
 ---
 

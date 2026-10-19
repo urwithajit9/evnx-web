@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx convert"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-11"
-excerpt: "Command reference for evnx convert — flags, supported formats, transform values, glob patterns, and exit codes."
+updatedAt: "2026-10-19"
+excerpt: "Reference for evnx convert: turn a .env into the format one of 14 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
 difficulty: "beginner"
-timeToComplete: "3 minutes"
+timeToComplete: "8 minutes"
 tags: ["convert", "reference", "cli", "env", "formats"]
-commands: ["convert"]
-evnxVersion: "0.5.2"
+commands: ["cloud run", "convert", "migrate", "template"]
+evnxVersion: "0.10.9"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -17,16 +17,24 @@ draft: false
 
 # evnx convert
 
-Transform `.env` files into 14+ output formats including JSON, YAML, Kubernetes secrets,
-Terraform variables, and cloud provider configs.
+`evnx convert` reads a `.env` and prints it in the format one of 14 targets expects:
+JSON, YAML, a shell script, a Kubernetes Secret, a Compose `environment:` block, a
+Terraform `.tfvars` file, or the commands or payload for a cloud secret store. It
+never contacts the target itself: it writes the artefact, and you run it.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
 </Prerequisites>
 
-<Callout type="info">
-  Run <code>evnx convert</code> without <code>--to</code> to open an interactive TUI format
-  selector — no flags required.
+<Callout type="warning" title="Changed in v0.10.9">
+  The formats that write a place into their output need it named:
+  <code>--project</code> (gcp-secrets), <code>--vault-name</code> (azure-keyvault),
+  <code>--heroku-app</code> (heroku), <code>--name</code> (kubernetes). They printed
+  <code>my-project</code>, <code>my-keyvault</code>, <code>YOUR_APP_NAME</code> and
+  <code>app-secrets</code> for you to edit. A filter that leaves nothing, an empty
+  <code>.env</code>, and two names that become one name in the output are now exit
+  <code>2</code>; <code>--include</code> takes <code>?</code>, a <code>*</code> anywhere and
+  comma lists; an unknown <code>--transform</code> is an error.
 </Callout>
 
 ---
@@ -37,85 +45,231 @@ Terraform variables, and cloud provider configs.
 evnx convert [OPTIONS]
 ```
 
-All flags are optional. Omitting `--to` launches interactive mode.
+Without `--to`, evnx opens a format menu when there is a terminal, and exits `2` naming
+`--to` when there is not.
 
 ---
 
 ## Flags
 
-| Flag | Short | Type | Default | Description |
-|------|-------|------|---------|-------------|
-| `--env` | — | `path` | `.env` | Path to input `.env` file |
-| `--env-name` | — | `string` | — | **v0.5.0+** — use `.env.<NAME>` instead. Conflicts with `--env` |
-| `--to` | — | `string` | — | Target output format (omit for interactive selection) |
-| `--output` | `-o` | `path` | — | Write output to file instead of stdout |
-| `--include` | — | `glob` | — | Include only variables matching this pattern |
-| `--exclude` | — | `glob` | — | Exclude variables matching this pattern |
-| `--base64` | — | `bool` | `false` | Base64-encode all values before output |
-| `--prefix` | — | `string` | — | Prepend a string to all variable names |
-| `--transform` | — | `enum` | — | Transform key casing (see [Transform values](#transform-values)) |
-| `--verbose` | `-v` | `bool` | `false` | Print debug output to stderr (global flag) |
-| `--help` | `-h` | `bool` | `false` | Display help |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--env <PATH>` | `.env` | The file to convert |
+| `--env-name <NAME>` | — | Convert `.env.<NAME>` instead. Conflicts with `--env` |
+| `--to <FORMAT>` | menu | The output format; see [Formats](#formats) |
+| `-o, --output <FILE>` | stdout | Write to `FILE`, readable by you only (`0600`) |
+| `--force` | off | Replace `FILE` when it exists. The input is never replaced |
+| `--gitignore` | — | Add `FILE` to `.gitignore` without asking |
+| `--no-gitignore` | — | Skip the `.gitignore` check for `FILE` |
+| `--include <PATTERN>` | all | Keep only names matching a glob; see [Filtering](#filtering) |
+| `--exclude <PATTERN>` | none | Drop names matching a glob; exclude wins |
+| `--allow-empty` | off | Convert even when no variable is left |
+| `--allow-collisions` | off | When two names become one, keep the last value |
+| `--prefix <PREFIX>` | — | Prepend to every name. Letters, digits and `_`, not starting with a digit |
+| `--transform <MODE>` | — | `uppercase`, `lowercase`, `camelCase` or `snake_case` (any case) |
+| `--base64` | off | Base64-encode every value. For `kubernetes`, writes `data:` instead of `stringData:` |
+| `--project <PROJECT>` | — | Google Cloud project. Required by `gcp-secrets` |
+| `--vault-name <NAME>` | — | Azure Key Vault. Required by `azure-keyvault` |
+| `--heroku-app <APP>` | — | Heroku app. Required by `heroku` |
+| `--name <NAME>` | — | The Kubernetes Secret's name. Required by `kubernetes` |
+| `--namespace <NAMESPACE>` | — | The Secret's namespace, optional |
 
-<Callout type="warning">
-  <code>--to</code> has no <code>-t</code> short alias. <code>--verbose</code> / <code>-v</code>
-  is a global flag on the top-level <code>evnx</code> command, not specific to <code>convert</code>.
-</Callout>
+`-v` / `--verbose`, `-q` / `--quiet` and `--no-color` are global flags. The converted
+output goes to stdout and nothing else does: notices and the `Docs:` line go to stderr,
+so a pipe carries the artefact alone.
 
 ---
 
-## Supported formats
+## Formats
 
-| Category | Format name | Aliases |
-|----------|-------------|---------|
-| **Generic** | `json` | — |
-| | `yaml` | `yml` |
-| | `shell` | `bash`, `export` |
-| **Cloud Providers** | `aws-secrets` | `aws`, `aws-secrets-manager` |
-| | `gcp-secrets` | `gcp`, `gcp-secret-manager` |
-| | `azure-keyvault` | `azure`, `azure-key-vault` |
-| **CI/CD** | `github-actions` | `github`, `gh-actions` |
-| **Containers** | `docker-compose` | `compose` |
-| | `kubernetes` | `k8s`, `kubectl` |
-| **Infrastructure as Code** | `terraform` | `tf`, `tfvars` |
-| **Secret Managers** | `doppler` | — |
-| | `heroku` | — |
-| | `vercel` | — |
-| | `railway` | — |
+| Format | Aliases | Output | Needs |
+|--------|---------|--------|-------|
+| `json` | — | flat object, every value a string | — |
+| `yaml` | `yml` | mapping, values that look like numbers or booleans quoted | — |
+| `shell` | `bash`, `export` | `export NAME='value'` script | — |
+| `aws-secrets` | `aws`, `aws-secrets-manager` | the flat JSON `create-secret --secret-string` takes | — |
+| `gcp-secrets` | `gcp`, `gcp-secret-manager` | script that creates each secret or adds a version | `--project` |
+| `azure-keyvault` | `azure`, `azure-key-vault` | `az keyvault secret set` script, `_` → `-` | `--vault-name` |
+| `github-actions` | `github`, `gh-actions` | text to paste into the GitHub web form | — |
+| `docker-compose` | `docker`, `compose` | `environment:` list, `$` written `$$` | — |
+| `kubernetes` | `k8s`, `kubectl` | `v1` Secret, `stringData:` (or `data:` with `--base64`) | `--name` |
+| `terraform` | `tf`, `tfvars` | `name = "value"`, names lowercased | — |
+| `doppler` | — | **experimental** | — |
+| `heroku` | — | `heroku config:set` script, one call per variable | `--heroku-app` |
+| `vercel` | — | **experimental** | — |
+| `railway` | — | **experimental**: the same JSON as `json` | — |
+
+[Convert reference](/guides/reference/convert-reference) shows each format's output.
+
+<Callout type="warning" title="Experimental formats">
+  The <code>doppler</code>, <code>vercel</code> and <code>railway</code> shapes have not been
+  checked against those services' importers, and evnx says so on stderr when you choose
+  one. Doppler documents flat JSON for <code>doppler secrets upload</code>, which is what
+  <code>--to json</code> prints. Vercel's API takes <code>{"{key, value, type, target}"}</code>
+  objects, which this map does not have. Railway documents no import that takes this JSON.
+</Callout>
+
+### The names a target needs
+
+A format that writes a place into its output requires the flag that names it, and
+checks it by that platform's rules before anything is printed:
+
+```bash
+evnx convert --to gcp-secrets
+```
+
+```text
+Error: --to gcp-secrets needs --project: the Google Cloud project the secrets go to. Nothing was printed.
+
+  evnx convert --to gcp-secrets --project <PROJECT>
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+A name flag given to a format that does not use it is refused rather than ignored:
+
+```bash
+evnx convert --to json --project acme-prod
+```
+
+```text
+Error: --project is for --to gcp-secrets; --to json does not use it. Nothing was printed.
+```
 
 ---
 
 ## Transform values
 
-Passed to `--transform`. Applied to every key in the output after `--prefix` is prepended.
+`--transform` renames every key after `--prefix` is added. Case does not matter:
+`--transform CamelCase` works.
 
-| Value | Input example | Output example |
-|-------|--------------|----------------|
+| Value | Input | Output |
+|-------|-------|--------|
 | `uppercase` | `database_url` | `DATABASE_URL` |
 | `lowercase` | `DATABASE_URL` | `database_url` |
-| `camelCase` | `database_url` | `databaseUrl` |
+| `camelCase` | `DATABASE_URL` | `databaseUrl` |
 | `snake_case` | `DatabaseURL` | `database_url` |
 
-Order of operations: filter → prefix → transform.
+An unknown mode is an error:
+
+```text
+Error: unknown transform 'title' — expected one of: uppercase, lowercase, camelCase, snake_case
+```
 
 ---
 
-## Glob pattern support
+## Filtering
 
-`--include` and `--exclude` accept simple glob patterns.
-`--exclude` is applied after `--include`.
+`--include` and `--exclude` take the globs `evnx migrate` and `evnx cloud run` take.
+Matching is case-sensitive.
 
-| Pattern | Meaning | Example match |
-|---------|---------|---------------|
-| `*` | Everything | all variables |
-| `PREFIX_*` | Starts with prefix | `AWS_KEY`, `AWS_SECRET` |
-| `*_SUFFIX` | Ends with suffix | `APP_DEBUG`, `DB_DEBUG` |
-| `*CONTAINS*` | Contains substring | `DATABASE_URL`, `REDIS_URL` |
-| `EXACT` | Exact key name only | `PORT` |
+| Pattern | Matches |
+|---------|---------|
+| `AWS_*` | `AWS_REGION`, `AWS_SECRET_ACCESS_KEY` |
+| `*_URL` | `DATABASE_URL`, `REDIS_URL` |
+| `DB_*_URL` | `DB_PRIMARY_URL` — a `*` anywhere |
+| `APP_?ORT` | `APP_PORT` — `?` is exactly one character |
+| `AWS_*,REDIS_URL` | either: a comma list |
 
-<Callout type="warning">
-  Character classes and brace expansions (<code>[abc]</code>, <code>{a,b}</code>) are not supported.
-</Callout>
+Repeat a flag to add patterns (`--include "AWS_*" --include REDIS_URL`). A name
+matching `--exclude` is dropped even when `--include` matches it.
+
+When the filters leave nothing, evnx stops rather than print an empty object for a
+pipeline to upload:
+
+```bash
+evnx convert --to json --include "NOPE_*"
+```
+
+```text
+Error: --include/--exclude left nothing to convert — all 9 variable(s) were filtered out.
+  Check the patterns: they are case-sensitive globs matched against variable names.
+  Pass --allow-empty to write the empty output anyway.
+```
+
+An empty `.env` is refused the same way. `--allow-empty` converts it to the empty
+output and exits `0`.
+
+---
+
+## Names that collide
+
+Two names can become one name in the output: `Api` and `API` under
+`--transform uppercase`, or `A_B` and `a_b` for a format that renames or a target
+that ignores case — gcp-secrets lowercases and writes `_` as `-`, terraform lowercases,
+and Azure Key Vault and GitHub treat names that differ only in case as one. evnx refuses
+rather than lose a value:
+
+```text
+Error: these names become the same name in gcp-secrets, and one value would be lost:
+  A_B, a_b → a-b
+Rename one in the .env, or pass --allow-collisions to keep the last value. Nothing was written.
+```
+
+`--allow-collisions` keeps the last value and says so on stderr:
+
+```text
+! A_B, a_b → a-b: kept the value of a_b (--allow-collisions)
+```
+
+---
+
+## Writing to a file
+
+`--output` writes the file readable by you only (`0600`). An existing file is refused
+without `--force`, and the `.env` being read is never the output, by any name:
+
+```text
+Error: --output '.env' is the same file as the env file '.env'. Nothing was written; choose another --output.
+```
+
+The file holds every value, so in a git repository evnx checks `.gitignore` for it, the
+way [`evnx template`](/guides/commands/template) does. With a terminal it asks; without
+one it warns:
+
+```text
+✓ Converted successfully
+Output written to: secrets.json
+! 'secrets.json' may contain secrets and is not in .gitignore
+```
+
+`--gitignore` adds the entry without asking, and `--no-gitignore` skips the check.
+
+---
+
+## Interactive mode
+
+`evnx convert` with no `--to` opens a menu:
+
+```text
+Select output format:
+> json - Generic JSON key-value object
+  yaml - Generic YAML key-value format
+  shell - Shell export script (bash/zsh)
+  aws-secrets - AWS Secrets Manager JSON (for create-secret --secret-string)
+  gcp-secrets - GCP Secret Manager script (gcloud; needs --project)
+  azure-keyvault - Azure Key Vault script (az; needs --vault-name)
+  github-actions - GitHub Actions secrets (text to paste into the web form)
+  docker-compose - Docker Compose YAML environment
+  kubernetes - Kubernetes Secret YAML (stringData, or data with --base64; needs --name)
+  terraform - Terraform .tfvars file
+  doppler - Doppler secrets JSON (experimental)
+  heroku - Heroku config vars script (heroku; needs --heroku-app)
+  vercel - Vercel environment variables JSON (experimental)
+  railway - Railway variables JSON (experimental)
+```
+
+Choosing a format that needs a name still needs its flag on the command line. In a
+script or CI job there is no menu:
+
+```text
+Error: --to is required when there is no terminal to ask.
+
+  Pass one explicitly:
+    evnx convert --to <FORMAT>
+
+  Available: json, yaml, shell, aws-secrets, gcp-secrets, azure-keyvault, github-actions, docker-compose, kubernetes, terraform, doppler, heroku, vercel, railway
+```
 
 ---
 
@@ -123,18 +277,15 @@ Order of operations: filter → prefix → transform.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Conversion completed successfully |
-| `2` | Nothing was converted — unknown format, parse error, I/O error, an existing `--output` file without `--force`, an output path that is the input, or names that collide after `--transform` |
+| `0` | Converted |
+| `2` | Nothing was converted: an unknown format or flag value, a missing name flag, a missing `.env`, an existing `--output` without `--force`, an output that is the input, names that collide, or no variables left |
 
-<Callout type="info">
-  Since v0.10.3 every failure is <code>2</code>, the same "could not run" code every
-  evnx command uses; it was <code>1</code>. <code>convert</code> has no findings, so it
-  never exits <code>1</code>.
-</Callout>
+`convert` has no findings, so it never exits `1`.
 
 ---
 
 ## See also
 
-- [Convert basics](/guides/getting-started/convert-basic) — Practical examples for everyday conversion tasks
-- [Convert reference](/guides/reference/convert-reference) — Format-by-format output examples and troubleshooting
+- [Convert basics](/guides/getting-started/convert-basic) — everyday examples, step by step
+- [Convert reference](/guides/reference/convert-reference) — every format's output, and troubleshooting
+- [`evnx migrate`](/guides/commands/migrate) — the same targets, with upload and conflict handling
