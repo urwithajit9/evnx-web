@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.10",
+  "evnx_version": "0.10.11",
   "features": [
     "net",
     "migrate",
