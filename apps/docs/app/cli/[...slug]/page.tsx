@@ -11,11 +11,25 @@ import {
   getGuide,
   getGuidesBySection,
   getAdjacentGuides,
+  guideHref,
   resolveCommands,
   type GuideSection,
 } from "@evnx/docs-content";
-import { mdxComponents } from "@evnx/mdx";
+import { CommandRef, mdxComponents } from "@evnx/mdx";
 import { HOSTS } from "@evnx/config";
+import { rehypeGuideHrefs } from "@/lib/rehype-guide-hrefs";
+
+/**
+ * The shared components, with `CommandRef` told how this app spells a guide
+ * URL. The guides' own links are rewritten by `rehypeGuideHrefs` (D-175);
+ * `CommandRef` builds its href in code, so it takes the same mapping as a prop.
+ */
+const docsComponents = {
+  ...mdxComponents,
+  CommandRef: (props: React.ComponentProps<typeof CommandRef>) => (
+    <CommandRef {...props} resolveHref={guideHref} />
+  ),
+};
 
 /** Share-card URL for a page. See app/api/og/route.tsx for why it is a route. */
 const ogImage = (title: string, kicker: string) =>
@@ -229,11 +243,15 @@ export default async function DocsPage({ params }: Props) {
       <div className="prose-evnx">
         <MDXRemote
           source={guide.content}
-          components={mdxComponents}
+          components={docsComponents}
           options={{
             mdxOptions: {
               remarkPlugins: [remarkGfm],
-              rehypePlugins: [rehypeSlug, [rehypeAutolinkHeadings, { behavior: "wrap" }]],
+              rehypePlugins: [
+                rehypeGuideHrefs,
+                rehypeSlug,
+                [rehypeAutolinkHeadings, { behavior: "wrap" }],
+              ],
             },
           }}
         />

@@ -65,9 +65,19 @@ export function commandCount(): number {
  * MDX, and the rendered site serves `/cli/…`. Writing the rendered form into
  * the index would make every MDX cross-link dead; doing the rewrite inline at
  * each call site is how one of them eventually gets forgotten.
+ *
+ * ⚠️ The docs app renders every guide's links through this too (D-175): 352
+ * `](/guides/…)` links in the MDX went out unchanged and 404ed on
+ * docs.evnx.dev, which serves `/cli/…` only.
  */
 export function guideHref(authorPath: string): string {
-  return authorPath.replace("/guides/", "/cli/");
+  // Root-relative `/guides` only — the index, a page, a fragment or a query on
+  // either. An absolute `https://evnx.dev/guides/…` is left alone: evnx.dev
+  // redirects it itself, and rewriting it would point at a path evnx.dev does
+  // not serve.
+  return /^\/guides(?=$|[/#?])/.test(authorPath)
+    ? `/cli${authorPath.slice("/guides".length)}`
+    : authorPath;
 }
 
 /** A command named by a guide's `commands:` frontmatter, resolved for display. */

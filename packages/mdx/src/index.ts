@@ -4,5 +4,6 @@
 // /cli/*). Both must render a guide identically — the split moves URLs, not
 // appearance, and a reader who follows a 301 should not be able to tell.
 export { mdxComponents } from "./components/mdx-components";
+export { CommandRef } from "./components/command-ref";
 export { LANG_LABELS } from "./lib/lang-labels";
 export { resolveGrammar } from "./lib/shiki";

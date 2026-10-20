@@ -86,14 +86,20 @@ type Props = {
   command?: string;
   /** Override the default description */
   label?: string;
+  /**
+   * Map the author-form `/guides/…` path to the one the rendering app serves.
+   * apps/web serves `/guides/…` and leaves it out; apps/docs passes
+   * `guideHref`, because it serves `/cli/…` only (D-175).
+   */
+  resolveHref?: (authorPath: string) => string;
 };
 
-export function CommandRef({ command, label }: Props) {
+export function CommandRef({ command, label, resolveHref = (p) => p }: Props) {
   if (!command) return null;
   const meta = COMMAND_META[command];
-  const href = meta
-    ? `/guides/${meta.slug}`
-    : `/guides/commands/${command.replace("evnx ", "")}`;
+  const href = resolveHref(
+    meta ? `/guides/${meta.slug}` : `/guides/commands/${command.replace("evnx ", "")}`,
+  );
   const description = label ?? meta?.description ?? "View command reference";
 
   return (
