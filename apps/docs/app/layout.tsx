@@ -43,7 +43,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   this app shipped without it. Pagefind indexes the build, so
                   it returns nothing in `next dev` — expected, not broken. */}
               <SearchTrigger className="mx-1" />
-              <a href={HOSTS.web} className="px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary">
+              {/* ⚠️ Hidden below `sm`: with it the nav is 383 px wide and every
+                  page scrolls sideways at 375 px. The footer links evnx.dev
+                  too, so it stays reachable on a phone. */}
+              <a href={HOSTS.web} className="hidden sm:block px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary">
                 evnx.dev ↗
               </a>
               <a
