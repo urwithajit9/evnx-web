@@ -3,77 +3,360 @@ title: "evnx backup"
 section: commands
 order: 3
 publishedAt: "2026-03-10"
-updatedAt: "2026-03-23"
-excerpt: "Create an encrypted, portable backup of your .env file using AES-256-GCM and Argon2id key derivation."
+updatedAt: "2026-10-20"
+excerpt: "Encrypt a .env file into one portable backup file — AES-256-GCM, a key from Argon2id over a passphrase you choose — and keep the last few versions beside it. No account, no network."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["backup", "encryption", "security", "disaster-recovery", "evnx"]
 commands: ["backup", "restore"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.11"
 prerequisites:
   - getting-started/installation
 draft: false
 ---
 
-`evnx backup` creates a cryptographically secure, portable backup of your `.env` file. The backup is encrypted with **AES-256-GCM** using a key derived from your password via **Argon2id**, ensuring your secrets remain confidential even if the backup file is exposed.
+`evnx backup` encrypts a `.env` file into a single Base64 file. The key is derived
+from a passphrase you choose with **Argon2id**, the content is encrypted with
+**AES-256-GCM**, and the file is written owner-only. It needs no account and makes
+no network call — the file is the backup. [`evnx restore`](/guides/commands/restore)
+opens it again.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
   <Prerequisite href="/guides/reference/concepts-security-model">Understand evnx security model</Prerequisite>
 </Prerequisites>
 
+<Callout type="warning">
+**Changed in 0.10.11 — check your scripts.**
+
+- A **key file or `EVNX_PASSWORD` under 8 characters is refused** (exit `2`), as a
+  typed passphrase always was. `restore` takes any length, so a backup made earlier
+  with a shorter secret still opens.
+- `--output` may not be the file you are backing up — by path, symlink or hard
+  link — nor a directory, nor a name whose rotation would move the source. Each is
+  refused with exit `2` before anything is written. `--output .env` used to turn
+  the `.env` itself into ciphertext.
+- When both `--key-file` and `EVNX_PASSWORD` are set, a warning now says the key
+  file won.
+- With no key file, no `EVNX_PASSWORD` and no terminal, the error names both
+  instead of `IO error: not a terminal`.
+- Exit code `1` is gone from the table: `backup` never produced it.
+</Callout>
+
 ---
 
 ## Command signature
 
 ```bash
-evnx backup [OPTIONS]
+evnx backup [ENV] [OPTIONS]
 ```
 
-**Options:**
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `[ENV]` | positional | `.env` | The file to back up — `evnx backup .env.production` |
-| `--env-name` | `string` | — | **v0.5.0+** — back up `.env.<NAME>`. env |
-| `--output` | `string` | `<env>.backup` | Destination path for the encrypted backup |
-| `--key-file` | `path` | — | Use a file as the encryption key instead of a password prompt. **v0.5.0+** — also accepted as `--password-file`, the spelling [`restore`](/guides/commands/restore) uses |
-| `--keep` | `number` | `3` | Number of previous backups to retain alongside the new one |
-| `--verify` | `bool` | `false` | Re-decrypt and integrity-check the backup immediately after writing |
-| `--verbose` | `bool` | `false` | Print diagnostic information at each pipeline stage |
-
----
+| Argument / flag | Default | Description |
+|-----------------|---------|-------------|
+| `[ENV]` | `.env` | The file to back up — `evnx backup .env.production` |
+| `--env-name <NAME>` | — | Back up `.env.<NAME>` instead; a name with no file is an error listing the environments there are |
+| `--output <PATH>` | `<env>.backup` | Where to write the backup. Not the source file, not a directory |
+| `--key-file <PATH>` | — | Use a file's contents as the passphrase. Also accepted as `--password-file`, the spelling [`restore`](/guides/commands/restore) uses |
+| `--keep <N>` | `3`, or `[backup] keep` | Previous backups to keep beside the new one; `0` overwrites |
+| `--verify` | off | Decrypt the backup again after writing it and compare, byte for byte |
+| `-v`, `--verbose` | off | Print each step to stderr |
+| `-q`, `--quiet` | off | Print nothing on success; warnings and errors still print |
 
 <Callout type="warning">
-**`--env` does not exist and never has.** This page documented
+**`--env` does not exist and never has.** Earlier versions of this page used
 `evnx backup --env .env.production`, which fails with an argument error. The file is
-**positional**:
+**positional**, or named with `--env-name`:
 
 ```bash
-evnx backup .env.production                  # any version
-evnx backup --env-name production            # v0.5.0+
+evnx backup .env.production
+evnx backup --env-name production
 ```
 </Callout>
 
-## How encryption works
+---
 
-### Security model
+## Basic usage
 
-Every backup uses industry-standard cryptography:
+### Back up `.env`
 
+```bash
+evnx backup
 ```
-┌─────────────────────────────────────────┐
-│ 1. Password entered or read from file   │
-│ 2. Fresh 32-byte salt generated         │
-│ 3. Argon2id derives 32-byte AES key     │
-│    • Memory: 64 MiB                     │
-│    • Iterations: 3                      │
-│    • Parallelism: 1                     │
-│ 4. Fresh 12-byte nonce generated        │
-│ 5. AES-256-GCM encrypts JSON envelope   │
-│ 6. Binary envelope Base64-encoded       │
-│ 7. File written with 0o600 permissions  │
-└─────────────────────────────────────────┘
+
+```text
+  evnx backup  Encrypt and back up your .env file
+
+✓ Read 160 bytes from .env
+Enter encryption password: [hidden]
+Confirm password: [hidden]
+
+✓ Backup created successfully
+  Source  : .env
+  Backup  : .env.backup
+  Size    : 476 bytes (encrypted + Base64)
+  Verified: no
+
+! Important:
+  • Keep your password (or key file) safe — it cannot be recovered
+  • Store the backup in a secure, separate location
+  • To restore: evnx restore .env.backup --output .env
+  • Test the restore before deleting the original .env
+  Docs: https://docs.evnx.dev/cli/commands/backup
+```
+
+The passphrase is asked twice. It must be at least 8 characters:
+
+```text
+Enter encryption password: [hidden]
+Error: Password must be at least 8 characters (got 5)
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+### Back up another environment
+
+```bash
+evnx backup --env-name production --key-file backup.key
+```
+
+```text
+✓ Read 160 bytes from .env.production
+· Using key file for encryption (non-interactive mode)
+
+✓ Backup created successfully
+  Source  : .env.production
+  Backup  : .env.production.backup
+  Size    : 488 bytes (encrypted + Base64)
+  Verified: no
+```
+
+`evnx backup .env.production --output prod.backup` does the same with a path and a
+name of your own.
+
+---
+
+## The passphrase
+
+One rule, the same for `backup` and `restore`, highest priority first:
+
+1. **`--key-file <path>`** (or `--password-file`) — the file's contents.
+2. **`EVNX_PASSWORD`** — read once, then removed from evnx's environment.
+3. **A prompt**, when there is a terminal to show it on.
+
+A new backup needs **at least 8 characters** from whichever source is used:
+
+```bash
+evnx backup --key-file short.key --output s.bak
+```
+
+```text
+✓ Read 160 bytes from .env
+Error: The key file short.key must be at least 8 characters (got 3)
+
+  Only a new backup needs it: one made earlier with a shorter passphrase still restores.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+`EVNX_PASSWORD=abc evnx backup` is refused the same way. Characters are counted,
+not bytes, so `äöüßäöüß` is eight.
+
+**How a key file is read:** UTF-8 content is trimmed of surrounding whitespace, so a
+trailing newline does not count. Binary content is Base64-encoded first, which gives
+a stable string for any bytes. `restore` reads key files with the same code, so one
+file always opens what it locked.
+
+**`EVNX_PASSWORD`** prints a warning, because the value may already sit in a shell
+history, a process listing or a CI log:
+
+```bash
+EVNX_PASSWORD="$BACKUP_PASSPHRASE" evnx backup --output env.bak
+```
+
+```text
+✓ Read 160 bytes from .env
+! Reading password from EVNX_PASSWORD environment variable.
+  Less secure than interactive prompt — avoid in shared environments.
+
+✓ Backup created successfully
+```
+
+**Both set:** the key file wins, and since 0.10.11 evnx says so:
+
+```text
+· Using key file for encryption (non-interactive mode)
+! EVNX_PASSWORD is set as well; the key file wins, so EVNX_PASSWORD was not used
+```
+
+**Neither set, and no terminal** — a script, a CI step, `< /dev/null`:
+
+```bash
+evnx backup
+```
+
+```text
+✓ Read 160 bytes from .env
+Error: there is no terminal to ask for the passphrase on.
+
+  Give it without a prompt, from a file or the environment:
+    evnx backup .env --key-file <path>
+    EVNX_PASSWORD=… evnx backup .env
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+---
+
+## Backup rotation
+
+Each backup keeps the previous ones, numbered, newest first. With the default
+`--keep 3`, once the new backup is safely written:
+
+```text
+.env.backup.2  →  .env.backup.3
+.env.backup.1  →  .env.backup.2
+.env.backup    →  .env.backup.1
+(new backup)   →  .env.backup
+```
+
+The file already at the last place (`.env.backup.3` here) is replaced by the shift,
+with a warning; files past it are never touched or deleted.
+
+```bash
+evnx backup --key-file backup.key --keep 1
+```
+
+```text
+! --keep 1: .env.backup.1 will be overwritten by rotation — increase --keep or prune manually to retain it
+```
+
+```bash
+evnx backup --keep 7     # a week of daily backups
+evnx backup --keep 0     # no rotation: overwrite .env.backup
+```
+
+`[backup] keep` in [`.evnx.toml`](/guides/reference/configuration-file) sets the
+project default; `--keep` wins over it.
+
+**What rotation will not do.** The new backup is written to a temporary file and
+renamed into place only after it is complete, so a full disk or a crash leaves the
+previous backups where they were. And it refuses outputs that would destroy
+something:
+
+```bash
+evnx backup .env --key-file backup.key --output .env
+```
+
+```text
+Error: --output '.env' is the same file as the env file '.env'. Nothing was written; choose another --output.
+```
+
+```text
+Error: backups-dir exists and is not a regular file
+```
+
+The same holds for a symlink or hard link to the source, for
+`evnx backup out.1 --output out` (rotation would move `out.1`, the source, to
+`out.2`), and for a directory in a rotation slot. All are exit `2`, decided before
+the passphrase is asked for. An output that is a symlink is written through: the
+link stays, and the file it points to is rotated.
+
+---
+
+## Verifying a backup
+
+`--verify` decrypts the file it just wrote and compares it with the source, byte for
+byte, before the command finishes:
+
+```bash
+evnx backup --key-file backup.key --verify
+```
+
+```text
+✓ Backup created and verified successfully
+  Source  : .env
+  Backup  : .env.backup
+  Size    : 476 bytes (encrypted + Base64)
+  Verified: yes
+```
+
+It costs one more Argon2id round — a fraction of a second to about a second,
+depending on the machine. If the check fails, evnx exits `6` and leaves the backup on
+disk for inspection; the source is never modified.
+
+---
+
+## In CI
+
+```yaml
+# GitHub Actions
+- name: Back up .env.production
+  run: |
+    mkdir -p backups
+    evnx backup .env.production \
+      --output "backups/prod-$(date +%Y%m%d).backup" \
+      --keep 0 \
+      --verify
+  env:
+    EVNX_PASSWORD: ${{ secrets.BACKUP_PASSPHRASE }}
+```
+
+```yaml
+# compose.yaml — the file is positional; there is no --env flag
+services:
+  backup:
+    image: ghcr.io/urwithajit9/evnx:latest
+    user: "1000:1000"          # your uid:gid, so the backup can be written to ./backups
+    working_dir: /work
+    command: >
+      backup /work/.env
+      --output /work/backups/env.backup
+      --key-file /run/secrets/backup_key
+      --keep 5
+      --verify
+    volumes:
+      - ./:/work
+    secrets:
+      - backup_key
+secrets:
+  backup_key:
+    file: ./backup.key
+```
+
+```bash
+mkdir -p backups && docker compose run --rm backup
+```
+
+The image runs as an unprivileged `evnx` user, which cannot write into a folder on
+the host that you own: without `user:` the write fails with `Permission denied`
+(exit `5`), and without `backups/` with "the directory /work/backups does not exist".
+
+`-q` prints nothing on success, so a cron job's mail only arrives when something
+went wrong. Branch on the exit code, not on the text.
+
+<Callout type="warning" title="Key file security">
+Treat key files with the same care as the `.env` file itself. Keep them in a
+secrets manager or a secrets volume (`/run/secrets/…`), never beside the backup and
+never in version control.
+</Callout>
+
+---
+
+## How it is encrypted
+
+```text
+┌──────────────────────────────────────────┐
+│ 1. Passphrase: key file, env, or prompt  │
+│ 2. Fresh 32-byte salt                    │
+│ 3. Argon2id derives a 32-byte AES key    │
+│    • Memory: 64 MiB                      │
+│    • Iterations: 3                       │
+│    • Parallelism: 1                      │
+│ 4. Fresh 12-byte nonce                   │
+│ 5. AES-256-GCM encrypts a JSON envelope  │
+│ 6. Binary envelope Base64-encoded        │
+│ 7. Written atomically, mode 0600         │
+└──────────────────────────────────────────┘
 ```
 
 ### Binary format (version 1)
@@ -85,264 +368,62 @@ Every backup uses industry-standard cryptography:
 └─────────┴────────────┴──────────┴────────────────────────────────┘
 ```
 
-The entire structure is Base64-encoded before being written to disk.
-
-### Encrypted payload structure
-
-The ciphertext decrypts to a JSON envelope containing both your `.env` content and metadata:
+The ciphertext decrypts to the content and its metadata:
 
 ```json
 {
   "schema_version": 1,
   "version": 1,
-  "created_at": "2026-03-10T14:30:00Z",
-  "original_file": ".env.production",
-  "tool_version": "0.4.0",
-  "content": "DATABASE_URL=postgresql://...\nAPI_KEY=sk-...\n"
+  "created_at": "2026-10-20T12:14:39Z",
+  "original_file": ".env",
+  "tool_version": "0.10.11",
+  "content": "DATABASE_URL=postgres://...\nAPI_KEY=sk_...\n"
 }
 ```
 
-<Callout type="info" title="Why metadata is encrypted">
-Embedding metadata *inside* the encrypted payload means it is both **confidential** (an attacker cannot learn filenames or timestamps without the password) and **tamper-evident** (altering metadata invalidates the GCM authentication tag).
+<Callout type="info" title="Why the metadata is encrypted">
+Keeping the metadata *inside* the ciphertext makes it **confidential** — without the
+passphrase nobody learns the file name or the date — and **tamper-evident**: changing
+any of it breaks the GCM authentication tag.
 </Callout>
+
+The format is locked: backups made by 0.10.0 and later open in every later version,
+and the evnx test suite restores ones made by released binaries on every change.
+
+### File permissions
+
+On Unix a new backup is created `0600` (owner read and write) whatever the umask:
+
+```bash
+ls -l .env.backup
+```
+
+```text
+-rw------- 1 user user 476 Oct 20 12:14 .env.backup
+```
+
+Rotation renames files, so a backup keeps its mode as it moves to `.1`, `.2` …: a
+file that was `0644` — loosened by hand, or copied in from elsewhere — stays `0644`.
+Check the older files with `ls -l .env.backup*`.
 
 ---
 
-## Basic usage
+## Backup or evnx cloud?
 
-### Create a backup of `.env`
+They solve different problems, and neither reads the other's files.
 
-```bash
-evnx backup
-```
+| | `backup` / `restore` | [`cloud push` / `cloud pull`](/guides/commands/cloud) |
+|---|---|---|
+| Where the ciphertext lives | a file you keep | the evnx server, as versions |
+| Secret | a passphrase or key file you choose | your account's master password |
+| History | `--keep N` numbered files | server versions: `--version N`, `history`, `diff` |
+| Non-interactive | `--key-file`, `EVNX_PASSWORD` | `--password-stdin` |
+| Replacing a file | `restore --yes` (alias `--force`), keeps `.bak` | `cloud pull --force` |
+| Works with no account or network | yes | no |
+| Everything back at once | the file is the backup | `cloud export` |
 
-```
-╔══════════════════════════════════════╗
-║  evnx backup                        ║
-║  Encrypt and back up your .env file ║
-╚══════════════════════════════════════╝
-
-✓ Read 342 bytes from .env
-Enter encryption password: ••••••••
-Confirm password: ••••••••
-
-✓ Backup created successfully
-  Source   .env
-  Backup   .env.backup
-  Size     1 024 bytes (encrypted + Base64)
-  Verified no
-
-⚠️  Important:
-  • Keep your password (or key file) safe — it cannot be recovered
-  • Store the backup in a secure, separate location
-  • To restore: evnx restore .env.backup --output .env
-  • Test the restore before deleting the original .env
-```
-
-### Backup a specific environment file
-
-```bash
-evnx backup .env.production --output prod.backup
-```
-
-### Verbose mode for debugging
-
-```bash
-evnx backup --verbose
-```
-
-```
-╔══════════════════════════════════════╗
-║  evnx backup                        ║
-║  Encrypt and back up your .env file ║
-╚══════════════════════════════════════╝
-
-  Source path  : .env
-  Read 342 bytes from .env
-✓ Read 342 bytes from .env
-Enter encryption password: ••••••••
-  Password accepted — awaiting confirmation
-Confirm password: ••••••••
-  Passwords match
-  Backup pipeline starting
-  Source       : .env
-  Output       : .env.backup
-  Keep         : 3
-  Verify       : false
-  Argon2id key derivation in progress…
-  Encryption complete — writing backup file
-  Backup written to .env.backup
-
-✓ Backup created successfully
-  Source   .env
-  Backup   .env.backup
-  Size     1 024 bytes (encrypted + Base64)
-  Verified no
-```
-
----
-
-## Backup rotation
-
-By default evnx keeps the **3 most recent backups** alongside the new one.
-Before each write, existing files are shifted up by one position:
-
-```
-.env.backup   →  .env.backup.1
-.env.backup.1 →  .env.backup.2
-.env.backup.2 →  .env.backup.3  (overwritten if already exists — see warning)
-```
-
-After the rotation the slot is free and the new backup is written to `.env.backup`.
-
-```bash
-# Keep the last 5 backups
-evnx backup --keep 5
-
-# Disable rotation — overwrite silently
-evnx backup --keep 0
-```
-
-<Callout type="warning" title="Files beyond --keep are overwritten, never deleted">
-If a file already exists at position `--keep` (e.g. `.env.backup.5` when using `--keep 5`),
-evnx will warn you and overwrite it during rotation. Increase `--keep` or prune the file
-manually if you need to retain it.
-</Callout>
-
----
-
-## Post-write integrity verification
-
-The `--verify` flag re-decrypts the backup immediately after writing and compares
-the recovered content byte-for-byte against the original. This proves the backup
-is readable before you discard or archive the source file.
-
-```bash
-evnx backup --verify
-```
-
-```
-✓ Backup created and verified successfully
-  Source   .env
-  Backup   .env.backup
-  Size     1 024 bytes (encrypted + Base64)
-  Verified yes
-```
-
-If the check fails (corrupt write, filesystem error) evnx exits with code 6 and
-leaves the backup file on disk for manual inspection. Your original `.env` is
-never modified.
-
-<Callout type="info" title="Performance cost">
-`--verify` runs a second full Argon2id round (~1 s on commodity hardware).
-For interactive use this is imperceptible. In CI pipelines backing up many files
-in sequence, consider whether the safety guarantee is worth the added time.
-</Callout>
-
----
-
-## Non-interactive / CI usage
-
-For automated pipelines where typing a password is not possible, there are two
-sources. Neither shows a prompt.
-
-**1. `--key-file <path>`** — the file's contents become the encryption password.
-
-```bash
-evnx backup --key-file /run/secrets/backup-key
-```
-
-**2. `EVNX_PASSWORD`** — **v0.5.0+**. Read once, then removed from the process
-environment.
-
-```bash
-EVNX_PASSWORD="$BACKUP_PASSPHRASE" evnx backup
-```
-
-<Callout type="info">
-  **`EVNX_PASSWORD` was added to `backup` in v0.5.0.** Before it, only
-  [`restore`](/guides/commands/restore) accepted the variable — so a scheduled
-  backup had no way to supply a passphrase except writing one to disk, while the
-  restore it fed needed no file at all. The two halves of one pipeline now take
-  the same inputs, under either flag spelling.
-</Callout>
-
-`--key-file` wins if both are present. Both print a warning to stderr: they are
-less secure than the interactive prompt, and `EVNX_PASSWORD` may already have
-been captured by a shell, a process monitor or a CI log before evnx removed it.
-
-**How key material is read:**
-
-- **UTF-8 files** — content is trimmed of surrounding whitespace. A file
-  containing `correct-horse-battery-staple\n` is treated identically to one
-  without the trailing newline.
-- **Binary files** — content is Base64-encoded first to produce a stable ASCII
-  string before being fed into Argon2id.
-
-<Callout type="warning">
-  **The same reader runs on both sides.** `evnx restore --password-file` reads
-  the file exactly as `backup` does, so one key file round-trips. Before v0.5.0
-  it did not: `restore` read the file as UTF-8 and stripped only a trailing
-  newline, so a **binary** key file wrote a backup that the same file could not
-  open, and the only symptom was a failed decryption.
-</Callout>
-
-Both paths go through the same Argon2id KDF, so key length beyond the KDF input
-limit is handled automatically.
-
-### Full CI example
-
-```bash
-# GitHub Actions
-- name: Backup .env.production
-  run: |
-    evnx backup .env.production \
-      --output backups/prod-$(date +%Y%m%d).backup \
-      --key-file /run/secrets/BACKUP_KEY \
-      --keep 7 \
-      --verify
-```
-
-```bash
-# Docker / docker-compose
-services:
-  backup:
-    image: evnx
-    command: >
-      backup
-      --env /secrets/.env
-      --key-file /run/secrets/backup_key
-      --keep 5
-      --verify
-    volumes:
-      - ./backups:/backups
-    secrets:
-      - backup_key
-```
-
-<Callout type="warning" title="Key file security">
-Treat key files with the same care as the `.env` file itself. Store them in a
-secrets manager (Vault, AWS Secrets Manager, GitHub Secrets) rather than on
-disk alongside your repository. Never commit a key file to version control.
-</Callout>
-
----
-
-## File permissions and security
-
-### Automatic permission hardening
-
-On Unix-like systems, `evnx backup` creates backup files with restrictive
-permissions regardless of the current umask:
-
-```bash
-$ evnx backup
-$ ls -l .env.backup
--rw------- 1 user user 1024 Mar 10 14:30 .env.backup  # 0o600: owner read/write only
-```
-
-This applies to every file in the rotation chain (`.env.backup.1`,
-`.env.backup.2`, …) — all are originally created by evnx with `0o600`.
+Use `backup` for an offline copy that does not depend on any service; use the cloud
+commands to share and version secrets across machines and people.
 
 ---
 
@@ -350,109 +431,48 @@ This applies to every file in the rotation chain (`.env.backup.1`,
 
 ### "Password must be at least 8 characters"
 
-evnx enforces a minimum password length as a sanity guard. Argon2id makes
-brute-forcing expensive, but short passwords remain vulnerable to dictionary attacks.
+Every source of a new backup's passphrase — the prompt, a key file,
+`EVNX_PASSWORD` — needs 8 characters. Use a longer one: four or five unrelated words
+are easy to type and hard to guess.
 
-**Fix**: Use a longer password or passphrase:
+### "Passwords do not match" (exit 3)
 
-```bash
-# ✅ Strong passphrase
-evnx backup  # then type: correct-horse-battery-staple
-```
-
-### "Passwords do not match" (exit code 3)
-
-The confirmation prompt did not match the original entry. Re-run the command and
-type both prompts carefully. This check does not apply when `--key-file` is used.
+The confirmation prompt did not match. Re-run and type both carefully. There is no
+confirmation for a key file or `EVNX_PASSWORD`.
 
 ### "File does not look like a standard .env file"
 
-evnx heuristically checks whether the input resembles a `.env` file. This
-warning is non-fatal — the backup proceeds regardless.
+The source is not a `.env` evnx can read — prose, a binary file, a line the parser
+rejects. The backup goes ahead; this is a warning. Check the path if it is
+unexpected.
 
-```
-⚠️  File does not look like a standard .env file — backing up anyway
-```
+### "is the same file as the env file" / "exists and is not a regular file" (exit 2)
 
-<Callout type="tip" title="When this is expected">
-This warning appears when backing up files with unusual formatting, files
-containing mostly comments, or non-`.env` files you intentionally want to
-encrypt. If unexpected, verify the `--env` path is correct.
-</Callout>
+`--output` names the source, or a directory. Choose another `--output`. Nothing was
+written or renamed.
 
-### "Backup integrity check failed" (exit code 6)
+### "Failed to write backup file: the directory … does not exist" (exit 5)
 
-The `--verify` check failed: evnx could not re-decrypt the file it just wrote,
-or the recovered content did not match the original. The backup file is left on
-disk for inspection.
+The directory part of `--output` does not exist. Create it first.
 
-**Possible causes:**
-- Filesystem error during write (full disk, permission change mid-write)
-- Storage hardware fault
+### "Backup integrity check failed" (exit 6)
 
-**Fix**: Check available disk space, inspect the backup file, and retry.
-If the problem persists on a specific path, try a different output location.
+`--verify` could not read back what it just wrote, or the content differed. The
+backup is left on disk for inspection. Check free space and the storage, then retry,
+or write somewhere else.
 
-### "Key file not found" or "Key file is not a regular file"
+### "Key file not found" or "Key file is not a regular file" (exit 2)
 
-evnx validates the key file path before attempting to read it.
-
-**Fix**: Verify the path exists and is a regular file (not a directory or symlink
-to a missing target):
-
-```bash
-ls -l /run/secrets/backup-key
-```
+Check the path: `ls -l /run/secrets/backup-key`.
 
 ### "Backup feature not enabled"
 
-The backup/restore feature is optional and must be enabled at build time:
-
-```
-✗ Backup feature not enabled
-Rebuild with: cargo build --features backup
-```
-
-**Fix**:
+The prebuilt binaries (npm, PyPI, Homebrew, Scoop, the GitHub Release, the container)
+all include it. Only a source install needs the feature:
 
 ```bash
 cargo install evnx --features backup
-# or for local development:
-cargo build --features backup
 ```
-
----
-
-## Best practices
-
-### Password and key file management
-
-- **Never** commit passwords or key files to version control
-- Use a password manager or secrets manager (Vault, AWS Secrets Manager,
-  1Password Secrets Automation) to generate and store credentials
-- Use different passwords/keys for different environments (dev / staging / prod)
-- Rotate credentials periodically and re-encrypt existing backups after rotation
-
-### Backup storage
-
-- Store backups in a location **separate** from your source code repository
-- Use encrypted storage or a secret manager for the backup files themselves
-- Use `--keep` with a value appropriate to your recovery window
-- Run `--verify` for any backup you intend to archive or ship offsite
-- Test restore procedures regularly — a backup you cannot restore is not a backup
-
-### Recommended CI invocation
-
-```bash
-evnx backup .env.production \
-  --output /secure/backups/prod.backup \
-  --key-file /run/secrets/backup_key \
-  --keep 7 \
-  --verify
-```
-
-This combination: uses a machine-readable key (no TTY required), retains a week
-of daily backups, and proves each one is readable before the job exits.
 
 ---
 
@@ -460,18 +480,25 @@ of daily backups, and proves each one is readable before the job exits.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Backup created successfully |
-| `1` | Generic error: IO failure, encoding error, unexpected failure |
-| `2` | Source file not found or not a regular file |
-| `3` | Password confirmation did not match |
+| `0` | Backup written (and verified, with `--verify`) |
+| `2` | Could not run: source file, key file or passphrase, an output that is the source or a directory, no terminal to ask on |
+| `3` | Passphrase confirmation did not match |
 | `4` | Encryption failed |
-| `5` | Failed to write backup file to disk |
-| `6` | Post-write integrity check failed (`--verify`) |
+| `5` | Could not write the backup file |
+| `6` | Integrity check failed after writing (`--verify`) |
+
+<Callout type="info">
+  `1` means "ran, and found something" for the commands that have findings; a backup
+  has none, so `backup` never exits `1`. ⚠️ Until 0.10.11 this table listed it as
+  "generic error", and `2` as "source not found" only — every could-not-run case is
+  `2`, with the "No verdict" line.
+</Callout>
 
 ---
 
 ## Related commands
 
-- **[evnx restore](/guides/commands/restore)** — decrypt and restore a backup to a `.env` file
+- **[evnx restore](/guides/commands/restore)** — decrypt a backup back to a `.env` file
+- **[evnx cloud](/guides/commands/cloud)** — encrypted, versioned sync through evnx cloud
 - **[evnx validate](/guides/commands/validate)** — check `.env` files for misconfiguration
-- **[evnx scan](/guides/commands/scan)** — detect secrets and sensitive patterns in `.env` files
+- **[evnx scan](/guides/commands/scan)** — detect secrets in files before they are committed

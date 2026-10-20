@@ -347,11 +347,11 @@ fn atomic_write(path: &str, content: &[u8]) -> Result<()> {
 | Threat | Likelihood | Impact | evnx mitigation | Residual risk |
 |--------|-----------|--------|-----------------|---------------|
 | **Backup file theft** | Medium | High | AES-256-GCM encryption | Low (if password strong) |
-| **Password brute-force** | Low | High | Argon2id (64 MiB, 3 iter) | Low (with 8+ char password) |
+| **Password brute-force** | Low | High | Argon2id (64 MiB, 3 iter); 8 characters minimum for a new backup from every source (since 0.10.11) | Low (with a long passphrase) |
 | **File tampering** | Low | High | GCM auth tag + schema validation | Very low |
 | **Memory scraping** | Very low | High | `zeroize` on password buffers | Medium (OS-level attacks possible) |
 | **Shell history leak** | Medium | High | `--password` flag warning + interactive default | Low (if user follows guidance) |
-| **Accidental overwrite** | High | High | Mandatory prompt + no `--force` + `.restored` fallback | Very low |
+| **Accidental overwrite** | High | High | `restore` replaces a file only on a yes (a prompt, or `--yes` in a script) and keeps the replaced file as `.bak`; identical content is left alone; the output may not be the backup, and `backup`'s output may not be its source; unreadable content goes to `.restored` | Very low |
 | **Wrong password on restore** | Medium | Low | Generic error message (no oracle) | Low (safe failure) |
 
 ### Security boundaries
@@ -411,7 +411,7 @@ evnx backup --env-name test --output test.backup  # Interactive password
 evnx restore test.backup --output .env.test.restored --dry-run  # Verify metadata
 
 # 5. Verify file permissions
-ls -l .env.test.backup  # Should show -rw------- (0o600) on Unix
+ls -l test.backup  # Should show -rw------- (0o600) on Unix
 
 # 6. Confirm no network activity
 strace -f -e trace=network evnx backup .env.test --output net.backup 2>&1 \
@@ -499,25 +499,26 @@ Track progress in [GitHub issue #42](https://github.com/evnx/evnx/issues/42).
 
 ## Troubleshooting security issues
 
-### "Decryption failed. The password may be incorrect or the backup file is corrupt."
+### "Wrong password or corrupt backup — decryption failed"
 
 **Why the vague error?**
 Distinguishing "wrong password" from "tampered file" would create a decryption oracle — an attacker could test passwords or modifications and learn which part failed.
 
+Since 0.10.11 that is all this message means. A file that is cut off, is not an
+evnx backup at all, or was made by a newer evnx gets its own message — "truncated or
+damaged", "not an evnx backup", "Upgrade evnx" — see
+[When a backup will not open](/guides/commands/restore#when-a-backup-will-not-open).
+None of those needs the passphrase to be right, so naming them gives nothing away.
+
 **Debugging steps:**
 
 ```bash
-# 1. Verify backup file integrity
-wc -c .env.backup  # Should be > 61 bytes (min: 1+32+12+16 Base64-encoded)
+# 1. The passphrase source you think you are using is the one evnx uses:
+#    a key file beats EVNX_PASSWORD, and evnx warns when both are set.
+evnx restore .env.backup --password-file /run/secrets/evnx-pass --inspect
 
-# 2. Check Base64 validity
-base64 -d .env.backup > /dev/null && echo "✓ Valid Base64" || echo "✗ Corrupt Base64"
-
-# 3. Test with known-good password
-# (If you have a test backup with known password)
-
-# 4. Try restore with --dry-run to see if metadata parses
-evnx restore .env.backup --dry-run  # Still prompts for password
+# 2. Try an earlier generation, in case this one was changed
+evnx restore .env.backup.1 --password-file /run/secrets/evnx-pass --inspect
 ```
 
 ### "Derived key too short: X bytes (expected 32)"
@@ -543,7 +544,9 @@ cat /dev/random | head -c 32 | base64  # Should produce output without error
 
 ### Password prompt not appearing (CI/CD)
 
-**Cause**: `dialoguer` requires a TTY; CI environments often lack one.
+**Cause**: a prompt needs a terminal, and CI has none. Since 0.10.11 evnx says so
+instead of failing with `IO error: not a terminal`, and names the two ways in:
+`--key-file`/`--password-file`, or `EVNX_PASSWORD`.
 
 **Solution**: Use `--password-file` with secure secret injection:
 
