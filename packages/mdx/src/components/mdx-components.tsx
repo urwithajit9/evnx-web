@@ -92,13 +92,15 @@ function Blockquote({ children }: { children?: React.ReactNode }) {
 function HR() {
   return <hr className="border-border-subtle my-10" />;
 }
+// break-words: a bare URL as link text is one unbreakable word, and at 375 px
+// it pushed the page sideways (use-cases-platform-secrets).
 function A({ href, children }: { href?: string; children?: React.ReactNode }) {
   return (
     <a
       href={href}
       target={href?.startsWith("http") ? "_blank" : undefined}
       rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}
-      className="text-brand-400 hover:text-brand-300 underline underline-offset-2 transition-colors"
+      className="text-brand-400 hover:text-brand-300 underline underline-offset-2 transition-colors break-words"
     >
       {children}
     </a>

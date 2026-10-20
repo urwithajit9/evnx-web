@@ -189,7 +189,11 @@ evnx diff --format json
 
 <Callout type="tip" title="Add statistics to JSON">
 Use <code>--with-stats</code> to include similarity metrics:
-<pre><code>evnx diff --format json --with-stats | jq '.stats.similarity_percent'</code></pre>
+
+```bash
+evnx diff --format json --with-stats | jq '.stats.similarity_percent'
+```
+
 </Callout>
 
 ### 3. Patch — For applying changes
@@ -215,7 +219,11 @@ secrets included — and warns on stderr. Keep that output out of logs.
 
 <Callout type="info" title="Interactive merge">
 Add <code>--interactive</code> to patch mode for selective application:
-<pre><code>evnx diff --format patch --interactive</code></pre>
+
+```bash
+evnx diff --format patch --interactive
+```
+
 Prompts: <code>(y)es</code>, <code>(n)o</code>, <code>(s)kip rest</code>
 </Callout>
 
