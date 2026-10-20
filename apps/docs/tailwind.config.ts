@@ -6,6 +6,12 @@ const config: Config = {
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
     "./content/**/*.{md,mdx}",
+    // ⚠️ Every guide renders through @evnx/mdx, which lives outside this app.
+    // Without this line a class used there reached the CSS only if something
+    // in this app happened to use it too. Over a hundred did not: code blocks
+    // lost their margin, header background and horizontal scroll (a long line
+    // was clipped), headings their spacing and paragraphs their 72ch measure.
+    "../../packages/mdx/src/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
