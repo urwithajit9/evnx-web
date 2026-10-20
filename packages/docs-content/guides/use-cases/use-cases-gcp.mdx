@@ -3,13 +3,13 @@ section: "use-cases"
 order: 3
 title: "Migrate to GCP Secret Manager"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-09"
-excerpt: "Generate gcloud CLI commands to store each .env variable as an individual secret in Google Cloud Secret Manager."
+updatedAt: "2026-10-20"
+excerpt: "Generate a gcloud script that stores each .env variable as its own secret in Google Cloud Secret Manager, creating it or adding a new version."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "gcp", "secret-manager", "gcloud"]
 commands: ["convert", "migrate", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.10"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -18,7 +18,7 @@ draft: false
 
 # Migrate to GCP Secret Manager
 
-`evnx migrate --to gcp-secret-manager` prints a `gcloud secrets create` block per variable, piping the value through stdin — the GCP-recommended pattern for creating secrets without exposing values in shell history.
+`evnx migrate --to gcp-secret-manager --project my-gcp-project` prints a short `gcloud` script: one line per variable, each piping its value to `gcloud` on stdin. The script creates each secret, or adds a new version when the secret already exists, so you can run it again after a value changes.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -30,33 +30,47 @@ draft: false
 ## What you need
 
 - `gcloud` CLI installed and authenticated (`gcloud auth login`)
-- A GCP project set (`gcloud config set project YOUR_PROJECT`)
-- The Secret Manager API enabled (`gcloud services enable secretmanager.googleapis.com`)
+- The ID of the GCP project that will hold the secrets — evnx needs it as `--project`
+- The Secret Manager API enabled in that project (`gcloud services enable secretmanager.googleapis.com --project=my-gcp-project`)
 
-evnx does not need GCP credentials — it only generates commands.
+evnx does not need GCP credentials and contacts nothing — it only prints the script. You run it.
 
 ---
 
 ## What evnx generates
 
-Unlike AWS (one JSON object), GCP Secret Manager stores **one secret per variable**. evnx prints a pipe block for each key:
+Unlike AWS (one JSON object), GCP Secret Manager stores **one secret per variable**. For a `.env` with three variables, evnx prints:
 
 ```bash
-echo -n "${DATABASE_URL}" | \
-  gcloud secrets create DATABASE_URL \
-    --data-file=- \
-    --replication-policy=automatic
+# Creates each secret, or adds a new version when it already exists.
+upsert_secret() {
+  if gcloud secrets describe "$1" --project=my-gcp-project </dev/null >/dev/null 2>&1; then
+    gcloud secrets versions add "$1" --data-file=- --project=my-gcp-project
+  else
+    gcloud secrets create "$1" --data-file=- --project=my-gcp-project
+  fi
+}
 
-echo -n "${STRIPE_SECRET_KEY}" | \
-  gcloud secrets create STRIPE_SECRET_KEY \
-    --data-file=- \
-    --replication-policy=automatic
+printf '%s' 'postgres://user:pass@host:5432/db' | upsert_secret DATABASE_URL
+printf '%s' 'sk_test_example' | upsert_secret STRIPE_SECRET_KEY
+printf '%s' 'redis://localhost:6379/0' | upsert_secret REDIS_URL
 ```
 
-The value is passed through `--data-file=-` (stdin), which avoids logging the secret value in shell history or process lists.
+- `upsert_secret` asks `gcloud secrets describe` whether the secret exists. If it does, it runs `gcloud secrets versions add`; if not, `gcloud secrets create`. Every `gcloud` call names the project.
+- Each value is written into the script in single quotes, exactly as it is in your `.env`, and reaches `gcloud` on stdin (`--data-file=-`). `printf` is a shell builtin, so the value is not in any process's argument list.
+- Names stay exactly as they are in the `.env`: `DATABASE_URL` is stored as `DATABASE_URL`.
+- There is no `--replication-policy` flag. `gcloud secrets create` uses an automatic replication policy when none is given — see [Replication policy](#replication-policy).
+
+<Callout type="warning">
+  <strong>The script contains your secret values.</strong> They are printed to your terminal, and written to the file if you save the script. Delete the file once it has run, and never commit it.
+</Callout>
 
 <Callout type="info">
-  <strong>Alternative with evnx convert.</strong> For GCP, evnx offers a second path: <code>evnx convert --to gcp-secrets --project my-gcp-project {">"} upload.sh && bash upload.sh</code>. The script carries the values itself, creates each secret or adds a new version when it exists, and names secrets in lowercase with <code>-</code> (<code>DATABASE_URL</code> becomes <code>database-url</code>), where <code>migrate</code> keeps the names as they are and reads the values from your exported variables. Pick one, or the two will create differently named secrets.
+  <strong>Changed in 0.10.10.</strong> Earlier versions printed <code>{'echo -n "${DATABASE_URL}" | gcloud secrets create DATABASE_URL --data-file=- --replication-policy=automatic'}</code>. That took the value from a shell variable of the same name — usually unset, so the secret was created empty — failed on a second run because the secret already existed, and left out <code>--project</code>. If you kept a script made by an older version, generate it again.
+</Callout>
+
+<Callout type="info">
+  <strong>evnx convert prints the same script with different names.</strong> <code>evnx convert --to gcp-secrets --project my-gcp-project {">"} upload.sh</code> writes the same <code>upsert_secret</code> script, but names secrets in lowercase with <code>-</code> (<code>DATABASE_URL</code> becomes <code>database-url</code>), where <code>migrate</code> keeps the names as they are. Pick one, or the two will create differently named secrets.
 </Callout>
 
 ---
@@ -64,24 +78,33 @@ The value is passed through `--data-file=-` (stdin), which avoids logging the se
 ## Basic usage
 
 ```bash
-evnx migrate --to gcp-secret-manager
+evnx migrate --to gcp-secret-manager --project my-gcp-project
 ```
 
 `gcp` is accepted as a shorthand:
 
 ```bash
-evnx migrate --to gcp
+evnx migrate --to gcp --project my-gcp-project
 ```
+
+`--project` is required. In a terminal, evnx asks for it (`GCP project ID:`) when you leave it out. Without a terminal, or with `--dry-run`, a missing `--project` is an error, exit 2, and nothing is printed:
+
+```text
+✓ Loaded 5 secrets from .env
+Error: GCP project ID is required. Pass `--project`.
+  evnx would normally ask, but stdin is not a terminal.
+```
+
+evnx also checks the ID's shape — 6–30 lowercase letters, digits and hyphens, starting with a letter and not ending with a hyphen — and refuses anything else before printing.
 
 ---
 
 ## Step-by-step walkthrough
 
-<Step title="Enable the API and authenticate">
+<Step title="Authenticate and enable the API">
 ```bash
-gcloud services enable secretmanager.googleapis.com
 gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
+gcloud services enable secretmanager.googleapis.com --project=my-gcp-project
 ```
 </Step>
 
@@ -93,45 +116,74 @@ evnx validate --strict
 
 <Step title="Preview the migration">
 ```bash
-evnx migrate --to gcp --dry-run
+evnx migrate --to gcp --project my-gcp-project --dry-run
 ```
 
-```
-☁️ GCP Secret Manager migration
+```text
+  evnx migrate  Generate destination commands from your .env
+
+
+✓ Loaded 5 secrets from .env
+
+· GCP Secret Manager migration
+· Requires Google Cloud CLI (`gcloud`)
+  Install: https://cloud.google.com/sdk/docs/install
 
 Dry-run — would upload to GCP Secret Manager:
-  Secrets : 12
+  Project : my-gcp-project
+  Secrets : 5
+
+Summary:
+  ·  5 secret(s) previewed
+     dry run — nothing was uploaded and nothing was written
+…
 ```
+
+A dry run prints the count, not the script.
 </Step>
 
 <Step title="Filter what you need">
 ```bash
 evnx migrate \
   --to gcp \
+  --project my-gcp-project \
   --exclude "*_LOCAL,*_TEST" \
   --dry-run
 ```
+
+```text
+✓ Loaded 5 secrets from .env
+· After filtering: 3 of 5 secrets remain.
+…
+Dry-run — would upload to GCP Secret Manager:
+  Project : my-gcp-project
+  Secrets : 3
+…
+```
 </Step>
 
-<Step title="Generate and run the commands">
-Pipe to a script, review it, then execute:
+<Step title="Generate and run the script">
+Save only the script with `--print-only`, read it, then run it:
 
 ```bash
 evnx migrate \
   --to gcp \
+  --project my-gcp-project \
   --exclude "*_LOCAL,*_TEST" \
-  > gcp-upload.sh
+  --print-only > gcp-upload.sh
 
 cat gcp-upload.sh    # inspect
 bash gcp-upload.sh   # run
+rm gcp-upload.sh     # it holds every value
 ```
 
-Or run directly from a `.env` with values already exported:
+With `--print-only`, stdout carries only the script; the status lines and the summary still appear in your terminal, on stderr. You can also pipe it straight into a shell:
 
 ```bash
-set -a && source .env && set +a
-evnx migrate --to gcp --exclude "*_LOCAL" | bash
+evnx migrate --to gcp --project my-gcp-project --exclude "*_LOCAL" --print-only | bash
 ```
+
+Use `--print-only` whenever the output goes to a file or a shell. Without it, stdout also holds the status lines and the summary, so `> gcp-upload.sh` does not save a script, and `| bash` stops at a syntax error on the `· Requires Google Cloud CLI` line before it reaches the first `gcloud` call. (Earlier versions of this page showed both without the flag, plus `set -a && source .env` to export the values first. The values are in the script now, so nothing needs exporting.)
 </Step>
 
 <Step title="Grant access to your service accounts">
@@ -139,7 +191,8 @@ Each secret must be granted to the service account your application runs as:
 
 ```bash
 gcloud secrets add-iam-policy-binding DATABASE_URL \
-  --member="serviceAccount:myapp@PROJECT.iam.gserviceaccount.com" \
+  --project=my-gcp-project \
+  --member="serviceAccount:myapp@my-gcp-project.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 ```
 </Step>
@@ -148,27 +201,30 @@ gcloud secrets add-iam-policy-binding DATABASE_URL \
 
 ## Updating existing secrets
 
-The generated `gcloud secrets create` command fails if a secret already exists. To update a version instead:
+Run the script again. For a secret that already exists it runs `gcloud secrets versions add` instead of `create`, so a second run adds a new version rather than failing. evnx itself decides nothing here — it never contacts GCP; the script checks each secret when it runs.
+
+A re-run adds a version to every secret in the script, including those whose value did not change. To send only what changed, select it with `--include`:
 
 ```bash
-# Add a new version to an existing secret
-echo -n "${DATABASE_URL}" | \
-  gcloud secrets versions add DATABASE_URL --data-file=-
+evnx migrate \
+  --to gcp \
+  --project my-gcp-project \
+  --include "DATABASE_URL" \
+  --print-only > gcp-update.sh
 ```
-
-evnx does not currently detect existing GCP secrets or generate `versions add` commands. Run `evnx migrate --to gcp --dry-run` to see the list, then decide manually whether to create or update.
 
 ---
 
 ## Replication policy
 
-evnx uses `--replication-policy=automatic` in all generated commands, which lets GCP choose the storage regions. For a specific region:
+The script names no replication policy, so `gcloud secrets create` uses an automatic one, which lets GCP choose the storage regions. (Earlier versions printed `--replication-policy=automatic` explicitly; the result is the same.) For a specific region, edit the `create` line inside `upsert_secret` before running the script:
 
 ```bash
-# Edit the generated script to replace --replication-policy=automatic with:
---replication-policy=user-managed \
---locations=us-central1
+    gcloud secrets create "$1" --data-file=- --project=my-gcp-project \
+      --replication-policy=user-managed --locations=us-central1
 ```
+
+The `versions add` line takes no replication flag: a secret's replication is set when it is created.
 
 ---
 
@@ -191,12 +247,14 @@ Or in Cloud Run / GKE, mount secrets as environment variables via the `--set-sec
 
 ## Minimum IAM permissions
 
-For creating secrets (migration time):
+For running the script (migration time):
 
 | Role | When |
 |------|------|
-| `roles/secretmanager.admin` | Creating new secrets |
+| `roles/secretmanager.admin` | Any secret in the script is new — it is checked with `describe`, then created |
 | `roles/secretmanager.secretVersionAdder` | Adding versions to existing secrets |
+
+The script treats any failure of `gcloud secrets describe` as "does not exist", because it discards that command's output. If the account may add versions but not describe the secret, the script falls through to `gcloud secrets create`, which then fails because the secret already exists.
 
 For reading secrets (application runtime):
 
@@ -209,5 +267,6 @@ For reading secrets (application runtime):
 ## Next steps
 
 - [Migration concepts](/guides/reference/concepts-migrate-intro)
+- [`evnx migrate` reference](/guides/commands/migrate) — every destination, `--print-only`, names that collide
 - [AWS Secrets Manager migration](/guides/use-cases/use-cases-aws) — for comparison
-- [`evnx convert --to gcp-secrets`](/guides/commands/convert) — static script alternative
+- [`evnx convert --to gcp-secrets`](/guides/commands/convert) — the same script, with lowercase names
