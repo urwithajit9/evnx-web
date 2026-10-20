@@ -64,15 +64,18 @@ function UL({ children }: { children?: React.ReactNode }) {
   return <ul className="mb-4 ml-1 space-y-2">{children}</ul>;
 }
 function OL({ children }: { children?: React.ReactNode }) {
-  return <ol className="mb-4 ml-4 list-decimal space-y-2">{children}</ol>;
+  return <ol className="mb-4 ml-4 list-decimal space-y-2 marker:text-brand-500">{children}</ol>;
 }
 // Single LI used for both UL and OL.
 // UL gets the › bullet via the span; OL gets its number from list-decimal on OL.
-// The span is hidden for OL via the [ol_&]:hidden selector.
+// ⚠️ A number renders only on a `display: list-item` box, and this LI is flex —
+// so an OL's own items switch back to list-item and hide the span. Both
+// selectors are direct-child (`>`), not descendant (`_`): a UL nested inside an
+// OL item must keep its › bullets.
 function LI({ children }: { children?: React.ReactNode }) {
   return (
-    <li className="text-text-secondary leading-relaxed flex gap-2 items-start">
-      <span className="text-brand-500 flex-shrink-0 mt-[3px] select-none [ol_&]:hidden">
+    <li className="text-text-secondary leading-relaxed flex gap-2 items-start [ol>&]:list-item">
+      <span className="text-brand-500 flex-shrink-0 mt-[3px] select-none [ol>li>&]:hidden">
         ›
       </span>
       <span className="min-w-0">{children}</span>
