@@ -9,11 +9,17 @@
  *   3. Render our own <pre><code> with full style control
  *
  * This means there is exactly one box — ours. No double border possible.
+ *
+ * ```mermaid is the one exception: the same highlighted block is rendered,
+ * then handed to <Mermaid>, which replaces it with the diagram in the browser.
+ * The block stays what a reader without JavaScript — or with a diagram that
+ * does not parse — sees.
  */
 import React from 'react'
 import { codeToHtml } from 'shiki'
 import { LANG_LABELS, resolveGrammar } from '../lib/shiki'
 import { CopyButton } from './copy-button'
+import { Mermaid } from './mermaid'
 
 type Props = { children?: React.ReactNode }
 
@@ -69,7 +75,7 @@ export async function FencedCodeBlock({ children }: Props) {
     innerHtml = escapeHtml(rawCode)
   }
 
-  return (
+  const block = (
     <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
       {/* Header */}
       <div className="flex items-center justify-between bg-bg-overlay px-4 py-2.5 border-b border-border-subtle">
@@ -101,6 +107,8 @@ export async function FencedCodeBlock({ children }: Props) {
       </div>
     </div>
   )
+
+  return lang === 'mermaid' ? <Mermaid code={rawCode}>{block}</Mermaid> : block
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
