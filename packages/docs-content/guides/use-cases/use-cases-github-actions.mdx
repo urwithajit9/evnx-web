@@ -3,13 +3,13 @@ section: "use-cases"
 order: 1
 title: "Migrate to GitHub Actions Secrets"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-09"
+updatedAt: "2026-10-20"
 excerpt: "Upload secrets from your .env file directly into GitHub Actions repository secrets using evnx migrate."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "github-actions", "ci-cd", "secrets"]
 commands: ["backup", "migrate", "scan", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.10"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -18,63 +18,78 @@ draft: false
 
 # Migrate to GitHub Actions Secrets
 
-`evnx migrate --to github-actions` is the only destination where evnx uploads secrets for you directly — no copy-pasting commands. It calls the GitHub REST API, encrypts each value with the repository's public key, and streams results with a live progress bar.
+`evnx migrate --to github-actions` is the only destination where evnx uploads secrets for you — no commands to copy and run. It calls the GitHub REST API, encrypts each value with the repository's public key, and uploads it. In a terminal it shows a progress bar and a line per secret.
 
 <Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx with the migrate feature</Prerequisite>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
   <Prerequisite href="/guides/reference/concepts-migrate-intro">Understand the migration pipeline</Prerequisite>
 </Prerequisites>
 
-<Callout type="warning">
-  <strong>Feature flag required.</strong> GitHub Actions migration is only available when evnx is built with the <code>migrate</code> feature:
+<Callout type="info">
+  <strong>Building from source.</strong> <code>migrate</code> is behind a Cargo feature, but every prebuilt binary (install script, Homebrew, Scoop, winget, npm, PyPI, the GitHub Release) is built with all features and has it. Only <code>cargo install</code> needs to ask:
   <ul>
-    <li><code>cargo install evnx --features migrate</code></li>
+    <li><code>cargo install evnx --all-features</code></li>
   </ul>
+</Callout>
+
+<Callout type="warning">
+  <strong>Changed in 0.10.10 — check scripts that use <code>--skip-existing</code>.</strong> Before 0.10.10, evnx read only the first 30 names in the repository's secret list and compared them case-sensitively. A secret past the 30th, or one spelled in another case in your <code>.env</code>, looked new, so <code>--skip-existing</code> (and <code>--yes</code> without <code>--overwrite</code>) <strong>replaced secrets it promised to keep</strong>. evnx now reads every page and compares names as GitHub stores them, in uppercase.
 </Callout>
 
 ---
 
 ## What you need
 
-- A GitHub Personal Access Token (PAT) with the **`secrets:write`** permission for the target repository
+- A GitHub token with the repository's **Secrets** permission (read and write)
 - The repository in **`owner/repo`** format
 - A `.env` file with the secrets you want to upload
 
-The token can be supplied three ways (in priority order):
+evnx finds the token in this order:
 
-1. `--github-token "ghp_…"` flag
-2. `GITHUB_TOKEN` environment variable
-3. Interactive prompt (evnx asks if neither of the above is set)
+1. `--github-token` on the command line
+2. The `GITHUB_TOKEN` environment variable
+3. A prompt, in a terminal, if neither is set. Without a terminal evnx stops with exit 2.
+
+**Use the environment variable.** A token passed with `--github-token` lands in your shell history and is visible in `ps` while evnx runs. evnx still accepts it, and prints a warning:
+
+```text
+! --github-token puts the token in your shell history and in `ps` while evnx runs. Export GITHUB_TOKEN instead: evnx reads it when the flag is absent.
+```
 
 ---
 
 ## How it works
 
-evnx does not handle raw secret values. Before uploading, it:
+evnx never sends a plaintext value to GitHub. On a real run (not `--dry-run`) it:
 
-1. Fetches the repository's RSA public key from `GET /repos/{owner}/{repo}/actions/secrets/public-key`
-2. Encrypts each value using a **libsodium sealed box** (X25519 / XSalsa20-Poly1305) with that public key
-3. Sends the encrypted payload to `PUT /repos/{owner}/{repo}/actions/secrets/{NAME}`
+1. Lists the repository's existing secrets with `GET /repos/{owner}/{repo}/actions/secrets`, 100 names per page, every page
+2. Fetches the repository's public key from `GET /repos/{owner}/{repo}/actions/secrets/public-key`
+3. Encrypts each value as a **libsodium sealed box** (X25519 / XSalsa20-Poly1305) with that key
+4. Sends the ciphertext to `PUT /repos/{owner}/{repo}/actions/secrets/{NAME}`, waiting one second between uploads
 
-Only the encrypted ciphertext leaves your machine. GitHub decrypts it server-side when the secret is used in a workflow.
+Only ciphertext leaves your machine. GitHub decrypts it when a workflow uses the secret.
+
+Every request names API version `2022-11-28`, identifies itself as `evnx/<version>`, and times out after 30 seconds. Requests go to `GITHUB_API_URL` when it is set — GitHub Actions sets it in every job, including on GitHub Enterprise Server — and to the public API otherwise.
 
 ---
 
 ## Basic usage
 
 ```bash
+export GITHUB_TOKEN=…   # a token with the repository's Secrets permission
 evnx migrate \
   --from env-file \
   --to github-actions \
-  --repo owner/repo \
-  --github-token "$GITHUB_TOKEN"
+  --repo owner/repo
 ```
 
-Without `--from`, evnx defaults to `env-file` and reads `.env` in the current directory. Without `--source-file`, it reads `.env`.
+`--from env-file` reads a `.env` file; without `--from`, evnx asks in a terminal and uses `env-file` when there is none. It reads `.env` in the current directory, or the file named by `--source-file`. `--env-name production` reads `.env.production`, and `[defaults] env_name` in `.evnx.toml` applies as it does for every other command.
 
 ---
 
 ## Step-by-step walkthrough
+
+The output below comes from a `.env` with 14 variables, in a repository that already holds `DATABASE_URL` and `REDIS_URL`.
 
 <Step title="Scan and validate your .env first">
 Avoid uploading test keys or placeholder values to GitHub.
@@ -86,27 +101,29 @@ evnx validate --strict
 </Step>
 
 <Step title="Preview the migration">
-Run with `--dry-run` to see exactly which secrets would be uploaded, skipped, or would conflict with existing ones — without making any API calls.
+`--dry-run` loads and filters the `.env` and stops. It makes **no API calls** and needs no token, so it cannot tell which secrets already exist: every secret is counted as "to upload".
 
 ```bash
 evnx migrate \
   --to github-actions \
   --repo owner/repo \
-  --github-token "$GITHUB_TOKEN" \
   --dry-run
 ```
 
-Example output:
+```text
+✓ Loaded 14 secrets from .env
 
-```
-✓ Loaded 14 secrets from env-file
+· Migrating to GitHub Actions Secrets…
 
 Migration plan:
-  • 11 to upload
-  • 2 to skip (already exist)
-  • 1 conflicts (will overwrite)
+  • 14 to upload
 
-ℹ️ Dry-run — no changes made.
+· Dry-run — no changes made.
+
+Summary:
+  ·  14 secret(s) previewed
+     dry run — nothing was uploaded and nothing was written
+…
 ```
 </Step>
 
@@ -120,37 +137,61 @@ evnx migrate \
   --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST" \
   --dry-run
 ```
+
+```text
+✓ Loaded 14 secrets from .env
+· After filtering: 10 of 14 secrets remain.
+
+· Migrating to GitHub Actions Secrets…
+
+Migration plan:
+  • 10 to upload
+…
+```
 </Step>
 
 <Step title="Run the migration">
-Remove `--dry-run`. evnx shows a progress bar and prints a line per secret.
+Remove `--dry-run`. In a terminal, evnx asks about each secret that already exists (see [Handling conflicts](#handling-conflicts)), prints the plan, asks **"Proceed with migration?"**, then uploads with a progress bar and a `✓` line per secret.
 
 ```bash
 evnx migrate \
   --to github-actions \
   --repo owner/repo \
-  --github-token "$GITHUB_TOKEN" \
-  --exclude "*_LOCAL,*_DEV"
+  --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST"
 ```
 
+To answer both questions up front — and to run without a terminal — add `--yes` and `--skip-existing`:
+
+```bash
+evnx migrate \
+  --to github-actions \
+  --repo owner/repo \
+  --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST" \
+  --yes --skip-existing
 ```
-🚀 Migrating to GitHub Actions Secrets…
+
+```text
+✓ Loaded 14 secrets from .env
+· After filtering: 10 of 14 secrets remain.
+
+· Migrating to GitHub Actions Secrets…
 
 Migration plan:
-  • 11 to upload
-
-Proceed with migration? › Yes
-
-⠸ [████████████████████░░░░░░░░░░░░░░░░░░░░] 10/11 DB_PASSWORD
-  ✓ DATABASE_URL
-  ✓ DB_PASSWORD
-  ✓ STRIPE_SECRET_KEY
-  …
+  • 8 to upload
+  • 2 to skip (already exist)
 
 Summary:
-  ✓  11 uploaded
+  ✓  8 uploaded
   ⊘  2 skipped
+
+Next steps:
+  1. Update your GitHub Actions workflows to reference these secrets.
+  2. Revoke / delete your local .env file or encrypt it with `evnx backup`.
+  3. Regenerate .env.example if secret names changed.
+…
 ```
+
+Without a terminal there is no progress bar, so no per-secret lines either — only the plan and the summary. Add `-v` to see an `Uploading '<NAME>'` line for each secret.
 </Step>
 
 <Step title="Update your workflows">
@@ -174,12 +215,12 @@ jobs:
 
 ## Handling conflicts
 
-When a secret already exists in the repository, evnx gives you three options:
+A secret that already exists in the repository is never replaced without your say-so. Names are compared as GitHub stores them — uppercase — so `database_url` in your `.env` matches an existing `DATABASE_URL`.
 
-**Interactive (default)** — prompts for each conflict:
+**Interactive (default, in a terminal)** — evnx asks for each existing secret, defaulting to No:
 ```bash
 evnx migrate --to github-actions --repo owner/repo
-# → Overwrite existing secret 'DATABASE_URL'? › No
+# evnx asks "Overwrite existing secret 'DATABASE_URL'?" — Enter means no
 ```
 
 **Skip all existing** — never overwrite:
@@ -190,6 +231,52 @@ evnx migrate --to github-actions --repo owner/repo --skip-existing
 **Overwrite all existing** — no prompts:
 ```bash
 evnx migrate --to github-actions --repo owner/repo --overwrite
+```
+
+**`--yes` does not answer "overwrite?"** It only skips "Proceed with migration?". If a secret exists and you passed neither `--skip-existing` nor `--overwrite`, evnx stops before uploading anything:
+
+```text
+· Migrating to GitHub Actions Secrets…
+Error: 2 already exist in owner/repo: DATABASE_URL, REDIS_URL.
+
+--yes does not replace secrets. Add --overwrite to replace them or --skip-existing to leave them. Nothing was uploaded.
+```
+
+That run exits with code 2.
+
+---
+
+## Running from CI
+
+A CI job has no terminal, so evnx cannot ask "Proceed with migration?". Without `--yes` it stops before contacting GitHub:
+
+```text
+· Migrating to GitHub Actions Secrets…
+Error: there is no terminal to confirm with.
+
+Add --yes to upload without asking:
+  evnx migrate --to github-actions --repo owner/repo --yes
+```
+
+Pass `--yes`, choose `--skip-existing` or `--overwrite`, and give evnx the token through `GITHUB_TOKEN`:
+
+```yaml
+      - name: Upload secrets
+        env:
+          GITHUB_TOKEN: ${{ secrets.SECRETS_ADMIN_TOKEN }}
+        run: evnx migrate --to github-actions --repo owner/repo --yes --skip-existing
+```
+
+The token a workflow gets automatically (`secrets.GITHUB_TOKEN`) cannot manage repository secrets. Store a personal access token with the Secrets permission as a secret of its own, and map it to `GITHUB_TOKEN` as above.
+
+**Exit codes:** `0` everything uploaded or skipped; `1` at least one upload failed; `2` evnx could not run (a missing flag or token, no `--yes` without a terminal, an undecided existing secret, a name collision, a filter that left nothing). A failed upload is listed in the summary:
+
+```text
+Summary:
+  ✓  1 uploaded
+  ⊘  1 skipped
+  ✗  1 failed
+      • JWT_SECRET: Upload failed 422 Unprocessable Entity: {"message": "Validation Failed"}
 ```
 
 ---
@@ -216,11 +303,40 @@ evnx migrate \
   --add-prefix "PROD_"
 ```
 
+Both must leave every name a variable name — letters, digits and `_`, not starting with a digit — or evnx refuses the prefix.
+
+**Two names that become one are an error.** If your `.env` holds both `APP_DATABASE_URL` and `DATABASE_URL`, `--strip-prefix "APP_"` would upload one and lose the other's value. GitHub also ignores case, so `api_key` and `API_KEY` are one secret there. evnx exits with code 2 and names both:
+
+```text
+Error: these names become the same name in GitHub Actions, and one value would be lost:
+  APP_DATABASE_URL, DATABASE_URL → DATABASE_URL
+  (GitHub Actions treats names that differ only in case as one name.)
+Rename one in the .env, migrate without --strip-prefix, or pass --allow-collisions to keep the last value. Nothing was printed or sent.
+```
+
+`--allow-collisions` keeps the last value and says which one it kept.
+
+---
+
+## What GitHub refuses
+
+evnx checks two of GitHub's own rules before it sends any request, and stops with exit 2 if a secret breaks one:
+
+- **Names starting with `GITHUB_`** are reserved. Rename the variable, add a prefix with `--add-prefix`, or leave it out with `--exclude`.
+- **Values over 48 KB** do not fit in a GitHub secret.
+
+```text
+Error: GitHub would refuse this secret:
+  GITHUB_DEPLOY_KEY: names starting with GITHUB_ are reserved
+
+Rename them in the .env, add a prefix with --add-prefix, or leave them out with --exclude. Nothing was uploaded.
+```
+
 ---
 
 ## Token permission requirements
 
-The PAT must have:
+The token must have:
 
 | Permission | Scope |
 |-----------|-------|
@@ -234,7 +350,11 @@ For a classic PAT: the `repo` scope covers both.
 
 ## Rate limiting
 
-GitHub allows 1 000 API requests per hour for authenticated users. evnx adds a 100 ms delay between secret uploads to stay comfortably within this limit for repositories with up to a few hundred secrets.
+GitHub asks clients to leave at least a second between writes, and limits how many secret uploads it accepts per minute. evnx waits one second between uploads, so 50 secrets take about 50 seconds. Each request times out after 30 seconds.
+
+<Callout type="info">
+  <strong>Changed in 0.10.10.</strong> evnx waited 100 ms between uploads, and a repository with more than 80 secrets ran into GitHub's secondary rate limit; the rest failed. Requests also had no timeout, so an unanswered connection could hang the run.
+</Callout>
 
 ---
 

@@ -3,13 +3,13 @@ section: "use-cases"
 order: 2
 title: "Migrate to AWS Secrets Manager"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-09"
+updatedAt: "2026-10-20"
 excerpt: "Generate ready-to-run AWS CLI commands to store your .env secrets in AWS Secrets Manager as a single JSON secret."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "aws", "secrets-manager", "cli"]
 commands: ["convert", "migrate", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.10"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -35,13 +35,23 @@ evnx packs all filtered secrets into a single JSON object and prints two `aws se
 # Create a new secret:
 aws secretsmanager create-secret \
   --name prod/myapp/config \
-  --secret-string '{"DATABASE_URL":"postgres://…","STRIPE_SECRET_KEY":"sk_live_…"}'
+  --secret-string '{
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000",
+  …
+}'
 
 # Or update an existing secret:
 aws secretsmanager update-secret \
   --secret-id prod/myapp/config \
-  --secret-string '{"DATABASE_URL":"postgres://…","STRIPE_SECRET_KEY":"sk_live_…"}'
+  --secret-string '{
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000",
+  …
+}'
 ```
+
+The JSON is inside single quotes, with a `'` in a value written as `'\''`, so `$`, `#` and quotes reach AWS as written instead of being interpreted by your shell.
 
 <Callout type="info">
   Storing all secrets as one JSON object is the AWS-recommended pattern for application configs. Your application reads the JSON and parses individual keys at runtime.
@@ -67,7 +77,14 @@ evnx migrate \
   --secret-name prod/myapp/config
 ```
 
-If `--secret-name` is omitted, evnx prompts interactively.
+If `--secret-name` is omitted, evnx asks for it in a terminal. Without a terminal it stops with exit 2:
+
+```text
+Error: AWS secret name (e.g. prod/myapp/config) is required. Pass `--secret-name`.
+  evnx would normally ask, but stdin is not a terminal.
+```
+
+The output on this page comes from a `.env` with 12 variables, four of them local-only (`*_LOCAL`, `*_TEST`, `*_DEV`).
 
 ---
 
@@ -80,7 +97,7 @@ evnx validate --strict
 </Step>
 
 <Step title="Preview the migration">
-`--dry-run` shows the secret name, count, and a preview of the JSON payload without printing the full commands.
+`--dry-run` shows the secret name, the count, and the first 300 characters of the JSON payload, without printing the commands.
 
 ```bash
 evnx migrate \
@@ -89,8 +106,10 @@ evnx migrate \
   --dry-run
 ```
 
-```
-☁️ AWS Secrets Manager migration
+```text
+✓ Loaded 12 secrets from .env
+
+· AWS Secrets Manager migration
 
 Dry-run — would upload to AWS Secrets Manager:
   Secret name : prod/myapp/config
@@ -98,10 +117,21 @@ Dry-run — would upload to AWS Secrets Manager:
 
   JSON preview (first 300 chars):
   {
-    "DATABASE_URL": "postgres://user:pass@host:5432/db",
-    "STRIPE_SECRET_KEY": "sk_live_…",
-    …
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000",
+  "STRIPE_WEBHOOK_SECRET": "whsec_EXAMPLE0000000000000000",
+  "REDIS_URL": "redis://cache.internal:6379/0",
+  "JWT_SECRET": "4f9c2e1a7b3d8e6f0a5c9b2d7e1f3a8c",
+  "SENDGRID_API_KEY": "
+  … (299 more chars)
+
+Summary:
+  ·  12 secret(s) previewed
+     dry run — nothing was uploaded and nothing was written
+…
 ```
+
+Nothing is contacted, with or without `--dry-run`: this destination only prints.
 </Step>
 
 <Step title="Filter out local-only variables">
@@ -112,26 +142,56 @@ evnx migrate \
   --exclude "*_LOCAL,*_TEST,*_DEV" \
   --dry-run
 ```
+
+```text
+✓ Loaded 12 secrets from .env
+· After filtering: 8 of 12 secrets remain.
+…
+  Secrets     : 8
+```
 </Step>
 
 <Step title="Generate the commands">
-Remove `--dry-run`. Pipe to a file so you can review before running.
+Remove `--dry-run` and add `--print-only`, then redirect to a file so you can review it before running. With `--print-only`, stdout holds only the commands; the header, status lines and summary go to stderr, so they stay on your screen and out of the file.
 
 ```bash
 evnx migrate \
   --to aws-secrets-manager \
   --secret-name prod/myapp/config \
   --exclude "*_LOCAL,*_TEST,*_DEV" \
-  > aws-upload.sh
+  --print-only > aws-upload.sh
 ```
+
+```text
+✓ Loaded 12 secrets from .env
+· After filtering: 8 of 12 secrets remain.
+
+· AWS Secrets Manager migration
+
+Run one of the following commands:
+
+
+Summary:
+  ✓  8 command(s) generated
+     nothing has been uploaded — run the commands written to stdout
+…
+```
+
+<Callout type="info">
+  <strong>New in 0.10.10.</strong> Without <code>--print-only</code>, stdout carries the status lines and the summary as well as the commands, so <code>&gt; aws-upload.sh</code> saves a file <code>sh</code> cannot run. Earlier versions of this page redirected without it; add the flag to any script that copied that.
+</Callout>
 </Step>
 
 <Step title="Review and run">
+`aws-upload.sh` holds **both** commands, `create-secret` and `update-secret`, each with the whole JSON payload. Delete the one you don't need, then run the file:
+
 ```bash
 cat aws-upload.sh     # inspect the JSON payload
-bash aws-upload.sh    # run create-secret (first time)
-                      # or update-secret (subsequent runs)
+sh aws-upload.sh      # first time: keep create-secret
+                      # afterwards: keep update-secret
 ```
+
+`create-secret` fails when the secret already exists, and `update-secret` fails when it does not.
 </Step>
 
 ---
@@ -147,13 +207,26 @@ evnx migrate \
   --aws-profile production
 ```
 
-Output:
+The commands it prints — here with `--include "DATABASE_URL,STRIPE_SECRET_KEY"` to keep them short:
 ```bash
+# Create a new secret:
 aws secretsmanager create-secret \
-  --profile production \
-  --name prod/myapp/config \
-  --secret-string '{…}'
+  --profile production --name prod/myapp/config \
+  --secret-string '{
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000"
+}'
+
+# Or update an existing secret:
+aws secretsmanager update-secret \
+  --profile production --secret-id prod/myapp/config \
+  --secret-string '{
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000"
+}'
 ```
+
+The commands carry no `--region`: the AWS CLI takes it from the profile or from `AWS_REGION`.
 
 ---
 
@@ -181,6 +254,30 @@ evnx migrate \
   --to aws \
   --secret-name prod/myapp/config \
   --strip-prefix "APP_"
+```
+
+If the `.env` also holds a plain `DATABASE_URL`, both would become one JSON key and one value would be lost. evnx refuses with exit 2 and names both:
+
+```text
+Error: these names become the same name after renaming, and one value would be lost:
+  APP_DATABASE_URL, DATABASE_URL → DATABASE_URL
+Rename one in the .env, migrate without --strip-prefix, or pass --allow-collisions to keep the last value. Nothing was printed or sent.
+```
+
+`--allow-collisions` keeps the last value and prints which one it kept. A prefix must also leave every name a variable name (letters, digits, `_`, not starting with a digit).
+
+---
+
+## Another environment's file
+
+`--env-name production` reads `.env.production` instead of `.env`. With `[defaults] env_name` in `.evnx.toml`, migrate reads that environment's file, as every other evnx command does — before 0.10.10 it read `.env` regardless. The load line names the file it read: `✓ Loaded 8 secrets from .env.production`.
+
+```bash
+evnx migrate \
+  --env-name production \
+  --to aws \
+  --secret-name prod/myapp/config \
+  --print-only > aws-upload.sh
 ```
 
 ---
