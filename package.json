@@ -13,6 +13,7 @@
     "config:sync": "node scripts/sync-config.mjs",
     "config:check": "node scripts/sync-config.mjs --check",
     "check:links": "node scripts/check-content-links.mjs",
+    "check:links:built": "node scripts/check-content-links.mjs --built apps/docs",
     "baseline:analytics": "node scripts/export-analytics.mjs",
     "baseline:crawl": "node scripts/crawl-inventory.mjs",
     "verify:redirects": "node scripts/verify-redirects.mjs",

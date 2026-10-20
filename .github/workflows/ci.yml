@@ -82,6 +82,27 @@ jobs:
       - name: Every guide's `commands:` matches what it demonstrates
         run: node scripts/sync-guide-commands.mjs --check
 
+  # ⚠️ D-175. `content-links` reads the MDX as written, where a guide links
+  # `/guides/…`; the docs app serves the same pages at `/cli/…`. It rendered
+  # those links unchanged — 352 hrefs on 63 of 72 pages, every one a 404 on
+  # docs.evnx.dev — and `content-links` was green the whole time, because it
+  # checks the author's URL space, not the one the reader gets. This builds the
+  # docs app and checks every `<a href>` in its output against the pages that
+  # build serves. Only a build shows that.
+  built-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter docs build
+      - name: Every link the docs app renders reaches a page it serves
+        run: pnpm check:links:built
+
   config-drift:
     runs-on: ubuntu-latest
     steps:

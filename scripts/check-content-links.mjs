@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // ─── Validate every internal link in content/ ─────────────────────────────────
 //
-//   node scripts/check-content-links.mjs
+//   node scripts/check-content-links.mjs                    the MDX, as written
+//   node scripts/check-content-links.mjs --built apps/docs  what a build renders
+//   node scripts/check-content-links.mjs --built apps/docs --fragments
 //
 // ⚠️ WHY THIS EXISTS. An audit of the built site found 43 dead internal links
 // across 22 URLs, every one of them written by hand in MDX and none of them
@@ -17,9 +19,120 @@
 //
 // Fixing them once is worthless if the next guide reintroduces them. This runs
 // in CI.
+//
+// ⚠️ AND WHY IT IS NOT ENOUGH ON ITS OWN (D-175). The default mode resolves
+// `/guides/…` against the guide list — the URL space the MDX is written in. The
+// docs app serves the same guides at `/cli/…`, and rendered every `/guides/…`
+// link unchanged: 352 hrefs on 63 of 72 pages, each one a 404 on
+// docs.evnx.dev, while this check stayed green. A link is only right in the
+// app that renders it, so `--built <app>` reads that app's build output and
+// checks every `<a href>` against the pages the build actually contains.
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join, extname, basename } from "node:path";
+import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { join, extname, basename, relative } from "node:path";
+import { createRequire } from "node:module";
+
+const requireHere = createRequire(join(process.cwd(), "package.json"));
+
+/** `/guides/:path*` → a RegExp, and the destination it would produce. */
+function redirectFor(redirects, path) {
+  for (const r of redirects) {
+    const names = [];
+    const pattern = r.source.replace(/:(\w+)(\*)?/g, (_, name, star) => {
+      names.push(name);
+      return star ? "(.*)" : "([^/]+)";
+    });
+    const m = path.match(new RegExp(`^${pattern}$`));
+    if (!m) continue;
+    let dest = r.destination;
+    names.forEach((n, i) => (dest = dest.replace(new RegExp(`:${n}\\*?`), m[i + 1])));
+    return dest;
+  }
+  return null;
+}
+
+async function appRedirects(appDir) {
+  const config = requireHere(`./${appDir}/next.config.js`);
+  return typeof config.redirects === "function" ? await config.redirects() : [];
+}
+
+// ── --built <app>: the links a reader actually gets ──────────────────────────
+
+const builtAt = process.argv.indexOf("--built");
+if (builtAt !== -1) {
+  const appDir = process.argv[builtAt + 1]?.replace(/\/+$/, "");
+  const checkFragments = process.argv.includes("--fragments");
+  const root = join(appDir ?? "", ".next/server/app");
+  if (!appDir || !existsSync(root)) {
+    console.error(`no build at ${root} — run that app's \`next build\` first`);
+    process.exit(2);
+  }
+
+  const walk = (dir) =>
+    readdirSync(dir).flatMap((f) => {
+      const p = join(dir, f);
+      return statSync(p).isDirectory() ? walk(p) : p.endsWith(".html") ? [p] : [];
+    });
+
+  // Route → HTML, for every page the build prerendered.
+  const pages = new Map();
+  for (const file of walk(root)) {
+    const route = `/${relative(root, file).replace(/\.html$/, "")}`.replace(/\/index$/, "") || "/";
+    if (route === "/_not-found" || route === "/_global-error") continue;
+    pages.set(route === "/index" ? "/" : route, file);
+  }
+  // Plus every static route, prerendered or not: `/blog` and `/pricing` render
+  // on request and leave no HTML behind. A dynamic route (`/cli/[...slug]`)
+  // counts only through the pages it prerendered.
+  const manifest = join(appDir, ".next/app-path-routes-manifest.json");
+  const routes = new Set(
+    existsSync(manifest)
+      ? Object.values(JSON.parse(readFileSync(manifest, "utf8"))).filter((r) => !r.includes("["))
+      : [],
+  );
+  const isPage = (path) => pages.has(path) || routes.has(path);
+
+  const redirects = await appRedirects(appDir);
+  const problems = [];
+  let links = 0;
+  for (const [route, file] of pages) {
+    const html = readFileSync(file, "utf8");
+    // Anchors only: reader-facing links, not <link rel> assets in <head>.
+    for (const m of html.matchAll(/<a\s[^>]*?href="(\/(?!\/)[^"]*)"/g)) {
+      const href = m[1].replace(/&amp;/g, "&");
+      if (href.startsWith("/_next/")) continue;
+      links++;
+      const [beforeHash, fragment] = href.split("#");
+      const path = beforeHash.split("?")[0].replace(/\/$/, "") || "/";
+      if (isPage(path)) {
+        if (checkFragments && fragment && pages.has(path)) {
+          const target = readFileSync(pages.get(path), "utf8");
+          if (!target.includes(`id="${fragment}"`)) {
+            problems.push(`${route}: ${href} — no element with id "${fragment}"`);
+          }
+        }
+        continue;
+      }
+      if (/\.[a-z0-9]{2,5}$/i.test(path) && existsSync(join(appDir, "public", path))) continue;
+      const dest = redirectFor(redirects, path);
+      problems.push(
+        dest
+          ? `${route}: ${href} — not a page here; reaches ${dest} only through a redirect`
+          : `${route}: ${href} — no such page in this build`,
+      );
+    }
+  }
+
+  console.log(`checked ${links} internal link(s) on ${pages.size} built page(s) of ${appDir}`);
+  if (problems.length === 0) {
+    console.log(`✓ every internal link in ${appDir}'s build reaches a page it serves`);
+    process.exit(0);
+  }
+  console.error(`\n✗ ${problems.length} link(s) in ${appDir}'s build do not reach a page:\n`);
+  for (const p of problems.slice(0, 60)) console.error(`  ${p}`);
+  if (problems.length > 60) console.error(`  … and ${problems.length - 60} more`);
+  process.exit(1);
+}
 
 // ⚠️ Guides live in the shared package now; blog stayed in apps/web.
 const GUIDES = "packages/docs-content/guides";
@@ -143,6 +256,22 @@ for (const [, { file }] of [...guides, ...posts]) {
       if (!g) note(rel, `prerequisite "${slug}" — no such guide`);
       else if (g.draft) note(rel, `prerequisite "${slug}" — guide is draft: true`);
     }
+  }
+}
+
+// ── Every app that renders the guides can resolve their links ────────────────
+//
+// ⚠️ D-175. apps/docs serves the guides at `/cli/…` and nothing at `/guides`.
+// Its page renderer rewrites the author-form links, and `--built apps/docs`
+// proves that on a build; this cheap half checks the safety net is still there
+// for `/guides` URLs that come from outside, without needing a build.
+{
+  const redirects = await appRedirects("apps/docs");
+  if (redirectFor(redirects, "/guides/commands/scan") !== "/cli/commands/scan") {
+    note(
+      "apps/docs/next.config.js",
+      "no /guides/:path* → /cli/:path* redirect — a /guides link that reaches docs.evnx.dev 404s (D-175)",
+    );
   }
 }
 
