@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.8",
+  "evnx_version": "0.10.10",
   "features": [
     "net",
     "migrate",
@@ -75,7 +75,7 @@
     },
     {
       "name": "migrate",
-      "about": "Full migration workflow to secret managers",
+      "about": "Move a .env into a secret manager: print the commands, or upload to GitHub",
       "aliases": [],
       "guide": "/guides/commands/migrate",
       "guide_draft": false,
