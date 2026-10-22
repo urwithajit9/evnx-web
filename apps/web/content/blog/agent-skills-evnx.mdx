@@ -56,10 +56,10 @@ curl -fsSL https://dotenv.space/install.sh | bash
 <Tab label="Cargo">
 
 ```bash
-# Core features — validate, scan, diff, convert, sync
+# Everything, as the prebuilt binaries (recommended)
 cargo install evnx --all-features
 
-# All features — adds migrate and encrypted backup
+# migrate and encrypted backup only, without the cloud commands
 cargo install evnx --features full
 ```
 
@@ -85,7 +85,7 @@ pip install evnx
 
 ```powershell
 # Requires Rust — install from https://rustup.rs first
-cargo install evnx --features full
+cargo install evnx --all-features
 ```
 
 </Tab>

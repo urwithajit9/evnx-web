@@ -343,15 +343,21 @@ sentry_dsn: {{SENTRY_DSN|default:}}
 timeout:    {{REQUEST_TIMEOUT|default:30}}
 
 # .env
-LOG_LEVEL=             # defined but empty → triggers default
-REQUEST_TIMEOUT=60     # defined with value → uses value
-# SENTRY_DSN not in .env at all → triggers default
+# LOG_LEVEL is defined but empty: the default applies
+LOG_LEVEL=
+# REQUEST_TIMEOUT has a value: the value is used
+REQUEST_TIMEOUT=60
+# SENTRY_DSN is not in .env at all: the default (empty) applies
 
 # Output
 log_level:  warn
-sentry_dsn:             ← empty string (default was empty)
+sentry_dsn:
 timeout:    60
 ```
+
+<Callout type="warning">
+  <strong>Put a comment on its own line after an empty value.</strong> <code>LOG_LEVEL=   # empty</code> is read as the value <code># empty</code>, not as an empty value followed by a comment, so the default does not apply. A comment after a real value is fine: <code>LOG_LEVEL=warn # quiet</code> gives <code>warn</code>.
+</Callout>
 
 **The two conditions that trigger the default:**
 
