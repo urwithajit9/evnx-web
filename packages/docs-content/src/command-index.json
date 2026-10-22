@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.14",
+  "evnx_version": "0.10.16",
   "features": [
     "net",
     "migrate",
@@ -10,7 +10,7 @@
   "commands": [
     {
       "name": "init",
-      "about": "Interactive project setup — generates .env.example",
+      "about": "Interactive project setup — the template, .env and the .evnx.toml contract",
       "aliases": [],
       "guide": "/guides/commands/init",
       "guide_draft": false,

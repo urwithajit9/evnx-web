@@ -73,11 +73,11 @@ EMPTY=                   # → "" (an empty value, not an error)
 TABBED="col1\tcol2"      # → col1<tab>col2
 LITERAL='col1\tcol2'     # → col1\tcol2
 QUOTED="say \"hi\""      # → say "hi"
-WINPATH='C:\Users\ajit'  # → C:\Users\ajit — single quotes are the escape hatch
+WINPATH='C:\Users\aj'    # → C:\Users\aj — single quotes are the escape hatch
 ```
 
 <Callout type="warning" title="A Windows path or a regex belongs in single quotes">
-`"C:\Users\ajit"` resolves `\U` and `\a` as escapes. Single quotes take the value
+`"C:\Users\aj"` resolves `\U` and `\a` as escapes. Single quotes take the value
 exactly as written, which is what you want for paths, regular expressions and anything
 else where a backslash is data.
 </Callout>
