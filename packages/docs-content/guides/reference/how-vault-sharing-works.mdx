@@ -3,21 +3,21 @@ title: "How Sharing a Vault Works"
 section: reference
 order: 6
 publishedAt: "2026-10-22"
-updatedAt: "2026-10-22"
+updatedAt: "2026-10-23"
 excerpt: "Which key opens a vault someone shared with you: three people, seven steps, and each person's path from their own password to the same vault key, with a diagram for every step."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["cloud", "vault", "sharing", "cryptography", "zero-knowledge", "team"]
 commands: ["auth login", "auth register", "cloud pull", "cloud push", "vault create", "vault list", "vault revoke", "vault share"]
-evnxVersion: "0.10.14"
+evnxVersion: "0.10.16"
 prerequisites:
   - getting-started/cloud-sync-quickstart
 draft: false
 ---
 
-Ajit encrypts a `.env` on his laptop, pushes it to a vault and adds Jazz. Jazz pulls
-it and reads it. Ajit never told her his password, and the server never saw the file.
-So **which key does Jazz use to decrypt it?**
+AJ, a tech lead, encrypts a `.env` on their laptop, pushes it to a vault and adds Joy, a backend developer. Joy pulls
+it and reads it. AJ never shared their password, and the server never saw the file.
+So **which key does Joy use to decrypt it?**
 
 This page answers that one step at a time. Each step has the command, what happens on
 the machine, what is sent to the server, and a diagram. The diagrams are pieces of one
@@ -28,13 +28,13 @@ through, so step 3 starts where step 2 stopped. The whole thing is assembled at 
 Each vault has **one random vault key**, and every version of the `.env` is encrypted
 with it, never with anyone's personal key.
 
-The server keeps **one locked copy of that vault key per member**. Ajit's copy is
-locked with his master key. Jazz's copy is locked to her public keys; Ajit made it
-when he shared the vault.
+The server keeps **one locked copy of that vault key per member**. AJ's copy is
+locked with AJ's master key. Joy's copy is locked to Joy's public keys; AJ made it
+when sharing the vault.
 
-When Jazz pulls, she types **her own** master password. It opens her private key, her
-private key opens her copy of the vault key, and the vault key decrypts the file. All
-of it happens on her machine.
+When Joy pulls, Joy types **their own** master password. It opens Joy's private key,
+that private key opens Joy's copy of the vault key, and the vault key decrypts the
+file. All of it happens on Joy's machine.
 </Callout>
 
 <Prerequisites>
@@ -45,11 +45,11 @@ of it happens on her machine.
 
 ## The cast
 
-| Person | Role | Can do |
-|---|---|---|
-| **Ajit** `ajit@example.test` | owner | creates the vault `myapp/production`, pushes, shares, removes people |
-| **Jazz** `jazz@example.test` | developer | pulls, and pushes new versions |
-| **Ranjan** `ranjan@example.test` | viewer | pulls and reads; later removed |
+| Person | Job | Vault role | In this story |
+|---|---|---|---|
+| **AJ** `aj@example.test` | tech lead | owner | creates the vault `myapp/production`, pushes, shares, removes people |
+| **Joy** `joy@example.test` | backend developer | developer | pulls the secrets to run the app, and pushes a new variable |
+| **Roy** `roy@example.test` | QA contractor | viewer | pulls the secrets to run the test environment; removed when the contract ends |
 
 The server enforces these roles on every request:
 
@@ -64,7 +64,7 @@ A role decides what the server will **hand you**. It cannot give anyone the abil
 **decrypt**, because the server never holds an unlocked key to give.
 
 <Callout type="info" title="Everything on this page was run">
-Every command and every output below comes from the evnx 0.10.14 release binary
+Every command and every output below comes from the evnx 0.10.16 release binary
 against a local evnx-server built from the same commit as `api.evnx.dev`, with three
 throw-away accounts. The values in the example file are made up. Where an output
 names the server, it shows `https://api.evnx.dev`, the address you will see, in place
@@ -86,19 +86,19 @@ Two different paths lead to the same vault key. This picture is the whole answer
 
 ```mermaid
 flowchart TB
-  PA["Ajit's master password"] -->|"Argon2id, Ajit's salt"| MKA["Ajit's master key"]
-  MKA -->|"unlocks (XChaCha20)"| CA["Ajit's copy of the vault key"]
-  PJ["Jazz's master password"] -->|"Argon2id, Jazz's salt"| MKJ["Jazz's master key"]
-  MKJ -->|"unlocks"| SKJ["Jazz's private keys"]
-  SKJ -->|"hybrid unwrap, X25519 + ML-KEM-768"| CJ["Jazz's copy of the vault key"]
+  PA["AJ's master password"] -->|"Argon2id, AJ's salt"| MKA["AJ's master key"]
+  MKA -->|"unlocks (XChaCha20)"| CA["AJ's copy of the vault key"]
+  PJ["Joy's master password"] -->|"Argon2id, Joy's salt"| MKJ["Joy's master key"]
+  MKJ -->|"unlocks"| SKJ["Joy's private keys"]
+  SKJ -->|"hybrid unwrap, X25519 + ML-KEM-768"| CJ["Joy's copy of the vault key"]
   CA --> VK(("the vault key: the same 256 bits"))
   CJ --> VK
   VK -->|"AES-256-GCM decrypt"| ENV[".env.production"]
 ```
 
-Ajit's copy and Jazz's copy are two different locked boxes with the same key inside.
-Ajit opens his with his master key. Jazz opens hers with her private keys, which she
-first opens with her master key.
+AJ's copy and Joy's copy are two different locked boxes with the same key inside.
+AJ opens theirs with AJ's master key. Joy opens theirs with Joy's private keys, which
+Joy first opens with Joy's master key.
 
 ---
 
@@ -107,8 +107,8 @@ first opens with her master key.
 Each person does this once, on their own machine, with their own password:
 
 ```bash
-evnx auth register --email jazz@example.test
-evnx auth login --email jazz@example.test
+evnx auth register --email joy@example.test
+evnx auth login --email joy@example.test
 ```
 
 ```
@@ -116,15 +116,15 @@ evnx auth login --email jazz@example.test
   ✓ account created on https://api.evnx.dev
 ```
 
-What happens on Jazz's laptop:
+What happens on Joy's laptop:
 
-1. Her master password goes through Argon2id with a random salt. The result is her
+1. Joy's master password goes through Argon2id with a random salt. The result is Joy's
    **master key**.
-2. The CLI generates her **account keypair** (X25519 and ML-KEM-768) and locks the
-   private half under her master key.
-3. It computes an **SRP verifier**: a value that lets the server check her password
+2. The CLI generates Joy's **account keypair** (X25519 and ML-KEM-768) and locks the
+   private half under Joy's master key.
+3. It computes an **SRP verifier**: a value that lets the server check the password
    later without ever receiving it.
-4. After she clicks the link in the verification email, `evnx auth login` proves the
+4. After Joy clicks the link in the verification email, `evnx auth login` proves the
    password to the server with SRP. Nothing that crosses the wire can be replayed or
    turned back into the password.
 
@@ -135,22 +135,22 @@ What happens on Jazz's laptop:
 ```mermaid
 sequenceDiagram
     autonumber
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
     A->>A: master key = Argon2id(password, salt)
     A->>A: new keypair, private half locked under the master key
     A->>S: auth register (verifier, salts, public keys, locked private key)
-    J->>S: auth register (same steps, Jazz's own password)
-    R->>S: auth register (same steps, Ranjan's own password)
+    J->>S: auth register (same steps, Joy's own password)
+    R->>S: auth register (same steps, Roy's own password)
     Note over A,S: Each verifies their email, then signs in with SRP. No password is sent.
 ```
 
 ---
 
-## Step 2: Ajit creates the vault
+## Step 2: AJ creates the vault
 
 ```bash
 evnx vault create myapp --env production
@@ -160,27 +160,27 @@ evnx vault create myapp --env production
   ✓ created myapp/production
 ```
 
-1. Ajit's machine generates a random 256-bit **vault key**.
-2. It locks the vault key under **Ajit's master key** (XChaCha20-Poly1305).
-3. The server stores that locked copy as Ajit's member row, with the role `owner`.
+1. AJ's machine generates a random 256-bit **vault key**.
+2. It locks the vault key under **AJ's master key** (XChaCha20-Poly1305).
+3. The server stores that locked copy as AJ's member row, with the role `owner`.
 
 ```mermaid
 sequenceDiagram
     autonumber 6
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
     A->>A: vault key = 256 random bits
-    A->>A: lock it under Ajit's master key
-    A->>S: vault create myapp/production, with Ajit's locked copy
-    Note over S: one member row: Ajit, owner, a locked copy
+    A->>A: lock it under AJ's master key
+    A->>S: vault create myapp/production, with AJ's locked copy
+    Note over S: one member row: AJ, owner, a locked copy
 ```
 
 ---
 
-## Step 3: Ajit pushes the file
+## Step 3: AJ pushes the file
 
 ```bash
 evnx cloud push --vault myapp/production
@@ -191,7 +191,7 @@ evnx cloud push --vault myapp/production
   ✓ pushed ./.env.production to myapp/production as version 1
 ```
 
-1. Ajit types his master password. The CLI makes his master key, fetches his locked
+1. AJ types their master password. The CLI makes AJ's master key, fetches AJ's locked
    copy of the vault key and unlocks it.
 2. It reads `.env.production`, the default file for a production vault, and encrypts
    it byte for byte with AES-256-GCM.
@@ -205,13 +205,13 @@ evnx cloud push --vault myapp/production
 ```mermaid
 sequenceDiagram
     autonumber 9
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
     A->>S: GET my-key for myapp/production
-    S-->>A: Ajit's locked copy of the vault key
+    S-->>A: AJ's locked copy of the vault key
     A->>A: unlock it, encrypt the file (AES-256-GCM, vault id + version 1)
     A->>S: cloud push (ciphertext, hash, variable names)
     S->>B: store the blob as version 1
@@ -219,50 +219,50 @@ sequenceDiagram
 
 ---
 
-## Step 4: Ajit shares with Jazz and Ranjan
+## Step 4: AJ shares with Joy and Roy
 
 ```bash
-evnx vault share myapp/production --with jazz@example.test --role developer -v
-evnx vault share myapp/production --with ranjan@example.test --role viewer
+evnx vault share myapp/production --with joy@example.test --role developer -v
+evnx vault share myapp/production --with roy@example.test --role viewer
 ```
 
 ```
-  ✓ shared myapp/production with jazz@example.test as developer
-  vault id  7bf37b45-47ac-4cc7-89f8-947adfa28c3b
+  ✓ shared myapp/production with joy@example.test as developer
+  vault id  bed17154-430e-4e6f-aebf-32a7cdb40931
   key wrap  hybrid X25519 + ML-KEM-768
   ml-kem ct 1452 chars
 
   They can pull it with:  evnx cloud pull --vault myapp/production
 ```
 
-This is the step that makes sharing possible, and it happens entirely on Ajit's laptop:
+This is the step that makes sharing possible, and it happens entirely on AJ's laptop:
 
-1. The CLI asks the server for **Jazz's public keys**.
-2. Ajit types his master password, and his machine unlocks **his** copy of the vault key.
-3. It locks the vault key again, this time **to Jazz's public keys**. This lock is a
+1. The CLI asks the server for **Joy's public keys**.
+2. AJ types their master password, and AJ's machine unlocks **AJ's** copy of the vault key.
+3. It locks the vault key again, this time **to Joy's public keys**. This lock is a
    *hybrid*: a one-time X25519 key exchange and an ML-KEM-768 encapsulation, mixed
    into one wrapping key. It stays shut as long as either algorithm holds, including
    against a future quantum computer working on a recording made today.
-4. The server stores Jazz's locked copy as her member row. Ranjan's share repeats the
-   same steps with his public keys.
+4. The server stores Joy's locked copy as Joy's member row. Roy's share repeats the
+   same steps with Roy's public keys.
 
 | Sent to the server | Never sent |
 |---|---|
-| Jazz's locked copy, the one-time public key, the ML-KEM ciphertext, her role | the unlocked vault key, Ajit's master key or password |
+| Joy's locked copy, the one-time public key, the ML-KEM ciphertext, Joy's role | the unlocked vault key, AJ's master key or password |
 
 ```mermaid
 sequenceDiagram
     autonumber 14
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
-    A->>S: GET public keys for jazz@example.test
-    S-->>A: Jazz's X25519 and ML-KEM-768 public keys
-    A->>A: unlock Ajit's copy, then lock the vault key to Jazz's public keys
-    A->>S: vault share, Jazz as developer, with her locked copy
-    A->>S: vault share, Ranjan as viewer (same steps, his public keys)
+    A->>S: GET public keys for joy@example.test
+    S-->>A: Joy's X25519 and ML-KEM-768 public keys
+    A->>A: unlock AJ's copy, then lock the vault key to Joy's public keys
+    A->>S: vault share, Joy as developer, with Joy's locked copy
+    A->>S: vault share, Roy as viewer (same steps, Roy's public keys)
     Note over S: three locked copies of one vault key
 ```
 
@@ -282,9 +282,9 @@ Organisation invites are a separate feature, and they cannot grant access to a v
 
 ---
 
-## Step 5: Jazz pulls and decrypts
+## Step 5: Joy pulls and decrypts
 
-This is the step the question was about. On Jazz's laptop:
+This is the step the question was about. On Joy's laptop:
 
 ```bash
 evnx vault list
@@ -301,29 +301,29 @@ evnx cloud pull --vault myapp/production --file .env.production
   ✓ pulled version 1 of myapp/production into .env.production
 ```
 
-1. Jazz types **her own** master password. With her salt, it becomes her master key.
-2. The CLI fetches her locked private key and unlocks it with her master key.
-3. It fetches **her** copy of the vault key, the one Ajit made in step 4.
-4. Her private keys unwrap it. Out comes **the same vault key** Ajit used in step 3.
+1. Joy types **their own** master password. With Joy's salt, it becomes Joy's master key.
+2. The CLI fetches Joy's locked private key and unlocks it with that master key.
+3. It fetches **Joy's** copy of the vault key, the one AJ made in step 4.
+4. Joy's private keys unwrap it. Out comes **the same vault key** AJ used in step 3.
 5. The CLI downloads the encrypted file, decrypts it, and writes `.env.production`
-   readable by her only (mode `600`). It is byte-for-byte the file Ajit pushed.
+   readable by Joy only (mode `600`). It is byte-for-byte the file AJ pushed.
 
 ```mermaid
 sequenceDiagram
     autonumber 19
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
-    J->>J: master key = Argon2id(Jazz's password, Jazz's salt)
+    J->>J: master key = Argon2id(Joy's password, Joy's salt)
     J->>S: GET auth/me
-    S-->>J: Jazz's locked private key
-    J->>J: unlock it with Jazz's master key
+    S-->>J: Joy's locked private key
+    J->>J: unlock it with Joy's master key
     J->>S: GET my-key for myapp/production
-    S-->>J: Jazz's locked copy of the vault key
-    J->>J: hybrid unwrap with Jazz's private keys
-    Note over J: the same vault key Ajit holds
+    S-->>J: Joy's locked copy of the vault key
+    J->>J: hybrid unwrap with Joy's private keys
+    Note over J: the same vault key AJ holds
     J->>S: cloud pull, latest version
     S->>B: fetch version 1
     B-->>S: ciphertext
@@ -346,12 +346,12 @@ Without `--file`, a first pull into a folder that has no `.env.production` yet w
   ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
 ```
 
-Pass `--file .env.production` to keep the same name as on Ajit's machine.
+Pass `--file .env.production` to keep the same name as on AJ's machine.
 </Callout>
 
 ---
 
-## Step 6: Jazz pushes a change
+## Step 6: Joy pushes a change
 
 ```bash
 evnx cloud push --vault myapp/production --file .env.production
@@ -361,15 +361,15 @@ evnx cloud push --vault myapp/production --file .env.production
   ✓ pushed .env.production to myapp/production as version 2
 ```
 
-Jazz unlocks her copy exactly as in step 5 and encrypts version 2 with it. There is
-one vault key, so Ajit and Ranjan decrypt her version with their own copies. Ranjan is
-a viewer, so his push is refused by the server:
+Joy unlocks Joy's copy exactly as in step 5 and encrypts version 2 with it. There is
+one vault key, so AJ and Roy decrypt Joy's version with their own copies. Roy is
+a viewer, so the server refuses Roy's push:
 
 ```
 Error: Insufficient permissions
 ```
 
-Jazz can't pass the vault on, either. The CLI shares only from the creator's own copy:
+Joy can't pass the vault on, either. The CLI shares only from the creator's own copy:
 
 ```
 Error: myapp/production was shared with you rather than created by you, and re-sharing
@@ -379,33 +379,35 @@ is not supported. Ask the owner to share it directly.
 ```mermaid
 sequenceDiagram
     autonumber 31
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
     J->>S: cloud push version 2 (developer, so allowed)
     S->>B: store version 2
     A->>S: cloud pull
     S-->>A: ciphertext of version 2
-    A->>A: decrypt with Ajit's own copy of the vault key
+    A->>A: decrypt with AJ's own copy of the vault key
     R->>S: cloud push (viewer)
     S--xR: Insufficient permissions
 ```
 
 ---
 
-## Step 7: Ajit removes Ranjan
+## Step 7: AJ removes Roy
+
+Roy's QA contract has ended, so Roy should lose access to the vault.
 
 ```bash
-evnx vault revoke myapp/production --user ranjan@example.test
+evnx vault revoke myapp/production --user roy@example.test
 ```
 
 ```
   Re-encrypting 2 version(s)…
   Re-wrapping for 2 member(s)…
 
-  ✓ removed ranjan@example.test from myapp/production and rotated the vault key
+  ✓ removed roy@example.test from myapp/production and rotated the vault key
   2 version(s) re-encrypted, 2 member(s) re-wrapped
 
   They can no longer read anything pushed from now on.
@@ -413,19 +415,19 @@ evnx vault revoke myapp/production --user ranjan@example.test
   rotate those secrets at their source.
 ```
 
-Deleting Ranjan's row would not be enough. He may have kept the unlocked vault key,
+Deleting Roy's row would not be enough. Roy may have kept the unlocked vault key,
 and it would open every blob, including ones pushed later. So `revoke` **rotates the
 key**:
 
-1. Ajit's machine generates a **new** vault key.
+1. AJ's machine generates a **new** vault key.
 2. It downloads every version, decrypts it with the old key and encrypts it with the
    new one.
-3. It locks the new key for everyone who stays: Ajit's copy under his master key,
-   Jazz's with the hybrid lock to her public keys.
-4. One request swaps in all the new blobs and copies at once and deletes Ranjan's row.
+3. It locks the new key for everyone who stays: AJ's copy under AJ's master key,
+   Joy's with the hybrid lock to Joy's public keys.
+4. One request swaps in all the new blobs and copies at once and deletes Roy's row.
    If anything fails, nothing changes.
 
-Ranjan's next pull finds nothing, and Jazz's next pull works unchanged:
+Roy's next pull finds nothing, and Joy's next pull works unchanged:
 
 ```
 Error: no vault called "myapp/production". Run `evnx vault list` to see what you have.
@@ -434,26 +436,26 @@ Error: no vault called "myapp/production". Run `evnx vault list` to see what you
 ```mermaid
 sequenceDiagram
     autonumber 38
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
     A->>A: new vault key
     A->>S: fetch every version
     S-->>A: ciphertexts
     A->>A: decrypt with the old key, encrypt with the new key
-    A->>A: lock the new key for Ajit and for Jazz
-    A->>S: vault revoke, one atomic swap, Ranjan's row deleted
+    A->>A: lock the new key for AJ and for Joy
+    A->>S: vault revoke, one atomic swap, Roy's row deleted
     R->>S: cloud pull
     S--xR: no vault called myapp/production
     J->>S: cloud pull
-    S-->>J: works, Jazz's copy was re-locked in the same swap
+    S-->>J: works, Joy's copy was re-locked in the same swap
 ```
 
 <Callout type="warning" title="What revoke cannot do">
-It cannot reach into Ranjan's laptop. The `.env.production` he pulled before step 7
-is still on his disk, and any value he copied is still his. **Rotate those secrets
+It cannot reach into Roy's laptop. The `.env.production` Roy pulled before step 7
+is still on Roy's disk, and any value Roy copied is still Roy's. **Rotate those secrets
 where they are issued**: the database password, the Stripe key, and so on. evnx can
 stop handing a secret out. Only the provider can make the old value worthless.
 </Callout>
@@ -467,65 +469,65 @@ The seven pieces above, joined. The numbers match the arrows in each step.
 ```mermaid
 sequenceDiagram
     autonumber
-    actor A as Ajit
-    actor J as Jazz
-    actor R as Ranjan
+    actor A as AJ
+    actor J as Joy
+    actor R as Roy
     participant S as evnx server
     participant B as Blob storage
     Note over A,B: Step 1, register
     A->>A: master key = Argon2id(password, salt)
     A->>A: new keypair, private half locked under the master key
     A->>S: auth register (verifier, salts, public keys, locked private key)
-    J->>S: auth register (same steps, Jazz's own password)
-    R->>S: auth register (same steps, Ranjan's own password)
+    J->>S: auth register (same steps, Joy's own password)
+    R->>S: auth register (same steps, Roy's own password)
     Note over A,B: Step 2, create the vault
     A->>A: vault key = 256 random bits
-    A->>A: lock it under Ajit's master key
-    A->>S: vault create myapp/production, with Ajit's locked copy
+    A->>A: lock it under AJ's master key
+    A->>S: vault create myapp/production, with AJ's locked copy
     Note over A,B: Step 3, push
     A->>S: GET my-key for myapp/production
-    S-->>A: Ajit's locked copy of the vault key
+    S-->>A: AJ's locked copy of the vault key
     A->>A: unlock it, encrypt the file (AES-256-GCM, vault id + version 1)
     A->>S: cloud push (ciphertext, hash, variable names)
     S->>B: store the blob as version 1
     Note over A,B: Step 4, share
-    A->>S: GET public keys for jazz@example.test
-    S-->>A: Jazz's X25519 and ML-KEM-768 public keys
-    A->>A: unlock Ajit's copy, then lock the vault key to Jazz's public keys
-    A->>S: vault share, Jazz as developer, with her locked copy
-    A->>S: vault share, Ranjan as viewer (same steps, his public keys)
-    Note over A,B: Step 5, Jazz pulls with her own password
-    J->>J: master key = Argon2id(Jazz's password, Jazz's salt)
+    A->>S: GET public keys for joy@example.test
+    S-->>A: Joy's X25519 and ML-KEM-768 public keys
+    A->>A: unlock AJ's copy, then lock the vault key to Joy's public keys
+    A->>S: vault share, Joy as developer, with Joy's locked copy
+    A->>S: vault share, Roy as viewer (same steps, Roy's public keys)
+    Note over A,B: Step 5, Joy pulls with Joy's own password
+    J->>J: master key = Argon2id(Joy's password, Joy's salt)
     J->>S: GET auth/me
-    S-->>J: Jazz's locked private key
-    J->>J: unlock it with Jazz's master key
+    S-->>J: Joy's locked private key
+    J->>J: unlock it with Joy's master key
     J->>S: GET my-key for myapp/production
-    S-->>J: Jazz's locked copy of the vault key
-    J->>J: hybrid unwrap with Jazz's private keys
+    S-->>J: Joy's locked copy of the vault key
+    J->>J: hybrid unwrap with Joy's private keys
     J->>S: cloud pull, latest version
     S->>B: fetch version 1
     B-->>S: ciphertext
     S-->>J: ciphertext
     J->>J: decrypt, write .env.production (mode 600)
-    Note over A,B: Step 6, Jazz pushes, Ranjan cannot
+    Note over A,B: Step 6, Joy pushes, Roy cannot
     J->>S: cloud push version 2 (developer, so allowed)
     S->>B: store version 2
     A->>S: cloud pull
     S-->>A: ciphertext of version 2
-    A->>A: decrypt with Ajit's own copy of the vault key
+    A->>A: decrypt with AJ's own copy of the vault key
     R->>S: cloud push (viewer)
     S--xR: Insufficient permissions
-    Note over A,B: Step 7, remove Ranjan
+    Note over A,B: Step 7, remove Roy
     A->>A: new vault key
     A->>S: fetch every version
     S-->>A: ciphertexts
     A->>A: decrypt with the old key, encrypt with the new key
-    A->>A: lock the new key for Ajit and for Jazz
-    A->>S: vault revoke, one atomic swap, Ranjan's row deleted
+    A->>A: lock the new key for AJ and for Joy
+    A->>S: vault revoke, one atomic swap, Roy's row deleted
     R->>S: cloud pull
     S--xR: no vault called myapp/production
     J->>S: cloud pull
-    S-->>J: works, Jazz's copy was re-locked in the same swap
+    S-->>J: works, Joy's copy was re-locked in the same swap
 ```
 
 ---
@@ -537,12 +539,12 @@ the bytes themselves are random-looking and useless without a master password.
 
 | Member | Role | Locked vault key | One-time public key | ML-KEM ciphertext |
 |---|---|---|---|---|
-| ajit@example.test | owner | 96 characters | none | none |
-| jazz@example.test | developer | 96 characters | present | 1452 characters |
-| ranjan@example.test | viewer | 96 characters | present | 1452 characters |
+| aj@example.test | owner | 96 characters | none | none |
+| joy@example.test | developer | 96 characters | present | 1452 characters |
+| roy@example.test | viewer | 96 characters | present | 1452 characters |
 
-Ajit's row has no one-time key and no ML-KEM ciphertext, because his copy is locked
-symmetrically under his own master key: there is no key exchange to record. Every
+AJ's row has no one-time key and no ML-KEM ciphertext, because AJ's copy is locked
+symmetrically under AJ's own master key: there is no key exchange to record. Every
 shared copy has both. A database rule refuses a row that has one without the other,
 so a weakened, X25519-only share can't be stored even by mistake.
 
@@ -575,19 +577,19 @@ Not passively. A breach, a database dump or a curious operator gets what the dia
 above shows: nothing that opens without a master password.
 
 **Is there any way the server could get in?**
-Yes: by lying during a share. In step 4 Ajit's CLI gets Jazz's public keys **from the
+Yes: by lying during a share. In step 4 AJ's CLI gets Joy's public keys **from the
 server**. A malicious server could hand over its own keys instead, and receive a copy
 it can open. evnx doesn't yet let you compare key fingerprints out of band, so the
 precise claim is that the server cannot read your secrets **passively**. Sharing is
 the one moment that trusts the server to be honest about who is who.
 
-**Does Ajit have to be online when Jazz pulls?**
-No. Ajit's part ended when he stored Jazz's locked copy in step 4. From then on Jazz
-needs only her own password and the server.
+**Does AJ have to be online when Joy pulls?**
+No. AJ's part ended when AJ stored Joy's locked copy in step 4. From then on Joy
+needs only Joy's own password and the server.
 
-**What if Jazz forgets her master password?**
-Then her copy can't be opened, by her, by Ajit, or by the server. Her password is the
-only thing that opens her private key, and it is never stored.
+**What if Joy forgets the master password?**
+Then Joy's copy can't be opened, by Joy, by AJ, or by the server. That password is
+the only thing that opens Joy's private key, and it is never stored.
 
 **How does a CI pipeline read a vault?**
 An [API token](/guides/integrations/ci-cd-cloud-tokens) lets a pipeline reach the
@@ -596,7 +598,7 @@ the master password, kept as a CI secret and piped in:
 `echo "$EVNX_PASSWORD" | evnx cloud pull --vault myapp/production --password-stdin`.
 On the runner it becomes the master key, exactly as on a laptop.
 
-**Why isn't Ajit's own copy locked with the public-key method too?**
+**Why isn't AJ's own copy locked with the public-key method too?**
 It doesn't need to be, and it is safer this way. A copy locked symmetrically under
 the master key involves no key exchange, so there's nothing for a quantum computer to
 attack later. Only copies made for someone else need the hybrid lock.
