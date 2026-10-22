@@ -140,6 +140,18 @@ Every vault member holds their own wrapped copy of the vault key, wrapped one of
 | **Yours, as creator** | XChaCha20-Poly1305 under an HKDF subkey of your master key | `NULL` | `NULL` | ✅ symmetric only |
 | A member's, when shared | **hybrid X25519 ECDH + ML-KEM-768** | the ephemeral | the KEM ciphertext | ✅ holds if either primitive does |
 
+```mermaid
+flowchart LR
+  VK(("vault key"))
+  VK -->|"XChaCha20-Poly1305 under an HKDF subkey of your master key"| OWN["your copy (creator): eph_pub_key and mlkem_ciphertext NULL"]
+  VK -->|"X25519 exchange + ML-KEM-768 encapsulation, one wrap key"| SHARED["a member's copy (shared): eph_pub_key and mlkem_ciphertext set"]
+  OWN -.->|"opened by"| MK["your master key"]
+  SHARED -.->|"opened by"| PK["their X25519 + ML-KEM private keys, unlocked by their master key"]
+```
+
+[How Sharing a Vault Works](/guides/reference/how-vault-sharing-works) walks through both
+modes with three people, one step and one diagram at a time.
+
 Your own copy is symmetric, so the only quantum threat is Grover — which halves effective strength, leaving 128 bits. Not a concern.
 
 A shared copy derives its wrap key from **both** an X25519 exchange and an ML-KEM-768 encapsulation, mixed together with the transcript. Shor breaks X25519 outright, so the ML-KEM half is what carries the guarantee against an adversary recording the wrap today.
@@ -207,7 +219,7 @@ If you self-host, this is the sentence to take away.
 - **A compromised client.** Malware on the machine doing the decryption sees plaintext. Zero-knowledge is a claim about the *server*.
 - **A weak master password.** The server holds an SRP verifier; someone who steals the database can attack it offline with no rate limiting. Argon2id at 64 MiB makes that expensive, not impossible.
 - **Losing your password.** There is nothing to recover with. That is the cost, stated honestly.
-- **Shared vaults, against a future quantum adversary.** See above.
+- **A malicious server during a share.** It could hand you its own public key in place of the recipient's. See "What the hybrid wrap does not cover" above.
 
 ---
 
@@ -216,3 +228,4 @@ If you self-host, this is the sentence to take away.
 - [Inside evnx-crypto](/blog/inside-evnx-crypto-the-library-that-holds-the-guarantee)
 - [What evnx-server Is](/blog/what-evnx-server-is-and-why-it-is-a-separate-thing)
 - [evnx cloud](/guides/commands/cloud) · [API tokens in CI](/guides/integrations/ci-cd-cloud-tokens)
+- [How Sharing a Vault Works](/guides/reference/how-vault-sharing-works): which key opens a shared vault, step by step
