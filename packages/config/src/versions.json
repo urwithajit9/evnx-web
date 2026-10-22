@@ -1,14 +1,14 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `node scripts/sync-config.mjs` to refresh from the registries. Committed so builds are deterministic and offline-safe.",
-  "cli": "0.10.14",
+  "cli": "0.10.16",
   "cryptoCrate": "0.2.1",
   "wasm": "0.2.1",
   "minSupportedCli": "0.4.0",
   "downloads": {
-    "crates": 508,
+    "crates": 517,
     "npm": 3858,
     "pypi": 1889,
-    "total": 6255
+    "total": 6264
   },
-  "syncedAt": "2026-10-22T00:50:55.531Z"
+  "syncedAt": "2026-10-22T15:21:44.146Z"
 }
