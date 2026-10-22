@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.11",
+  "evnx_version": "0.10.14",
   "features": [
     "net",
     "migrate",
@@ -59,7 +59,7 @@
     },
     {
       "name": "diff",
-      "about": "Compare .env vs .env.example — show missing/extra vars",
+      "about": "Compare two env files: keys missing or extra, and values between environments",
       "aliases": [],
       "guide": "/guides/commands/diff",
       "guide_draft": false,
