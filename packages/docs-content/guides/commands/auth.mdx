@@ -7,8 +7,8 @@ excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, ena
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
-commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth login", "auth logout", "auth register", "auth sessions", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status"]
-evnxVersion: "0.8.0"
+commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth login", "auth logout", "auth register", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status"]
+evnxVersion: "0.10.17"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -79,6 +79,18 @@ This is the cost of zero knowledge, stated plainly. Your master password decrypt
 </Callout>
 
 Registration sends a verification email. The link in it activates the account.
+Until it is opened, vault commands are refused:
+
+```text
+Error: your email address is not verified yet — check your inbox for the link from evnx. Vault commands stay unavailable until it is confirmed.
+```
+
+**Open the link and carry on — there is no need to sign in again** (0.10.17+).
+A session started before the link was opened still says "unverified" for up to
+fifteen minutes; when the server answers that way, the CLI refreshes the session
+once and retries, and the refreshed session carries the verified address.
+Before 0.10.17 vault commands kept refusing while `evnx auth status` already said
+`verified  yes`.
 
 <Callout type="tip" title="Lost the verification email?">
 `POST /api/v1/auth/resend-verification` will issue a new one and expire the old. Every previous link stops working the moment a new one is sent.
@@ -102,12 +114,48 @@ That second half matters more than it sounds. A server that has been replaced �
 <OptionTable>
   <Option flag="--email" type="string">Email address. Prompted for when omitted.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting. For scripts and test harnesses.</Option>
-  <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `.evnx.toml`.</Option>
+  <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `config.toml`.</Option>
 </OptionTable>
 
 <Callout type="warning" title="--password-stdin is for automation, not convenience">
 It takes everything up to the first newline, so passphrases with spaces work. But a password on stdin usually comes from somewhere — a file, a variable, a here-string — and all three are readable or recoverable. Prefer an API token for anything unattended.
 </Callout>
+
+<Callout type="info" title="CI signs in with an API token, not with login">
+With two-factor authentication on, `login` stops and asks for a code, and no
+pipeline can type one — by design, a second factor cannot be scripted. Jobs use
+an [API token](#api-tokens-for-ci) in `EVNX_TOKEN` instead; `evnx auth login --help`
+says so since 0.10.17.
+</Callout>
+
+### When sign-in is refused
+
+Two limits protect an account, both per email address:
+
+- **Five wrong master passwords lock the address for fifteen minutes.** The
+  sixth attempt is refused even with the right password, and the lock clears by
+  itself:
+
+  ```text
+  Error: Account temporarily locked
+    Too many failed sign-in attempts for this account. The lock clears by itself — wait, then try again.
+    Nothing was changed, and your vaults are untouched.
+  ```
+
+  A successful sign-in clears the count. An unknown address is refused exactly
+  as a wrong password is, so the server never says which of the two was wrong.
+
+- **Thirty sign-in attempts per fifteen minutes**, right or wrong. Past that the
+  refusal says how long is actually left — the number is the real remaining time,
+  not the whole window — and the response carries a `Retry-After` header for
+  scripts:
+
+  ```text
+  Error: Too many requests. Try again in 600 seconds.
+  ```
+
+  Until 2026-10-23 this limit was five, so the sixth *successful* sign-in in a
+  row was refused.
 
 ---
 
@@ -118,7 +166,7 @@ evnx auth logout
 ```
 
 Two things happen: the server is told to revoke the session, and the local
-credentials are deleted from `~/.config/evnx/`.
+credentials are deleted from the CLI's config folder ([where that is](#where-credentials-live)).
 
 <Callout type="warning" title="An offline logout is only half a logout">
 If the server cannot be reached, evnx still removes your local credentials and
@@ -126,9 +174,9 @@ says so plainly:
 
 ```text
   ✓ local credentials removed
-  warning: the server was not told: …
+  warning: the server was not told: could not reach …
   The session may still be usable until it expires. Revoke it from
-  another signed-in machine with `evnx auth sessions`.
+  another signed-in machine with `evnx auth sessions list`.
 ```
 
 This is deliberate. Refusing to log out because the network is down would leave
@@ -174,6 +222,31 @@ Two limits are enforced centrally on the server, not by each endpoint:
 
 **A token cannot mint another token.** Token creation requires a real logged-in session, so a leaked CI token cannot quietly issue itself a longer-lived, wider-scoped replacement and survive revocation of the original.
 
+`revoke` asks before it acts; pass `-y` in a script.
+
+### When a token stops working
+
+A revoked, expired or mistyped token is reported as exactly that (0.10.17+):
+
+```text
+Error: the API token in EVNX_TOKEN was refused — it has been revoked, has expired, or is mistyped. Create a new one on a signed-in machine with `evnx auth token create`, and replace the secret where this job reads it.
+```
+
+and `evnx auth status` run with that token shows it as a state rather than
+failing:
+
+```text
+evnx account
+  server    https://api.evnx.dev
+  using     API token (from EVNX_TOKEN)
+  status    API token refused
+  It has been revoked, has expired, or is mistyped. Create a new one
+  on a signed-in machine with `evnx auth token create`.
+```
+
+Before 0.10.17 both said "your session has expired. Run `evnx auth login`" —
+the wrong cause, and a fix a CI job cannot run. The exit codes did not change.
+
 ---
 
 ## Two-factor authentication
@@ -190,7 +263,9 @@ evnx auth totp disable
 With 2FA on and your authenticator gone, a recovery code is the sole route to your account — and, through it, to your vault keys. Store them somewhere other than the device running the authenticator.
 </Callout>
 
-Both `disable` and `recovery-codes` require a valid second factor. That is deliberate: a stolen session should not be able to strip 2FA off the account it stole.
+Both `disable` and `recovery-codes` require a valid second factor. That is deliberate: a stolen session should not be able to strip 2FA off the account it stole. Turning 2FA off deletes the recovery codes with it.
+
+Two-factor applies to `evnx auth login`. API tokens never ask for a code, which is why pipelines use them.
 
 ---
 
@@ -239,10 +314,45 @@ evnx auth status
 
 This asks the **server**, so it answers "is this credential actually still good?" rather than "is there a file on disk?" It reports your email, whether it is verified, whether 2FA is on, and whether the stored session still works.
 
-Since 0.8.0 it also prints your **plan and usage**: vaults used, active API
+```text
+evnx account
+  server    https://api.evnx.dev
+  using     signed in on this machine
+  email     you@example.com
+  verified  yes
+  2FA       off
+
+plan (free)
+  vaults      0 / 3
+  API tokens  0 / 2
+  versions    5 per vault
+```
+
+`using` says which credential answered — this machine's sign-in, or an API token
+from `EVNX_TOKEN`. The **plan and usage** block shows vaults you own, active API
 tokens, the per-vault version limit, and a warning naming any vault at or near
 its cap. See [Plan limits](/guides/reference/plan-limits) for what each number
-counts — and note that `3 / 3` means **full**, not one remaining.
+counts — and note that `3 / 3` means **full**, not one remaining. When your plan
+comes from an organisation seat it says so: `plan (team via acme)`.
+
+**When an organisation pays and you hold no seat** (0.10.17+), `status` says so
+and names the way to one. Paying for seats hands none out — the owner of a new
+organisation holds none — so this is the state every new subscription starts in:
+
+```text
+plan (free)
+  vaults      3 / 3 — full
+  API tokens  0 / 2
+  versions    5 per vault
+
+  ! acme is on the team plan, but you hold no seat there — so your own free plan applies.
+    Take one:  evnx org assign you@example.com --org acme
+```
+
+A member who cannot assign seats is told to ask an owner or admin instead, and
+someone whose one seat is in another organisation is told to release it there
+first. The dashboard shows the same note, with a **Take a seat** button. More in
+[After you subscribe](/guides/reference/after-you-subscribe).
 
 <Callout type="info" title="Two different status commands">
 `evnx auth status` is about your **account**. `evnx cloud status` is about **this machine** — whether it has credentials, whether the directory is bound to a vault, and which server it will talk to.
@@ -275,7 +385,25 @@ Full detail: [Exporting your data](/guides/reference/exporting-your-data).
 
 ## Where credentials live
 
-`~/.config/evnx/` — a file, mode `0600`, the same model as `~/.aws/credentials` and `~/.docker/config.json`.
+One folder, depending on the platform — files, the same model as
+`~/.aws/credentials` and `~/.docker/config.json`:
+
+| Platform | Folder |
+|---|---|
+| Linux | `~/.config/evnx` (or `$XDG_CONFIG_HOME/evnx`) |
+| macOS | `~/Library/Application Support/evnx` |
+| Windows | `%APPDATA%\evnx` |
+
+`EVNX_CONFIG_DIR` replaces the folder entirely — also how to keep a work and a
+personal account apart on one machine.
+
+| File | Holds | Written by |
+|---|---|---|
+| `config.toml` | `server = "..."` and other preferences | you, by hand |
+| `credentials.json` | your email and the session's access and refresh tokens | only the CLI, mode `0600`, in a folder kept at `0700` (Linux and macOS) |
+
+Neither holds your master password or any key that opens a vault; those are
+never written to disk.
 
 <Callout type="info" title="Why a file and not the system keyring">
 A keyring costs roughly thirty extra dependencies, including a second async runtime, and still needs a file fallback for CI where no keyring daemon is running. The file is the honest default; keyring support can be added later as its own opt-in feature.

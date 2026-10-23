@@ -9,7 +9,7 @@ difficulty: beginner
 timeToComplete: "4 minutes"
 tags: ["cloud", "plans", "limits", "quota", "evnx"]
 commands: ["auth", "auth status", "cloud", "cloud delete-version", "cloud history", "cloud push"]
-evnxVersion: "0.7.0"
+evnxVersion: "0.10.17"
 prerequisites:
   - commands/auth
 draft: false
@@ -41,6 +41,10 @@ count against them too, even when you are the one pushing.
 That is deliberate: otherwise a free-tier developer could not contribute to a
 team's vault, and a free-tier owner could raise their own limit by inviting
 someone on a bigger plan.
+
+The dashboard keeps the two apart: the vault list has an **Owned by you** tab —
+exactly what the limit counts — and a **Shared with you** tab, each with its
+count, and the line above it says "vaults you own".
 </Callout>
 
 ## ⚠️ What "3 of 3" means
@@ -61,10 +65,26 @@ evnx auth status
 ```
 
 Prints your plan, vaults used, active tokens, and the per-vault version limit —
-plus a warning naming any vault that is at or near its cap.
+plus a warning naming any vault that is at or near its cap:
+
+```text
+plan (free)
+  vaults      3 / 3 — full
+  API tokens  0 / 2
+  versions    5 per vault
+
+  ! my-api/production is at 5 / 5 — full
+  `evnx cloud history` lists them; `evnx cloud delete-version` removes one.
+```
+
+When your plan comes from an organisation seat the first line names it
+(`plan (team via acme)`), and when an organisation you belong to pays but you
+hold no seat, `status` says so and how to take one — see
+[After you subscribe](/guides/reference/after-you-subscribe).
 
 In the dashboard: **[app.evnx.dev](https://app.evnx.dev) → Settings → Plan and
-usage**, and a line above the create form on the vaults page.
+usage**, and a line above the vault list. Both update as soon as you create or
+delete a vault, push, or issue or revoke a token.
 
 ## What happens when you reach one
 
@@ -102,8 +122,9 @@ Upgrading a plan widens the window over history that was there all along.
 ## Self-hosting
 
 Every limit is configuration, not code: `QUOTA_<PLAN>_<WHAT>`, where `PLAN` is
-`FREE`, `TEAM` or `ENTERPRISE` and `WHAT` is `VAULTS`, `VERSIONS`, `TOKENS` or
-`AUDIT_DAYS`. The word `unlimited` is spelled out.
+`FREE`, `TEAM` or `ENTERPRISE` and `WHAT` is `VAULTS`, `VERSIONS`, `TOKENS`,
+`AUDIT_DAYS` or `ORGS` (organisations one account may own; 5 on the free plan).
+The word `unlimited` is spelled out.
 
 ```bash
 QUOTA_FREE_VAULTS=10

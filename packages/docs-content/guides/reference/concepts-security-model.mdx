@@ -399,7 +399,7 @@ cargo build --features backup 2>&1 | grep -q "Compiling evnx" && echo "✓ Featu
 cargo audit  # Requires cargo-audit installed
 
 # 3. Verify Rust toolchain is up to date
-rustc --version  # Should be >= 1.75.0 for latest crypto crate compatibility
+rustc --version  # Building from source needs >= 1.87 (evnx 0.10.17+)
 ```
 
 ### Runtime checks
