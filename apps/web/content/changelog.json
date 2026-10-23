@@ -1,0 +1,2176 @@
+{
+  "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
+  "latest": "0.10.17",
+  "releases": [
+    {
+      "version": "0.10.17",
+      "date": "2026-10-23",
+      "summary": "The patch for `evnx auth` (package R-auth, #221).",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "`evnx auth status` says why a paid organisation is not raising your plan"
+        },
+        {
+          "type": "improvement",
+          "text": "No second sign-in after verifying your email"
+        },
+        {
+          "type": "improvement",
+          "text": "A refused API token says so"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx auth login --help` and `evnx auth totp --help` say CI uses API tokens"
+        },
+        {
+          "type": "improvement",
+          "text": "README: the whole of `evnx auth`, and where it keeps your login"
+        },
+        {
+          "type": "improvement",
+          "text": "An error code this build does not know keeps the server's sentence"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.16...v0.10.17"
+      }
+    },
+    {
+      "version": "0.10.16",
+      "date": "2026-10-22",
+      "summary": "The patch for `evnx init` (package R-init: #217, #218, #219). init now keeps the `.evnx.toml` contract, writes into the template the project already uses, catches an existing `.env` up, sets up a fresh clone under `--yes`, says which env files it leaves alone, and has `--dry-run` and `--json`.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "init writes `.evnx.toml`"
+        },
+        {
+          "type": "improvement",
+          "text": "`init --yes` on a fresh clone succeeds"
+        },
+        {
+          "type": "improvement",
+          "text": "The project's template"
+        },
+        {
+          "type": "improvement",
+          "text": "An existing `.env` catches up"
+        },
+        {
+          "type": "improvement",
+          "text": "`CI` set means no questions"
+        },
+        {
+          "type": "improvement",
+          "text": "The target folder's `.evnx.toml` is read"
+        },
+        {
+          "type": "improvement",
+          "text": "`NEXT_PUBLIC_*` names only on Next.js"
+        },
+        {
+          "type": "improvement",
+          "text": "`--dry-run` and `--json`"
+        },
+        {
+          "type": "improvement",
+          "text": "The env files init does not write are named"
+        },
+        {
+          "type": "improvement",
+          "text": "`.envrc`"
+        },
+        {
+          "type": "improvement",
+          "text": "Five components"
+        },
+        {
+          "type": "improvement",
+          "text": "A stack refused over an existing template"
+        },
+        {
+          "type": "improvement",
+          "text": "Under `CI`, the refusal gives `CI` as the reason"
+        },
+        {
+          "type": "improvement",
+          "text": "A `.env` git would still commit"
+        },
+        {
+          "type": "improvement",
+          "text": "`--from-source` finds more of what the code reads"
+        },
+        {
+          "type": "improvement",
+          "text": "`--detect` reads `compose.yaml`"
+        },
+        {
+          "type": "improvement",
+          "text": "An unknown blueprint gets the hint a component gets"
+        },
+        {
+          "type": "improvement",
+          "text": "`--json`"
+        },
+        {
+          "type": "improvement",
+          "text": "A `.env` git would commit"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.15...v0.10.16"
+      }
+    },
+    {
+      "version": "0.10.15",
+      "date": "2026-10-22",
+      "summary": "The patch for `evnx doctor` (package R-doctor). Doctor now checks every env file, plaintext copies included, and stops calling `.envrc` one. Syntax errors and a template without `.env` are errors, and a check that cannot run is reported by name instead of stopping the run.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "A syntax error is an error"
+        },
+        {
+          "type": "improvement",
+          "text": "No env file is a verdict of its own"
+        },
+        {
+          "type": "improvement",
+          "text": "`--skip-without-env`"
+        },
+        {
+          "type": "improvement",
+          "text": "A check that cannot run no longer stops the others"
+        },
+        {
+          "type": "improvement",
+          "text": "`.envrc`, `.environment` and `.env-notes.md` are not env files"
+        },
+        {
+          "type": "improvement",
+          "text": "Plaintext copies are checked"
+        },
+        {
+          "type": "improvement",
+          "text": "Structured files named after `.env`"
+        },
+        {
+          "type": "docs",
+          "text": "Every env file's permissions"
+        },
+        {
+          "type": "docs",
+          "text": "Symlinked env files are seen"
+        },
+        {
+          "type": "docs",
+          "text": "The template is the project's, not always `.env.example`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.14...v0.10.15"
+      }
+    },
+    {
+      "version": "0.10.14",
+      "date": "2026-10-21",
+      "summary": "The patch for `evnx scan` (package R-scan). In a git repository a folder walk counts what git would commit, so a filled-in `.env` that `.gitignore` covers no longer fails the scan. Placeholders and addresses are no longer reported as secrets, and the advice under the findings names the real files.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "Files git ignores and does not track are summarised, not counted"
+        },
+        {
+          "type": "improvement",
+          "text": "Stand-ins are not findings"
+        },
+        {
+          "type": "improvement",
+          "text": "A name-only finding needs a value that could be a secret"
+        },
+        {
+          "type": "improvement",
+          "text": "`--exclude NAME` matches whole path components"
+        },
+        {
+          "type": "improvement",
+          "text": "`[scan] disable` silences the name-based finding too"
+        },
+        {
+          "type": "improvement",
+          "text": "`*.env` files are read as `.env`"
+        },
+        {
+          "type": "improvement",
+          "text": "Output is sorted"
+        },
+        {
+          "type": "improvement",
+          "text": "`-q` keeps the line saying the project config weakens the scan"
+        },
+        {
+          "type": "improvement",
+          "text": "\"Next steps\" follow what git knows"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.13...v0.10.14"
+      }
+    },
+    {
+      "version": "0.10.13",
+      "date": "2026-10-21",
+      "summary": "The patch for `evnx diff` (package R-diff). Against a template, `diff` compares key names only; between two environments it compares values too.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "Against a template only key names are compared"
+        },
+        {
+          "type": "improvement",
+          "text": "`--fail-on missing,extra,different`"
+        },
+        {
+          "type": "improvement",
+          "text": "The `evnx-diff` pre-commit hook"
+        },
+        {
+          "type": "improvement",
+          "text": "Flags that did nothing are exit 2"
+        },
+        {
+          "type": "improvement",
+          "text": "Without `--show-values` no value is shown, not even `"
+        },
+        {
+          "type": "improvement",
+          "text": "JSON"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.12...v0.10.13"
+      }
+    },
+    {
+      "version": "0.10.12",
+      "date": "2026-10-20",
+      "summary": "The patch for `evnx sync` (package R-sync). `--check` gives one verdict whatever the output format, looks both ways for a developer and one way for CI and the pre-commit hook, and every run without a terminal finishes instead of failing on a prompt.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "`sync --check` without `--direction` is two-way"
+        },
+        {
+          "type": "improvement",
+          "text": "`--check --format json` is the same verdict as the pretty output"
+        },
+        {
+          "type": "improvement",
+          "text": "No terminal, or `CI` set"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.11...v0.10.12"
+      }
+    },
+    {
+      "version": "0.10.11",
+      "date": "2026-10-20",
+      "summary": "The patch for `evnx backup` and `evnx restore` (package R-backup-restore). Neither can be pointed at a file it would destroy any more, a new backup needs an 8-character passphrase from every source, a script can replace an existing `.env` with `restore --yes`, and a backup that cannot be opened says why.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "A key file or `EVNX_PASSWORD` under 8 characters is refused by `backup`"
+        },
+        {
+          "type": "improvement",
+          "text": "`restore --yes`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.10...v0.10.11"
+      }
+    },
+    {
+      "version": "0.10.10",
+      "date": "2026-10-20",
+      "summary": "The patch for `evnx migrate` (package R-migrate). Every destination was checked against its tool's latest release on 2026-10-20: two printed commands their tool rejects, gcp printed no values, and the GitHub upload replaced secrets that `--skip-existing` promised to keep.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "`--to github-actions --skip-existing` (and `--yes` without `--overwrite`) replaced existing secrets"
+        },
+        {
+          "type": "improvement",
+          "text": "`--print-only`"
+        },
+        {
+          "type": "improvement",
+          "text": "`--env-name NAME`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.9...v0.10.10"
+      }
+    },
+    {
+      "version": "0.10.9",
+      "date": "2026-10-20",
+      "summary": "The patch for `evnx convert` (package R-convert): the names a target needs are flags instead of placeholders, the gcp script updates as well as creates, a format's own renaming can no longer merge two variables in silence, and filters use the same globs as `migrate`.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "The gcp script creates a secret or adds a version"
+        },
+        {
+          "type": "improvement",
+          "text": "`--prefix` reached the generated scripts unquoted"
+        },
+        {
+          "type": "improvement",
+          "text": "The key you press shows before Enter"
+        },
+        {
+          "type": "improvement",
+          "text": "One Enter answers one question"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.8...v0.10.9"
+      }
+    },
+    {
+      "version": "0.10.8",
+      "date": "2026-10-18",
+      "summary": "The patch for `evnx validate` (package R-validate): counts that count what they say, one finding per problem, a `--fix` that tells a repair from a placeholder, and the checks the review asked for — environment names, Docker files beside the env file, and `.gitignore`.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "`required_present` counts declared variables that are there"
+        },
+        {
+          "type": "improvement",
+          "text": "One problem, one finding"
+        },
+        {
+          "type": "improvement",
+          "text": "`--fix` separates \"Fixed\" from \"Needs your input\""
+        },
+        {
+          "type": "improvement",
+          "text": "`--fix --dry-run`"
+        },
+        {
+          "type": "improvement",
+          "text": "`--fail-on warning|error`"
+        },
+        {
+          "type": "improvement",
+          "text": "An unknown `--ignore` type is an error"
+        },
+        {
+          "type": "improvement",
+          "text": "With a contract, `--strict` measures against `[vars]`"
+        },
+        {
+          "type": "improvement",
+          "text": "`environments` names are checked"
+        },
+        {
+          "type": "improvement",
+          "text": "Docker files are looked for beside the env file"
+        },
+        {
+          "type": "improvement",
+          "text": "`.gitignore`"
+        },
+        {
+          "type": "improvement",
+          "text": "`--fix` invents only what nothing else holds"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx add custom NAME --optional`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.7...v0.10.8"
+      }
+    },
+    {
+      "version": "0.10.7",
+      "date": "2026-10-17",
+      "summary": "The patch for the three commands about evnx itself — `commands`, `completions` and `update` (package R-surface) — plus one HTTP client and one cargo command where there were several.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "The closing line counts what it lists"
+        },
+        {
+          "type": "improvement",
+          "text": "The warning for a build without `cloud` names no release"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx completions bash | head -1` exits 141"
+        },
+        {
+          "type": "improvement",
+          "text": "Five shells, in any case: `bash`, `zsh`, `fish`, `powershell`, and `elvish`, which is new"
+        },
+        {
+          "type": "improvement",
+          "text": "The cargo upgrade keeps every feature"
+        },
+        {
+          "type": "improvement",
+          "text": "A pip install is recognised by what pip leaves"
+        },
+        {
+          "type": "improvement",
+          "text": "`--check` answers with its exit code"
+        },
+        {
+          "type": "improvement",
+          "text": "A slow registry no longer fails a correct npm release, and re-running a failed one finishes it"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.6...v0.10.7"
+      }
+    },
+    {
+      "version": "0.10.6",
+      "date": "2026-10-17",
+      "summary": "The `spec` patch: the review fixes left after 0.10.3 (package R-spec), the `.evnx.toml` locator and writer that `spec`, `add` and `cloud link` each had a copy of, and the npm install forms that never worked (I-253).",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "A generated contract passes the project it came from"
+        },
+        {
+          "type": "improvement",
+          "text": "It writes the project's one `.evnx.toml`"
+        },
+        {
+          "type": "improvement",
+          "text": "`--env-name` and `[defaults]`"
+        },
+        {
+          "type": "improvement",
+          "text": "A file named by a flag must exist"
+        },
+        {
+          "type": "improvement",
+          "text": "Nothing to write is exit 2"
+        },
+        {
+          "type": "improvement",
+          "text": "The template's order, and names only in `.env`"
+        },
+        {
+          "type": "improvement",
+          "text": "A URL with a password is `secret = true`"
+        },
+        {
+          "type": "improvement",
+          "text": "`-q`"
+        },
+        {
+          "type": "improvement",
+          "text": "`secret` from a name follows `validate`'s rule"
+        },
+        {
+          "type": "improvement",
+          "text": "`format = \"bool\"` accepts `on`, `off`, `y` and `n`"
+        },
+        {
+          "type": "improvement",
+          "text": "A symlinked `.evnx.toml` is written through"
+        },
+        {
+          "type": "improvement",
+          "text": "A key evnx does not know under `[vars.NAME]` is named"
+        },
+        {
+          "type": "improvement",
+          "text": "A bare `evnx.toml` is not ignored silently"
+        },
+        {
+          "type": "improvement",
+          "text": "`cloud link` from a subfolder with no config creates `.evnx.toml` at the git root"
+        },
+        {
+          "type": "improvement",
+          "text": "`npx @evnx/cli` and `npm install --save-dev @evnx/cli` give an `evnx` command"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.5...v0.10.6"
+      }
+    },
+    {
+      "version": "0.10.5",
+      "date": "2026-10-17",
+      "summary": "The `template` patch: the review fixes left after 0.10.3 (package R-template), and code that several commands had their own copy of, moved into one place.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "An unknown filter is an error."
+        },
+        {
+          "type": "improvement",
+          "text": "Chained filters are an error"
+        },
+        {
+          "type": "improvement",
+          "text": "`|bool` reads `true yes on 1 y` and `false no off 0 n`"
+        },
+        {
+          "type": "improvement",
+          "text": "`|title` is title case:"
+        },
+        {
+          "type": "improvement",
+          "text": "An `--output` with `..` is resolved before it goes into `.gitignore`."
+        },
+        {
+          "type": "improvement",
+          "text": "`--dry-run`"
+        },
+        {
+          "type": "improvement",
+          "text": "`--mkdir`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.4...v0.10.5"
+      }
+    },
+    {
+      "version": "0.10.4",
+      "date": "2026-10-17",
+      "summary": "The `add` patch: the review fixes left after 0.10.3 (package R-add), and one 0.10.3 regression. Only `add` changed, plus the `DATABASE_URL` that `init --blueprint` writes for three blueprints.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "`add custom` no longer shows a secret on screen."
+        },
+        {
+          "type": "improvement",
+          "text": "Stacks with PostgreSQL write PostgreSQL's `DATABASE_URL`."
+        },
+        {
+          "type": "improvement",
+          "text": "`add custom` writes `.gitignore` before the `.env` it creates."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.3...v0.10.4"
+      }
+    },
+    {
+      "version": "0.10.3",
+      "date": "2026-10-17",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "security",
+          "text": "`diff` printed secrets"
+        },
+        {
+          "type": "security",
+          "text": "`diff --format patch` and `diff --interactive` print `<withheld>`"
+        },
+        {
+          "type": "security",
+          "text": "`--show-values` masks credentials inside values"
+        },
+        {
+          "type": "security",
+          "text": "`sync`'s \"actual values\" choices copied credentials into `.env.example`"
+        },
+        {
+          "type": "security",
+          "text": "The two interactive \"actual values\" choices of `sync` now refuse credentials"
+        },
+        {
+          "type": "security",
+          "text": "`convert -o` wrote every secret world-readable"
+        },
+        {
+          "type": "security",
+          "text": "`convert -o FILE` creates FILE with mode 0600"
+        },
+        {
+          "type": "security",
+          "text": "files holding secrets were created readable by everyone"
+        },
+        {
+          "type": "security",
+          "text": "`template`"
+        },
+        {
+          "type": "security",
+          "text": "`init` and `add`"
+        },
+        {
+          "type": "security",
+          "text": "`backup`"
+        },
+        {
+          "type": "security",
+          "text": "`restore`"
+        },
+        {
+          "type": "security",
+          "text": "`doctor --fix` reported repairs it had not made"
+        },
+        {
+          "type": "security",
+          "text": "`doctor --fix` checks again after every fix"
+        },
+        {
+          "type": "security",
+          "text": "A committed `.env` is reported as tracked by git"
+        },
+        {
+          "type": "security",
+          "text": "`template --gitignore` asks git"
+        },
+        {
+          "type": "improvement",
+          "text": "`sync --naming-policy error` exits 2, not 1"
+        },
+        {
+          "type": "improvement",
+          "text": "`diff --format` and `sync --check --format` refuse an unknown value"
+        },
+        {
+          "type": "improvement",
+          "text": "`migrate --to github-actions` exits 1 when an upload failed"
+        },
+        {
+          "type": "feature",
+          "text": "`--yes` (`-y`) uploads without asking \"Proceed with migration?\""
+        },
+        {
+          "type": "security",
+          "text": "`add custom` put your values in `.env.example`"
+        },
+        {
+          "type": "security",
+          "text": "`evnx add custom NAME=value` writes a placeholder into `.env.example` and the value only into `.env`"
+        },
+        {
+          "type": "security",
+          "text": "`scan` did not read a `.pem` file in a folder"
+        },
+        {
+          "type": "security",
+          "text": "A folder scan reads every file"
+        },
+        {
+          "type": "breaking",
+          "text": "`evnx spec init --merge` adds only the variables `[vars]` does not declare yet"
+        },
+        {
+          "type": "breaking",
+          "text": "`spec init` never writes a `.evnx.toml` that does not parse"
+        },
+        {
+          "type": "fix",
+          "text": "With no `.env`, `sync --check` checks `.env.example` against the spec"
+        },
+        {
+          "type": "fix",
+          "text": "New `--skip-without-env`"
+        },
+        {
+          "type": "fix",
+          "text": "The `evnx-sync` pre-commit hook works"
+        },
+        {
+          "type": "fix",
+          "text": "Reverse copies `.env.example`'s own values into `.env`"
+        },
+        {
+          "type": "fix",
+          "text": "`doctor` gives a verdict on a Pipenv or `poetry.lock`-only project"
+        },
+        {
+          "type": "fix",
+          "text": "`init --from-source` no longer calls a variable the code reads \"named nowhere in the source\""
+        },
+        {
+          "type": "fix",
+          "text": "`init --detect` finds the database an `sqlx` project uses"
+        },
+        {
+          "type": "fix",
+          "text": "`init --from-source` no longer proposes values the framework fills itself"
+        },
+        {
+          "type": "improvement",
+          "text": "`validate` asks a strong value of `*_PWD`, `*_APIKEY`, `*CREDENTIALS` and `PASSWD`"
+        },
+        {
+          "type": "fix",
+          "text": "`convert` refuses names that become one name after renaming"
+        },
+        {
+          "type": "fix",
+          "text": "`cloud pull --file -` writes to stdout"
+        },
+        {
+          "type": "security",
+          "text": "`cloud run`, and what an API token may do"
+        },
+        {
+          "type": "security",
+          "text": "`cloud run` refuses vault variables that make a program run other code"
+        },
+        {
+          "type": "security",
+          "text": "`cloud run` no longer hands evnx's own settings to the child"
+        },
+        {
+          "type": "security",
+          "text": "An API token can no longer delete a vault or a version, share, change a role, revoke or re-key"
+        },
+        {
+          "type": "fix",
+          "text": "`org delete --force` is the gate it says it is"
+        },
+        {
+          "type": "fix",
+          "text": "`cloud export` refuses to write into a git repository"
+        },
+        {
+          "type": "fix",
+          "text": "An API token can no longer change the master password, download the account's data or delete the account"
+        },
+        {
+          "type": "fix",
+          "text": "`auth sessions revoke` needs at least 4 characters of a session id"
+        },
+        {
+          "type": "fix",
+          "text": "Revoking the session you are signed in with signs this machine out"
+        },
+        {
+          "type": "security",
+          "text": "cloud requests stay on the resource you named"
+        },
+        {
+          "type": "security",
+          "text": "Text you give a cloud command can no longer change which API resource it reaches"
+        },
+        {
+          "type": "security",
+          "text": "`auth token create --expires-in-days` takes 1 to 3650"
+        },
+        {
+          "type": "security",
+          "text": "`cloud audit --last` takes `1d` to `3650d` or `all`"
+        },
+        {
+          "type": "security",
+          "text": "the commands `migrate` prints ran parts of your values"
+        },
+        {
+          "type": "security",
+          "text": "vercel and azure put values in double quotes"
+        },
+        {
+          "type": "security",
+          "text": "aws escaped an apostrophe as `\\'` inside single quotes"
+        },
+        {
+          "type": "security",
+          "text": "Names are checked before anything is printed"
+        },
+        {
+          "type": "security",
+          "text": "`--from environment` needs `--include`"
+        },
+        {
+          "type": "security",
+          "text": "values written into `.env` files lost everything after ` #`"
+        },
+        {
+          "type": "security",
+          "text": "`sync` and `add custom` quote a value when it needs it"
+        },
+        {
+          "type": "security",
+          "text": "`restore` puts a valid `.env` back where it belongs"
+        },
+        {
+          "type": "improvement",
+          "text": "`validate` reports more placeholders"
+        },
+        {
+          "type": "improvement",
+          "text": "`scan` treats `<set-me>`, `change-me`, `none`, `null` and an empty value as placeholders"
+        },
+        {
+          "type": "improvement",
+          "text": "The command banner is on stderr"
+        },
+        {
+          "type": "improvement",
+          "text": "Warnings and errors printed by evnx (`! …`, `✗ …`) are on stderr"
+        },
+        {
+          "type": "fix",
+          "text": "`scan` and `init --from-source` walk folders in name order."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.2...v0.10.3"
+      }
+    },
+    {
+      "version": "0.10.2",
+      "date": "2026-10-14",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "security",
+          "text": "adding a variable again replaced your real value"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add custom NAME=value …`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add --list`"
+        },
+        {
+          "type": "feature",
+          "text": "`--dry-run`"
+        },
+        {
+          "type": "feature",
+          "text": "`--json`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add framework nextjs`"
+        },
+        {
+          "type": "feature",
+          "text": "One id space"
+        },
+        {
+          "type": "feature",
+          "text": "Browser copies in `add service`"
+        },
+        {
+          "type": "fix",
+          "text": "All commands: a bare `$NAME` in a `.env` value kept the character after it out."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.1...v0.10.2"
+      }
+    },
+    {
+      "version": "0.10.1",
+      "date": "2026-10-13",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "security",
+          "text": "`init` could leave `.env` without its `.gitignore` rule"
+        },
+        {
+          "type": "feature",
+          "text": "Browser variables."
+        },
+        {
+          "type": "feature",
+          "text": "Component aliases"
+        },
+        {
+          "type": "feature",
+          "text": "Typo suggestions"
+        },
+        {
+          "type": "feature",
+          "text": "`.env` from a template you keep."
+        },
+        {
+          "type": "improvement",
+          "text": "`-q/--quiet` is silent on success, for every command."
+        },
+        {
+          "type": "fix",
+          "text": "`init`: no \"Next steps\" after an abort"
+        },
+        {
+          "type": "fix",
+          "text": "`init` without a terminal"
+        },
+        {
+          "type": "fix",
+          "text": "SARIF `artifactLocation.uri`"
+        },
+        {
+          "type": "fix",
+          "text": "GitHub Actions annotations"
+        },
+        {
+          "type": "fix",
+          "text": "SARIF `partialFingerprints`"
+        },
+        {
+          "type": "fix",
+          "text": "A directory whose name *ended with* an excluded one was also skipped"
+        },
+        {
+          "type": "fix",
+          "text": "`.env.example` was a substring, not a file name"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.0...v0.10.1"
+      }
+    },
+    {
+      "version": "0.10.0",
+      "date": "2026-10-10",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "breaking",
+          "text": "Four dependencies that were compiled for nothing"
+        },
+        {
+          "type": "breaking",
+          "text": "`serde_json` in `[build-dependencies]`"
+        },
+        {
+          "type": "breaking",
+          "text": "`dotenvy`"
+        },
+        {
+          "type": "breaking",
+          "text": "`rand`"
+        },
+        {
+          "type": "breaking",
+          "text": "`rust-version = \"1.85\"` was a promise nothing checked"
+        },
+        {
+          "type": "security",
+          "text": "`validate --fix` overwrote working credentials"
+        },
+        {
+          "type": "security",
+          "text": "`--rotate-weak-secrets`"
+        },
+        {
+          "type": "security",
+          "text": "`.env.bak`"
+        },
+        {
+          "type": "security",
+          "text": "`diff --format json` printed secret values"
+        },
+        {
+          "type": "security",
+          "text": "`diff` panicked on a non-ASCII secret."
+        },
+        {
+          "type": "security",
+          "text": "`--show-values` printed sensitive values from the `missing` and `extra` sections completely unredacted."
+        },
+        {
+          "type": "security",
+          "text": "`diff` and `validate` disagreed about what a secret is."
+        },
+        {
+          "type": "security",
+          "text": "`scan` reported a clean bill of health on files it never read"
+        },
+        {
+          "type": "security",
+          "text": "With a byte-order mark"
+        },
+        {
+          "type": "security",
+          "text": "Without one it succeeds."
+        },
+        {
+          "type": "security",
+          "text": "A comment after a closing quote silently lost whole variables"
+        },
+        {
+          "type": "security",
+          "text": "`validate --fix` still destroyed real values, by a second route"
+        },
+        {
+          "type": "security",
+          "text": "`--fix` no longer replaces URLs or emails at all."
+        },
+        {
+          "type": "security",
+          "text": "The PyPI wheels still had no cloud commands — the fix never ran"
+        },
+        {
+          "type": "security",
+          "text": "Secrets written world-readable, and `--help` printing the token"
+        },
+        {
+          "type": "breaking",
+          "text": "The cloud guarantee was overstated — corrected"
+        },
+        {
+          "type": "security",
+          "text": "Converter output ran code, or did not parse"
+        },
+        {
+          "type": "security",
+          "text": "shell"
+        },
+        {
+          "type": "security",
+          "text": "Kubernetes"
+        },
+        {
+          "type": "security",
+          "text": "Terraform"
+        },
+        {
+          "type": "security",
+          "text": "Azure"
+        },
+        {
+          "type": "security",
+          "text": "`template`"
+        },
+        {
+          "type": "security",
+          "text": "A `#` inside a value truncated it, and `--inspect` printed private keys"
+        },
+        {
+          "type": "security",
+          "text": "`scan` missed secrets a parsed `.env` cannot show it"
+        },
+        {
+          "type": "security",
+          "text": "A commented-out assignment"
+        },
+        {
+          "type": "security",
+          "text": "A shadowed duplicate"
+        },
+        {
+          "type": "security",
+          "text": "`.env.yaml` and `.env.json`"
+        },
+        {
+          "type": "security",
+          "text": "The pre-commit hook blocked every commit, for everyone"
+        },
+        {
+          "type": "security",
+          "text": "A branch name could publish to npm, and run commands while doing it"
+        },
+        {
+          "type": "security",
+          "text": "The trigger is now identified by file path."
+        },
+        {
+          "type": "security",
+          "text": "A branch was indistinguishable from a tag."
+        },
+        {
+          "type": "security",
+          "text": "The ref name was interpolated into a shell script."
+        },
+        {
+          "type": "security",
+          "text": "`workflow_dispatch` validated nothing."
+        },
+        {
+          "type": "breaking",
+          "text": "The published crate carried the CI workflows"
+        },
+        {
+          "type": "breaking",
+          "text": "Every GitHub Action ran from a tag anyone could move"
+        },
+        {
+          "type": "breaking",
+          "text": "`install.sh` could skip checksum verification three ways"
+        },
+        {
+          "type": "breaking",
+          "text": "A missing checksum file was silently fine."
+        },
+        {
+          "type": "security",
+          "text": "a URL that looked like localhost sent your token elsewhere"
+        },
+        {
+          "type": "security",
+          "text": "`http://localhost:abc` was accepted"
+        },
+        {
+          "type": "security",
+          "text": "`http://a:b:c` was accepted"
+        },
+        {
+          "type": "breaking",
+          "text": "`scan --ignore-placeholders` did nothing"
+        },
+        {
+          "type": "security",
+          "text": "`--compromised` wrote a file the leaked password opens"
+        },
+        {
+          "type": "security",
+          "text": "`scan` missed whole classes of credential, and invented one"
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.9.0...v0.10.0"
+      }
+    },
+    {
+      "version": "0.9.0",
+      "date": "2026-10-05",
+      "summary": "**One pull request, and the thing it adds is money.** `evnx org` creates an organisation, invites people into it, and assigns seats — and a seat is what makes a paid plan's limits apply to somebody. With the server side deployed, a team can now buy a plan and see their limits change.",
+      "highlights": [
+        {
+          "type": "security",
+          "text": "The one thing to understand before using it"
+        },
+        {
+          "type": "breaking",
+          "text": "This needs a server that has the organisation endpoints"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx org` — organisations, seats, and what the plan is."
+        },
+        {
+          "type": "feature",
+          "text": "A seat is a plan change for somebody who is not at the keyboard."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx org billing` — what the organisation is on, and until when."
+        },
+        {
+          "type": "feature",
+          "text": "One seat per person, by construction."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx org seats --set` asks before it tries."
+        },
+        {
+          "type": "feature",
+          "text": "Roles have no peers."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.8.0...v0.9.0"
+      }
+    },
+    {
+      "version": "0.8.0",
+      "date": "2026-10-03",
+      "summary": "**Nine pull requests, and the answer to \"what happens when we want to leave?\" is now a command.** `evnx cloud export` writes every version of a vault to disk, decrypted — the escape hatch that was previously a script you had to write yourself.",
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "`evnx cloud export` — the way out."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx vault rekey` — rotate a key without removing anyone."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth devices list` and `evnx auth devices disavow`."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth download-data` — take your data with you."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth status` shows your plan and usage."
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx auth export` is `evnx auth download-data`."
+        },
+        {
+          "type": "improvement",
+          "text": "Every documentation URL the binary prints now points at `docs.evnx.dev`."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx scan` missed a secret inside a multiline value."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx convert` wrote different bytes to stdout than to `--output`."
+        },
+        {
+          "type": "fix",
+          "text": "A vault named `..` could write outside `--output`."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.7.0...v0.8.0"
+      }
+    },
+    {
+      "version": "0.7.0",
+      "date": "2026-09-30",
+      "summary": "**Thirteen pull requests, and a cloud account is now fully self-service.** A master password can be changed and the change undone, an account can be deleted, and a version can be removed from a vault's history — three things the server could already do and nothing could reach.",
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "`evnx auth rotate-master-password` — change your master password."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth undo-password-change` — and it takes no session, deliberately."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth delete-account`."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud delete-version`."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx update` — how to upgrade, and whether to."
+        },
+        {
+          "type": "feature",
+          "text": "`scan` detects a password embedded in a connection string."
+        },
+        {
+          "type": "feature",
+          "text": "`sync`'s `allow_actual` is implemented, and guarded."
+        },
+        {
+          "type": "fix",
+          "text": "A rejected login said \"your session has expired\"."
+        },
+        {
+          "type": "fix",
+          "text": "One credential in a source file counted as two secrets."
+        },
+        {
+          "type": "fix",
+          "text": "`scan` told you to rotate a key that is meant to be public."
+        },
+        {
+          "type": "fix",
+          "text": "`sync` produced a git diff on a project whose `.env` had not changed."
+        },
+        {
+          "type": "fix",
+          "text": "An uncompilable `sync` pattern was silently skipped"
+        },
+        {
+          "type": "fix",
+          "text": "Every expansion error reported \"line 0\""
+        },
+        {
+          "type": "fix",
+          "text": "The published Scoop manifest was invalid JSON on every release since `e96bdb4`."
+        },
+        {
+          "type": "fix",
+          "text": "A 404 while fetching a checksum published `\"hash\": \"sha256:\"`."
+        },
+        {
+          "type": "fix",
+          "text": "Nothing validated the Homebrew formula before pushing it."
+        },
+        {
+          "type": "improvement",
+          "text": "A secret containing a dollar sign can now be written."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.6.0...v0.7.0"
+      }
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-09-27",
+      "summary": "**The first release since 0.5.0 that contains new code.** 0.5.1 and 0.5.2 were release engineering; ten pull requests have landed since.",
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "A secret behind a build-time public prefix is now called what it is."
+        },
+        {
+          "type": "feature",
+          "text": "`.ipynb` files are scanned."
+        },
+        {
+          "type": "feature",
+          "text": "`vault share`, `vault revoke` and `vault role` accept both `--with` and `--user`."
+        },
+        {
+          "type": "feature",
+          "text": "`scripts/verify-claims.sh`"
+        },
+        {
+          "type": "fix",
+          "text": "The GitHub Release body now carries this changelog."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx scan` no longer reports a clean result for a scan that examined nothing."
+        },
+        {
+          "type": "fix",
+          "text": "The private-key detector could not fire outside a `.env` file."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx migrate`'s missing-file hint named `--env`, a flag it does not have."
+        },
+        {
+          "type": "fix",
+          "text": "The crate no longer ships environment files."
+        },
+        {
+          "type": "fix",
+          "text": "npm publishing downloaded every artifact in the release run, not just the binaries."
+        },
+        {
+          "type": "fix",
+          "text": "npm publishing now reads the registry back instead of trusting the publish step."
+        },
+        {
+          "type": "fix",
+          "text": "An escaped `\\\"` no longer ends a multiline value."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx doctor` no longer reports the continuation lines of a multiline value as `invalid syntax`."
+        },
+        {
+          "type": "docs",
+          "text": "The README said multiline and array values \"will not parse correctly\"."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.5.2...v0.6.0"
+      }
+    },
+    {
+      "version": "0.5.2",
+      "date": "2026-09-25",
+      "summary": "**Still release engineering. No source has changed since 0.5.0.**",
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "`fail-fast: false`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.5.1...v0.5.2"
+      }
+    },
+    {
+      "version": "0.5.1",
+      "date": "2026-09-25",
+      "summary": "**A release-engineering fix. No code changed between 0.5.0 and 0.5.1.**",
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "CI now compiles the release targets."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.5.0...v0.5.1"
+      }
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-09-25",
+      "summary": "The command-review release. Every command was run against a real build and compared with its published guide; where the two disagreed, one of them was wrong and got fixed. 31 pull requests (#29–#59).",
+      "highlights": [
+        {
+          "type": "security",
+          "text": "`evnx migrate --to github` never encrypted anything."
+        },
+        {
+          "type": "security",
+          "text": "`evnx sync` wrote real values into `.env.example`"
+        },
+        {
+          "type": "security",
+          "text": "`evnx scan` never read `.env.production`"
+        },
+        {
+          "type": "security",
+          "text": "`evnx scan <unwalkable path>` printed \"✓ No secrets detected\""
+        },
+        {
+          "type": "security",
+          "text": "`evnx migrate` with no `--to` guessed."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx init` wrote a `.env.example` that could not be appended to."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx validate --fix` exited 1 after fixing everything."
+        },
+        {
+          "type": "fix",
+          "text": "`--validate-formats` rejected every non-HTTP URL."
+        },
+        {
+          "type": "fix",
+          "text": "`doctor` called `export FOO=bar` invalid"
+        },
+        {
+          "type": "fix",
+          "text": "Findings came out in a different order every run"
+        },
+        {
+          "type": "fix",
+          "text": "A key written twice vanished in silence."
+        },
+        {
+          "type": "fix",
+          "text": "SARIF put the variable name inside the `ruleId`"
+        },
+        {
+          "type": "fix",
+          "text": "`completions` answered an unusable argument with 1"
+        },
+        {
+          "type": "fix",
+          "text": "`convert --help` was backwards about kubernetes"
+        },
+        {
+          "type": "fix",
+          "text": "`cloud status` promised a token renewal it had no way to verify"
+        },
+        {
+          "type": "fix",
+          "text": "`init --detect` conflicted with `--yes`"
+        },
+        {
+          "type": "fix",
+          "text": "Fourteen flags had no help text at all"
+        },
+        {
+          "type": "fix",
+          "text": "`backup` and `restore` disagreed about how a passphrase arrives."
+        },
+        {
+          "type": "fix",
+          "text": "One key file could produce two different passwords."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx scan` claimed a value matched a live key format when nothing had read the value."
+        },
+        {
+          "type": "fix",
+          "text": "`migrate --dry-run` reported a migration that had not happened."
+        },
+        {
+          "type": "fix",
+          "text": "`convert --help` printed its examples as unusable Markdown"
+        },
+        {
+          "type": "fix",
+          "text": "The placeholder list did not know evnx's own placeholders."
+        },
+        {
+          "type": "fix",
+          "text": "The weak-secret check only ever looked at one variable."
+        },
+        {
+          "type": "fix",
+          "text": "A generated secret could be called weak by the command that generated it."
+        },
+        {
+          "type": "fix",
+          "text": "`validate --fix` reported a placeholder as a completed repair."
+        },
+        {
+          "type": "fix",
+          "text": "`--fix` swapped one placeholder for a vaguer one and called it a fix."
+        },
+        {
+          "type": "fix",
+          "text": "`--fix` repaired at most one weak secret per run, and only if it was called `SECRET_KEY`."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx add` reported variables the parser could not see."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx sync` no longer just says \"up to date\" when the source is empty."
+        },
+        {
+          "type": "fix",
+          "text": "A build missing features now says which, and how to get them."
+        },
+        {
+          "type": "fix",
+          "text": "A real provider key is no longer called weak."
+        },
+        {
+          "type": "fix",
+          "text": "A file that is absent is no longer reported as a file that failed to parse"
+        },
+        {
+          "type": "fix",
+          "text": "`evnx migrate` no longer reports a migration that did not happen"
+        },
+        {
+          "type": "fix",
+          "text": "`--skip-existing` and `--overwrite` are refused where they cannot work."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx add custom` can no longer write a file evnx cannot read"
+        },
+        {
+          "type": "fix",
+          "text": "`scan`'s machine formats made the claim its terminal output had stopped making."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx spec`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud run -- <cmd>`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx vault share`, `members`, `role`, `revoke`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan --pattern` and `[[scan.patterns]]`"
+        },
+        {
+          "type": "feature",
+          "text": "`.evnx.toml` is now read."
+        },
+        {
+          "type": "feature",
+          "text": "`--env-name production`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx sync --check`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx doctor --fix`, `--path`, `--strict`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx init --detect`, `--from-source`, `--with`, `--list-components`"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx validate --pattern` was removed"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx scan` exit codes are now 0 / 1 / 2."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.4.0...v0.5.0"
+      }
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-09-15",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "`evnx auth`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth totp`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth sessions`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx auth token`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx vault`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud link`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud status --ping`"
+        },
+        {
+          "type": "security",
+          "text": "Credentials are stored at mode 0600"
+        },
+        {
+          "type": "security",
+          "text": "Plain `http://` is refused"
+        },
+        {
+          "type": "security",
+          "text": "Nothing that can decrypt a vault is ever written to disk."
+        },
+        {
+          "type": "security",
+          "text": "No `--password` flag exists"
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.8...v0.4.0"
+      }
+    },
+    {
+      "version": "0.3.8",
+      "date": "2026-03-30",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "`evnx backup --key-file <PATH>` — reads encryption password from a file for fully non-interactive CI/CD pipelines."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx backup --keep <N>` (default: 3) — rotates existing backup files before each write, preserving the last N backups."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx backup --verify` — re-decrypts the backup immediately after writing and compares byte-for-byte against the source."
+        },
+        {
+          "type": "feature",
+          "text": "`BackupError::VerifyFailed` — new typed error variant, exit code 6."
+        },
+        {
+          "type": "feature",
+          "text": "Exit codes table in `evnx backup --help` covering codes 0–6."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx restore --inspect` — decrypt a backup and list variable key names without writing any files."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx restore --password-file <path>` and `EVNX_PASSWORD` environment variable for non-interactive restore in CI/CD environments."
+        },
+        {
+          "type": "feature",
+          "text": "Argon2id progress spinner during the key-derivation step of `evnx restore`."
+        },
+        {
+          "type": "feature",
+          "text": "Structured exit codes for `evnx restore` covering codes 0–6."
+        },
+        {
+          "type": "improvement",
+          "text": "`backup.rs` refactored into `backup/` module — split into `mod.rs`, `core.rs`, and `error.rs` following the same structure as `restore/`."
+        },
+        {
+          "type": "improvement",
+          "text": "Password memory safety — password string now wrapped in a `ZeroizeOnDrop` RAII guard inside `backup_inner`, guaranteeing zeroization on all exit paths including `?`-propagated errors and panics."
+        },
+        {
+          "type": "improvement",
+          "text": "Argon2id spinner replaces static `println!(\"Encrypting…\")` in backup, matching the restore command."
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx restore` internal architecture split into `core`, `source`, and `error` modules — pure logic is independently testable without a terminal."
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx restore --verbose` now emits a diagnostic line at every pipeline stage instead of a single line at startup."
+        },
+        {
+          "type": "improvement",
+          "text": "Password, decrypted content, and ciphertext blob are all zeroized via RAII guard on every exit path including panics."
+        },
+        {
+          "type": "improvement",
+          "text": "Consistent header and success summary formatting across backup and restore using shared `ui::` helpers."
+        },
+        {
+          "type": "fix",
+          "text": "Off-by-one in `rotate_backups` — loop range was `(1..keep)`, stopping one position short and silently destroying the oldest backup."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx restore <directory>` now reports a clear \"not a regular file\" error instead of a confusing IO message."
+        },
+        {
+          "type": "fix",
+          "text": "`encrypt_content` re-export visibility corrected to eliminate unused-import warning in production builds."
+        },
+        {
+          "type": "security",
+          "text": "Password zeroization is now unconditional on all exit paths via `ZeroizeOnDrop`."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.7...v0.3.8"
+      }
+    },
+    {
+      "version": "0.3.7",
+      "date": "2026-03-20",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "Scoop and Winget publish jobs moved from standalone workflow files into `release.yml` as inline jobs."
+        },
+        {
+          "type": "fix",
+          "text": "Scoop manifest `architecture.url` was writing a literal `$version` string instead of the real version number due to incorrect heredoc escaping."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.6...v0.3.7"
+      }
+    },
+    {
+      "version": "0.3.6",
+      "date": "2026-03-19",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "Windows package manager support via two new publish channels: - Scoop (user-local, no admin required): `scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx && scoop install evnx` - Winget (system-wide): `winget install urwithajit9.evnx` - Both channels auto-update on every `v*` tag release via GitHub Actions."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx pre-commit` subcommand for Git pre-commit hook integration."
+        },
+        {
+          "type": "feature",
+          "text": "All CLI `--help` outputs now include a link to the corresponding docs page at `https://www.evnx.dev/guides/<command>`."
+        },
+        {
+          "type": "feature",
+          "text": "Windows installation guide: https://www.evnx.dev/guides/install/windows"
+        },
+        {
+          "type": "feature",
+          "text": "Pre-commit integration guide: https://www.evnx.dev/guides/pre-commit"
+        },
+        {
+          "type": "fix",
+          "text": "Scan command panic: resolved `thread 'main' panicked at 'index out of bounds'` when scanning empty or malformed `.env` files (#142)."
+        },
+        {
+          "type": "fix",
+          "text": "Secret detection false positives: common placeholder values such as `your_key_here`, `CHANGEME`, and `***` are no longer flagged."
+        },
+        {
+          "type": "fix",
+          "text": "Windows path resolution: `.evnx.toml` config lookup now resolves correctly on Windows systems."
+        },
+        {
+          "type": "fix",
+          "text": "SHA256 validation: fixed checksum verification for cross-platform tarball downloads."
+        },
+        {
+          "type": "fix",
+          "text": "Release workflow: `.zip` and `.zip.sha256` artifacts were produced during the build but never copied into the GitHub Release assets."
+        },
+        {
+          "type": "fix",
+          "text": "Scoop manifest: `bin` field referenced `evnx.exe`, which does not exist inside the archive."
+        },
+        {
+          "type": "fix",
+          "text": "Scoop workflow commit step: bare `$VERSION` shell variable was undefined in the commit step context."
+        },
+        {
+          "type": "fix",
+          "text": "Scoop workflow hash source: manifest was fetching the `.tar.gz.sha256` file for the Windows ZIP installer."
+        },
+        {
+          "type": "improvement",
+          "text": "Release workflow now produces `.zip` and `.zip.sha256` alongside `.tar.gz` for the Windows target, required for Scoop and Winget compatibility."
+        },
+        {
+          "type": "improvement",
+          "text": "Binary size reduced by approximately 12% using `cargo build --release --strip`."
+        },
+        {
+          "type": "improvement",
+          "text": "Error messages improved with actionable suggestions and direct links to docs."
+        },
+        {
+          "type": "improvement",
+          "text": "Secret scanning patterns updated to detect current AWS, Azure, and GitHub token formats."
+        },
+        {
+          "type": "improvement",
+          "text": "Pre-commit hooks run in an isolated subprocess to prevent environment leakage."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.5...v0.3.6"
+      }
+    },
+    {
+      "version": "0.3.5",
+      "date": "2026-03-16",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "PyPI Linux wheel build matrix reduced to x86_64 only. aarch64 and armv7 targets were removed because cross-compilation inside the manylinux Docker container fails when the migrate feature is enabled — reqwest pulls rustls which pulls ring, and ring's ARM assembly fails to compile in the cross-compilation environment. x86_64 builds natively and is unaffected."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.4...v0.3.5"
+      }
+    },
+    {
+      "version": "0.3.4",
+      "date": "2026-03-16",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "fix: switch reqwest to native-tls, ring removed from dependency tree"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.3...v0.3.4"
+      }
+    },
+    {
+      "version": "0.3.3",
+      "date": "2026-03-16",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "PyPI aarch64 wheel build failure caused by ring crate assembly cross-compilation error."
+        },
+        {
+          "type": "fix",
+          "text": "npm smoke test timing increased to handle registry replication delay."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.2...v0.3.3"
+      }
+    },
+    {
+      "version": "0.3.2",
+      "date": "2026-03-16",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "fix: add features=[\"full\"] to pyproject.toml [tool.maturin] so PyPI wheel includes migrate, backup, restore commands"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.1...v0.3.2"
+      }
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-03-16",
+      "summary": "Patch release fixing PyPI distribution and Homebrew automation. No changes to the CLI itself — only release infrastructure and documentation.",
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "PyPI wheels were published without optional features (`migrate`, `backup`, `restore`)."
+        },
+        {
+          "type": "fix",
+          "text": "`update-homebrew-tap` job in `release.yml` was incorrectly indented as a nested key inside the `release` job."
+        },
+        {
+          "type": "fix",
+          "text": "Homebrew Formula `install` block updated from `Dir[\"evnx-*\"].first` glob to explicit per-platform binary names for reliable installs."
+        },
+        {
+          "type": "feature",
+          "text": "Homebrew tap support: `brew install urwithajit9/evnx/evnx`."
+        },
+        {
+          "type": "feature",
+          "text": "Homebrew install instructions added to README and release notes template."
+        },
+        {
+          "type": "improvement",
+          "text": "README installation section restructured with per-OS pipx setup instructions covering macOS, Ubuntu/Debian (including the PEP 668 explanation for 22.04+), older Ubuntu (20.04), and Windows."
+        },
+        {
+          "type": "improvement",
+          "text": "Release notes template updated to include the Homebrew install command."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.3.0...v0.3.1"
+      }
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-03-14",
+      "summary": "This release is a comprehensive refactor. The focus is on command consistency, improved test coverage, and breaking changes to several commands that had accumulated technical debt from the initial prototype.",
+      "highlights": [
+        {
+          "type": "breaking",
+          "text": "`evnx init` no longer accepts `--stack` or `--services` flags."
+        },
+        {
+          "type": "breaking",
+          "text": "`evnx add` interactive flow has been revised."
+        },
+        {
+          "type": "breaking",
+          "text": "Several internal argument names and output formats were normalised for consistency across commands."
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx init` refactored to interactive TUI with Blank / Blueprint / Architect modes replacing the previous `--stack` and `--services` argument approach."
+        },
+        {
+          "type": "improvement",
+          "text": "All commands reviewed and refactored for argument consistency and improved error output."
+        },
+        {
+          "type": "improvement",
+          "text": "Test suite significantly expanded across all command paths."
+        },
+        {
+          "type": "fix",
+          "text": "Shell syntax error in Windows binary extraction during npm publish workflow."
+        },
+        {
+          "type": "fix",
+          "text": "Dead CHANGELOG link removed from GitHub release notes template."
+        },
+        {
+          "type": "fix",
+          "text": "npm platform packages now include a stub README to reduce search noise on npmjs.com."
+        },
+        {
+          "type": "fix",
+          "text": "npm install instructions corrected to use `@evnx/cli` package name (previously showed unscoped `evnx` which does not exist on npm)."
+        },
+        {
+          "type": "fix",
+          "text": "All documentation and install scripts updated from `dotenv.space` to `evnx.dev` domain."
+        },
+        {
+          "type": "feature",
+          "text": "`CHANGELOG.md` added to repository."
+        },
+        {
+          "type": "feature",
+          "text": "Auto-generated \"What's Changed\" section appended to GitHub releases via `generate_release_notes: true`."
+        },
+        {
+          "type": "feature",
+          "text": "npm badge and PyPI badge added to README."
+        },
+        {
+          "type": "feature",
+          "text": "`workflow_dispatch` added to `npm-publish.yml` for manual recovery without cutting a new release tag."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.2.1...v0.3.0"
+      }
+    },
+    {
+      "version": "0.2.1",
+      "date": "2026-03-07",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "Several commands refactored with improved internal structure."
+        },
+        {
+          "type": "improvement",
+          "text": "Test coverage improved across validation and scan paths."
+        },
+        {
+          "type": "fix",
+          "text": "Various known bugs addressed."
+        },
+        {
+          "type": "feature",
+          "text": "npm publish workflow (`npm-publish.yml`) — publishes `@evnx/cli` to npmjs.com on each tagged release."
+        },
+        {
+          "type": "feature",
+          "text": "PyPI publish workflow (`python-publish.yml`) — publishes `evnx` to PyPI via maturin on each tagged release."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.2.0...v0.2.1"
+      }
+    },
+    {
+      "version": "0.2.0",
+      "date": "2026-03-04",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "breaking",
+          "text": "Multiple initial commands revised with updated arguments and behaviour."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add` command for adding variables to `.env` interactively from custom input, service blueprints, or templates."
+        },
+        {
+          "type": "feature",
+          "text": "14+ format targets for `evnx convert`: JSON, YAML, Shell, Docker Compose, Kubernetes, Terraform, GitHub Actions, AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, Heroku, Vercel, Railway, Doppler."
+        },
+        {
+          "type": "improvement",
+          "text": "Secret pattern detection enhanced with improved entropy analysis."
+        },
+        {
+          "type": "improvement",
+          "text": "Error messages for validation failures made more actionable."
+        },
+        {
+          "type": "improvement",
+          "text": "CLI documentation expanded."
+        },
+        {
+          "type": "fix",
+          "text": "Windows path handling corrected."
+        },
+        {
+          "type": "fix",
+          "text": "False positives in GitHub token detection reduced."
+        },
+        {
+          "type": "performance",
+          "text": "Validation on large `.env` files approximately 3x faster."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.1.0...v0.2.0"
+      }
+    },
+    {
+      "version": "0.1.0",
+      "date": "2026-03-01",
+      "summary": "Initial public release.",
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "`evnx init` — stack and service based interactive project setup."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx validate` — basic validation engine (placeholders, weak secrets, misconfigurations)."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan` — core secret scanning with pattern matching."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx diff` — comparison between `.env` and `.env.example`."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx convert` — basic format conversion."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx sync` — bidirectional sync between `.env` and `.env.example`."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/releases/tag/v0.1.0"
+      }
+    }
+  ]
+}

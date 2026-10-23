@@ -12,6 +12,8 @@
     "typecheck": "turbo run typecheck",
     "config:sync": "node scripts/sync-config.mjs",
     "config:check": "node scripts/sync-config.mjs --check",
+    "changelog:sync": "node scripts/sync-changelog.mjs",
+    "changelog:check": "node scripts/sync-changelog.mjs --check",
     "check:links": "node scripts/check-content-links.mjs",
     "check:links:built": "node scripts/check-content-links.mjs --built apps/docs",
     "baseline:analytics": "node scripts/export-analytics.mjs",
