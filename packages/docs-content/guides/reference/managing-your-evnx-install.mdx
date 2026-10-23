@@ -234,7 +234,9 @@ Upgrade with the second command. It needs `--force` because cargo will not reins
 a crate that is already installed, and `--all-features` because cargo compiles from
 source with **no** optional features by default. Without the flag you get a binary
 with no `auth`, `vault`, `cloud`, `migrate`, `backup` or `restore`. It needs Rust
-1.85 or newer.
+1.87 or newer since 0.10.17 (1.85 before); a dependency's security fix,
+RUSTSEC-2026-0385, required it. The prebuilt binaries from every other channel are
+unaffected.
 
 <Callout type="danger" title="`cargo install evnx --force` alone drops features">
 Reinstalling without `--all-features` replaces a full build with a minimal one, and
