@@ -29,28 +29,41 @@ Your payment went through and the organisation is on a paid plan. There is **one
 evnx auth status
 ```
 
-With a seat assigned, the paid plan's limits apply and the counts go unlimited:
+With a seat assigned, the paid plan's limits apply, the counts go unlimited, and
+the plan line names the organisation it came from:
 
 ```text
-plan (team)
+plan (team via acme)
+  seat in Acme
   vaults      4 (unlimited)
-  API tokens  1 (unlimited)
+  API tokens  0 (unlimited)
   versions    unlimited per vault
 ```
 
-Without one, you see your own account's plan instead — and this is what people read straight past, because nothing about it looks like an error:
+Without one, your own account's plan applies. Before 0.10.17 that was all you
+saw, and nothing about it looked like an error. Now `status` says why and how to
+fix it:
 
 ```text
 plan (free)
-  vaults      1 / 3
+  vaults      3 / 3 — full
   API tokens  0 / 2
   versions    5 per vault
+
+  ! acme is on the team plan, but you hold no seat there — so your own free plan applies.
+    Take one:  evnx org assign you@example.com --org acme
 ```
 
-That second output is what "I paid and nothing happened" actually looks like.
+That is what "I paid and nothing happened" actually looks like. If you cannot
+assign seats, the second line tells you to ask an owner or admin; if your one
+seat is in another organisation, it tells you to release it there first.
 
 <Callout type="info">
-**`auth status` tells you what your limits are, not where they came from.** It prints a plan name and nothing about which organisation supplied it, so a `team` line looks identical whether it arrived with a seat or some other way. When you want the *why*, use `evnx org billing` below — that one names the organisation and both seat numbers.
+**The dashboard says the same.** Settings and the vaults page at
+[app.evnx.dev](https://app.evnx.dev) show the note for every organisation on a
+higher plan where you hold no seat — with a **Take a seat** button when you are
+an owner or admin and a seat is free — and Settings names the organisation your
+plan comes from. `evnx org billing` below is still the place for both seat numbers.
 </Callout>
 
 ---
