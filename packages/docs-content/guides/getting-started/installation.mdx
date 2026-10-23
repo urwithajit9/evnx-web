@@ -3,12 +3,12 @@ title: "Installing evnx"
 section: getting-started
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-23"
 excerpt: "Get evnx running on macOS, Linux, or Windows in under two minutes. Includes pre-commit hook setup."
 difficulty: beginner
 timeToComplete: "2 minutes"
 tags: ["install", "getting-started", "pre-commit"]
-commands: ["cloud", "doctor", "scan"]
+commands: ["cloud", "doctor", "scan", "update"]
 evnxVersion: "0.5.2"
 draft: false
 ---
@@ -34,8 +34,10 @@ curl -fsSL https://dotenv.space/install.sh | bash
 The script:
 1. Detects your OS and architecture (x86_64 / arm64)
 2. Downloads the correct binary from GitHub Releases
-3. Installs to `~/.local/bin` (added to PATH automatically)
-4. Verifies the checksum
+3. Verifies the checksum, and refuses to install if it is missing or wrong
+4. Installs to `/usr/local/bin` if you can write there, otherwise to `~/.local/bin`
+   if that folder exists. It does **not** edit your `PATH`; if `~/.local/bin` is not
+   on it, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile
 
 Verify the installation:
 
@@ -271,15 +273,23 @@ The `.pre-commit-config.yaml` approach is better for teams — it's committed to
 ## Updating evnx
 
 ```bash
+# Prints the upgrade command for the way you installed it (0.7.0+)
+evnx update
+
 # If installed via install script
 curl -fsSL https://dotenv.space/install.sh | bash
 
-# If installed via cargo
-cargo install evnx --force
+# If installed via cargo: --all-features, or the cloud commands are dropped
+cargo install evnx --all-features --force
 
 # Check which version you are on
 evnx --version
 ```
+
+Upgrade through the channel you installed with. Installing through a second
+channel adds a second copy instead of replacing the first, and the older one can
+keep winning on your `PATH`. [Managing your evnx install](/guides/reference/managing-your-evnx-install)
+has every channel's upgrade and uninstall command, and fixes for the common problems.
 
 <Callout type="warning">
 Corrected September 2026: this block ended with `evnx doctor --check-updates`, which does

@@ -1,0 +1,668 @@
+---
+title: "Managing your evnx install"
+section: reference
+order: 11
+publishedAt: "2026-10-23"
+updatedAt: "2026-10-23"
+excerpt: "Every install channel with its upgrade and uninstall command, how to find out which evnx you are actually running, and fixes for the problems people really hit: an old version after upgrading, pip refusing to install, pipx not linking, missing cloud commands."
+difficulty: beginner
+timeToComplete: "10 minutes"
+tags: ["install", "upgrade", "uninstall", "troubleshooting", "path", "pipx", "npm", "homebrew", "winget"]
+commands: ["cloud run", "commands", "update"]
+evnxVersion: "0.10.16"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+# Managing your evnx install
+
+evnx ships through eleven channels: an install script, Homebrew, npm, pipx and pip,
+cargo, Scoop, winget, a Docker image, the GitHub Release, and a GitHub Action. They
+all carry the same program. What differs is **where the file lands and which tool
+owns it**, and that is where nearly every install problem comes from.
+
+<Callout type="tip" title="The one rule">
+**Keep exactly one global copy of evnx per machine.** Almost every "I upgraded but
+nothing changed" report so far has been two copies from two channels, with the old
+one earlier on `PATH`. Pick a channel, upgrade through that channel only, and
+remove the rest.
+</Callout>
+
+This page assumes you have read [Installing evnx](/guides/getting-started/installation),
+which covers first-time setup. This one covers what happens after: upgrading,
+uninstalling, and fixing the problems people actually run into.
+
+---
+
+## Which evnx am I running?
+
+Answer this first, before changing anything. Three commands answer it.
+
+**1. The version that runs when you type `evnx`:**
+
+```bash
+evnx --version
+```
+
+**2. Every copy on your `PATH`, in the order your shell tries them:**
+
+```bash
+type -a evnx
+```
+
+That works in bash and zsh. In PowerShell, use `Get-Command evnx -All`; in
+`cmd.exe`, `where.exe evnx`. **The first line is the one that runs.** More than one
+distinct path means more than one copy. The same path listed twice is harmless: it
+only means a folder appears twice in `PATH`.
+
+**3. How that copy was installed, and how to upgrade it** (0.7.0 and later):
+
+```bash
+evnx update
+```
+
+It reads the channel from where the running binary lives and prints that channel's
+command. It contacts nothing. `evnx update --check` also asks GitHub whether a newer
+release exists. See [`evnx update`](/guides/commands/update) for the details.
+
+**4. Optionally, which features this build has** (0.10.0 and later):
+
+```bash
+evnx commands
+```
+
+```text
+  evnx 0.10.16
+  built with: net, migrate, backup, cloud
+```
+
+Two binaries with the same version number can have different commands: `cloud`,
+`migrate` and `backup` are optional features. If `auth`, `vault` or `cloud` are
+missing, see [No `auth`, `vault` or `cloud` commands](#no-auth-vault-or-cloud-commands)
+below.
+
+---
+
+## Every channel at a glance
+
+| Channel | Install | Upgrade | Uninstall |
+|---|---|---|---|
+| Install script | `curl -fsSL https://dotenv.space/install.sh \| bash` | run the same command again | delete the file (see below) |
+| Homebrew | `brew install urwithajit9/evnx/evnx` | `brew upgrade evnx` | `brew uninstall evnx` |
+| npm | `npm install -g @evnx/cli` | `npm install -g @evnx/cli@latest` | `npm uninstall -g @evnx/cli` |
+| pipx | `pipx install evnx` | `pipx upgrade evnx` | `pipx uninstall evnx` |
+| pip, in a virtual environment | `pip install evnx` | `pip install --upgrade evnx` | `pip uninstall evnx` |
+| cargo | `cargo install evnx --all-features` | `cargo install evnx --all-features --force` | `cargo uninstall evnx` |
+| Scoop | `scoop install evnx` (after adding the bucket) | `scoop update evnx` | `scoop uninstall evnx` |
+| winget | `winget install urwithajit9.evnx` | `winget upgrade urwithajit9.evnx` | `winget uninstall urwithajit9.evnx` |
+| Docker | `docker pull ghcr.io/urwithajit9/evnx` | pull a newer tag | `docker rmi ghcr.io/urwithajit9/evnx` |
+| GitHub Release | download, verify, put on `PATH` | repeat with the new release | delete the file |
+
+And where each one puts the binary, which is how you recognise it in `type -a evnx`:
+
+| Channel | Where the binary lives |
+|---|---|
+| Install script | `/usr/local/bin/evnx` if that folder is writable, otherwise `~/.local/bin/evnx` if that folder exists, otherwise `/usr/local/bin/evnx` via `sudo` |
+| Homebrew | `/opt/homebrew/bin` on Apple Silicon; `/usr/local/bin`, linking into `/usr/local/Cellar/evnx/…`, on Intel macs; `/home/linuxbrew/.linuxbrew/bin` on Linux |
+| npm | the `bin` folder under `npm prefix -g`, for example `~/.npm-global/bin`. The real binary is inside `node_modules/@evnx/` |
+| pipx | `~/.local/bin/evnx`, a symlink into `~/.local/share/pipx/venvs/evnx/` (`~/.local/pipx/venvs/` on older pipx) |
+| pip | the active environment's `bin/` (`Scripts\` on Windows) |
+| cargo | `~/.cargo/bin/evnx` |
+| Scoop | a shim in `~\scoop\shims`, pointing at `~\scoop\apps\evnx\current` |
+| winget | under `%LOCALAPPDATA%\Microsoft\WinGet\` |
+
+### Install script
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+It supports Linux (x86_64 and arm64, glibc or musl, detected for you) and macOS
+(Intel and Apple Silicon). It always installs the **latest** release, verifies the
+download's SHA-256 checksum before installing, and refuses to continue if the
+checksum is missing or wrong.
+
+To upgrade, run it again: it overwrites the file in place. To uninstall, delete that
+file:
+
+```bash
+rm ~/.local/bin/evnx
+```
+
+Use `sudo rm /usr/local/bin/evnx` if it went there instead. `type -a evnx` tells you
+which one you have.
+
+<Callout type="warning" title="It does not edit your PATH">
+The script never changes your shell profile. If it installs to `~/.local/bin` and
+that folder is not on `PATH`, add it yourself:
+`export PATH="$HOME/.local/bin:$PATH"` in `~/.bashrc` or `~/.zshrc`. (An older
+version of the installation guide said it was "added to PATH automatically". It
+never was.)
+</Callout>
+
+### Homebrew
+
+```bash
+brew install urwithajit9/evnx/evnx
+```
+
+That adds the `urwithajit9/evnx` tap and installs from it. `brew upgrade evnx`
+upgrades it, and `brew upgrade` with no arguments includes it. To remove it
+completely:
+
+```bash
+brew uninstall evnx
+```
+
+```bash
+brew untap urwithajit9/evnx
+```
+
+### npm
+
+```bash
+npm install -g @evnx/cli
+```
+
+`@evnx/cli` is a small wrapper. The binary itself comes in one of five
+platform packages that npm installs automatically: Linux x64 and arm64, macOS x64
+and arm64, and Windows x64. A setup step that runs at install time connects the two.
+This matters for two of the failures below.
+
+`npx @evnx/cli` (0.10.6 and later) runs it without installing anything, and a
+project can pin its own version with `npm install --save-dev @evnx/cli`. A
+per-project install does not count as a second global copy: it is only reachable
+through `npx` or an npm script.
+
+<Callout type="info" title="nvm, fnm and volta keep globals per Node version">
+With a Node version manager, `npm install -g` installs into **the current Node
+version only**. Switch Node versions and `evnx` either disappears or becomes
+whatever older copy that version had. If evnx "changed version on its own", check
+`node --version`.
+</Callout>
+
+### pipx (recommended for Python users)
+
+```bash
+pipx install evnx
+```
+
+```bash
+pipx upgrade evnx
+```
+
+pipx gives evnx its own virtual environment and links the command into
+`~/.local/bin`. The PyPI wheels contain the full program, cloud commands included,
+from **0.10.0** on. Earlier wheels were built without them.
+
+<Callout type="warning" title="evnx update gives pipx users the wrong command">
+On a pipx install, `evnx update` currently says `Installed via pip` and suggests
+`pip install --upgrade evnx`. That command does not upgrade a pipx install. **Use
+`pipx upgrade evnx`.** This is a known bug in evnx's channel detection.
+</Callout>
+
+### pip
+
+Use plain `pip` only **inside a virtual environment you created**, such as a
+project's `.venv`. There evnx is on `PATH` only while that environment is active,
+which is usually what you want for a project-pinned version.
+
+Outside a virtual environment, use pipx. `pip install evnx` against the system
+Python fails on current Debian, Ubuntu and Homebrew Python, and that is
+deliberate. See [`error: externally-managed-environment`](#pip-install-fails-with-error-externally-managed-environment).
+
+<Callout type="warning" title="Conda users: base is not a project environment">
+If your prompt shows `(base)`, conda's base environment is active in **every**
+shell, and conda puts its `bin` folder ahead of almost everything else on `PATH`.
+A `pip install evnx` there behaves like a global install that outranks Homebrew,
+cargo and the install script. Use pipx, or a named conda environment you activate
+on purpose.
+</Callout>
+
+### cargo
+
+```bash
+cargo install evnx --all-features
+```
+
+```bash
+cargo install evnx --all-features --force
+```
+
+Upgrade with the second command. It needs `--force` because cargo will not reinstall
+a crate that is already installed, and `--all-features` because cargo compiles from
+source with **no** optional features by default. Without the flag you get a binary
+with no `auth`, `vault`, `cloud`, `migrate`, `backup` or `restore`. It needs Rust
+1.85 or newer.
+
+<Callout type="danger" title="`cargo install evnx --force` alone drops features">
+Reinstalling without `--all-features` replaces a full build with a minimal one, and
+nothing warns you. The cloud commands simply stop existing. `evnx commands` shows
+what your build has.
+</Callout>
+
+### Scoop
+
+```powershell
+scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx
+scoop install evnx
+```
+
+`scoop update evnx` upgrades it. Run `scoop update` on its own first if Scoop says
+you are already on the latest version: that refreshes the bucket.
+
+### winget
+
+```powershell
+winget install urwithajit9.evnx
+```
+
+winget releases go through Microsoft's validation, which can take from an hour to
+several days, so winget is often the **last** channel to receive a release. Two
+releases never reached winget at all, **0.10.9 and 0.10.12**. Upgrades skip
+straight past them, which is harmless: each later release contains their fixes.
+
+### Docker
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.16 scan
+```
+
+There is nothing to uninstall but the image. **Pin a version tag** in anything
+automated: `latest` changes under you, and a pinned tag is how you upgrade on
+purpose.
+
+### GitHub Release, by hand
+
+Every release publishes `evnx-<target>.tar.gz` for Linux and macOS and
+`evnx-x86_64-pc-windows-msvc.zip` for Windows, each with a `.sha256` file beside it.
+Verify before you run anything:
+
+```bash
+sha256sum -c evnx-x86_64-unknown-linux-musl.tar.gz.sha256
+```
+
+macOS has no `sha256sum`; use `shasum -a 256 -c` instead. The `musl` builds are
+static and run on any Linux distribution, Alpine included.
+
+### CI
+
+In a pipeline, use the Docker image with a pinned tag, the
+[evnx GitHub Action](https://github.com/urwithajit9/evnx-action), or the install
+script. See [GitHub Actions](/guides/use-cases/use-cases-github-actions).
+
+---
+
+## Which channel should I use?
+
+| You are on | Use | Why |
+|---|---|---|
+| macOS | Homebrew | `brew upgrade` covers evnx along with everything else |
+| Linux | the install script, or Homebrew if you already use it | No package manager to own the file; upgrading means running one command again |
+| Windows | Scoop, or winget | Scoop's bucket is updated by the release itself, so it rarely lags; winget is built into Windows but can trail by days |
+| A Python-centred machine | pipx | Isolated, and it upgrades cleanly |
+| A Node project that should pin evnx | npm, as a `devDependency` | Every developer and CI job gets the same version from `package.json` |
+| A Rust toolchain you already maintain | cargo, with `--all-features` | Builds for your exact platform |
+| CI | a pinned Docker tag, or the Action | Reproducible, nothing left behind |
+
+Whichever you pick, **upgrade through that same channel**. Upgrading with a
+different one does not replace the old copy. It adds a second one, and the two then
+compete on `PATH`.
+
+---
+
+## Troubleshooting
+
+### I upgraded, but `evnx --version` still shows the old version
+
+**Cause: you have two copies, and the old one comes first on `PATH`.** The upgrade
+worked. It just upgraded a copy your shell never reaches.
+
+Run:
+
+```bash
+type -a evnx
+```
+
+Two real examples:
+
+```text
+# Linux: npm's copy outranks the install script's, but only in login shells
+evnx is /home/you/.npm-global/bin/evnx      ← 0.10.0, runs in cron, IDEs, `bash -l`
+evnx is /home/you/.local/bin/evnx           ← 0.10.12, runs in an interactive terminal
+```
+
+```text
+# macOS: cargo installed 0.10.15, but conda's base environment comes first
+evnx is /opt/miniconda3/bin/evnx            ← 0.3.7, from an old pip install
+evnx is /Users/you/.cargo/bin/evnx          ← 0.10.15, never reached
+```
+
+**Fix:** decide which channel you are keeping, remove every other copy with its
+channel's uninstall command (see the table above), then make your shell forget the
+old location:
+
+```bash
+hash -r
+```
+
+That is for bash. In zsh run `rehash`, or just open a new terminal. Then check:
+
+```bash
+evnx --version
+```
+
+<Callout type="warning" title="Your terminal and your scripts can see different PATHs">
+Login shells read `~/.profile` (or `~/.zprofile`); interactive shells also read
+`~/.bashrc` (or `~/.zshrc`). If those files prepend folders in a different order,
+your terminal can run one evnx while cron jobs, IDE task runners, git hooks and
+`bash -lc` run another. In the Linux example above, `~/.profile` put
+`~/.npm-global/bin` first and `~/.bashrc` put `~/.local/bin` back in front. So
+`evnx --version` in a terminal looked fine while every hook ran 0.10.0. Removing
+the extra copy fixes this. Reordering `PATH` only hides it.
+</Callout>
+
+### `error: unrecognized subcommand 'update'`
+
+```text
+error: unrecognized subcommand 'update'
+
+  tip: a similar subcommand exists: 'template'
+```
+
+`evnx update` was added in **0.7.0**. The copy answering is older than that, even if
+you just installed a newer one. This is the previous problem again: run
+`type -a evnx` and remove the old copy.
+
+### `pip install` fails with `error: externally-managed-environment`
+
+```text
+error: externally-managed-environment
+
+× This environment is externally managed
+```
+
+Debian 12+, Ubuntu 23.04+ and Homebrew's Python mark the system Python as managed by
+the OS package manager (PEP 668), so `pip install` outside a virtual environment is
+refused. **That is the system working as intended.** Do not reach for
+`--break-system-packages`. Use pipx:
+
+```bash
+sudo apt install pipx
+```
+
+```bash
+pipx ensurepath
+```
+
+```bash
+pipx install evnx
+```
+
+On macOS, `brew install pipx`.
+
+Note that if `evnx update` listed `pip install --upgrade evnx` as one of two options
+and you are on such a system, the **other** option was the right one. See the next
+problem but one.
+
+### pipx says `File exists at ~/.local/bin/evnx … Not modifying`
+
+```text
+⚠️  File exists at /home/you/.local/bin/evnx and points to /home/you/.local/bin/evnx, not
+    /home/you/.local/share/pipx/venvs/evnx/bin/evnx. Not modifying.
+  installed package evnx 0.10.12, installed using Python 3.14.4
+  These apps are now globally available
+    - evnx (symlink missing or pointing to unexpected location)
+```
+
+pipx installed evnx into its own environment but **could not link it**, because
+another channel already owns `~/.local/bin/evnx`, usually the install script. You
+now have two copies, and the command still runs the old one.
+
+Pick one:
+
+- **Keep the install script's copy:** `pipx uninstall evnx`. pipx removes only its
+  own environment and leaves a file it did not create alone, but check with
+  `evnx --version` afterwards.
+- **Switch to pipx:** remove the other file, then make pipx link again:
+
+```bash
+rm ~/.local/bin/evnx
+```
+
+```bash
+pipx install --force evnx
+```
+
+Also: `pipx install --upgrade evnx` is not a pipx command. It is `pipx upgrade evnx`.
+
+### `evnx update` says "the install script or pip: both write to this folder"
+
+```text
+  Installed via the install script or pip: both write to this folder.
+  Upgrade with the one you used:
+
+      pip            pip install --upgrade evnx
+      script         curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+The binary is in `~/.local/bin` or `/usr/local/bin`, where both channels write, and
+evnx found no pip record to settle it. To check yourself:
+
+```bash
+ls ~/.local/lib/python3*/site-packages/ | grep -i '^evnx-'
+```
+
+If that prints nothing, **pip did not install it**: pip always leaves an
+`evnx-<version>.dist-info` folder. Use the script line. On a machine that refuses
+`pip install` (previous section), the script line is the only one that can apply.
+
+### No `auth`, `vault` or `cloud` commands
+
+```text
+error: unrecognized subcommand 'cloud'
+```
+
+Your build was compiled without the `cloud` feature. `evnx commands` shows the
+`built with:` line, and on such a build `evnx --help` ends with a note naming what
+is missing. There are two ways to end up here:
+
+| How | Fix |
+|---|---|
+| `cargo install evnx` without `--all-features` | `cargo install evnx --all-features --force` |
+| A PyPI wheel older than 0.10.0 | `pipx upgrade evnx` |
+
+The same cause is behind this message:
+
+```text
+Error: `--check` needs network support, and this build has none.
+```
+
+A build with no optional features contains no HTTP code at all, on purpose. The
+fixes above apply.
+
+### npm: `evnx: run npm install to complete setup`
+
+```text
+evnx: run npm install to complete setup
+```
+
+The setup step that runs at install time was skipped, usually because of
+`--ignore-scripts` or `ignore-scripts=true` in an `.npmrc`. Reinstall with scripts
+allowed:
+
+```bash
+npm install -g @evnx/cli --ignore-scripts=false
+```
+
+### npm: `Binary package @evnx/evnx-… not installed`
+
+The platform package was not installed. Either optional dependencies were turned off
+(`--omit=optional`, `--no-optional`, or `omit=optional` in an `.npmrc`), or your
+platform is not one of the five supported (Linux x64 and arm64, macOS x64 and
+arm64, Windows x64). For the first:
+
+```bash
+npm install -g @evnx/cli --include=optional
+```
+
+For an unsupported platform, use a release binary or `cargo install`.
+
+### The install script asks for `sudo`
+
+```text
+[WARN] Need sudo permission to install to /usr/local/bin
+```
+
+The script installs to `~/.local/bin` only if that folder **already exists** and is
+writable. Create it, and run the script again to install without `sudo`:
+
+```bash
+mkdir -p ~/.local/bin
+```
+
+Then make sure `~/.local/bin` is on your `PATH`.
+
+### The install script says `Installation failed - binary not found in PATH`
+
+```text
+[ERROR] Installation failed - binary not found in PATH
+```
+
+Despite the wording, the file **was** installed. The script then looked for `evnx` on
+your `PATH`, did not find it, and stopped before it could print its hint about
+`PATH`. Add the folder it reported (`Installing to …`) to your `PATH` and open a new
+terminal.
+
+### The install script reported the wrong version
+
+The `Installed version:` line runs whichever `evnx` comes first on your `PATH`, not
+necessarily the file it just installed. If it prints an older number, you have a
+second copy ahead of it. See the first problem in this section.
+
+### On an Intel Mac with Homebrew, I ran the install script
+
+On Intel Macs Homebrew owns `/usr/local/bin`, and that folder is usually writable by
+you, so the install script writes there. It **replaces Homebrew's link** with its
+own file. `brew upgrade evnx` then upgrades a copy that is no longer linked, and
+nothing changes. Restore Homebrew's link:
+
+```bash
+brew link --overwrite evnx
+```
+
+From then on, upgrade with `brew upgrade evnx` only.
+
+### Windows: Defender or SmartScreen blocks evnx
+
+The Windows binary is not code-signed yet, and Microsoft Defender's cloud heuristics
+have occasionally flagged an unsigned release. That is also why two releases never
+reached winget. The release's checksum confirms the file is the one that was
+published. If Defender quarantines a release, report it to us and install the
+previous or next release in the meantime.
+
+### Windows: the upgrade fails with "Access is denied" or "file in use"
+
+Windows cannot replace a program while it is running. Close anything still running
+evnx, such as a long `evnx cloud run` in another terminal, then upgrade again. This
+applies to cargo, Scoop, winget and npm alike.
+
+### macOS: "evnx cannot be opened because the developer cannot be verified"
+
+That happens only to a binary downloaded **through a browser**, which marks the file
+as quarantined. The install script, Homebrew and cargo do not. Remove the mark from
+a file you have verified against its `.sha256`:
+
+```bash
+xattr -d com.apple.quarantine ./evnx
+```
+
+### `evnx update --check` says GitHub is rate-limiting
+
+GitHub allows 60 unauthenticated API requests an hour per IP address, and a shared
+office or CI address can use them up. Wait, or open
+[the latest release](https://github.com/urwithajit9/evnx/releases/latest) in a
+browser. The install script falls back to a request that does not count against
+this limit.
+
+### `evnx update --check` found a release, but my channel says I'm up to date
+
+```text
+  note: a channel can lag behind the release by minutes or days.
+```
+
+`--check` asks GitHub, where a release exists first. Homebrew, Scoop, PyPI and npm
+are published automatically from the release tag and usually follow within minutes. crates.io
+is published by hand and can trail. winget can take days, or skip a release
+entirely (0.10.9 and 0.10.12). Wait and retry, or switch channel, and remove the old
+copy if you do.
+
+---
+
+## Start over cleanly
+
+If `type -a evnx` lists several copies and you are not sure where they came from,
+remove them all and install once. Run each uninstall command for a channel you
+have used. A command for a channel you never used fails harmlessly.
+
+```bash
+brew uninstall evnx
+```
+
+```bash
+npm uninstall -g @evnx/cli
+```
+
+```bash
+pipx uninstall evnx
+```
+
+```bash
+cargo uninstall evnx
+```
+
+```bash
+rm -f ~/.local/bin/evnx
+```
+
+Use `sudo rm -f /usr/local/bin/evnx` for that last file only if `type -a evnx` showed
+it and it is **not** a Homebrew link. A pip copy inside an environment, conda's base
+included, goes with `pip uninstall evnx` while that environment is active.
+
+Keep running `type -a evnx` until it prints nothing (zsh: `rehash` in between).
+Then install once, with the channel you chose, and check:
+
+```bash
+evnx --version
+```
+
+---
+
+## Reporting an install problem
+
+Include the output of these, with your operating system and how you meant to
+install evnx:
+
+```bash
+type -a evnx
+```
+
+```bash
+evnx --version
+```
+
+```bash
+evnx update --check --json
+```
+
+`update --check --json` needs 0.10.7 or later. It names the channel evnx detected
+and the latest release, and sends nothing about you or your machine.
+
+---
+
+## Related guides
+
+- [Installing evnx](/guides/getting-started/installation): first-time setup on every platform
+- [`evnx update`](/guides/commands/update): how channel detection and `--check` work
+- [evnx commands](/guides/commands/commands): which commands and features your build has
