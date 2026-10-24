@@ -137,8 +137,9 @@ The most useful diff is between two real files:
 evnx diff --env-name production --against staging
 ```
 
-Comparing against `.env.example` — the default — reports every correctly filled-in value
-as "different", because the template holds placeholders by construction.
+That compares keys **and** values. Against `.env.example` — the default — only key names
+are compared (v0.10.13+), because the template holds placeholders by construction and every
+filled-in value would differ. `--values` compares them anyway.
 
 ---
 
