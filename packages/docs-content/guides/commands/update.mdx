@@ -3,7 +3,7 @@ section: "commands"
 order: 18
 title: "evnx update"
 publishedAt: "2026-09-29"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-25"
 excerpt: "Find out whether a newer evnx exists, and get the upgrade command for the way you installed it."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
@@ -98,6 +98,14 @@ them apart and says so:
       pip            pip install --upgrade evnx
       script         curl -fsSL https://dotenv.space/install.sh | bash
 ```
+
+<Callout type="warning" title="Installed with pipx? Use pipx upgrade evnx">
+evnx does not recognise pipx yet. A pipx install lives in its own virtual environment,
+so `evnx update` says `Installed via pip` and suggests `pip install --upgrade evnx`,
+which does not upgrade a pipx install. Run **`pipx upgrade evnx`** instead. This is a
+known bug in the channel detection, and this note goes when it is fixed. See
+[Managing your evnx install](/guides/reference/managing-your-evnx-install).
+</Callout>
 
 ### When it cannot tell
 

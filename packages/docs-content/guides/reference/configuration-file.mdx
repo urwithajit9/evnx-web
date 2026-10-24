@@ -360,7 +360,7 @@ command behaves. Read by `validate`, `scan` and `sync`.
 | `required` | bool | `true` | Unstated means required. `false` marks a variable that may be absent |
 | `secret` | bool | *unstated* | `true` reports a credential the heuristics cannot name; `false` retracts a guess made from the variable's name |
 | `format` | string | none | `url`, `int`, `port`, `bool`, `email`, or a regular expression |
-| `description` | string | none | Written into `.env.example` by `evnx sync` |
+| `description` | string | none | Shown in `evnx validate`'s suggestion when the variable is missing. `evnx sync` does not read it |
 | `environments` | list of strings | all | Which environments the variable is required in |
 
 ```toml

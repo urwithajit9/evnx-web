@@ -224,7 +224,8 @@ exit=1
 
 A typo in a glob that silently ran your deploy with **zero** secrets injected would be a
 success worse than any failure — the deploy would go out misconfigured and nothing would say
-so. `evnx migrate` has the same shape and exits `0`; this deliberately does not.
+so. `evnx migrate` refuses the same way: a filter that leaves nothing exits `2`, so the two
+commands agree.
 
 ## 7. History, binding, and cleanup
 

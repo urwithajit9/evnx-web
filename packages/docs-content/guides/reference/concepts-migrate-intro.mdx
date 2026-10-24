@@ -240,14 +240,18 @@ For all command-generation destinations there is no conflict detection: evnx con
 
 A production migration is more than a single command. Here is a recommended sequence using evnx tools:
 
-<Step title="Scan for real secrets first">
-Before migrating, confirm you are not accidentally including test keys or placeholders.
+<Step title="Check the file before you upload it">
+`scan` reports values that look like real secrets; `validate` reports placeholders and
+weak values. Run both on the file you are about to migrate. Name the file, because in a git
+repository a folder scan only summarises a gitignored `.env`:
 
 ```bash
-evnx scan --format pretty
+evnx scan .env
+evnx validate
 ```
 
-Fix any issues `scan` reports before proceeding.
+A real secret in the file is expected here — that is what you are migrating. A placeholder
+is not: fix what `validate` reports before proceeding.
 </Step>
 
 <Step title="Validate the .env file">

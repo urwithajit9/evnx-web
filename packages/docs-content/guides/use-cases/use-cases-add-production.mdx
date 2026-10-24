@@ -3,7 +3,7 @@ section: "use-cases"
 order: 2
 title: "Production Use Cases — Real-World `evnx add` Workflows"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-05"
+updatedAt: "2026-10-25"
 excerpt: "Explore real production scenarios where `evnx add` solves environment variable management challenges — with before/after comparisons showing manual friction vs. evnx efficiency."
 difficulty: "intermediate"
 timeToComplete: "12 minutes"
@@ -304,8 +304,7 @@ and Other. `--required` marks a variable `(required)` in the same comment.
 
 <Callout type="warning">
 **`evnx validate --category` does not exist**, and neither does
-`evnx validate --recursive` further down this page. Both were listed here as
-shipped features. The section headers and `[Category]` comments are real —
+`evnx validate --recursive`. Both were listed on this page as shipped features. The section headers and `[Category]` comments are real —
 `evnx add` writes them and they survive a round trip — but nothing filters or
 validates by them. They are documentation for humans and for `git diff`.
 </Callout>
@@ -365,7 +364,7 @@ done
 **Benefits:**
 - ✅ `--path` flag enables precise targeting in monorepos
 - ✅ Blueprints ensure shared config stays synchronized
-- ✅ `--recursive` validation catches issues across all services
+- ✅ One `evnx validate` per service folder catches issues in each
 - ✅ Schema-driven approach scales: add service = one command
 - ✅ Conflict detection prevents accidental overwrites across services
 
@@ -383,7 +382,7 @@ What required custom scripts and manual coordination now works with composable, 
 | Onboarding developers | Incomplete templates, setup friction | Blueprint-driven, one-command setup |
 | Third-party integrations | Secret leakage, naming debates | Safe placeholders, consistent naming |
 | Feature flags | Undocumented, untracked experiments | Categorized, optional/required metadata |
-| Microservices | Config drift, duplicated logic | Path-targeted, recursive validation |
+| Microservices | Config drift, duplicated logic | Path-targeted adds, one validation per service |
 
 ---
 
@@ -394,7 +393,7 @@ Master these workflows to level up your environment management:
 1. **[Sync Basics](/guides/getting-started/sync-basic)** — Keep `.env` and `.env.example` aligned
 2. **[Validate Command](/guides/commands/validate)** — Catch issues before deployment
 3. **[Team Collaboration](/guides/use-cases/team-collaboration)** — Share templates safely at scale
-4. **[Schema Reference](/guides/commands/spec)** — Extend evnx with your own services and frameworks
+4. **[Variable contract](/guides/commands/spec)** — declare what each variable is: required, format, secret. For variables the catalogue does not know, use `evnx add custom`
 
 <Callout type="success" title="You're production-ready">
 You now know how `evnx add` solves real-world environment challenges. Use these patterns to reduce setup friction, prevent configuration errors, and keep your team moving fast — safely.
