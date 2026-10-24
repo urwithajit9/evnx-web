@@ -118,7 +118,7 @@ jobs:
 
       - name: Check .env.example is up to date
         run: |
-          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.12 \
+          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 \
             sync --check --direction forward \
             --naming-policy error \
             --template-config .evnx/placeholders.json
@@ -134,7 +134,7 @@ To report the two failure modes differently:
       - name: Check .env.example is up to date
         run: |
           set +e
-          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.12 \
+          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 \
             sync --check --direction forward
           case $? in
             0) ;;
@@ -152,7 +152,7 @@ it the `case` never runs.
       - name: Check .env.example is up to date
         run: |
           set +e
-          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.12 \
+          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 \
             sync --check --direction forward --format json > drift.json
           status=$?
           if [ "$status" -eq 1 ]; then
@@ -186,7 +186,7 @@ is clean JSON. On exit `2` it is empty.
 env-sync:
   stage: test
   image:
-    name: ghcr.io/urwithajit9/evnx:0.10.12
+    name: ghcr.io/urwithajit9/evnx:0.10.18
     entrypoint: [""]
   script:
     - evnx sync --check --direction forward --naming-policy error --template-config .evnx/placeholders.json
@@ -205,7 +205,7 @@ To print the drifted names in the job log as well:
 env-sync-report:
   stage: test
   image:
-    name: ghcr.io/urwithajit9/evnx:0.10.12
+    name: ghcr.io/urwithajit9/evnx:0.10.18
     entrypoint: [""]
   script:
     - evnx sync --check --direction forward --format json
@@ -225,7 +225,7 @@ evnx ships a hook for the [pre-commit](https://pre-commit.com) framework:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.10.12
+    rev: v0.10.18
     hooks:
       - id: evnx-sync
 ```
@@ -345,7 +345,7 @@ holds one file named after its target:
 ```yaml
 - name: Install evnx
   run: |
-    curl -fsSL -o evnx.tar.gz https://github.com/urwithajit9/evnx/releases/download/v0.10.12/evnx-x86_64-unknown-linux-musl.tar.gz
+    curl -fsSL -o evnx.tar.gz https://github.com/urwithajit9/evnx/releases/download/v0.10.18/evnx-x86_64-unknown-linux-musl.tar.gz
     tar -xzf evnx.tar.gz
     sudo install -m 0755 evnx-x86_64-unknown-linux-musl /usr/local/bin/evnx
     evnx --version

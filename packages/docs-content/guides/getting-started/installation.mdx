@@ -119,7 +119,7 @@ writes into a mounted directory.
 Pin a version rather than tracking `latest` in a pipeline:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.5.0 scan
+docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 scan
 ```
 
 In GitHub Actions the container form usually reads better than an install step:
@@ -127,7 +127,7 @@ In GitHub Actions the container form usually reads better than an install step:
 ```yaml
 - name: Scan for secrets
   run: |
-    docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.5.0 \
+    docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 \
       scan --severity high
 ```
 
