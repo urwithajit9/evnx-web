@@ -3,12 +3,13 @@ title: "API Tokens in CI/CD"
 section: integrations
 order: 4
 publishedAt: "2026-09-16"
+updatedAt: "2026-10-25"
 excerpt: "Pull encrypted secrets into a pipeline with a scoped API token — and understand exactly what a runner can and cannot do with it."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["ci-cd", "cloud", "tokens", "github-actions", "security", "evnx"]
-commands: ["auth token create", "auth token list", "auth token revoke", "cloud history", "cloud pull", "cloud run"]
-evnxVersion: "0.5.2"
+commands: ["auth token create", "auth token list", "auth token revoke", "cloud history", "cloud pull", "cloud run", "vault list", "vault members"]
+evnxVersion: "0.10.18"
 prerequisites:
   - commands/auth
   - commands/cloud
@@ -56,7 +57,13 @@ evnx auth token revoke ci-deploy
 ```
 
 The name is **positional**. `--scope` is `read` or `read_write`; omitting `--expires-in-days`
-mints a token that never expires.
+mints a token that never expires. With `-q` (**v0.10.18+**) the new token is the only
+thing printed, alone on stdout, so it can go straight into your CI provider's secret
+store:
+
+```bash
+evnx auth token create ci-deploy --scope read --vault my-api/production -q
+```
   </Tab>
   <Tab label="Dashboard">
 **[app.evnx.dev](https://app.evnx.dev)** → Settings → API tokens → New token.
@@ -91,6 +98,37 @@ Anything that is not GET, HEAD or OPTIONS is refused for a read-only token. Depl
 A vault-scoped token reaches only that vault. Routes with no vault in the path — listing vaults, creating one — are refused outright, because enumerating your account is outside what a deploy token was issued for.
 </Step>
 
+### Name the vault by its id
+
+Because a vault-scoped token cannot list vaults, it cannot turn a **name** into a vault
+either. Pass the vault's **id** in a pipeline. By name, the command stops and says so:
+
+```text
+Error: a vault-scoped API token cannot list vaults, so "my-api/production" cannot be resolved by name.
+  Pass the vault's id in place of its name.
+  Find it with `evnx vault list --verbose` from a normal login. The restriction is deliberate — a token issued for one vault should not be able to enumerate the others.
+```
+
+Find the id once, from your own login:
+
+```bash
+evnx vault list --verbose
+```
+
+```text
+  0453e5f6-f1fd-476c-b083-626430cb7639 my-api/production
+```
+
+By id, a vault-scoped token works with `cloud pull`, `run`, `export`, `history`,
+`diff`, `watch` and `audit`, and with `evnx vault members` (**v0.10.18+**; before, it
+failed with a bare "Insufficient permissions"). `cloud push` works by id with a
+`read_write` token. The examples below keep the id in a CI variable, `EVNX_VAULT_ID`.
+It is not a secret.
+
+A push by id with a token is **not** asked the production question that a push of the
+default `.env` asks a signed-in user: the token cannot look up the vault's environment.
+Name the file with `--file` anyway, so the job pushes what you mean.
+
 <Callout type="info" title="Why refusals are 403 and not 401">
 A token that reaches an account-management route gets **403**, deliberately distinct from 401. The credential was recognised; it is the wrong *kind*. That distinction is what tells you "rotate the scope" rather than "the token is broken".
 </Callout>
@@ -121,9 +159,10 @@ jobs:
         env:
           EVNX_TOKEN:    ${{ secrets.EVNX_TOKEN }}
           EVNX_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+          EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
         run: |
           printf '%s' "$EVNX_PASSWORD" \
-            | evnx cloud pull --vault my-api/production --file .env --force --password-stdin
+            | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --force --password-stdin
 
       - name: Deploy
         run: ./deploy.sh
@@ -136,7 +175,8 @@ jobs:
 - name: Check what changed
   env:
     EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
-  run: evnx cloud history --vault my-api/production --limit 5
+    EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
+  run: evnx cloud history --vault "$EVNX_VAULT_ID" --limit 5
 ```
   </Tab>
   <Tab label="GitLab CI">
@@ -145,10 +185,11 @@ deploy:
   script:
     - curl -fsSL https://dotenv.space/install.sh | bash
     - printf '%s' "$EVNX_PASSWORD" |
-        evnx cloud pull --vault my-api/production --file .env --force --password-stdin
+        evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --force --password-stdin
   variables:
     EVNX_TOKEN: $EVNX_TOKEN
     EVNX_PASSWORD: $EVNX_MASTER_PASSWORD
+    EVNX_VAULT_ID: $EVNX_VAULT_ID
 ```
   </Tab>
 </CodeTabs>
@@ -170,9 +211,12 @@ working directory.
 
 ```yaml
 - name: Deploy
+  env:
+    EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
+    EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
   run: |
     printf '%s' "${{ secrets.EVNX_MASTER_PASSWORD }}" \
-      | evnx cloud run --vault my-api/production --password-stdin -- ./deploy.sh
+      | evnx cloud run --vault "$EVNX_VAULT_ID" --password-stdin -- ./deploy.sh
 ```
 
 Nothing is written to disk, nothing enters shell history, and nothing appears in `ps` —
@@ -209,8 +253,13 @@ strictly less exposure for the same result.
 
 ```bash
 trap 'rm -f .env' EXIT
-evnx cloud pull --vault my-api/production --file .env --force --password-stdin
+evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --force --password-stdin
 ```
+
+**Use `-q` in jobs.** **v0.10.18+** every cloud command prints nothing on success under
+`-q`, while warnings and errors still reach the log. A step that read a `✓ pulled …`
+line from stdout gets nothing under `-q`; check the exit code instead (`0` done, `2`
+refused or failed).
 
 **Never `cat` the file.** A `.env` echoed into a build log is a `.env` in your CI provider's log retention, readable by everyone with repository access.
 

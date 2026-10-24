@@ -1,6 +1,7 @@
 ---
 title: "API Tokens for CI: What They Unlock, and What They Deliberately Don't"
 publishedAt: "2026-09-18"
+updatedAt: "2026-10-25"
 excerpt: "A walkthrough of minting an evnx API token — in the CLI or the new dashboard — wiring it into a pipeline, and understanding the one thing a token is designed never to do."
 author: "ajit"
 category: "tutorial"
@@ -16,6 +17,10 @@ Most secret managers give your CI pipeline a token, the pipeline calls the API, 
 evnx cannot do that, and the reason is the whole point of the product.
 
 This post walks through minting a token, scoping it, and wiring it into a real pipeline — including the part that is genuinely awkward, which most write-ups on this subject quietly skip.
+
+<Callout type="info" title="Updated for v0.10.18">
+A token scoped to one vault cannot list vaults, so it cannot resolve a vault **name**. The pipeline examples below now pass the vault's **id** (`evnx vault list --verbose` prints it), kept in a CI variable. By name they stop with *"a vault-scoped API token cannot list vaults"*. The current reference is [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens).
+</Callout>
 
 ---
 
@@ -138,10 +143,11 @@ jobs:
         env:
           EVNX_TOKEN:    ${{ secrets.EVNX_TOKEN }}
           EVNX_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+          EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
         run: |
           trap 'rm -f .env' EXIT
           printf '%s' "$EVNX_PASSWORD" \
-            | evnx cloud pull --vault my-api/production --file .env --force --password-stdin
+            | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --force --password-stdin
           ./deploy.sh
 ```
 
@@ -169,7 +175,8 @@ This is the most underused thing in the whole system.
 - name: Check what changed
   env:
     EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
-  run: evnx cloud history --vault my-api/production --limit 5
+    EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
+  run: evnx cloud history --vault "$EVNX_VAULT_ID" --limit 5
 ```
 
 No `EVNX_PASSWORD`. No prompt. No decryption. No blob download.

@@ -3,7 +3,7 @@ title: "Rotating a vault key"
 section: reference
 order: 10
 publishedAt: "2026-10-01"
-updatedAt: "2026-10-01"
+updatedAt: "2026-10-25"
 excerpt: "Rotate the key a vault is encrypted under without removing anyone — what it protects you from, what it cannot reach, and why that distinction is the whole point."
 difficulty: intermediate
 timeToComplete: "5 minutes"
@@ -61,15 +61,31 @@ evnx vault rekey api/production
   This stops anyone holding only the OLD key from reading what is
   pushed from now on. It cannot recall copies of what they could
   already read — rotate those secrets at their source.
-
-? Rotate the key for api/production? (y/N)
+Rotate the key for api/production? [y/N]
 ```
 
 You are asked for your master password, because the current key has to be opened
-before anything can be re-encrypted under a new one.
+before anything can be re-encrypted under a new one. **v0.10.18+** a wrong password
+is refused straight after the prompt, before any version is downloaded:
+
+```
+Error: that master password did not open your keypair, so it is not the one this account was registered with. Nothing has been changed.
+```
 
 Add `-y` to skip the prompt, and `--password-stdin` to read the password from a
-pipe rather than a terminal.
+pipe rather than a terminal. With no terminal and no `-y`, `rekey` stops before
+doing anything and prints the command with `--yes` added (**v0.10.18+**; older
+versions failed with `IO error: not a terminal`).
+
+When it finishes:
+
+```
+  ✓ rotated the key for api/production
+  4 version(s) re-encrypted, 3 member(s) re-wrapped
+
+  Members keep access and stay signed in — they pick up the new key
+  on their next command.
+```
 
 ## ⚠️ What rotation cannot do
 

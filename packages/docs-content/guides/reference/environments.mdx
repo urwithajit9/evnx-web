@@ -74,6 +74,12 @@ reporting success, which is the failure mode this tool exists to prevent.
 falls back to `.env`. Most projects genuinely have only `.env`, and refusing would break
 the common case. What makes it safe is that both commands **print the file they chose**
 every time.
+
+`push` derives `.env.<environment>` when that file exists; `pull` only when it
+**already** exists, so a first pull into a fresh checkout writes `.env`. And
+**v0.10.18+** pushing the default `.env` into a **production** vault asks first, or, with
+no terminal, is refused unless you add `--yes` or name the file. See
+[evnx cloud → Pushing](/guides/commands/cloud#pushing).
 </Callout>
 
 ---

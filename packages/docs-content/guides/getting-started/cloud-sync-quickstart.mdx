@@ -3,13 +3,13 @@ title: "Cloud Sync in 10 Minutes"
 section: getting-started
 order: 6
 publishedAt: "2026-09-16"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-25"
 excerpt: "From no account to a .env pulled byte-identical on a second machine. Every encryption step happens locally — the server only ever holds ciphertext."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["cloud", "sync", "getting-started", "encryption", "evnx"]
 commands: ["auth login", "auth register", "auth status", "cloud", "cloud history", "cloud link", "cloud pull", "cloud push", "update", "vault create"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -43,7 +43,7 @@ Note that `--features full` is **not** enough: `full` is `migrate` plus `backup`
 evnx auth register --email you@example.com
 ```
 
-You are asked for a master password twice. Then evnx derives your keys locally and sends the server an SRP verifier, two salts, two public keys, and your private key already sealed under your master key.
+You are asked for a master password twice. Then evnx derives your keys locally and sends the server an SRP verifier, two salts, your public keys (including the ML-KEM-768 key that sharing uses), and your private keys already sealed under your master key.
 
 Your password itself is never transmitted.
 
@@ -85,7 +85,15 @@ This asks the server, so it tells you whether the credential is genuinely still 
 evnx vault create my-api --env production
 ```
 
+```text
+  ✓ created my-api/production
+
+  Push a .env into it with:  evnx cloud push --vault my-api/production
+```
+
 A fresh 256-bit key is generated on this machine and wrapped under your master key before it goes anywhere. The server stores only the wrapped form.
+
+A name is lower-case letters, digits and hyphens; `My-Api` is refused with the lower-case name suggested. Your master password is checked first too: a mistyped one is refused straight after the prompt, so no vault is ever created under a typo.
 
 Name and environment together identify a vault, so `my-api/production` and `my-api/staging` are two vaults with two independent keys.
 
@@ -108,6 +116,16 @@ This writes `[cloud] vault` into `.evnx.toml` so `push` and `pull` need no `--va
 evnx cloud push
 ```
 
+Because this is a **production** vault and the file is the default `.env`, the push asks first:
+
+```text
+  file      ./.env (default)
+  ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+Push ./.env into production vault my-api/production? [y/N]
+```
+
+Answer `y`. The question is there because a forgotten `--file` is how development secrets end up in production. Keep production values in `.env.production` and the push picks that file up without asking. In a script with no terminal, add `--yes` or name the file with `--file`.
+
 Your `.env` is encrypted here, then uploaded. Comments, ordering, blank lines and quoting all survive, because evnx encrypts the file itself rather than a parsed version of it.
 
 Only the key *names* are sent in the clear, so a dashboard can list what a vault holds without decrypting it.
@@ -122,6 +140,15 @@ On a second machine, after `evnx auth login`:
 cd ~/projects/my-api
 evnx cloud pull --vault my-api/production
 ```
+
+```text
+  file      ./.env (default)
+  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ✓ pulled version 1 of my-api/production into ./.env
+! '.env' may contain secrets and is not in .gitignore
+```
+
+In a git repository, `pull` checks that the file it wrote is ignored. On a terminal it offers to add it to `.gitignore`; `--gitignore` adds it without asking.
 
 Prove it round-tripped:
 

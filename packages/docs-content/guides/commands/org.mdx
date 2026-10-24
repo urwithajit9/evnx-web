@@ -3,12 +3,13 @@ title: "evnx org"
 section: commands
 order: 10
 publishedAt: "2026-10-04"
+updatedAt: "2026-10-25"
 excerpt: "Organisations hold a plan and a set of seats. A seat decides which plan's limits apply to its holder — and nothing else. An organisation cannot give anyone access to a vault."
 difficulty: intermediate
 timeToComplete: "8 minutes"
 tags: ["cloud", "organisation", "team", "seats", "billing", "invitations", "evnx"]
 commands: ["auth", "auth delete-account", "auth status", "org accept", "org assign", "org billing", "org create", "org delete", "org invite", "org invites", "org leave", "org list", "org members", "org release", "org remove", "org role", "org seats", "org uninvite", "vault", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.9.0"
+evnxVersion: "0.10.18"
 prerequisites:
   - commands/auth
 draft: false
@@ -105,10 +106,25 @@ The command prints a single-use token and the server emails a link. Both expire 
 **Only the invited address can redeem it.** The token alone is not enough — redemption checks it against the signed-in account's own email. That is what makes it safe to print the token and to forward the link; a stranger who gets hold of either cannot join.
 </Callout>
 
-Roles are `member` or `admin`.
+Roles are `member` (the default) or `admin`. **v0.10.18+** a role is read the same
+way here and in `evnx vault`: any case, spaces trimmed, so `--role Admin` works.
+Anything else names the roles you can use:
+
+```text
+Error: role must be one of: member, admin. Got `superuser`.
+```
+
+With `-q`, `invite` prints only what you need to pass on: the
+`evnx org accept …` line with the token, and the reminder that it grants no vault.
 
 <Callout type="danger">
-`owner` cannot be granted — not by invitation, not by a role change. An organisation has exactly one owner, set when it is created. Handing it out would leave two, and nothing could then remove either.
+`owner` cannot be granted — not by invitation, not by a role change. An organisation has exactly one owner, set when it is created. Handing it out would leave two, and nothing could then remove either. The refusal says so:
+
+```text
+Error: `owner` cannot be granted. An organisation has exactly one owner, set
+  when it is created — handing it out through an invitation or a role
+  change would leave two, and nothing could then remove either.
+```
 </Callout>
 
 You may only invite at a rank you outrank, so an admin cannot invite another admin. That would create a pair neither of them can manage.
@@ -264,7 +280,27 @@ evnx org remove colleague@example.com    # admin removes someone
 
 Leaving needs no administrator — it is your membership. Removing someone else takes an admin who outranks them.
 
-The owner can do neither. An organisation with no owner has nobody who can change its billing or delete it, so ownership has to move before the owner can go.
+The owner can do neither. An organisation with no owner has nobody who can change its billing or delete it, so ownership has to move before the owner can go:
+
+```text
+Error: you own acme, so you cannot leave it.
+  An organisation with no owner has nobody who can change its billing
+  or delete it. Transfer ownership, or delete the organisation.
+```
+
+Both ask first. **v0.10.18+**, with no terminal to ask on, they stop before
+sending anything and name the flag, where older versions failed with
+`IO error: not a terminal`:
+
+```text
+  Remove alice@example.com from acme?
+  Nothing they already pulled is recalled.
+
+Error: there is no terminal to confirm with.
+
+Add --yes (-y) to go ahead without being asked:
+  evnx org remove <member> --yes
+```
 
 <Callout type="warning">
 Removing someone frees their seat, which drops their limits back to their own plan. It does not recall anything they already pulled, and it does not touch any vault — if they were a member of one, they still are. Use [`evnx vault revoke`](/guides/commands/vault) for that, which re-keys the vault.
@@ -278,7 +314,12 @@ Removing someone frees their seat, which drops their limits back to their own pl
 evnx org delete --org acme
 ```
 
-Owner-only, and it asks first. Every seat holder drops back to their own plan.
+Owner-only, and it asks first (`-y` skips the question, and is required with no
+terminal). Every seat holder drops back to their own plan. While seats are
+assigned, it needs `--force` as well.
+
+`-q` works for every `org` command (**v0.10.18+**): nothing on success, while
+tables, warnings and errors still print. Refusals exit 2.
 
 <Callout type="info">
 This is also the way out of a corner: **`evnx auth delete-account` refuses while you own an organisation**, because an organisation may be paying for other people's seats. Delete or transfer the organisation first, then the account can be closed.

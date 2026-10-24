@@ -7,7 +7,7 @@ excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, ena
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
-commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth login", "auth logout", "auth register", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status"]
+commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth login", "auth logout", "auth register", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status", "vault list"]
 evnxVersion: "0.10.17"
 prerequisites:
   - getting-started/installation
@@ -204,6 +204,13 @@ The name is a **positional** argument. `--scope` takes `read` or `read_write`, `
 restricts the token to one vault, and `--expires-in-days` sets an expiry — omit it and the
 token never expires.
 
+With `-q` (**v0.10.18+**) `create` prints the new token alone on stdout and nothing else,
+so a script can capture it:
+
+```bash
+evnx auth token create ci-deploy --scope read --vault my-api/production -q
+```
+
 <Callout type="tip" title="Or mint it in the dashboard">
 The same tokens are listed and created at **[app.evnx.dev](https://app.evnx.dev)** →
 Settings → API tokens. Same endpoint, same credential, and the list shows a last-used
@@ -218,11 +225,14 @@ pipeline since last year.
 Two limits are enforced centrally on the server, not by each endpoint:
 
 - **Read-only tokens cannot mutate.** Anything other than GET, HEAD or OPTIONS is refused. It is written as "this is not a safe read" rather than as a list of banned verbs, so a route added later is refused by default instead of accidentally allowed.
-- **A vault-scoped token reaches only that vault.** Routes without a vault in the path — listing vaults, creating one — are refused outright, because enumerating your account is outside what a deploy token was issued for.
+- **A vault-scoped token reaches only that vault.** Routes without a vault in the path — listing vaults, creating one — are refused outright, because enumerating your account is outside what a deploy token was issued for. That also means it cannot resolve a vault **name**: in a pipeline, pass the vault's id, which `evnx vault list --verbose` prints. See [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens#name-the-vault-by-its-id).
 
 **A token cannot mint another token.** Token creation requires a real logged-in session, so a leaked CI token cannot quietly issue itself a longer-lived, wider-scoped replacement and survive revocation of the original.
 
-`revoke` asks before it acts; pass `-y` in a script.
+`revoke` asks before it acts; pass `-y` in a script. With no terminal and no `-y` it stops
+before sending anything and names the flag (**v0.10.18+**; older versions failed with
+`IO error: not a terminal`). The same holds for `auth sessions revoke`,
+`sessions revoke-others` and `rotate-master-password`.
 
 ### When a token stops working
 

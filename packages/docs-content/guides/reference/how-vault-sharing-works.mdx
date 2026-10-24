@@ -3,13 +3,13 @@ title: "How Sharing a Vault Works"
 section: reference
 order: 6
 publishedAt: "2026-10-22"
-updatedAt: "2026-10-23"
+updatedAt: "2026-10-25"
 excerpt: "Which key opens a vault someone shared with you: three people, seven steps, and each person's path from their own password to the same vault key, with a diagram for every step."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["cloud", "vault", "sharing", "cryptography", "zero-knowledge", "team"]
-commands: ["auth login", "auth register", "cloud pull", "cloud push", "vault create", "vault list", "vault revoke", "vault share"]
-evnxVersion: "0.10.16"
+commands: ["auth login", "auth register", "cloud pull", "cloud push", "vault create", "vault leave", "vault list", "vault revoke", "vault share"]
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/cloud-sync-quickstart
 draft: false
@@ -60,11 +60,14 @@ The server enforces these roles on every request:
 | admin | yes | yes | yes | no |
 | owner | yes | yes | yes | yes |
 
+An admin shares as viewer or developer; only the owner makes someone an admin. Any
+member except the owner can leave with `evnx vault leave` (v0.10.18+).
+
 A role decides what the server will **hand you**. It cannot give anyone the ability to
 **decrypt**, because the server never holds an unlocked key to give.
 
 <Callout type="info" title="Everything on this page was run">
-Every command and every output below comes from the evnx 0.10.16 release binary
+Every command and every output below comes from the evnx 0.10.18 release binary
 against a local evnx-server built from the same commit as `api.evnx.dev`, with three
 throw-away accounts. The values in the example file are made up. Where an output
 names the server, it shows `https://api.evnx.dev`, the address you will see, in place
@@ -158,7 +161,12 @@ evnx vault create myapp --env production
 
 ```
   ✓ created myapp/production
+
+  Push a .env into it with:  evnx cloud push --vault myapp/production
 ```
+
+Before any of this, AJ's password has to open AJ's own locked keypair. A mistyped
+password is refused here, so no vault is ever sealed under a typo (v0.10.18+).
 
 1. AJ's machine generates a random 256-bit **vault key**.
 2. It locks the vault key under **AJ's master key** (XChaCha20-Poly1305).
@@ -334,7 +342,8 @@ sequenceDiagram
 A wrong password fails at the first lock, before anything is downloaded:
 
 ```
-Error: could not open your keypair — the master password is wrong.
+Error: that master password did not open your keypair, so it is not the one this account was registered with. Nothing has been changed.
+  If you have already changed it on another machine, use the new one.
 ```
 
 <Callout type="tip" title="Which file a pull writes">
@@ -369,12 +378,38 @@ a viewer, so the server refuses Roy's push:
 Error: Insufficient permissions
 ```
 
-Joy can't pass the vault on, either. The CLI shares only from the creator's own copy:
+Joy can't pass the vault on, either. Sharing needs the admin role, and the CLI says
+so before asking for a password:
 
 ```
-Error: myapp/production was shared with you rather than created by you, and re-sharing
-is not supported. Ask the owner to share it directly.
+Error: sharing myapp/production needs the admin or owner role; you are a developer on it.
+  Ask its owner, or an admin, to share it.
 ```
+
+If AJ made Joy an admin, Joy could share it as viewer or developer, from Joy's own
+copy of the vault key (v0.10.18+).
+
+<Callout type="info" title="Sharing again is refused">
+Sharing with someone already in the vault never rewrites their row (v0.10.18+). If
+AJ shares with Joy again at the same role, nothing changes:
+
+```
+  joy@example.test is already a developer on myapp/production — nothing changed.
+```
+
+At another role, AJ gets the command that does change it:
+
+```
+Error: joy@example.test is already a developer on myapp/production.
+  To make them admin:  evnx vault role myapp/production --user joy@example.test --role admin
+```
+
+And Joy sharing with AJ, the owner, is refused:
+`aj@example.test owns myapp/production. Sharing cannot change the owner's role or key.`
+Before this, a share was an overwrite: it replaced the member's role and key, so an
+owner sharing with themselves became a developer. The server refuses these too, for
+every client.
+</Callout>
 
 ```mermaid
 sequenceDiagram
@@ -426,6 +461,10 @@ key**:
    Joy's with the hybrid lock to Joy's public keys.
 4. One request swaps in all the new blobs and copies at once and deletes Roy's row.
    If anything fails, nothing changes.
+
+Roy could also have left on his own with `evnx vault leave myapp/production`. That
+deletes Roy's row and nothing else: the key is **not** rotated, so it is the polite
+way to go, not a substitute for this step.
 
 Roy's next pull finds nothing, and Joy's next pull works unchanged:
 
