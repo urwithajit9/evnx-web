@@ -1,7 +1,7 @@
 ---
 title: "Never Commit a Secret Again: Git Hooks, pre-commit, prek, and evnx"
 publishedAt: "2026-03-19"
-updatedAt: "2026-03-19"
+updatedAt: "2026-10-25"
 excerpt: "A complete guide to automating code quality at commit time — from raw git hooks to pre-commit and prek frameworks, popular community hooks, and using evnx to protect your .env files automatically."
 coverImage: "/images/blog/git-hooks-evnx.png"
 author: "ajit"
@@ -23,6 +23,12 @@ relatedSlugs:
   - "env-file-best-practices"
   - "secrets-scanning-in-rust"
 ---
+
+<Callout type="info" title="Updated for v0.10.18">
+The `rev:` pins below now name `v0.10.18`, and the descriptions of `evnx-diff` and
+`evnx-doctor` say what those hooks do today: both block, and both skip a fresh clone
+with no `.env`. evnx also ships `evnx-sync` and `evnx-sync-fix` for `.env.example`.
+</Callout>
 
 <Difficulty level="beginner-to-intermediate" />
 
@@ -358,7 +364,7 @@ Add this to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.2.0
+    rev: v0.10.18
     hooks:
       - id: evnx-scan       # blocks commit if secrets found
       - id: evnx-validate   # blocks commit if .env misconfigured
@@ -370,12 +376,12 @@ default_install_hook_types: [pre-commit, pre-push]
 
 repos:
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.3.5
+    rev: v0.10.18
     hooks:
       - id: evnx-scan        # blocks: secrets (AWS, Stripe, OpenAI, etc.)
       - id: evnx-validate    # blocks: placeholders, weak secrets, misconfigs
-      - id: evnx-diff        # warns: .env/.env.example out of sync
-      - id: evnx-doctor      # warns: .env not in .gitignore
+      - id: evnx-diff        # blocks: .env lacks a key .env.example declares
+      - id: evnx-doctor      # blocks: env files git would commit; warnings pass
       - id: evnx-scan-push   # pre-push: SARIF format scan before remote
 ```
   </Tab>
@@ -386,7 +392,7 @@ default_install_hook_types: [pre-commit, pre-push]
 
 repos:
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.2.0
+    rev: v0.10.18
     hooks:
       - id: evnx-scan
       - id: evnx-validate
@@ -421,13 +427,17 @@ prek install
     values, `localhost` in non-dev environments, and missing required variables.
     Commit is **blocked** in strict mode.
   </Option>
-  <Option flag="evnx-diff" type="pre-commit" default="warn">
-    Compares `.env` and `.env.example` and reports variables present in one but
-    not the other. Keeps your example file honest without blocking.
+  <Option flag="evnx-diff" type="pre-commit" default="block">
+    Runs `evnx diff --fail-on missing --skip-without-env`. The commit is
+    **blocked** when `.env` lacks a key `.env.example` declares; extra keys in
+    `.env` do not block. A clone with no `.env` is skipped. (Before 0.10.13 it
+    blocked on any difference; it never only warned.)
   </Option>
-  <Option flag="evnx-doctor" type="pre-commit" default="warn">
-    Checks that `.env` is in `.gitignore`, has safe file permissions (not
-    world-readable), and that `.env.example` exists and is tracked by Git.
+  <Option flag="evnx-doctor" type="pre-commit" default="block">
+    Runs `evnx doctor --skip-without-env`: env files git would commit or already
+    tracks, invalid dotenv, permissions others can read, and a template that is
+    not tracked. Errors **block**, warnings do not, and a clone with no `.env` is
+    skipped.
   </Option>
   <Option flag="evnx-scan-push" type="pre-push" default="always_run">
     Same secret detection as `evnx-scan` but runs at push time with SARIF output
@@ -895,7 +905,7 @@ repos:
 
   # .env protection (evnx)
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.2.0
+    rev: v0.10.18
     hooks:
       - id: evnx-scan
       - id: evnx-validate
@@ -937,7 +947,7 @@ repos:
 
   # .env protection (evnx)
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.2.0
+    rev: v0.10.18
     hooks:
       - id: evnx-scan
       - id: evnx-validate
@@ -980,7 +990,7 @@ repos:
 
   # .env protection (evnx)
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.2.0
+    rev: v0.10.18
     hooks:
       - id: evnx-scan
       - id: evnx-validate

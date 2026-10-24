@@ -954,15 +954,20 @@ repos:
       - id: evnx-doctor
         name: evnx env health check
         language: system
-        entry: evnx doctor
+        entry: evnx doctor --skip-without-env
         pass_filenames: false
         always_run: true
 ```
 
 <Callout type="warning">
 Corrected September 2026: the second hook previously passed `--fail-on-warning`, which does
-not exist — `evnx doctor` takes an optional path and nothing else. It already exits non-zero
-on a failed check, so the flag was not needed to make the hook work.
+not exist. `evnx doctor` already exits non-zero on a failed check, so no flag is needed to make
+the hook block.
+
+*Updated for v0.10.18:* the hook now passes `--skip-without-env`. Since v0.10.15 a template
+without a `.env` is an error, so plain `evnx doctor` blocks the first commit in every fresh
+clone. doctor also takes `--fix`, `--strict` and `--format json` (v0.5.0+); see
+[evnx doctor](/guides/commands/doctor).
 </Callout>
 
 ---

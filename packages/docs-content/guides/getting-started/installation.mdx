@@ -3,12 +3,12 @@ title: "Installing evnx"
 section: getting-started
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-23"
+updatedAt: "2026-10-25"
 excerpt: "Get evnx running on macOS, Linux, or Windows in under two minutes. Includes pre-commit hook setup."
 difficulty: beginner
 timeToComplete: "2 minutes"
 tags: ["install", "getting-started", "pre-commit"]
-commands: ["cloud", "doctor", "scan", "update"]
+commands: ["cloud", "commands", "doctor", "scan", "update"]
 evnxVersion: "0.5.2"
 draft: false
 ---
@@ -179,25 +179,38 @@ that needs the flag, because it is the only one that compiles from source.
 evnx --version
 
 evnx --help
-# Usage: evnx [COMMAND]
+# Usage: evnx [OPTIONS] <COMMAND>
+#
 # Commands:
-#   init      Initialize a new .env file from a template
-#   validate  Validate your .env against rules
-#   scan      Scan for secrets and sensitive data
-#   diff      Show differences between .env files
-#   convert   Convert .env to another format
-#   sync      Sync .env and .env.example
-#   add       Add or update a variable
-#   migrate   Push secrets to a cloud secret manager
-#   doctor    Run environment health diagnostics
-#   template  Generate config from a template file
-#   backup    Create an encrypted backup of .env
-#   restore   Restore from an encrypted backup
+#   init         Interactive project setup — the template, .env and the .evnx.toml contract
+#   add          Add environment variables to existing .env files
+#   validate     Check .env against .env.example, find issues
+#   scan         Detect secrets that look real (AWS keys, tokens, etc.)
+#   diff         Compare two env files: keys missing or extra, and values between environments
+#   convert      Transform `.env` files into multiple output formats
+#   migrate      Move a .env into a secret manager: print the commands, or upload to GitHub
+#   sync         Keep .env and .env.example in sync
+#   template     Generate config files from templates
+#   backup       Create encrypted backup of .env
+#   restore      Restore from encrypted backup
+#   auth         Manage your evnx cloud account
+#   org          Manage organisations — billing and a directory
+#   vault        Manage encrypted vaults
+#   cloud        Sync encrypted .env files with evnx cloud
+#   doctor       Check .env files, Git config, project structure, and security
+#   spec         Declare what each variable is: required, format, secret
+#   commands     Every command this build has, and which features it was compiled with [aliases: surface]
+#   completions  Generate shell completions
+#   update       Show how to upgrade, and optionally whether a newer release exists
 ```
+
+That is the 0.10.18 listing. `evnx commands` prints every subcommand as well, and which
+features your build was compiled with.
+
 
 ---
 
-## Run Your First Scan
+## Run Your First Check
 
 Before setting anything up, try this in any project directory:
 
@@ -206,13 +219,18 @@ cd your-project
 evnx doctor
 ```
 
-The `doctor` command checks:
-- Whether `.env` is tracked by git
-- Whether `.gitignore` covers `.env` in all subdirectories
-- Whether `.env.example` exists and is in sync
-- File permissions on `.env`
+`doctor` runs five checks on the folder you are in and prints one line for each:
 
-This alone catches most common configuration issues.
+- `.env` exists, is in `.gitignore`, and parses
+- `.env.example` exists and is tracked by git
+- the project type (Node, Python, Rust and others) and its dependencies
+- Docker configuration files
+- file permissions on `.env` (`600` recommended)
+
+It exits `1` when a check fails. `evnx doctor --fix` repairs what it can: it adds the
+`.env*` lines to `.gitignore` and tightens the file's permissions. The
+[Quick Start](/guides/getting-started/quick-start) shows a real run. To look for
+secrets, run `evnx scan`.
 
 ---
 
@@ -255,9 +273,14 @@ pre-commit install
 # Create the hook file
 cat > .git/hooks/pre-commit << 'EOF'
 #!/bin/bash
-if ! evnx scan; then
+evnx scan
+status=$?
+if [ "$status" -eq 1 ]; then
   echo "evnx: secrets detected. Commit blocked."
   exit 1
+elif [ "$status" -ne 0 ]; then
+  echo "evnx: the scan could not run (exit $status). Commit blocked."
+  exit "$status"
 fi
 EOF
 
