@@ -14,7 +14,7 @@ export function Audit() {
       <SectionHeading heading={audit.heading} lede={audit.lede} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-        <TerminalBlock lines={audit.terminal} title="evnx scan --all" />
+        <TerminalBlock lines={audit.terminal} title="evnx scan" />
 
         <div>
           <h3 className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">

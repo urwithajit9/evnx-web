@@ -18,7 +18,7 @@ export const commands: SectionHeading & {
   allCommandsLink: { label: string; docsSlug: string };
 } = {
   heading: "One binary, the whole lifecycle",
-  lede: "Eighteen commands. These are the six you will run most.",
+  lede: "Twenty commands. These are the six you will run most.",
 
   featured: [
     {

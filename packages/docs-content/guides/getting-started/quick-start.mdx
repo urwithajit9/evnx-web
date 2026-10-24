@@ -3,19 +3,21 @@ title: "Quick Start"
 section: getting-started
 order: 2
 publishedAt: "2024-03-15"
-updatedAt: "2026-09-23"
-excerpt: "Five minutes to your first evnx workflow — scan, validate, and convert a real .env file."
+updatedAt: "2026-10-25"
+excerpt: "Five minutes to your first evnx workflow — check, scan, template, validate and convert a real .env file."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["getting-started", "scan", "validate", "convert"]
-commands: ["convert", "diff", "doctor", "init", "migrate", "scan", "sync", "validate"]
-evnxVersion: "0.5.2"
+commands: ["convert", "diff", "doctor", "init", "scan", "sync", "validate"]
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
 draft: false
 ---
 
-By the end of this guide you'll have run your first scan, caught a validation warning, and converted your `.env` to a Kubernetes Secret — all in under five minutes.
+By the end of this guide you'll have run a health check, scanned for secrets, made a
+`.env.example`, caught validation problems, and converted your `.env` to a Kubernetes
+Secret — all in under five minutes. Every output below is from evnx 0.10.18.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx first</Prerequisite>
@@ -60,32 +62,58 @@ This `.env` contains intentionally bad values to demonstrate what evnx catches. 
 
 ## Step 2 — Run a health check
 
-Before scanning, run `doctor` to check the environment setup:
+Start with `doctor`, which checks the setup around the file:
 
 ```bash
 evnx doctor
 ```
 
-```
-[DOCTOR] Running environment health check...
-[WARNING] .env is not listed in .gitignore
-[WARNING] No .env.example found
-[OK] File permissions look good (600)
-[INFO] 2 warnings, 0 errors
-[TIP] Run `evnx doctor --fix` to auto-fix gitignore issues
+```text
+  evnx doctor  Diagnosing environment setup
+
+
+  ✗  Validate .env file existence, security, and syntax
+     .env is NOT in .gitignore (security risk)
+
+  !  Check .env.example exists and is Git-tracked
+     .env.example not found - consider creating a template
+
+  ·  Detect project type and validate dependencies
+     No recognized project configuration
+
+  ·  Check for Docker configuration files
+     No Docker configuration detected
+
+  !  Check file permissions for sensitive files
+     .env: permissions 664 (recommended: 600)
+
+  1 error  ·  2 warnings
+
+  →  2 issues evnx doctor --fix can repair:
+     ·  Validate .env file existence, security, and syntax
+     ·  Check file permissions for sensitive files
 ```
 
-Fix the gitignore automatically (**v0.5.0+**):
+It exits `1` because of the error. Let it repair what it can:
 
 ```bash
 evnx doctor --fix
-# [FIX] Added .env* to .gitignore (keeping .env.example committable)
+```
+
+```text
+✓ Fixed: .gitignore: added .env*, !.env.example, !.env.sample, !.env.template
+  ✓  Validate .env file existence, security, and syntax
+  …
+✓ Fixed: .env mode 664 → 600
+  ✓  Check file permissions for sensitive files
+
+  1 warning  ·  2 checks passed
 ```
 
 `--fix` writes the same four lines `evnx init` does — `.env*` plus `!.env.example`,
 `!.env.sample` and `!.env.template` — rather than a bare `.env`, which would leave
-`.env.production` committable. It also tightens a world-readable `.env` to `0600`. It will
-not stage or commit anything.
+`.env.production` committable. It also tightens a readable `.env` to `0600`. It will
+not stage or commit anything. The remaining warning, no `.env.example`, is step 4.
 
 ---
 
@@ -95,71 +123,148 @@ not stage or commit anything.
 evnx scan
 ```
 
+```text
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env, ./.gitignore
+
+  ✗  Credentials in a connection string          high
+     ./.env:7 (DATABASE_URL)  post…5432
+     !  a password in a postgres:// URL, not a placeholder
+
+  ✗  Sensitive config key: STRIPE_SECRET_KEY     high
+     ./.env:14 (STRIPE_SECRET_KEY)  sk_l…here
+     ·  flagged by variable name — the value was not checked
+
+  2 findings  ·  2 high
 ```
-[SCAN] Scanning .env...
 
-[ERROR] AWS_ACCESS_KEY_ID — matches pattern: aws_access_key_id
-        Value: AKIAIOSFODNN7EXAMPLE
-        Risk: HIGH — AWS access keys can be used to access your AWS account
+Values are shown only as a short preview, never whole. Two things worth noticing:
 
-[ERROR] AWS_SECRET_ACCESS_KEY — high entropy string detected
-        Value: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-        Risk: HIGH
-
-[WARNING] STRIPE_SECRET_KEY — matches pattern: stripe_live_key
-          Value: sk_live_your-stripe-key-here
-          Risk: MEDIUM — live Stripe key detected (but looks like a placeholder)
-
-[SUMMARY] 2 errors, 1 warning
-          Recommendation: Move secrets to a secret manager with `evnx migrate`
-```
+- **The AWS keys are not reported.** `AKIAIOSFODNN7EXAMPLE` and its secret are the
+  example keys from AWS's own documentation, and evnx recognises them as stand-ins.
+  A real key in the same place would be the first finding.
+- **The Stripe key is flagged by its name**, `STRIPE_SECRET_KEY`. Its value is not a
+  real key shape, so evnx says it did not check it.
 
 <Callout type="tip" title="Exit codes">
-`evnx scan` exits with code `1` if errors are found — perfect for blocking CI/CD pipelines. Use `--exit-zero` to always exit `0` (for advisory-only checks).
+`evnx scan` exits `0` when it finds nothing, `1` when it finds something, and `2`
+when it could not run at all (a bad path, flag or config). `--exit-zero` turns the
+`1` into a `0` for an advisory step; a scan that could not run still exits `2`.
+</Callout>
+
+<Callout type="info" title="In a git repository">
+A folder walk counts what git would commit. A filled-in `.env` that `.gitignore`
+covers is where secrets belong, so its findings are summarised in one line and do
+not fail the scan. `--include-ignored` counts them, and naming the file
+(`evnx scan .env`) always reports it in full.
 </Callout>
 
 Use JSON output for programmatic use:
 
 ```bash
-evnx scan --format json | jq '.findings[].key'
+evnx scan --format json | jq '.findings[].variable'
+```
+
+```text
+"DATABASE_URL"
+"STRIPE_SECRET_KEY"
 ```
 
 ---
 
-## Step 4 — Validate your configuration
+## Step 4 — Create .env.example
 
-Scanning finds secrets. Validation finds *misconfiguration* — wrong types, placeholders, bad values:
+A `.env.example` is the committed list of the variables your project needs, with
+placeholder values. `sync` makes one from your `.env`:
 
 ```bash
-evnx validate --strict
+evnx sync
 ```
 
-```
-[VALIDATE] Checking .env...
+```text
+  evnx sync  .env ↔ .env.example  (forward)
 
-[WARNING] DEBUG=true — boolean string trap
-          Python and some frameworks read this as the string "true", not bool True
-          Tip: Use DEBUG=1 or DEBUG=True depending on your framework
-
-[WARNING] JWT_SECRET=secret — weak secret detected
-          Value is too short (6 chars). Secrets should be at least 32 chars.
-
-[WARNING] SENDGRID_API_KEY=your-sendgrid-key — placeholder value detected
-          This looks like a template placeholder, not a real value
-
-[WARNING] DATABASE_URL contains localhost — production environment detected but
-          localhost database URL found
-
-[SUMMARY] 0 errors, 4 warnings
+· .env.example not found, creating from .env
+· no terminal: creating .env.example with placeholder values
+✓ Created .env.example
 ```
 
-<Callout type="info">
-`--strict` promotes warnings to errors. Without it, warnings are advisory only.
+```text
+# Generated from .env
+# Replace all placeholder values with real credentials
+
+APP_NAME=YOUR_VALUE_HERE
+APP_ENV=YOUR_VALUE_HERE
+DEBUG=true
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+AWS_ACCESS_KEY_ID=YOUR_KEY_HERE
+AWS_SECRET_ACCESS_KEY=YOUR_KEY_HERE
+STRIPE_SECRET_KEY=YOUR_KEY_HERE
+SENDGRID_API_KEY=YOUR_KEY_HERE
+JWT_SECRET=YOUR_KEY_HERE
+```
+
+Values become placeholders. On a terminal you get a menu with placeholders as the
+first choice; with no terminal, as above, placeholders are used. Review the file, then
+commit `.env.example` — it tells teammates what variables are needed without exposing
+values.
+
+<Callout type="info" title="--placeholder is deprecated">
+Older guides said `evnx sync --placeholder`. It still works but prints a notice: it
+does what `--force` does (placeholder values, no prompt). Use `--force` in scripts.
 </Callout>
 
 ---
 
-## Step 5 — Convert to another format
+## Step 5 — Validate your configuration
+
+Scanning finds secrets. Validation finds *misconfiguration* — placeholders left in,
+weak secrets, missing variables — measured against `.env.example`:
+
+```bash
+evnx validate
+```
+
+```text
+  evnx validate  Check environment configuration
+
+  ✗  AWS_ACCESS_KEY_ID looks like a placeholder
+     .env
+     →  Get from AWS Console
+
+  ✗  AWS_SECRET_ACCESS_KEY looks like a placeholder
+     .env
+     →  Get from AWS Console
+
+  ✗  SENDGRID_API_KEY looks like a placeholder
+     .env
+
+  ✗  STRIPE_SECRET_KEY is too weak or predictable
+     .env
+     →  Rotate STRIPE_SECRET_KEY where it is issued, then replace it here
+
+  ✗  JWT_SECRET is too weak or predictable
+     .env
+     →  Rotate JWT_SECRET where it is issued, then replace it here. `--fix` will not: it cannot tell a real credential from an unfilled placeholder. Pass --fix --rotate-weak-secrets if nothing else holds this value
+
+  5 errors
+```
+
+It exits `1`. Without a `.env.example` it would exit `2` and say how to make one, which
+is why step 4 comes first.
+
+<Callout type="info" title="Two flags people reach for">
+`--strict` **also reports variables that are present but not declared** in
+`.env.example`. It does not turn warnings into errors.
+
+`--fail-on warning` is the one that makes warnings fail the run (exit `1`), for a CI
+gate that wants them fixed.
+</Callout>
+
+---
+
+## Step 6 — Convert to another format
 
 Convert your `.env` to a Kubernetes Secret manifest. A Secret needs a name, so
 `--name` is required:
@@ -206,59 +311,40 @@ evnx convert --to terraform   # Terraform variables file
 
 ---
 
-## Step 6 — Keep .env and .env.example in sync
+## Step 7 — Catch drift
+
+Add two variables to `.env`, the way a feature branch does, and ask what changed:
 
 ```bash
-# Generate .env.example from your .env, with values replaced by placeholders
-evnx sync --placeholder
-
-cat .env.example
-# Generated from .env
-# Replace all placeholder values with real credentials
-
-# APP_NAME=YOUR_VALUE_HERE
-# DATABASE_URL=YOUR_URL_HERE
-# AWS_ACCESS_KEY_ID=YOUR_KEY_HERE
-# STRIPE_SECRET_KEY=YOUR_KEY_HERE
-# JWT_SECRET=YOUR_SECRET_HERE
-```
-
-Now commit `.env.example` to your repo — it tells teammates what variables are needed without exposing values.
-
-<Callout type="danger" title="Use --placeholder. Plain `evnx sync` copies your real values">
-This step used to read `evnx sync --generate-example`, a flag that does not exist,
-described as redacting values. Both halves were wrong, and the second is the
-dangerous one.
-
-When `.env.example` does **not** yet exist — which is exactly this step — plain
-`evnx sync` creates it by copying `.env` **verbatim**, secrets included, prints
-`✓ Created .env.example`, and then advises you to commit it. There is no prompt
-on that path: the "add with placeholder values / add with actual values —
-SECURITY RISK" choice only appears when the file already exists.
-
-`--placeholder` is what makes the output safe to commit. `--force` also implies
-it, which is the safer default for CI.
-</Callout>
-
-Check if they drift:
-
-```bash
+printf 'REDIS_URL=redis://localhost:6379\nNEW_FEATURE_FLAG=true\n' >> .env
 evnx diff
-# [DIFF] .env has 2 variables not in .env.example:
-# + NEW_FEATURE_FLAG (in .env only)
-# + REDIS_URL (in .env only)
 ```
+
+```text
+  evnx diff  .env ↔ .env.example
+
+Extra in .env (not in .env.example):
+  - REDIS_URL
+  - NEW_FEATURE_FLAG
+
+  2 not in .env.example
+  values not compared against a template (--values to compare them)
+```
+
+It exits `1` while the two files disagree, so it works as a check in CI. Running
+`evnx sync` again adds the new names to `.env.example`.
 
 ---
 
 ## What you just did
 
 In five minutes you:
-- Ran a health check and fixed a gitignore issue
-- Found two real secret patterns (AWS key, high-entropy string)
-- Caught four validation problems (weak secret, placeholder, boolean trap, localhost)
-- Converted to Kubernetes format
+- Ran a health check and let it fix `.gitignore` and the file's permissions
+- Found a database password and a Stripe key, shown only as previews
 - Generated a safe `.env.example`
+- Caught five validation problems (placeholders and weak secrets)
+- Converted to Kubernetes format
+- Caught two variables missing from the template
 
 This is the core evnx workflow. Everything else builds on these primitives.
 
