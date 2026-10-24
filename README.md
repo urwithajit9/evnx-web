@@ -1,8 +1,8 @@
 # evnx-web
 
-The official website for **[evnx](https://github.com/urwithajit9/evnx)** — a Rust-powered CLI for managing `.env` files.
+The website and documentation for **[evnx](https://github.com/urwithajit9/evnx)** — a Rust CLI for `.env` security, plus the evnx cloud for zero-knowledge secret sync.
 
-Live at [evnx.dev](https://evnx.dev) · Built with Next.js 15, TypeScript, Tailwind CSS, MDX.
+Live at [evnx.dev](https://evnx.dev) · pnpm + Turborepo monorepo · Next.js 16, React 19, TypeScript, Tailwind CSS 3, MDX.
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-evnx--action-blue?logo=github)](https://github.com/marketplace/actions/evnx-env-security-validation)
 
@@ -10,602 +10,289 @@ Live at [evnx.dev](https://evnx.dev) · Built with Next.js 15, TypeScript, Tailw
 
 ## Table of Contents
 
-- [Project Structure](#project-structure)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Content Pipeline](#content-pipeline)
-  - [Adding a Blog Post](#adding-a-blog-post)
-  - [Adding a Guide](#adding-a-guide)
-  - [Adding a Changelog Entry](#adding-a-changelog-entry)
-  - [Adding an Author](#adding-an-author)
-  - [Draft Workflow](#draft-workflow)
-- [MDX Component Reference](#mdx-component-reference)
-- [Design System](#design-system)
-- [Key Architecture Decisions](#key-architecture-decisions)
-- [Roadmap](#roadmap)
-- [Daily Maintenance](#daily-maintenance)
+- [Where things live](#where-things-live)
+- [Repository layout](#repository-layout)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Generated files — never edit by hand](#generated-files--never-edit-by-hand)
+- [Content](#content)
+- [Releasing a new evnx version](#releasing-a-new-evnx-version)
+- [Checks and CI](#checks-and-ci)
+- [Design system](#design-system)
+- [Status and roadmap](#status-and-roadmap)
 
 ---
 
-## Project Structure
+## Where things live
+
+| Host | What | Source |
+|---|---|---|
+| `evnx.dev` | Marketing site, blog, guides (for now), changelog, pricing | `apps/web` (this repo) |
+| `docs.evnx.dev` | CLI documentation at `/cli/*` — **migration in progress** | `apps/docs` (this repo) |
+| `pay.evnx.dev` | One static page that loads Paddle.js for checkout | `pay/` (this repo, Cloudflare) |
+| `app.evnx.dev` | Cloud web app (vaults, orgs, billing) | separate `evnx-app` repo |
+| `api.evnx.dev` | evnx cloud API | separate `evnx-server` repo |
+
+⚠️ The guides are served by `apps/web` at `/guides/*` today. `NEXT_PUBLIC_DOCS_MODE=split` repoints every docs link to `docs.evnx.dev/cli/*`; flip it only once docs.evnx.dev answers for every URL in [`docs/migration/url-inventory.csv`](docs/migration/README.md).
+
+⚠️ Origin boundaries are deliberate (ADR-1): marketing analytics run on `evnx.dev` only, never on `app.evnx.dev` (master keys live there in a Web Worker), and `pay.evnx.dev` holds no session, cookie or analytics. Read [`pay/README.md`](pay/README.md) before adding anything to either.
+
+---
+
+## Repository layout
 
 ```
 evnx-web/
-│
-├── app/                          # Next.js 15 App Router
-│   ├── (auth)/login/             # Auth scaffold — Clerk, not yet wired
-│   ├── (marketing)/              # Route group — shares no extra layout
-│   │   ├── page.tsx              # Landing page /
-│   │   ├── install/page.tsx      # /install
-│   │   ├── pricing/page.tsx      # /pricing (scaffold)
-│   │   └── changelog/page.tsx    # /changelog
-│   ├── api/
-│   │   ├── github-stars/         # Live star count from GitHub API
-│   │   └── waitlist/             # Email capture for Pro plan
-│   ├── blog/
-│   │   ├── page.tsx              # /blog index — reads all MDX
-│   │   └── [slug]/page.tsx       # /blog/:slug — renders MDX
-│   ├── dashboard/page.tsx        # Protected — scaffold only
-│   ├── guides/
-│   │   ├── page.tsx              # /guides index — reads all MDX
-│   │   └── [...slug]/page.tsx    # /guides/:section/:slug
-│   ├── globals.css               # CSS variables + prose styles
-│   ├── layout.tsx                # Root layout — fonts, header, footer
-│   └── sitemap.ts                # Auto-generated sitemap
-│
-├── components/
-│   ├── layout/
-│   │   ├── header.tsx            # Sticky header, mobile nav
-│   │   └── footer.tsx            # Footer with nav links
-│   ├── marketing/                # Landing page section components
-│   │   ├── hero.tsx
-│   │   ├── feature-grid.tsx
-│   │   ├── install-snippet.tsx
-│   │   ├── command-showcase.tsx
-│   │   ├── ci-cd-section.tsx
-│   │   ├── origin-story.tsx
-│   │   └── social-proof.tsx
-│   ├── mdx/                      # Components available inside every .mdx file
-│   │   ├── mdx-components.tsx    # ← Registry. All MDX components listed here.
-│   │   ├── callout.tsx           # <Callout type="warning">
-│   │   ├── code-tabs.tsx         # <CodeTabs><Tab label="bash">
-│   │   ├── prerequisites.tsx     # <Prerequisites><Prerequisite href>
-│   │   ├── version-badge.tsx     # <VersionBadge version="0.2.0" />
-│   │   ├── difficulty.tsx        # <Difficulty level="beginner" time="5 min" />
-│   │   ├── command-signature.tsx # <CommandSignature>evnx scan [OPTIONS]
-│   │   ├── option-table.tsx      # <OptionTable><Option flag="--path">
-│   │   ├── file-tree.tsx         # <FileTree>project/\n├── .env
-│   │   ├── diff-block.tsx        # <DiffBlock>- OLD\n+ NEW
-│   │   ├── step.tsx              # <Step number={1} title="Install">
-│   │   ├── terminal-output.tsx   # <TerminalOutput>[INFO] Done
-│   │   ├── author-note.tsx       # <AuthorNote>Personal note
-│   │   └── command-ref.tsx       # <CommandRef command="evnx scan" />
-│   └── ui/                       # shadcn/ui component library
-│
-├── content/                      # All MDX content — commit this, it's your CMS
-│   ├── authors/
-│   │   └── ajit.json             # { id, name, role, avatar, bio, github, twitter }
-│   ├── blog/
-│   │   └── *.mdx                 # Flat — one file per post
-│   ├── guides/
-│   │   ├── getting-started/      # Installation, Quick Start, Configuration
-│   │   ├── commands/             # One file per command (scan, validate, convert…)
-│   │   ├── integrations/         # GitHub Actions, GitLab CI, pre-commit, Docker
-│   │   ├── use-cases/            # Prevent leaks, Django setup, Next.js, k8s
-│   │   └── reference/            # .evnx.toml, output formats, secret patterns
-│   └── changelog/
-│       └── v*.mdx                # One file per release
-│
-├── lib/
-│   ├── config.ts                 # ← Single source of truth. Version, URLs, constants.
-│   ├── content.ts                # MDX file reading, frontmatter parsing, helpers
-│   ├── shiki.ts                  # Syntax highlighter singleton
-│   ├── search.ts                 # Pagefind integration (Phase 2)
-│   └── utils.ts                  # shadcn/ui utilities
-│
-├── public/
-│   ├── authors/                  # Author avatar images (ajit.jpg, etc.)
-│   ├── fonts/                    # Self-hosted fonts if needed
-│   ├── og/                       # OG image assets
-│   └── robots.txt
-│
-├── packages/                     # Monorepo packages (future)
-│   ├── config/                   # Shared ESLint + TypeScript config
-│   ├── content/                  # Shared MDX types (future)
-│   └── ui/                       # Shared component library (future)
-│
-├── next.config.js
-├── tailwind.config.ts
-├── tsconfig.json
-└── package.json
-```
-
-### Future structure (Phase 2–3)
-
-```
-app/
-├── docs/                         # Full reference docs (when Phase 3 launches)
-│   └── [...slug]/page.tsx
-└── api/
-    ├── og/route.tsx              # Dynamic OG image generation
-    └── sync/route.ts             # Cloud sync API (Phase 3)
-
-content/
-└── docs/                         # Docs MDX content
-
-packages/
-└── ui/                           # Published to npm as @evnx/ui
+├── apps/
+│   ├── web/                    # evnx.dev — @evnx/web
+│   │   ├── app/
+│   │   │   ├── (marketing)/    # /, /install, /pricing, /changelog, /talks,
+│   │   │   │                   # /security, /privacy, /terms, /refunds
+│   │   │   ├── blog/           # /blog, /blog/[slug]
+│   │   │   ├── guides/         # /guides, /guides/[...slug]  (from @evnx/docs-content)
+│   │   │   ├── testimonials/   # /testimonials + submission form
+│   │   │   ├── api/            # github-stars, testimonials, waitlist
+│   │   │   └── sitemap.ts
+│   │   ├── components/
+│   │   │   ├── sections/       # Landing-page sections (copy comes from @evnx/content)
+│   │   │   ├── layout/         # Header, footer
+│   │   │   └── ui/             # shadcn/ui primitives + site components
+│   │   ├── content/
+│   │   │   ├── blog/*.mdx      # Blog posts
+│   │   │   ├── authors/*.json  # Blog authors
+│   │   │   └── changelog.json  # GENERATED — see below
+│   │   └── lib/                # content loading, Supabase, search; config.ts is a
+│   │                           # compatibility shim over @evnx/config (no new code)
+│   └── docs/                   # docs.evnx.dev — @evnx/docs
+│       └── app/                # /, /cli, /cli/[...slug], OG image route
+├── packages/
+│   ├── config/                 # @evnx/config — facts that must be TRUE:
+│   │                           #   hosts, versions, plans, prices, feature flags
+│   ├── content/                # @evnx/content — words that must be GOOD:
+│   │                           #   every string on the marketing site
+│   ├── docs-content/           # @evnx/docs-content — the CLI guides (MDX) and
+│   │   ├── guides/             #   the generated command index
+│   │   │   ├── getting-started/
+│   │   │   ├── commands/       # one page per top-level evnx command
+│   │   │   ├── integrations/
+│   │   │   ├── use-cases/
+│   │   │   └── reference/
+│   │   └── src/                # guide loader, command-index.json (GENERATED)
+│   └── mdx/                    # @evnx/mdx — MDX components shared by both apps
+├── pay/                        # pay.evnx.dev (static, Cloudflare via wrangler)
+├── scripts/                    # sync + check scripts (see below)
+├── docs/migration/             # URL inventory and baseline for the docs split
+└── .github/workflows/ci.yml
 ```
 
 ---
 
-## Tech Stack
+## Tech stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| Framework | Next.js 15 (App Router) | ISR, RSC, edge-ready |
-| Language | TypeScript strict | Catch content schema errors at build time |
-| Styling | Tailwind CSS v4 | Design tokens via CSS variables |
-| Content | `next-mdx-remote` + `gray-matter` | No build plugins, works cleanly with App Router RSC |
-| Syntax | Shiki | VS Code-quality highlighting, server-side only |
-| Fonts | IBM Plex Mono + Fraunces (next/font) | No FOUT, subset, preloaded |
-| Deployment | Netlify (configured) / Vercel-ready | `netlify.toml` present |
-| Search | Pagefind (Phase 2) | Static, zero-server, build-time indexed |
-| Auth | Clerk scaffold (Phase 3) | Not yet wired |
-| DB | Neon/Planetscale schema (Phase 3) | Not yet wired |
+| Layer | Choice |
+|---|---|
+| Monorepo | pnpm 9 workspaces + Turborepo |
+| Framework | Next.js 16 (App Router, React Server Components), React 19 |
+| Language | TypeScript (strict) |
+| Styling | Tailwind CSS 3 + shadcn/ui, design tokens as CSS variables |
+| Content | MDX via `next-mdx-remote` + `gray-matter`, highlighting with Shiki |
+| Search | Pagefind, built after `next build` in both apps |
+| Data | Supabase — testimonials, waitlist, helpful-votes (all optional) |
+| Analytics | Self-hosted Umami, proxied through `/stats` — `evnx.dev` only |
+| Billing | Paddle, via `pay.evnx.dev`; `NEXT_PUBLIC_BILLING_LIVE` gates self-serve checkout |
+| Hosting | Vercel (`evnx.dev`), Cloudflare (`pay.evnx.dev`) |
 
 ---
 
-## Getting Started
+## Getting started
 
 ```bash
-# Clone
 git clone https://github.com/urwithajit9/evnx-web
 cd evnx-web
-
-# Install dependencies
 pnpm install
 
-# Install content pipeline deps (if not already in package.json)
-pnpm add next-mdx-remote gray-matter reading-time shiki
-pnpm add rehype-slug rehype-autolink-headings remark-gfm
+cp apps/web/.env.example apps/web/.env.local   # optional — everything in it is optional
 
-# Start dev server
-pnpm dev
+pnpm dev                      # both apps via turbo
+pnpm --filter @evnx/web dev   # just evnx.dev  → http://localhost:3000
+pnpm --filter @evnx/docs dev  # just docs
 ```
 
-Visit `http://localhost:3000`.
+Node 20+ and pnpm 9 are required (`packageManager` pins the exact pnpm).
+
+The site builds and runs with **no** environment variables set. `apps/web/.env.example` documents each one; the important ones:
+
+| Variable | Effect when unset |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` | Testimonials, waitlist and votes are disabled |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only, bypasses RLS. **Never** give it a `NEXT_PUBLIC_` prefix |
+| `NEXT_PUBLIC_DOCS_MODE` | `inline` — guides served from `evnx.dev/guides/*` |
+| `NEXT_PUBLIC_BILLING_LIVE` | Paid plans go through "talk to us" rather than checkout |
+| `NEXT_PUBLIC_TESTIMONIALS_ENABLED` | Testimonials aren't promoted in nav/footer/sitemap (page still reachable) |
+| `NEXT_PUBLIC_UMAMI_WEBSITE_ID` | Analytics off |
+| `GITHUB_TOKEN` | Star counter uses unauthenticated GitHub API (60 req/hour) |
+
+Several scripts compare the docs against the CLI binary. They expect a sibling clone of the CLI built with every feature:
+
+```bash
+cd .. && git clone https://github.com/urwithajit9/evnx
+cd evnx && cargo build --release --all-features
+```
+
+Without it those scripts skip rather than fail. See [`scripts/README-cli-surface.md`](scripts/README-cli-surface.md).
 
 ---
 
-## Content Pipeline
+## Generated files — never edit by hand
 
-All content lives in `content/`. There is no CMS, no database, no admin UI. **MDX files are the CMS.** The pipeline is:
+Every list of "what the CLI does" in this repo is derived from the CLI itself. Hand-kept lists drifted five times before this rule existed, and `/changelog` sat at v0.4.0 for 26 releases.
 
-```
-content/*.mdx
-    ↓ gray-matter (frontmatter parsing)
-    ↓ reading-time (auto read time)
-    ↓ next-mdx-remote/rsc (MDX → React, server-side)
-    ↓ Shiki (syntax highlighting, server-side)
-    ↓ mdx-components.tsx (custom component injection)
-    → Rendered page (statically generated)
-```
+| File | Generated from | Refresh | CI check |
+|---|---|---|---|
+| `packages/config/src/versions.json` | crates.io, npm, PyPI | `pnpm config:sync` | `pnpm config:check` |
+| `packages/config/src/plan-limits.json` | `api.evnx.dev` | `pnpm config:sync` | `pnpm config:check` |
+| `packages/docs-content/src/command-index.json` | the CLI binary's clap tree | `pnpm cli:index` | `pnpm cli:index:check` |
+| `commands:` in each guide's frontmatter | the `evnx …` invocations on that page | `pnpm guide:commands` | `pnpm guide:commands:check` |
+| `apps/web/content/changelog.json` | the CLI's `CHANGELOG.md` | `pnpm changelog:sync` | `pnpm changelog:check` |
 
-`lib/content.ts` is the single file that reads, parses, sorts, and filters all content. **You never need to touch route files when adding content.**
+The sync scripts never overwrite good data with a failed fetch: if a source is unreachable, the committed file stays as it is and the script says so.
 
 ---
 
-### Adding a Blog Post
+## Content
 
-1. Create `content/blog/your-post-slug.mdx`
+All content is MDX in the repo; git is the CMS and PRs are the review workflow.
 
-2. Add frontmatter at the top:
+### Blog post — `apps/web/content/blog/<slug>.mdx`
+
+The slug is the filename.
 
 ```mdx
 ---
 title: "Your Post Title"
-slug: your-post-slug
-publishedAt: "2024-04-15"
-excerpt: "One or two sentence summary shown in cards and OG images."
-author: ajit
-tags: ["security", "rust", "devops"]
-category: tutorial
+publishedAt: "2026-10-23"
+excerpt: "One or two sentences, shown in cards and OG images."
+author: ajit              # an id from apps/web/content/authors/
+tags: ["security", "rust"]
+category: tutorial        # tutorial | release | deep-dive | opinion | case-study
 featured: false
 draft: true
 ---
-
-Your content here. All MDX components are available without importing.
 ```
 
-3. Set `draft: false` when ready to publish.
+Optional: `updatedAt`, `coverImage`, `relatedSlugs`, `canonical`. Add an author with `apps/web/content/authors/<id>.json` and an avatar in `apps/web/public/authors/`.
 
-4. That's it. The post appears at `/blog/your-post-slug`.
+### Guide — `packages/docs-content/guides/<section>/<slug>.mdx`
 
-**Frontmatter fields:**
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `title` | string | ✅ | Shown in page, OG image, cards |
-| `slug` | string | ✅ | Must match filename |
-| `publishedAt` | ISO 8601 | ✅ | `"2024-04-15"` |
-| `excerpt` | string | ✅ | 1–2 sentences. Shown in cards |
-| `author` | string | ✅ | ID from `content/authors/` |
-| `tags` | string[] | ✅ | Lowercase, hyphenated |
-| `category` | enum | ✅ | `tutorial \| release \| deep-dive \| opinion \| case-study` |
-| `featured` | bool | ✅ | Shows in hero row on `/blog` |
-| `draft` | bool | ✅ | `true` = hidden in prod |
-| `updatedAt` | ISO 8601 | — | Shows "Updated" date |
-| `coverImage` | string | — | Path to image in `/public/` |
-| `relatedSlugs` | string[] | — | Manual related posts |
-| `canonical` | URL | — | If cross-posted |
-
----
-
-### Adding a Guide
-
-1. Pick the right section:
-   - `getting-started/` — Installation, first use, configuration
-   - `commands/` — One file per evnx command
-   - `integrations/` — GitHub Actions, Docker, pre-commit, etc.
-   - `use-cases/` — "How do I solve X with evnx?"
-   - `reference/` — Config file, formats list, pattern reference
-
-2. Create `content/guides/[section]/your-guide-slug.mdx`
-
-3. Add frontmatter:
+Sections: `getting-started`, `commands`, `integrations`, `use-cases`, `reference`. Each top-level CLI command has exactly one page in `commands/`; `pnpm cli:index:check` fails if a guide documents a command that doesn't exist, and warns on a command without a guide.
 
 ```mdx
 ---
-title: "Guide Title"
-slug: your-guide-slug
+title: "evnx vault"
 section: commands
-order: 5
-publishedAt: "2024-04-15"
+order: 8                  # position in the sidebar; gaps are fine
+publishedAt: "2026-09-16"
 excerpt: "What this guide covers in one sentence."
-difficulty: beginner
+difficulty: intermediate  # beginner | intermediate | advanced
 timeToComplete: "10 minutes"
-tags: ["scan", "secrets", "ci-cd"]
-evnxVersion: "0.2.0"
+tags: ["cloud", "vault"]
+evnxVersion: "0.5.2"      # minimum CLI version the page needs
 prerequisites:
-  - getting-started/installation
+  - commands/auth
 draft: true
 ---
 ```
 
-4. Set `draft: false` when ready.
+Don't write `commands:` by hand — run `pnpm guide:commands`. Every `evnx …` invocation in a guide must resolve against the binary (`pnpm cli:check`); a deliberate mention of a removed flag goes in `scripts/cli-invocations-baseline.json` with a reason.
 
-5. The guide appears in the sidebar, section card, and "Start Here" strip automatically.
+### Drafts
 
-**The `order` field** controls position within its section. Set `order: 1` for the first guide, `order: 2` for the second, and so on. Gaps are fine — `order: 10, 20, 30` leaves room to insert later.
+`draft: true` is visible in `pnpm dev` and excluded from production builds, so work in progress can land on `main`.
 
-**Frontmatter fields:**
+### MDX components
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `title` | string | ✅ | |
-| `slug` | string | ✅ | Must match filename |
-| `section` | enum | ✅ | `getting-started \| commands \| integrations \| use-cases \| reference` |
-| `order` | number | ✅ | Position within section |
-| `publishedAt` | ISO 8601 | ✅ | |
-| `excerpt` | string | ✅ | |
-| `difficulty` | enum | ✅ | `beginner \| intermediate \| advanced` |
-| `timeToComplete` | string | ✅ | e.g. `"5 minutes"` |
-| `evnxVersion` | string | ✅ | Minimum version required |
-| `tags` | string[] | ✅ | |
-| `draft` | bool | ✅ | |
-| `prerequisites` | string[] | — | Array of guide slugs |
-| `updatedAt` | ISO 8601 | — | |
-
----
-
-### Adding a Changelog Entry
-
-1. Create `content/changelog/v0.3.0.mdx`
-
-2. Frontmatter:
+Available in every `.mdx` file without importing, from `packages/mdx`: `Callout`, `CodeTabs`/`Tab`, `Prerequisites`/`Prerequisite`, `Step`, `VersionBadge`, `Difficulty`, `CommandSignature`, `OptionTable`/`Option`, `CommandRef`, `FileTree`, `DiffBlock`, `TerminalOutput`, `Figure`, `ExternalBadge`, plus fenced code blocks with `filename="…"`. `AuthorNote` is blog-only (`apps/web/components/mdx`).
 
 ```mdx
----
-version: "0.3.0"
-releaseDate: "2024-05-01"
-type: minor
-highlights:
-  - "Cloud sync across machines"
-  - "New `evnx push` command"
-  - "Doppler integration"
----
+<Callout type="warning" title="Before you rotate">Text.</Callout>
 
-## What's new in v0.3.0
-
-Full release notes here...
-```
-
-3. **Also update `lib/config.ts`:**
-
-```ts
-export const EVNX_VERSION = '0.3.0'  // ← bump this
-```
-
-This is the single place that drives the version badge in the header, footer, install instructions, and all guides.
-
----
-
-### Adding an Author
-
-1. Create `content/authors/[id].json`:
-
-```json
-{
-  "id": "jane",
-  "name": "Jane Smith",
-  "role": "Security Engineer",
-  "avatar": "/authors/jane.jpg",
-  "bio": "Jane writes about secrets management and zero-trust infrastructure.",
-  "github": "janesmith",
-  "twitter": "janesmith",
-  "website": "https://janesmith.dev"
-}
-```
-
-2. Add their avatar to `public/authors/jane.jpg` (any JPEG, ideally 200×200px).
-
-3. Use `author: jane` in any blog post frontmatter.
-
----
-
-### Draft Workflow
-
-```
-draft: true   → visible in `pnpm dev`, hidden in `pnpm build` / production
-draft: false  → live on site
-```
-
-This means you can:
-- Commit work-in-progress to `main` without it going live
-- Preview drafts locally at any time
-- No branch gymnastics needed for content
-
-**Important:** `draft` is filtered in `lib/content.ts`:
-```ts
-.filter(post => process.env.NODE_ENV === 'development' || !post.draft)
-```
-
----
-
-## MDX Component Reference
-
-All components below are available in every `.mdx` file without importing:
-
-### Callout
-
-```mdx
-<Callout type="info" title="Pro tip">Content here.</Callout>
-<Callout type="warning">Watch out for this.</Callout>
-<Callout type="danger" title="Never do this">Don't commit .env.</Callout>
-<Callout type="tip" title="New in v0.2.0">The add command is here.</Callout>
-```
-
-### Prerequisites
-
-```mdx
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/commands/scan">Understand scan output</Prerequisite>
-</Prerequisites>
-```
-
-### Code with filename (fenced code blocks)
-
-````mdx
-```yaml filename=".github/workflows/scan.yml"
-name: Scan
-on: [push]
-```
-````
-
-### Step
-
-```mdx
-<Step number={1} title="Install evnx">
-  Run the install script...
-</Step>
-```
-
-### VersionBadge
-
-```mdx
-<VersionBadge version="0.2.0" />
-```
-
-### Difficulty
-
-```mdx
-<Difficulty level="beginner" time="5 minutes" />
-```
-
-### CommandSignature
-
-```mdx
-<CommandSignature>
-  evnx scan [OPTIONS]
-  evnx scan --path DIR --format FORMAT --exit-zero
-</CommandSignature>
-```
-
-### OptionTable
-
-```mdx
 <OptionTable>
-  <Option flag="--path"   type="string" default=".">Directory to scan</Option>
-  <Option flag="--format" type="enum"   options="pretty,json,sarif">Output format</Option>
+  <Option flag="--path" type="string" default=".">Directory to scan</Option>
 </OptionTable>
 ```
 
-### FileTree
+### Marketing copy
 
-```mdx
-<FileTree>
-project/
-├── .env
-├── .env.example
-└── .evnx.toml
-</FileTree>
-```
-
-### DiffBlock
-
-```mdx
-<DiffBlock>
-- OLD_DATABASE_URL=postgres://localhost
-+ DATABASE_URL=postgres://prod-server
-</DiffBlock>
-```
+Every word on the landing page lives in `packages/content/src/en/*.ts`; section order is `sections.ts`. Edit copy there, not in components.
 
 ---
 
-## Design System
+## Releasing a new evnx version
 
-### Color palette
+1. `pnpm config:sync` — picks up the new version from the registries (`versions.json`).
+2. `pnpm changelog:sync` — regenerates `/changelog` from the CLI's `CHANGELOG.md`.
+3. With a fresh `--all-features` build of the CLI next door:
+   - `pnpm cli:diff vX.Y.Z` — what the release changed and which guides it touches
+   - `pnpm cli:index` and `pnpm guide:commands` — regenerate the indexes
+   - `pnpm cli:check` — every `evnx …` in the guides still resolves
+4. Update the guides `cli:diff` named, bumping `evnxVersion` where a page now needs the new release.
+5. Commit and push.
 
-All colors are CSS variables in `app/globals.css` and mapped to Tailwind in `tailwind.config.ts`. **Never hardcode hex values** — always use the token names.
-
-```
-bg-void / bg-base / bg-surface / bg-overlay  — backgrounds (darkest to lightest)
-border-subtle / border-muted / border-default — borders (lightest to most visible)
-text-primary / text-secondary / text-muted    — text (most to least prominent)
-brand-300 / brand-400 / brand-500             — Rust Orange accent
-success / warning / danger / info             — semantic colors
-terminal-bg / terminal-text / terminal-prompt — terminal window colors
-```
-
-### Typography rule
-
-- **All body text, UI, labels, code:** `font-mono` (IBM Plex Mono)
-- **Headings, display, hero text:** `font-serif` (Fraunces)
-- This is intentional. The fully monospace body creates terminal ethos.
-
-### Component naming
-
-- `components/ui/` — base primitives (shadcn/ui + custom)
-- `components/mdx/` — components for MDX content only
-- `components/marketing/` — landing page sections
-- `components/layout/` — header, footer, sidebar
+`/changelog` shows each release's summary and highlights. Releases up to v0.4.0 use hand-written highlights (`CURATED` in `apps/web/app/(marketing)/changelog/page.tsx`); never add later releases there.
 
 ---
 
-## Key Architecture Decisions
-
-### Why `next-mdx-remote` over Contentlayer2
-
-Contentlayer2 (Contentlayer's community fork) has no stable Next.js 15 App Router support as of 2024. `next-mdx-remote/rsc` runs entirely server-side in RSC — no client bundle cost, no build plugins, deterministic output.
-
-### Why `lib/content.ts` reads from the filesystem directly
-
-No database, no CMS API, no build-time codegen step. `content.ts` reads `.mdx` files at request time (cached by Next.js ISR). This means:
-- Zero dependencies on external services
-- Content is always in sync with the repo
-- Works in any deployment environment
-- Deploy = git push
-
-### Why a single `lib/config.ts`
-
-The evnx version number appears in: the header badge, footer, install commands, guide frontmatter hints, OG images, and the changelog. A single constant in `config.ts` means bumping a version requires changing exactly one line.
-
-### Why all pages are server components
-
-Blog and guide pages use `MDXRemote` from `next-mdx-remote/rsc`, which is a server component. This means:
-- Syntax highlighting runs server-side (Shiki)
-- Zero JS shipped for static content
-- Pages are statically generated at build time
-
-The only client components are the landing page (install tab state, incident animation) and the header (mobile menu).
-
-### Why content is committed to the repo (not a headless CMS)
-
-For a developer tool site maintained by one or two people, a headless CMS adds deployment coupling, API costs, and a separate edit/preview workflow. Git is the CMS. PRs are the review workflow. The `draft: true` flag is the staging environment.
-
----
-
-## Roadmap
-
-### Phase 1 — Complete ✅
-- [x] Design system + all CSS variables
-- [x] Landing page (hero, origin story, features, install, commands, CI/CD, CTA)
-- [x] Blog index + post template with MDX rendering
-- [x] Guides index + guide template with section sidebar + prev/next
-- [x] Content pipeline (`lib/content.ts`)
-- [x] Syntax highlighting (`lib/shiki.ts`)
-- [x] Author system (`content/authors/`)
-- [x] Origin story blog post
-- [x] Installation guide
-- [x] Quick start guide
-- [x] scan command guide
-- [x] GitHub Actions integration guide
-- [x] Prevent secret leaks use-case guide
-- [x] `.evnx.toml` reference guide
-- [x] Header + footer
-
-### Phase 2 — Growth
-- [ ] Pagefind search (Cmd+K modal, zero-server)
-- [ ] Giscus comments on blog posts and guides
-- [ ] Newsletter signup via Resend
-- [ ] Pricing page + waitlist form (Resend audience)
-- [ ] Dynamic OG image generation (`app/api/og/route.tsx`)
-- [ ] GitHub stars live counter (`app/api/github-stars/route.ts`)
-- [ ] All remaining command guides (validate, convert, add, diff, sync, migrate, doctor, backup)
-- [ ] All remaining integration guides (GitLab CI, pre-commit, Docker, Kubernetes)
-- [ ] More use-case guides (Django, Next.js, env-to-kubernetes)
-
-### Phase 3 — Cloud
-- [ ] Auth via Clerk (`/login`)
-- [ ] Dashboard scaffold (projects, secrets, team, audit log)
-- [ ] Cloud sync API routes
-- [ ] Team management UI
-- [ ] Billing integration (Stripe)
-- [ ] `/docs` full reference section
-
----
-
-## Daily Maintenance
-
-### New evnx release (e.g. v0.3.0)
-
-1. Update `lib/config.ts`: `export const EVNX_VERSION = '0.3.0'`
-2. Create `content/changelog/v0.3.0.mdx`
-3. Update any guides that reference the old version in frontmatter `evnxVersion`
-4. Commit + push — site rebuilds automatically
-
-### New blog post
-
-1. Create `content/blog/[slug].mdx` with `draft: true`
-2. Write and preview locally (`pnpm dev`)
-3. Change to `draft: false` in the same commit as publishing
-4. Push — post is live
-
-### New guide
-
-1. Create `content/guides/[section]/[slug].mdx`
-2. Set `order:` to position it in the sidebar
-3. Set `draft: true` while writing
-4. Set `draft: false` to publish
-
-### Dependency updates
+## Checks and CI
 
 ```bash
-pnpm update             # minor updates
-pnpm update --latest    # major updates (review changelog)
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm check:links                 # links in the MDX as written
+pnpm check:links:built           # links in the built docs app
+pnpm config:check
+pnpm cli:index:check
+pnpm guide:commands:check
+pnpm changelog:check
+pnpm verify:redirects            # docs-split redirects
 ```
 
-Critical deps to watch:
-- `next` — major versions can change App Router APIs
-- `next-mdx-remote` — RSC API changes with Next.js versions
-- `shiki` — breaking changes in v1.x+ API
-- `tailwindcss` — v4 is a significant rewrite if upgrading from v3
+`.github/workflows/ci.yml` runs typecheck, content links, the command-index and guide-commands checks against the latest released CLI, a built-links check for `apps/docs`, and the config and changelog drift checks. Drift checks fail only when a source was reachable and disagreed; an unreachable registry or GitHub is a warning.
 
-### Checking for broken links
+---
 
-```bash
-pnpm build 2>&1 | grep -i "warning\|error"
-# Build-time broken imports and missing MDX references surface here
+## Design system
+
+Colors are CSS variables in each app's `globals.css`, mapped in `tailwind.config.ts`. Use token names; never hard-code hex values.
+
 ```
+bg-void / bg-base / bg-surface / bg-overlay   backgrounds, darkest → lightest
+border-subtle / border-muted / border-default borders
+text-primary / text-secondary / text-muted    text
+brand-300 / brand-400 / brand-500             Rust-orange accent
+success / warning / danger / info             semantic
+terminal-bg / terminal-text / terminal-prompt terminal windows
+```
+
+Typography: body, UI and code in `font-mono` (IBM Plex Mono); headings and display in `font-serif` (Fraunces). The monospace body is intentional.
+
+---
+
+## Status and roadmap
+
+**Done**
+- Marketing site, blog (21 posts), install, pricing, talks, security and legal pages
+- Guides for all 20 top-level CLI commands, plus getting-started, integrations, use-cases and reference (65 pages)
+- Generated command index, guide commands, versions and changelog, each with a CI drift check
+- Pagefind search, GitHub star counter, testimonials and waitlist (Supabase), Umami analytics
+- `apps/docs` with OG images and `/cli` routes; Paddle checkout page
+
+**In progress**
+- Docs split: move guides to `docs.evnx.dev/cli/*` (schedule P3), then flip `NEXT_PUBLIC_DOCS_MODE=split`
+- Serve `/install.sh` from `evnx.dev` (schedule P5), then flip `NEXT_PUBLIC_INSTALL_HOST`
+- Retire `apps/web/lib/config.ts` as its last consumers move to `@evnx/config`
+
+**Not started**
+- Integration guides for GitLab CI, pre-commit/prek, Docker and Kubernetes (covered in the CLI README and a blog post, not yet as guides)
+- Giscus comments
+- Newsletter

@@ -1,9 +1,21 @@
 import { Badge } from "@/components/ui/badge-status";
 import { canonicalUrl } from "@evnx/config";
+import generated from "@/content/changelog.json";
 
-// -----------------------------
-// Types (Production-grade schema)
-// -----------------------------
+// ─── Where the releases come from ─────────────────────────────────────────────
+//
+// `content/changelog.json` is GENERATED from the CLI's CHANGELOG.md by
+// `pnpm changelog:sync` (scripts/sync-changelog.mjs). Do not add releases here.
+//
+// ⚠️ This page used to be a hand-kept array, and it stopped at v0.4.0 while the
+// CLI shipped 26 more releases. A list maintained by hand drifts; this one is
+// derived. `pnpm changelog:check` fails CI when it is stale.
+//
+// `CURATED` below is the one hand-written layer that remains: rewritten
+// highlights for releases from before the generator existed, where the
+// CHANGELOG.md entries are either terse or written for contributors. A curated
+// entry replaces that release's generated highlights and keeps its summary.
+// Releases from 0.5.0 on are only ever generated — do not add them here.
 
 type ReleaseType = "major" | "minor" | "patch";
 type HighlightType =
@@ -13,6 +25,7 @@ type HighlightType =
   | "performance"
   | "docs"
   | "breaking"
+  | "security"
   | "info";
 
 interface Highlight {
@@ -24,18 +37,17 @@ interface Release {
   version: string;
   date: string;
   type: ReleaseType;
+  summary?: string | null;
   highlights: Highlight[];
   links?: {
     github?: string;
   };
 }
 
-// -----------------------------
-// Data (cleaned + normalized)
-// -----------------------------
+/** How many highlights show before the rest fold under "N more". */
+const VISIBLE_HIGHLIGHTS = 6;
 
-
-const releases: Release[]  = [
+const CURATED: Omit<Release, "summary">[] = [
   {
     version: "0.4.0",
     date: "2026-09-15",
@@ -386,9 +398,20 @@ const releases: Release[]  = [
   },
 ];
 
-// Sort releases DESC by date
+const curatedByVersion = new Map(CURATED.map((r) => [r.version, r]));
+
+const releases: Release[] = (generated.releases as unknown as Release[]).map((r) => {
+  const curated = curatedByVersion.get(r.version);
+  return curated
+    ? { ...r, highlights: curated.highlights, links: curated.links ?? r.links }
+    : r;
+});
+
+// CHANGELOG.md is newest-first already; sort anyway so the page never depends on it.
 const sortedReleases = [...releases].sort(
-  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  (a, b) =>
+    new Date(b.date).getTime() - new Date(a.date).getTime() ||
+    b.version.localeCompare(a.version, undefined, { numeric: true }),
 );
 
 // -----------------------------
@@ -415,6 +438,7 @@ const highlightColorMap: Record<HighlightType, string> = {
   performance: "text-brand-500",
   docs: "text-text-secondary",
   breaking: "text-danger",
+  security: "text-danger",
   info: "text-text-secondary",
 };
 
@@ -425,8 +449,42 @@ const highlightLabelMap: Record<HighlightType, string> = {
   performance: "PERFORMANCE",
   docs: "DOCS",
   breaking: "BREAKING",
+  security: "SECURITY",
   info: "INFO",
 };
+
+/** CHANGELOG.md text keeps its `code spans`; render them as code. */
+function InlineText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("`") && part.endsWith("`") && part.length > 1 ? (
+          <code key={i} className="font-mono text-text-primary">
+            {part.slice(1, -1)}
+          </code>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+function HighlightItem({ item }: { item: Highlight }) {
+  return (
+    <li className="flex gap-3 text-sm">
+      <span
+        className={`font-mono font-semibold ${highlightColorMap[item.type] ?? "text-text-secondary"} whitespace-nowrap`}
+      >
+        {highlightLabelMap[item.type] ?? "INFO"}
+      </span>
+      <span className="text-text-secondary">
+        <InlineText text={item.text} />
+      </span>
+    </li>
+  );
+}
 
 // -----------------------------
 // Page
@@ -447,8 +505,8 @@ export default function ChangelogPage() {
             Changelog.
           </h1>
           <p className="text-xl text-text-secondary max-w-2xl">
-            All releases and updates to evnx. Track features, fixes, and
-            improvements.
+            Every evnx release, generated from the CLI&apos;s own CHANGELOG.md.
+            The full notes for each one are on GitHub.
           </p>
         </div>
       </section>
@@ -460,16 +518,19 @@ export default function ChangelogPage() {
               const githubLink =
                 release.links?.github ??
                 `https://github.com/urwithajit9/evnx/releases/tag/v${release.version}`;
+              const shown = release.highlights.slice(0, VISIBLE_HIGHLIGHTS);
+              const folded = release.highlights.slice(VISIBLE_HIGHLIGHTS);
 
               return (
                 <div
                   key={release.version}
-                  className="pb-12 border-b border-border-subtle last:border-0"
+                  id={`v${release.version}`}
+                  className="pb-12 border-b border-border-subtle last:border-0 scroll-mt-24"
                 >
                   <div className="flex items-start gap-6 mb-6">
                     <div className="pt-1">
                       <h2 className="font-serif text-3xl font-bold mb-2">
-                        v{release.version}
+                        <a href={`#v${release.version}`}>v{release.version}</a>
                       </h2>
                       <div className="flex items-center gap-3">
                         {getReleaseTypeBadge(release.type)}
@@ -488,22 +549,33 @@ export default function ChangelogPage() {
                     </a>
                   </div>
 
-                  <div className="bg-bg-surface border border-border-muted rounded-lg p-6">
-                    <ul className="space-y-3">
-                      {release.highlights.map((item, idx) => (
-                        <li key={idx} className="flex gap-3 text-sm">
-                          <span
-                            className={`font-mono font-semibold ${highlightColorMap[item.type]} whitespace-nowrap`}
-                          >
-                            {highlightLabelMap[item.type]}
-                          </span>
-                          <span className="text-text-secondary">
-                            {item.text}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {release.summary && (
+                    <p className="text-text-secondary mb-4">
+                      <InlineText text={release.summary} />
+                    </p>
+                  )}
+
+                  {release.highlights.length > 0 && (
+                    <div className="bg-bg-surface border border-border-muted rounded-lg p-6">
+                      <ul className="space-y-3">
+                        {shown.map((item, idx) => (
+                          <HighlightItem key={idx} item={item} />
+                        ))}
+                      </ul>
+                      {folded.length > 0 && (
+                        <details className="mt-4">
+                          <summary className="cursor-pointer font-mono text-sm text-brand-500 hover:text-brand-400">
+                            {folded.length} more
+                          </summary>
+                          <ul className="space-y-3 mt-3">
+                            {folded.map((item, idx) => (
+                              <HighlightItem key={idx} item={item} />
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -117,3 +117,10 @@ jobs:
       # every day and a stale one is cosmetic. Versions and plan limits do.
       - name: Generated config matches the registries and the API
         run: node scripts/sync-config.mjs --check
+
+      # ⚠️ /changelog stopped at v0.4.0 for 26 releases because it was a
+      # hand-kept array. It is now generated from the CLI's CHANGELOG.md on
+      # main; this fails when a release shipped and the page did not follow.
+      # An unreachable GitHub is a warning, not a failure, as above.
+      - name: The changelog page matches the CLI's CHANGELOG.md
+        run: node scripts/sync-changelog.mjs --check
