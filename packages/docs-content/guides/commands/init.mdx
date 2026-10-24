@@ -3,12 +3,12 @@ section: "commands"
 order: 1
 title: "evnx init"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-13"
+updatedAt: "2026-10-25"
 excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["init", "reference", "cli", "setup"]
-commands: ["doctor", "init"]
+commands: ["add", "add blueprint", "add service", "doctor", "init"]
 evnxVersion: "0.10.1"
 prerequisites:
   - getting-started/installation
@@ -19,7 +19,15 @@ draft: false
 
 Initialize `.env.example` and `.env` files using Blank, Blueprint, or Architect modes with schema-driven variable generation.
 
-Run with no flags in a terminal, `init` shows a menu with **Blank** pre-selected (it was Blueprint before 0.10.1). Yes/no questions take their answer on Enter (since 0.10.1): type `y` or `n` and press Enter, or just Enter for the default. Esc or `q` cancels without writing anything (exit 0): at once in a list, and followed by Enter at a yes/no question. If the output is piped into a command that stops reading early (`| head`), init still finishes writing its files and exits 141, quietly, like other command-line tools. Without a terminal (CI, a pipe, an AI agent) the menu cannot be shown, so `init` stops with exit 2 and lists the flags to use instead; `--with` and `--blueprint` without `--yes` likewise stop and say to add `--yes`.
+Run with no flags in a terminal, `init` shows a menu with **Blank** pre-selected (it was Blueprint before 0.10.1). Yes/no questions take their answer on Enter (since 0.10.1): type `y` or `n` and press Enter, or just Enter for the default. Esc or `q` cancels without writing anything (exit 0): at once in a list, and followed by Enter at a yes/no question. If the output is piped into a command that stops reading early (`| head`), init exits 141, quietly, like other command-line tools — but ⚠️ in 0.10.18 it can stop before it writes `.evnx.toml` (a known bug; `.env`, `.env.example` and `.gitignore` are written). Do not pipe `init` into `head`. Without a terminal (CI, a pipe, an AI agent) the menu cannot be shown, so `init` stops with exit 2 and lists the flags to use instead; `--with` and `--blueprint` without `--yes` likewise stop and say to add `--yes`. With **`CI` set** (any value except `0` and `false`, **v0.10.16+**), init does not ask even at a terminal:
+
+```text
+Error: CI is set, so init does not ask.
+Name what you want instead:
+  evnx init --yes                     blank files
+  evnx init --yes --blueprint <id>    a named stack
+  evnx init --yes --with <a,b,c>      components (evnx init --list-components)
+```
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -44,18 +52,25 @@ evnx init [OPTIONS]
 | `--blueprint <ID>` | `string` | — | generate from a named stack, e.g. `t3_modern` |
 | `--force` | `bool` | `false` | replace an existing `.env.example`. `.env` is never overwritten. Not valid with `--from-source`, which only appends (exit 2 since 0.10.1) |
 | `--path`, `-p` | `string` | `.` | output directory for generated files |
-| `--yes`, `-y` | `bool` | `false` | skip prompts and write blank files |
+| `--yes`, `-y` | `bool` | `false` | skip prompts. With no template, writes blank files; with one, keeps it and creates `.env` from it |
+| `--dry-run` | `bool` | `false` | **v0.10.16+** — show what would be written, and write nothing |
+| `--json` | `bool` | `false` | **v0.10.16+** — print the result as one JSON document. Needs `--yes` or `--dry-run` |
 | `--verbose`, `-v` | `bool` | `false` | detailed debug output |
-| `--quiet`, `-q` | `bool` | `false` | **v0.10.1+** — print nothing on success; warnings and errors still print |
+| `--quiet`, `-q` | `bool` | `false` | **v0.10.1+** — print nothing on success. Findings, warnings, errors and requested data still print |
+| `--no-color` | `bool` | `false` | disable coloured output |
 | `--help`, `-h` | `bool` | `false` | display help information |
 
 <Callout type="warning">
-**`--yes` means blank, not "pick a stack for me".**
+**`--yes` means "no stack", not "pick a stack for me".**
 
 Before v0.5.0 it selected a blueprint — and the list came out of a hash map, so
 **which stack you got changed between runs of the same command**. It now writes
 blank `.env` and `.env.example`, deterministically, which is what makes it safe in
 CI. Name a stack with `--blueprint` or components with `--with` when you want one.
+
+In a project that already has a template — a fresh clone — `--yes` keeps it, creates
+`.env` from it (mode `0600`) and exits 0 (**v0.10.16+**). Run again, it prints
+`✓ already set up: .env.example and .env are here; nothing was generated`.
 </Callout>
 
 ### How `init` decides what to generate
@@ -67,7 +82,7 @@ CI. Name a stack with `--blueprint` or components with `--with` when you want on
 | `--from-source` | the variables your code reads |
 | `--detect` | what the project declares, accepted without asking |
 | nothing, interactively | detects and proposes; falls back to the menu if it finds nothing |
-| `--yes` | blank files |
+| `--yes` | blank files, or, beside an existing template, `.env` made from it |
 
 An explicit `--with` or `--blueprint` **suppresses detection** — proposing something
 over what you already named would be worse than not detecting at all.
@@ -84,7 +99,7 @@ evnx init --with django,kafka,clerk        # no blueprint offers this
 evnx init --with postgresql --with redis   # repeatable, same as a comma list
 ```
 
-There are **51 components** — frameworks, services and infrastructure. See them all:
+There are **56 components** — frameworks, services and infrastructure. See them all:
 
 ```bash
 evnx init --list-components
@@ -231,8 +246,8 @@ for you.
 
 | Code | Meaning |
 |------|---------|
-| `0` | files generated, or nothing to do: you answered `n` or pressed Esc at a prompt, kept an existing `.env.example`, or `--from-source` found nothing new |
-| `2` | stopped: an existing `.env.example` under `--yes` without `--force`, an unknown component or blueprint, conflicting flags, no terminal to ask, or a write error (e.g. `--path` points at a file or an unwritable directory) |
+| `0` | files generated, or nothing to do: you answered `n` or pressed Esc at a prompt, `--yes` kept an existing template (and created `.env` from it), the project was already set up, or `--from-source` found nothing new |
+| `2` | stopped: `--with` or `--blueprint` over an existing template without `--force` (the message names `evnx add blueprint` / `evnx add service` instead), an unknown component or blueprint, conflicting flags, no terminal to ask, `CI` set with nothing named, a malformed `.evnx.toml` in the target, or a write error (e.g. `--path` points at a file or an unwritable directory) |
 
 <Callout type="info">
 Earlier versions of this page said `1` for refusals and failures. Every one of those cases exits `2`, the
@@ -275,9 +290,10 @@ evnx init --from-source
 
 | File | Purpose | Overwrite behavior |
 |------|---------|-------------------|
-| `.env.example` | Team template with placeholders + docs | **Refused** if it exists under `--yes` (`--force` to replace). Interactively you are asked; if you keep yours, init offers to create `.env` from it |
-| `.env` | Local secrets (gitignored) | Created only if missing. **Never** overwritten, even with `--force` |
+| `.env.example` | Team template with placeholders + docs | The project's template is `[defaults] example` from `.evnx.toml` if set, else whichever of `.env.example`, `.env.sample` or `.env.template` exists. `--yes` alone **keeps** it. `--with` / `--blueprint` over it is **refused** (`--force` replaces it). Interactively you are asked; if you keep yours, init offers to create `.env` from it |
+| `.env` | Local secrets (gitignored), mode `0600` | Created from the template if missing. With a stack, names it lacks are appended (`✓ Added 5 variables to .env; the values already there are kept`). **Never** overwritten, even with `--force` |
 | `.gitignore` | Appends `.env*` with the template family exempted | Appends if missing |
+| `.evnx.toml` | The variable contract, **v0.10.16+** | Created on every run: the variables init set up go into `[vars]` (`✓ created .evnx.toml with 5 variable(s) in [vars]`), or an empty `[vars]` for blank files, so that `evnx add` records into it. Commit it with `.env.example` |
 
 The exact block written:
 
@@ -311,15 +327,16 @@ undoes the protection. Since 0.10.1 `init` checks what git would actually ignore
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `NO_COLOR` | any value | unset | Disable coloured output ([no-color.org](https://no-color.org/)) |
+| `CI` | any value except `0` / `false` | unset | **v0.10.16+** — never ask; stop with exit 2 unless a mode is named |
 
 <Callout type="warning">
-This table used to list `CI`, described as auto-enabling non-interactive defaults.
-**evnx never read it.** The variables evnx actually reads are `EVNX_AUTO_FIX`,
-`EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`, `EVNX_SERVER` and
-`EVNX_TOKEN` — and none of them affects `init`.
+**`CI` is read since v0.10.16.** With `CI` set (any value except `0` and `false`),
+`init` does not ask even at a terminal, and stops with exit 2 unless you name what you
+want (`--yes`, `--blueprint`, `--with`). Before 0.10.16 this page said evnx never read
+`CI`, which was true then.
 
-`init` decides interactivity by asking whether stdin is a terminal, so it does the
-right thing in CI without being told. Pass `--yes`, `--detect` or `--with` to be
+Without `CI`, `init` decides interactivity by asking whether stdin is a terminal, so it
+does the right thing in CI either way. Pass `--yes`, `--detect` or `--with` to be
 explicit.
 </Callout>
 

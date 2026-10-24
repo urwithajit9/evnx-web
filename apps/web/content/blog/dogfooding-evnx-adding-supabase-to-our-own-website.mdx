@@ -1,7 +1,7 @@
 ---
 title: "Drinking Our Own .env: How We Used evnx to Add Supabase to evnx-web"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-01"
+updatedAt: "2026-10-25"
 excerpt: "What happens when the team behind evnx—the CLI for environment variable management—uses evnx to build evnx-web, its own website? Spoiler: no .env-y feelings, just clean commits and supa-fast setup. Here's how we dogfooded our tool to add Supabase, with puns intact."
 coverImage: "/images/evnx-dogfooding-supabase.png"
 author: evnx-team
@@ -42,6 +42,12 @@ In short: building `evnx-web` with `evnx` wasn't just convenient—it was *varia
 ## Step 1: Initialize evnx (The "Blank Slate" Special)
 
 We started fresh—because sometimes you just need to `rm -rf` your assumptions and begin anew.
+
+<Callout type="info" title="Updated for v0.10.18">
+The transcripts below are from the evnx of March 2026. In 0.10.18, `evnx init` in a
+folder that has a `package.json` first proposes what it detected, and init also writes
+`.evnx.toml`. The recap at the end uses the non-interactive forms that work today.
+</Callout>
 
 ```bash
 $ evnx init
@@ -205,11 +211,13 @@ npm install -g @evnx/cli
 # Navigate to your project (or start a new one—live a little)
 cd your-nextjs-app
 
-# Initialize evnx
-evnx init
+# Initialize evnx. In a project with a package.json, plain `evnx init` first
+# asks whether to use what it detected; name what you want instead:
+evnx init --yes                                  # blank files, as in this post
+# or: evnx init --blueprint supabase_fullstack --yes
 
 # Add your Supabase vars (or whatever you need)
-evnx add custom
+evnx add service supabase --yes
 
 # Sync your .env to/from .env.example
 evnx sync --direction forward
