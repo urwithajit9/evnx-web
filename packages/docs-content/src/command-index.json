@@ -434,8 +434,6 @@
     }
   ],
   "undocumented": [],
-  "unshown_subcommands": [
-    "vault leave"
-  ],
+  "unshown_subcommands": [],
   "orphan_guides": []
 }
