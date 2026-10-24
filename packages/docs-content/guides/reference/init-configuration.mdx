@@ -335,13 +335,14 @@ evnx init --path /tmp/myproject --yes
 
 ### Verbose output not showing details
 
-**Cause:** `--verbose` must be passed explicitly; `CI=true` doesn't auto-enable it.
+**Cause:** `--verbose` must be passed explicitly. `init` does not read `CI` at all
+(only `evnx sync` does), so `CI=true` neither enables verbose output nor skips prompts.
 
 **Fix:**
 ```bash
 evnx init --verbose
-# Or combine:
-CI=1 evnx init --verbose --yes
+# Non-interactive, with detail:
+evnx init --verbose --yes
 ```
 
 ---

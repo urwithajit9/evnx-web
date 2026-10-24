@@ -3,20 +3,18 @@ section: "use-cases"
 order: 2
 title: "Team Collaboration with evnx sync"
 publishedAt: "2026-03-06"
-updatedAt: "2026-03-07"
-excerpt: "Real-world patterns for using evnx sync with multiple developers, onboarding, and merge workflows."
+updatedAt: "2026-10-25"
+excerpt: "Real-world patterns for using evnx sync with multiple developers: adding a variable, onboarding, merges, review, and the CI and pre-commit checks."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["sync", "team", "collaboration", "workflow", "onboarding"]
 commands: ["sync", "validate"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/sync-basic
   - commands/sync
 draft: false
 ---
-
-# Team Collaboration with evnx sync
 
 <Callout type="tip" title="Who this is for">
 This guide is for teams of 2+ developers using evnx to manage environment variables. You'll learn patterns for onboarding, daily workflows, and avoiding merge conflicts.
@@ -34,9 +32,22 @@ This guide is for teams of 2+ developers using evnx to manage environment variab
 ### Key principles
 
 1. **`.env.example` is the source of truth** for variable names
-2. **`.env` is personal** — never commit, always gitignored
-3. **Sync forward** = share new variables with team
-4. **Sync reverse** = get team's new variables locally
+2. **`.env` is personal**: never committed, always gitignored
+3. **Sync forward** shares a new variable with the team
+4. **Sync reverse** brings the team's new variables into your `.env`
+
+### Which check runs where
+
+| Where | Command | Fails when |
+|-------|---------|------------|
+| Your own machine, before a PR | `evnx sync --check` | either file has a name the other lacks |
+| Pre-commit hook | `evnx sync --check --direction forward --skip-without-env` (the shipped `evnx-sync` hook) | your `.env` has a name the template lacks |
+| CI | `evnx sync --check --direction forward` | the template lacks a name `.env` has, or, with no `.env`, one the spec requires |
+
+The two-way check also catches a `.env` that has fallen behind the template. That is
+useful on your own machine and wrong in a hook: a teammate who has not pulled a new
+variable into their `.env` yet should still be able to commit. Naming a direction makes
+the check one-way.
 
 ---
 
@@ -44,28 +55,60 @@ This guide is for teams of 2+ developers using evnx to manage environment variab
 
 **Context:** Alice needs `STRIPE_WEBHOOK_SECRET` for a new feature.
 
-**Step 1: Alice adds to her .env**
+**Step 1: Alice adds it to her .env**
 
 ```bash
 echo "STRIPE_WEBHOOK_SECRET=whsec_abc123" >> .env
 ```
 
-**Step 2: Alice updates the team template**
+**Step 2: Alice previews the template change**
 
 ```bash
 evnx sync --direction forward --dry-run
-
-📋 Preview:
-Target: .env.example (action: Add)
-  🔒 STRIPE_WEBHOOK_SECRET = YOUR_KEY_HERE
-
-# Apply the change
-evnx sync --direction forward
-
-✓ Updated .env.example (+1 variables)
 ```
 
-**Step 3: Commit and push**
+```text
+┌─ Variables to Add ───────────────────────────────────────────────────────────┐
+│ Found 1 variable in .env missing from .env.example:                          │
+│   • STRIPE_WEBHOOK_SECRET                                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+Preview:
+Target: .env.example (action: Add)
+
+  · STRIPE_WEBHOOK_SECRET = YOUR_KEY_HERE
+
+(dry-run: no files were modified)
+```
+
+`·` marks a placeholder: the real value stays in her `.env`.
+
+**Step 3: Alice applies it**
+
+```bash
+evnx sync --direction forward
+```
+
+At a terminal, sync asks:
+
+```text
+Add these to .env.example?:
+> Yes, add with placeholder values (recommended)
+  Yes, add with actual values ! SECURITY RISK
+  Let me choose individually
+  No, skip
+```
+
+She keeps the first answer and declines the optional comment:
+
+```text
+Add these to .env.example?: Yes, add with placeholder values (recommended)
+Add a comment explaining these variables? no
+✓ Updated .env.example (+1 variable)
+```
+
+**Step 4: Commit and push**
 
 ```bash
 git add .env.example
@@ -75,78 +118,100 @@ git push
 
 **Result for teammates:**
 
-```env
-# .env.example now has:
+```text
+APP_NAME=shop
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+STRIPE_SECRET_KEY=YOUR_KEY_HERE
+
+# Synced from .env
 STRIPE_WEBHOOK_SECRET=YOUR_KEY_HERE
 ```
 
 <Callout type="warning" title="Don't commit secrets">
-Alice's real value `whsec_abc123` stays in her `.env` only. The template gets the safe placeholder `YOUR_KEY_HERE`.
+Alice's real value `whsec_abc123` stays in her `.env` only. The template gets the
+placeholder `YOUR_KEY_HERE`, because the name has the word `SECRET`. Even the
+"actual values" choice keeps a credential like this one out of the template.
 </Callout>
 
 ---
 
 ## Scenario 2: Onboarding a new developer
 
-**Context:** Bob joins the team and clones the repo.
+**Context:** Bob joins the team and clones the repo. It has `.env.example`, committed,
+and no `.env`, which is gitignored.
 
-**Step 1: Bob clones and enters project**
+**Step 1: Bob clones and enters the project**
 
 ```bash
 git clone git@github.com:team/project.git
 cd project
 ```
 
-**Step 2: Bob checks what's needed**
-
-```bash
-ls -la
-# Sees: .env.example (committed), .env (missing, gitignored)
-```
-
-**Step 3: Bob creates his local .env**
+**Step 2: Bob creates his .env from the template**
 
 ```bash
 evnx sync --direction reverse
+```
 
-ℹ️  .env not found, creating from .env.example
+```text
+· .env not found, creating from .env.example
 ✓ Created .env
-⚠️  Replace placeholder values with real credentials!
+! Replace placeholder values with real credentials!
+
+Next steps:
+  1. Edit .env and replace placeholder values with real credentials
+  2. Never commit .env to version control
 ```
 
-**Step 4: Bob edits with real values from team password manager**
+The new `.env` holds the template's values, working defaults included, and is created
+readable by Bob only (`0600`), so there is no `chmod` to remember. If the project has a
+[spec](/guides/commands/spec), the variables it requires are added too, under
+`# Added by evnx sync: required by [vars] in .evnx.toml`.
 
-```bash
-nano .env
-# Changes:
-#   DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-# To:
-#   DATABASE_URL=postgresql://bob:realpass@prod-db:5432/app
-```
-
-**Step 5: Bob secures permissions**
-
-```bash
-chmod 600 .env
-```
-
-**Step 6: Bob validates setup**
+**Step 3: Bob asks validate what is left to fill in**
 
 ```bash
 evnx validate
-✓ All variables present and valid
 ```
 
-✅ **Bob is ready to code!**
+```text
+  ✗  STRIPE_SECRET_KEY looks like a placeholder
+     .env
+     →  Get from Stripe Dashboard
+
+  ✗  STRIPE_WEBHOOK_SECRET looks like a placeholder
+     .env
+     →  Get from Stripe Dashboard
+
+  2 errors
+```
+
+**Step 4: Bob fills in real values from the team's password manager**
+
+```bash
+nano .env
+```
+
+**Step 5: Bob validates again**
+
+```bash
+evnx validate
+```
+
+```text
+✓ All required variables present
+✓ All checks passed
+```
+
+✅ **Bob is ready to code.**
 
 <Callout type="tip" title="Document the onboarding flow">
 Add this to your README:
 
-## Setup
-1. Clone repo
-2. Run `evnx sync --direction reverse` to create .env
-3. Edit .env with credentials from [password manager]
-4. Run `chmod 600 .env` and `evnx validate`
+1. Clone the repo
+2. Run `evnx sync --direction reverse` to create `.env`
+3. Fill in the values `evnx validate` reports, from [password manager]
+4. Run `evnx validate` until it passes
 </Callout>
 
 ---
@@ -155,69 +220,73 @@ Add this to your README:
 
 **Context:** Alice and Bob both add different variables and push around the same time.
 
-**Step 1: Alice pushes first**
-
-```bash
-git push
-# ✓ Success
-```
-
-**Step 2: Bob tries to push**
+**Step 1: Alice pushes first; Bob's push is rejected**
 
 ```bash
 git push
 # ✗ rejected: remote contains work you don't have
 ```
 
-**Step 3: Bob pulls and sees conflict**
+**Step 2: Bob pulls and sees a conflict**
 
 ```bash
 git pull
 # CONFLICT (content): Merge conflict in .env.example
 ```
 
-**Step 4: Bob opens .env.example to resolve**
+**Step 3: Bob keeps both new variables and removes the conflict markers**
 
 ```bash
 nano .env.example
-# Keeps both new variables, removes conflict markers
 ```
 
-**Step 5: Bob validates the resolved file**
+**Step 4: Bob checks his own pair, both ways**
 
 ```bash
-evnx validate
-✓ All variables present
+evnx sync --check
 ```
 
-**Step 6: Bob completes the merge**
+```text
+┌─ Only in .env.example ───────────────────────────────────────────────────────┐
+│ Found 1 variable in .env.example that .env does not have:                    │
+│   • STRIPE_WEBHOOK_SECRET                                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+✗ Out of sync.
+  · 1 variable in .env.example is not in .env: remove it from .env.example, or add it to .env with `evnx sync --direction reverse`.
+```
+
+Alice's variable is now in the template and not yet in Bob's `.env`. Exit `1`.
+
+**Step 5: Bob brings it into his .env, then completes the merge**
 
 ```bash
+evnx sync --direction reverse
 git add .env.example
 git commit -m "Resolve merge conflict in .env.example"
 git push
 ```
 
 <Callout type="success" title="Why this works">
-Because `.env.example` only contains variable names and placeholders (no secrets), merge conflicts are safe to resolve manually.
+`.env.example` holds names and placeholders, no secrets, so a conflict in it is safe to
+resolve by hand.
 </Callout>
 
 ---
 
 ## Scenario 4: Syncing before a pull request
 
-**Best practice:** Always sync forward before opening a PR that adds new environment variables.
-
-**Before creating PR:**
+**Best practice:** check your own pair before you open a PR that adds environment
+variables.
 
 ```bash
-evnx sync --direction forward --dry-run
+evnx sync --check
 ```
 
-**If preview shows new variables:**
+**If it reports a variable missing from `.env.example`:**
 
 ```bash
-# 1. Apply the sync
+# 1. Add it to the template, with a placeholder
 evnx sync --direction forward
 
 # 2. Commit the template change
@@ -231,15 +300,12 @@ gh pr create --title "feat: add new feature"
 **In your PR description:**
 
 ```markdown
-### Environment Changes
+### Environment changes
 - Added `NEW_API_KEY` to `.env.example` (placeholder: `YOUR_KEY_HERE`)
-- No secrets committed — all values are safe placeholders
+- No secrets committed: all values are placeholders
 
-### Testing
-# Preview the sync change:
-$ evnx sync --direction forward --dry-run
-📋 Preview:
-  🔒 NEW_API_KEY = YOUR_KEY_HERE
+Preview (`evnx sync --direction forward --dry-run`):
+  · NEW_API_KEY = YOUR_KEY_HERE
 ```
 
 ---
@@ -258,19 +324,19 @@ $ evnx sync --direction forward --dry-run
 ### Template for team notifications
 
 ```markdown
-**Environment Update** 🔄
+**Environment update** 🔄
 
 A new environment variable has been added:
 
 - **Name:** `NEW_SERVICE_URL`
 - **Purpose:** URL for the new analytics service
-- **Placeholder:** `https://api.demo.example.com`
-- **Required:** Yes (app won't start without it)
+- **Template value:** `https://your-api-url-here.com`
+- **Required:** Yes (the app won't start without it)
 
 **Action needed:**
-1. Pull latest changes: `git pull`
-2. Sync to your .env: `evnx sync --direction reverse`
-3. Edit .env with the real URL from [password manager]
+1. Pull the latest changes: `git pull`
+2. Add it to your .env: `evnx sync --direction reverse`
+3. Replace the value with the real URL from [password manager]
 4. Validate: `evnx validate`
 
 Questions? Reply here or ping @env-team.
@@ -282,43 +348,54 @@ Questions? Reply here or ping @env-team.
 
 ### "It works on my machine"
 
-**Problem:** Developer has a variable locally that's not in `.env.example`.
+**Problem:** a developer has a variable locally that is not in `.env.example`.
 
-**Prevention:**
+**Prevention:** the shipped pre-commit hook, which blocks the commit until the template
+declares every name in your `.env`:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/urwithajit9/evnx
+    rev: v0.10.12
+    hooks:
+      - id: evnx-sync
+```
+
+It runs `evnx sync --check --direction forward --skip-without-env`. On a fresh clone with
+no `.env` and no spec there is nothing to compare, so it says it skipped and lets the
+commit through. In CI, run the same check without `--skip-without-env`; there a check
+that compared nothing must fail:
 
 ```bash
-# Add to pre-commit hook or CI (evnx v0.5.0+):
-# --check writes nothing and exits 1 when the template is stale, 2 on error.
-if ! evnx sync --direction forward --check; then
-  echo "⚠️  .env.example needs updates!"
-  echo "Run: evnx sync --direction forward"
-  exit 1
-fi
+evnx sync --check --direction forward
 ```
 
 ### Secrets in .env.example
 
-**Problem:** Someone accidentally commits real values.
+**Problem:** someone commits real values to the template.
 
 **Prevention:**
 
-1. Use `--dry-run` before every sync forward
-2. Add CI check: `grep -E "(sk_live|password)" .env.example && exit 1`
+1. Preview with `--dry-run` before every forward sync, and read the value column
+2. Keep the "actual values" choice and `allow_actual` for configuration such as
+   `LOG_LEVEL`; evnx refuses credentials in both, but the template is still a public file
 3. Use custom placeholders that look fake: `sk_demo_XXXXXXXX`
+4. Add a CI check: `grep -E "(sk_live|password)" .env.example && exit 1`
 
-### Merge conflicts in .env
+### .env in Git
 
 **Problem:** `.env` should never be in Git, but someone commits it.
 
 **Prevention:**
 
 1. Ensure `.env` is in `.gitignore` from day one
-2. Add pre-commit hook to block `.env` commits
-3. Educate team: "If you see `.env` in `git status`, don't add it!"
+2. Add a pre-commit hook that blocks `.env` commits
+3. Teach the team: if you see `.env` in `git status`, do not add it
 
 ---
 
-## Advanced: Custom placeholders for teams
+## Advanced: custom placeholders for teams
 
 Create `.evnx/placeholders.json` for consistent team patterns:
 
@@ -327,7 +404,7 @@ Create `.evnx/placeholders.json` for consistent team patterns:
   "patterns": {
     ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
     ".*_SECRET$": "demo_secret_placeholder",
-    "DATABASE_URL": "postgresql://demo:demo@localhost:5432/demo_db"
+    "^DATABASE_URL$": "postgresql://demo:demo@localhost:5432/demo_db"
   },
   "default": "REPLACE_IN_PRODUCTION"
 }
@@ -335,50 +412,56 @@ Create `.evnx/placeholders.json` for consistent team patterns:
 
 **Team workflow:**
 
-1. Commit `.evnx/placeholders.json` to repo
-2. Document in README: "We use custom placeholders — see `.evnx/`"
-3. Use in sync: `evnx sync --template-config .evnx/placeholders.json`
+1. Commit `.evnx/placeholders.json` to the repo
+2. Use it on every run, CI included: `evnx sync --template-config .evnx/placeholders.json`
+3. Document in the README: "We use custom placeholders — see `.evnx/`"
 
-<Callout type="tip" title="Share the config">
-Commit `.evnx/placeholders.json` so every teammate gets the same placeholder patterns automatically.
-</Callout>
+A misspelt key in the file is an error (exit `2`), so a typo cannot quietly switch a
+rule off. The [configuration reference](/guides/reference/sync-configuration) has the
+full format.
 
 ---
 
-## Checklist: Team sync health
+## Checklist: team sync health
 
 Run this monthly or when onboarding:
 
 ```bash
-# 1. Verify .env.example is up to date (exits 1 if stale, v0.5.0+)
-evnx sync --direction forward --check
+# 1. My own pair, both ways (exit 1 if either file has a name the other lacks)
+evnx sync --check
 
-# 2. Check for secrets in template
+# 2. Look for secrets in the template
 grep -iE "(sk_live|password|secret)" .env.example | grep -v "YOUR_\|placeholder\|demo" && echo "⚠️  Potential secrets found!"
 
-# 3. Validate naming conventions
-evnx sync --naming-policy error --dry-run
+# 3. Names sync would add follow UPPER_SNAKE_CASE (exit 2 names the first that does not)
+evnx sync --dry-run --naming-policy error
 
 # 4. Confirm .gitignore is correct
 git check-ignore .env  # Should output: .env
 
-# 5. Test onboarding flow (in fresh directory)
+# 5. Test the onboarding flow in a fresh clone
 mkdir /tmp/test-onboarding && cd /tmp/test-onboarding
 git clone <repo> .
-evnx sync --direction reverse  # Should work without errors
+evnx sync --direction reverse   # creates .env from the template
+evnx sync --check               # exit 0
 ```
+
+<Callout type="info">
+`--naming-policy error` checks the names sync would write: names new to the template,
+or all of them when it creates one. A name already in both files passes. With nothing
+to add, step 3 says `.env.example is up to date` and exits `0`.
+</Callout>
 
 ---
 
 ## Related guides
 
-- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automate these checks
-- [Security Best Practices](/guides/reference/concepts-security-model) — Protect team secrets
-- [Configuration Reference](/guides/reference/sync-configuration) — Advanced placeholder patterns
+- [CI/CD Integration](/guides/integrations/ci-cd-sync): automate these checks
+- [Security Best Practices](/guides/reference/concepts-security-model): protect team secrets
+- [Configuration Reference](/guides/reference/sync-configuration): placeholder patterns and `allow_actual`
 
 <Callout type="success" title="Team sync mastery">
-With these patterns, your team will never lose track of environment variables again. Sync early, sync often, and always preview with `--dry-run`.
+With these patterns your team keeps one list of variable names, and nobody's secrets
+in it. Preview with `--dry-run`, check with `--check`, and let the hook and CI catch
+the rest.
 </Callout>
-
-
----

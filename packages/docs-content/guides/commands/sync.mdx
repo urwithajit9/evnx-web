@@ -3,34 +3,46 @@ section: "commands"
 order: 3
 title: "evnx sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-03-09"
-excerpt: "Reference documentation for the evnx sync command: bidirectional sync, smart placeholders, and security features."
+updatedAt: "2026-10-25"
+excerpt: "Reference for evnx sync: keep .env and .env.example in step by name, gate CI with --check, and generate placeholders a template can safely carry."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["sync", "reference", "cli", "env", "security"]
-commands: ["init", "scan", "sync", "validate"]
-evnxVersion: "0.5.2"
+commands: ["add custom", "diff", "init", "scan", "spec init", "sync"]
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
 draft: false
 ---
 
-# evnx sync — Command Reference
-
-Keep `.env` and `.env.example` in perfect synchronization with bidirectional sync, smart placeholder generation, and built-in security guards.
+`evnx sync` keeps `.env` and `.env.example` aligned by variable **name**. Forward (the
+default) adds the names `.env` has to the template, with placeholder values; reverse adds
+the template's names to `.env`. It only ever adds: it never removes a variable and never
+changes a value that is already there. Comparing values is [`evnx diff`](/guides/commands/diff).
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
 </Prerequisites>
 
 <Callout type="warning">
-  <strong>Security Notice:</strong> The "add with actual values" option in forward sync can expose secrets if <code>.env.example</code> is committed to version control. This option:
-  <ul>
-    <li>Shows an explicit warning prompt before proceeding</li>
-    <li>Is automatically disabled when <code>--force</code> is used in CI environments</li>
-    <li>Logs a security audit message when selected</li>
-  </ul>
-  Always prefer placeholder values for template files.
+**Changed in 0.10.12 — check your scripts, CI jobs and hooks.**
+
+- **`--check` without `--direction` looks both ways.** A name only `.env.example` has is
+  drift too, exit `1`. Naming a direction keeps the one-way check, and that is the form
+  for CI and pre-commit hooks: `evnx sync --check --direction forward`. The shipped
+  `evnx-sync` hook runs exactly that.
+- **`--format json` gives the same verdict as the pretty output**, and a two-way report
+  adds `template_only`.
+- **No terminal, or `CI` set:** sync uses placeholder values and says so, on an existing
+  template and in reverse too, instead of failing with `IO error: not a terminal`.
+  `--placeholder` is deprecated and does what `--force` does.
+- **A misspelt key in a `--template-config` file, or an invalid `[sync] naming_policy`,
+  is exit `2`**, naming the accepted values. Both used to be ignored.
+- `--check` with an empty `.env` beside a populated template is exit `2`, not a pass.
+- Placeholders are chosen by **whole words** of the name: `SUPPORT_EMAIL` no longer gets
+  `8000`. `DEBUG=false` stays `false`. A URL placeholder follows the value's scheme.
+- Reverse into a new `.env` adds the names your spec requires, and no longer copies the
+  template's `# Generated from .env` header.
 </Callout>
 
 ---
@@ -41,116 +53,197 @@ Keep `.env` and `.env.example` in perfect synchronization with bidirectional syn
 evnx sync [OPTIONS]
 ```
 
-<Callout type="warning">
-**Before v0.5.0, `sync` could not be pointed at a file at all.** `.env` and `.env.example`
-were hardcoded, so keeping a template in step with `.env.production` was not expressible.
-`--env`, `--example` and `--env-name` are all new in v0.5.0.
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--env <PATH>` | `.env` | The environment file to sync from (forward) or into (reverse) |
+| `--example <PATH>` | `.env.example` | The template to sync into (forward) or from (reverse) |
+| `--env-name <NAME>` | — | Use `.env.<NAME>`; a name with no file is an error listing the environments there are |
+| `--direction <DIR>` | `forward` | `forward` fills the template, `reverse` fills `.env`. With `--check`, naming one makes the check one-way |
+| `-n`, `--dry-run` | off | Preview; writes nothing, asks nothing, exits `0` whatever it finds |
+| `--check` | off | Report the verdict through the [exit code](#exit-codes). Implies `--dry-run` |
+| `--format <FMT>` | `pretty` | `json` (requires `--check`): which names drifted. See [JSON output](#machine-readable-output) |
+| `-f`, `--force` | off | Skip the prompts and use placeholder values |
+| `--skip-without-env` | off | Forward only: with no `.env` and no spec to compare, skip (exit `0`) and say so. For pre-commit hooks, not CI |
+| `--template-config <PATH>` | — | A JSON file of placeholder rules: `patterns`, `default`, `allow_actual`. See [Sync configuration](/guides/reference/sync-configuration) |
+| `--naming-policy <P>` | `warn` | `warn`, `error` or `ignore` for names that are not `UPPER_SNAKE_CASE`; defaults to `[sync] naming_policy` in `.evnx.toml` |
+| `--placeholder` | off | **Deprecated**: does what `--force` does, with a notice |
+| `-v`, `--verbose` | off | More detail |
+| `-q`, `--quiet` | off | Print nothing on success; findings, warnings and errors still print |
+| `--no-color` | off | Plain output (as does `NO_COLOR`) |
+
+<Callout type="info">
+There are no `-d` or `-p` short flags. Earlier versions of this page listed them; the
+parser has never accepted them and answers `unexpected argument '-d' found`, exit `2`.
+Spell them out: `--direction`, and `--force` rather than `--placeholder`.
 </Callout>
 
-### Options reference
+### Directions
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--env` | `path` | `.env` | **v0.5.0+** — the environment file to sync from (forward) or into (reverse) |
-| `--example` | `path` | `.env.example` | **v0.5.0+** — the template to sync into (forward) or from (reverse) |
-| `--env-name` | `string` | — | **v0.5.0+** — Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
-| `--direction`, `-d` | `enum` | `forward` | Sync direction: `forward` (`.env` → `.env.example`) or `reverse` (`.env.example` → `.env`) |
-| `--placeholder`, `-p` | `bool` | `false` | Use placeholder values when **adding** variables to an existing `.env.example`. Creating the file from scratch uses placeholders regardless — see below. `--force` implies it |
-| `--dry-run`, `-n` | `bool` | `false` | Preview changes without writing to files. Always exits `0`, whatever it finds |
-| `--check` | `bool` | `false` | **v0.5.0+** — report whether the files are in step through the [exit code](#exit-codes). Implies `--dry-run`; never writes |
-| `--format` | `enum` | `pretty` | **v0.5.0+** — `json` reports *what* drifted, not only that something did. Requires `--check` |
-| `--skip-without-env` | `bool` | `false` | **v0.10.3+** — forward only: with no `.env` and nothing else to compare, skip (exit `0`) and say so on stderr. For pre-commit hooks on a fresh clone; not for CI |
-| `--force`, `-f` | `bool` | `false` | Skip interactive prompts; auto-use placeholders (safe for CI/CD) |
-| `--template-config` | `path` | — | Path to custom placeholder JSON config for regex-based pattern matching. Applies in both directions (**v0.10.3+**; reverse used to ignore it) |
-| `--naming-policy` | `enum` | `warn` | Handle non-standard variable names: `warn`, `error`, or `ignore` |
-| `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
-| `--help`, `-h` | `bool` | `false` | Display help information |
+| Value | Fills | Values written |
+|-------|-------|----------------|
+| `forward` | `.env.example` from `.env` | Placeholders, never `.env`'s values, except keys you list in `allow_actual` |
+| `reverse` | `.env` from `.env.example` | The template's own values; a placeholder only where the template's value is empty or is itself a placeholder. Names the spec requires are added too |
 
-### Direction values
+---
 
-| Value | Flow | Use case |
-|-------|------|----------|
-| `forward` | `.env` → `.env.example` | Update team template with new variables from your local environment |
-| `reverse` | `.env.example` → `.env` | Pull new variables from team template to your local environment |
+## Which form to use
 
-### Naming policy values
+| You want | Run | Exit `1` when |
+|----------|-----|---------------|
+| To update the template after adding a variable | `evnx sync` | never (it writes) |
+| To see what that would do | `evnx sync --dry-run` | never |
+| To check your own pair before a PR | `evnx sync --check` | either file has a name the other lacks |
+| A CI gate or a pre-commit hook | `evnx sync --check --direction forward` | `.env` has a name the template lacks, or, with no `.env`, the spec requires one the template lacks |
+| To fill a new or stale `.env` from the template | `evnx sync --direction reverse` | never (it writes) |
 
-| Policy | Behavior | Best for |
-|--------|----------|----------|
-| `warn` | Shows warning for non-`UPPERCASE_WITH_UNDERSCORES` names, continues | Local development (default) |
-| `error` | Fails immediately on non-standard names | CI/CD validation, strict teams |
-| `ignore` | No validation, silent | Legacy projects with unconventional naming |
-
-### Placeholder generation rules
-
-When adding variables with placeholders, evnx uses these built-in heuristics (customizable via `--template-config`):
-
-| Variable pattern | Generated placeholder |
-|-----------------|----------------------|
-| Contains `SECRET`, `KEY`, or `TOKEN` | `YOUR_KEY_HERE` |
-| Contains `PASSWORD` or `PASS` | `YOUR_PASSWORD_HERE` |
-| Contains `URL` + value starts with `postgresql://` | `postgresql://user:password@localhost:5432/dbname` |
-| Contains `URL` + value starts with `redis://` | `redis://localhost:6379/0` |
-| Contains `URL` + value starts with `http(s)://` | `https://your-api-url-here.com` |
-| Contains `URL` (other) | `YOUR_URL_HERE` |
-| Contains `PORT` | `8000` |
-| Contains `DEBUG` | `true` |
-| Contains `HOST` or `SERVER` | `localhost` |
-| Unmatched | `YOUR_VALUE_HERE` (or custom default from config) |
+The two-way check is for a developer's own pair: a stale name in the template and a
+`.env` that has not caught up both count. In CI and in a hook that is the wrong
+question. A teammate whose `.env` lacks a name the template already has should still be
+able to commit, so naming a direction makes the check one-way.
 
 ---
 
 ## Exit codes
 
-There are two contracts. Which one applies depends on whether you pass `--check`.
+One contract, in every mode:
 
-### Creating `.env.example` for the first time
+| Code | Meaning |
+|------|---------|
+| `0` | Done: files written, already up to date, a `--dry-run` preview (whatever it found), `--check` in sync, or a `--skip-without-env` skip |
+| `1` | **Under `--check` only**: out of sync. The message names the command that fixes each side |
+| `2` | **No verdict.** The file sync reads from is missing (`.env` forward, `.env.example` reverse) or a file will not parse; the template config or `[sync] naming_policy` is wrong; `--naming-policy error` refused a name; `allow_actual` lists a credential; or, under `--check`, there was nothing to compare or `.env` is empty beside a populated template |
 
-When `.env.example` does not exist, `evnx sync` creates it from `.env`.
+An exit `2` ends with a line beginning `No verdict:`, so a log cannot be mistaken for a
+clean run (an unknown flag, which the parser rejects before sync starts, prints usage
+instead):
 
-<Callout type="danger" title="v0.5.0 changed this default, because it leaked">
-**Before v0.5.0 this path copied `.env` verbatim** — real secrets included —
-unless you passed `--placeholder`. It then printed `✓ Created .env.example` and
-advised committing the file.
-
-The placeholder-versus-actual prompt, whose second option is labelled a security
-risk, guarded only the *other* path: adding variables to an example file that
-already existed. So every case was covered except the **first** `evnx sync` in a
-project — the one a getting-started guide tells you to run, and the one where
-`.env` most likely holds the values you just pasted in. `evnx scan` does not read
-`.env.example`, so nothing downstream caught it either.
-
-Now: placeholders by default. At a terminal you are asked and placeholders are
-the default answer; without one it uses them and says so. `--placeholder` and
-`--force` skip the question.
-
-If you do choose actual values, the next-steps text says the file is **not** safe
-to commit as written, instead of telling you to commit it.
-</Callout>
-
-### The contract is a source too
-
-**v0.5.0+.** When the project has a [contract](/guides/commands/spec), reverse
-sync adds variables declared in `[vars]`, not only those in `.env.example`:
-
-```console
-$ evnx validate
-  ✗  Missing required variable: ONLY_IN_SPEC
-
-$ evnx sync --direction reverse
-✓ Added 1 variables to .env
+```text
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
-Before this, the second command said *".env is up to date"* — `validate`
-enforcing a contract that `sync` could not satisfy.
+Answering "No, skip" at a prompt is exit `0`: nothing went wrong, you chose to add
+nothing. A plain `evnx sync` with an empty `.env` beside a populated template warns and
+copies nothing, exit `0`; only `--check` treats that as "could not verify".
 
-Only variables that are **required** and **apply to the file being synced** are
-added. An optional one being absent is permitted by the contract, and
-`environments` narrows it the same way it narrows `validate`.
+The three codes follow the shape `diff` and `grep` use, so a pipeline can tell a stale
+template from a broken run:
+
+```bash
+evnx sync --check --direction forward
+case $? in
+  0) echo "in sync" ;;
+  1) echo "::error::.env.example is missing a variable"; exit 1 ;;
+  2) echo "::error::evnx could not check the files"; exit 1 ;;
+esac
+```
 
 ---
 
-### Machine-readable — `--check --format json`
+## `--check`
+
+`--check` writes nothing and asks nothing. Without `--direction` it looks both ways:
+
+```bash
+evnx sync --check
+```
+
+```text
+  evnx sync  .env ↔ .env.example  (forward)
+
+
+┌─ Variables to Add ───────────────────────────────────────────────────────────┐
+│ Found 1 variable in .env missing from .env.example:                          │
+│   • STRIPE_WEBHOOK_SECRET                                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─ Only in .env.example ───────────────────────────────────────────────────────┐
+│ Found 1 variable in .env.example that .env does not have:                    │
+│   • LEGACY_FLAG                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+Preview:
+Target: .env.example (action: Add)
+
+  · STRIPE_WEBHOOK_SECRET = YOUR_KEY_HERE
+
+(dry-run: no files were modified)
+  Docs: https://docs.evnx.dev/cli/commands/sync
+
+✗ Out of sync.
+  · 1 variable in .env is missing from .env.example: run `evnx sync --direction forward` and commit .env.example.
+  · 1 variable in .env.example is not in .env: remove it from .env.example, or add it to .env with `evnx sync --direction reverse`.
+```
+
+Exit `1`. With `--direction forward` the same pair reports only the first of those two
+lines; with `--direction reverse`, only the names missing from `.env`.
+
+A missing `.env.example` is drift too, exit `1`: running `evnx sync` would create it,
+so every name in `.env` is reported as missing from it.
+
+### With no `.env`
+
+A fresh clone and a CI runner usually have a template and no `.env`. Then `--check`
+compares `.env.example` with the [spec](/guides/commands/spec): every required `[vars]`
+name in `.evnx.toml` must be declared in the template.
+
+```bash
+evnx sync --check --direction forward
+```
+
+```text
+  config    .evnx.toml
+
+  evnx sync  .env ↔ .env.example  (forward)
+
+· .env not found: checking .env.example against the spec ([vars] in .evnx.toml)
+✗ .env.example is missing 1 required variable(s):
+  • DATABASE_URL
+
+✗ Out of sync. Add them to .env.example and commit the result.
+```
+
+Exit `1`. Once the template declares them all, it prints
+`✓ .env.example declares every required variable (2)` and exits `0`. With no `.env`
+**and** no spec there is nothing to compare, and the answer is exit `2`, not a pass:
+
+```text
+Error: nothing to compare: .env does not exist, and .evnx.toml declares no required [vars] to check .env.example against.
+
+Create .env (`evnx sync --direction reverse`), declare the contract with `evnx spec init`, or — in a pre-commit hook, where a missing .env is expected — pass --skip-without-env.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+`--skip-without-env` turns that one case into an announced skip, exit `0`:
+
+```text
+· .env not found and no required [vars] to check .env.example against — nothing to check, skipped
+```
+
+It is for pre-commit hooks, where a missing `.env` is expected. Do not use it in CI: a
+gate must not pass on a check that never ran. A spec, when there is one, is still checked.
+
+With `--direction reverse` and no `.env`, every template name is missing from `.env`:
+exit `1`, listing them.
+
+### Empty `.env`
+
+`--check` with an empty `.env` beside a populated template is exit `2`. An empty file is
+far more likely a truncated download or the wrong directory than a pair in step:
+
+```text
+Error: .env has no variables, while .env.example has 1: evnx could not verify the pair.
+  An empty .env beside a populated template is far more likely a mistake — a truncated file, the wrong directory, a failed secret fetch — than a pair in step.
+```
+
+### Machine-readable output
+
+`--format json` requires `--check`. The verdict and the exit code are the same as the
+pretty output's. A two-way report carries `template_only`:
 
 ```bash
 evnx sync --check --format json
@@ -162,288 +255,440 @@ evnx sync --check --format json
   "direction": "forward",
   "env": ".env",
   "example": ".env.example",
-  "missing": ["DATABASE_URL", "REDIS_URL"],
-  "summary": { "missing": 2 }
+  "missing": [
+    "STRIPE_WEBHOOK_SECRET"
+  ],
+  "template_only": [
+    "LEGACY_FLAG"
+  ],
+  "summary": {
+    "missing": 1,
+    "template_only": 1
+  }
 }
 ```
 
-The exit code is unchanged — `0`, `1` or `2` exactly as below — so an existing gate
-keeps working and the JSON only adds detail. Keys are sorted, so two reports can be
-diffed meaningfully.
+With `--direction`, `missing` is the only list. With no `.env`, the report says what it
+compared against:
+
+```json
+{
+  "in_sync": false,
+  "direction": "forward",
+  "env": ".env",
+  "example": ".env.example",
+  "missing": [
+    "DATABASE_URL"
+  ],
+  "summary": {
+    "missing": 1
+  },
+  "compared_with": "spec"
+}
+```
+
+Only the report goes to stdout; the banner, notes and errors go to stderr. On exit `2`
+stdout is empty, so branch on the exit code before reading the file:
 
 ```bash
 evnx sync --check --format json > drift.json || true
-jq -r '.missing[]' drift.json        # which keys, for a PR comment
+jq -r '.missing[]' drift.json        # which names, for a PR comment
 ```
-
-<Callout type="warning">
-`--format json` **requires `--check`**. Without it `sync` edits files, and a
-machine-readable report of an edit already made is worth less than the edit.
-
-An unreadable `.env.example` still exits `2`, not `1` — a broken file is a different
-answer from a stale one, and a pipeline branching on the code must not confuse them.
-</Callout>
-
-
-### Default — `evnx sync`, `evnx sync --dry-run`
-
-| Code | Meaning |
-|------|---------|
-| `0` | The command completed. **This includes a `--dry-run` that found pending changes** |
-| `2` | The command could not run — a missing source file, an unparseable file, `--naming-policy error` refusing a name |
-
-`--dry-run` is a *preview*: the output is the product, and the exit code only says
-whether evnx ran. It will not fail your pipeline when `.env.example` is stale, which is
-why it is the wrong tool for a CI gate.
-
-<Callout type="warning">
-Before v0.10.3 every failure exited `1`, which under `--check` was also the code for
-"out of sync". Failures are `2` now, in both modes.
-</Callout>
-
-### With `--check` — **v0.5.0+**
-
-| Code | Meaning | What to do |
-|------|---------|------------|
-| `0` | ✅ In sync | nothing |
-| `1` | ⚠️ **Out of sync** | run `evnx sync` and commit the result |
-| `2` | 🚨 **Error** — a source file is missing, or a file will not parse | fix the repo or the evnx invocation |
-
-Three codes rather than two, because a pipeline needs to tell *"your template is stale"*
-from *"evnx could not run"*. They follow the shape `diff` and `grep` use:
-
-```text
-diff   same → 0    different → 1    trouble → 2
-grep   match → 0   no match  → 1    trouble → 2
-```
-
-The contract is **opt-in**. Without `--check`, exit codes are exactly as they were —
-adding `--check` is how you ask for the detailed answer, the same way
-`terraform plan -detailed-exitcode` works.
-
-<Callout type="info">
-**Absent target vs absent source.** If `.env.example` does not exist, `--check` returns
-`1` — running `evnx sync` would create it, so the files are simply out of step.
-
-If `.env` does not exist — the normal state of CI and of a fresh clone — **v0.10.3+**
-checks `.env.example` against the spec instead: every required `[vars]` name in
-`.evnx.toml` must be declared in the template, and `1` names the ones that are not.
-With no spec either, there is nothing to compare, and the answer is `2`. Add
-`--skip-without-env` where a missing `.env` is expected (a pre-commit hook): then
-"nothing to compare" is a skip, said on stderr, with exit `0`. Do not use it in CI —
-there, a check that compared nothing must not pass.
-</Callout>
 
 ---
 
-## Basic usage examples
+## Without a terminal
 
-### Forward sync (default)
-```bash
-# Update .env.example with new variables from .env
-# Interactive: choose placeholder vs actual values
-evnx sync
+When stdin or stderr is not a terminal (a pipeline, `2>log`, a git hook), or `CI` is set
+to anything but empty, `0` or `false`, sync does not prompt. It uses placeholder values
+and says why:
+
+```text
+· no terminal: adding with placeholder values
+✓ Added 2 variables to .env.example
 ```
 
-### Reverse sync
+```text
+· CI is set: adding with placeholder values
+```
+
+Reverse copies the template's values instead
+(`· no terminal: adding the template's values (placeholders where it has none)`), and
+creating a template says `· no terminal: creating .env.example with placeholder values`.
+`sync` reads `CI`, and so does `init` since v0.10.16.
+
+`--force` does the same at a terminal
+(`· Force mode: using placeholder values and skipping prompts`). `--placeholder` is
+deprecated and now means `--force`:
+
+```text
+! --placeholder is deprecated: it does what --force does (placeholder values, no prompt). Use --force.
+```
+
+---
+
+## Placeholder rules
+
+Forward sync writes a placeholder for every value, chosen by the variable's name. The
+name is split into **whole words** at every character that is not a letter or digit, so
+`PORT` matches `DB_PORT` but not `SUPPORT_EMAIL`. The first rule that matches wins:
+
+| # | The name… | Placeholder |
+|---|-----------|-------------|
+| 1 | is listed in `allow_actual` (template config) | the real value from `.env` |
+| 2 | matches a `patterns` entry (template config) | that pattern's placeholder |
+| 3 | has a word `SECRET`, `KEY`, `TOKEN` or `APIKEY` | `YOUR_KEY_HERE` |
+| 4 | has a word `PASSWORD`, `PASSWD`, `PASS` or `PWD` | `YOUR_PASSWORD_HERE` |
+| 5 | has a word `URL`, `URI` or `DSN` | by the value's scheme (below), else `YOUR_URL_HERE` |
+| 6 | has a word `PORT` | `8000` |
+| 7 | has a word `DEBUG` | the value itself when it is `true`/`false`, `1`/`0`, `yes`/`no` or `on`/`off`; otherwise `true` |
+| 8 | has a word `HOST`, `SERVER` or `HOSTNAME` | `localhost` |
+| 9 | anything else | `default` from the template config, else `YOUR_VALUE_HERE` |
+
+A URL placeholder keeps the value's scheme, with `user` and `password` as credentials:
+
+| Value starts with | Placeholder |
+|-------------------|-------------|
+| `postgres://` | `postgres://user:password@localhost:5432/dbname` |
+| `postgresql://` | `postgresql://user:password@localhost:5432/dbname` |
+| `mysql://` | `mysql://user:password@localhost:3306/dbname` |
+| `mongodb://` | `mongodb://user:password@localhost:27017/dbname` |
+| `mongodb+srv://` | `mongodb+srv://user:password@cluster.example.net/dbname` |
+| `amqp://` | `amqp://user:password@localhost:5672/` |
+| `amqps://` | `amqps://user:password@localhost:5671/` |
+| `redis://` | `redis://localhost:6379/0` |
+| `rediss://` | `rediss://localhost:6379/0` |
+| `http://`, `https://` | `https://your-api-url-here.com` |
+| any other scheme | `YOUR_URL_HERE` |
+
+From a real run:
+
+```text
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+MONGO_SRV_URL=mongodb+srv://user:password@cluster.example.net/dbname
+SENTRY_DSN=https://your-api-url-here.com
+WEIRD_URL=YOUR_URL_HERE
+DB_PORT=8000
+SUPPORT_EMAIL=YOUR_VALUE_HERE
+DEBUG=false
+PASSPORT_ID=YOUR_VALUE_HERE
+GITHUB_TOKEN=YOUR_KEY_HERE
+```
+
+`evnx add custom` writes the same placeholders. To change them for your project, write a
+[template config](/guides/reference/sync-configuration).
+
+---
+
+## Creating `.env.example` for the first time
+
+With no template, forward sync creates one from `.env`. At a terminal you choose:
+
+```text
+· .env.example not found, creating from .env
+Create .env.example with:
+> Placeholder values (recommended — safe to commit)
+  Actual values copied from .env  ! SECURITY RISK
+```
+
+Without a terminal, or with `--force`, it uses placeholders. The new file carries a
+two-line header and is created `0644`, because it is meant to be committed:
+
+```text
+# Generated from .env
+# Replace all placeholder values with real credentials
+
+APP_NAME=YOUR_VALUE_HERE
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+STRIPE_SECRET_KEY=YOUR_KEY_HERE
+DEBUG=false
+```
+
+If you do choose actual values, every key that holds a credential (by the same
+detectors `evnx scan` uses) is still written as a placeholder and named in a warning.
+The file is built from the parsed values, so `.env`'s comments are not carried over.
+
+---
+
+## Reverse: filling `.env`
+
 ```bash
-# Pull new variables from .env.example to .env
-# Interactive: choose placeholder vs prompt for real values
 evnx sync --direction reverse
 ```
 
-### Preview without changes
-```bash
-# See what would change before applying
-# Shows 🔒 for placeholders, ⚠️ for actual values
-# Exits 0 whether or not there are changes — use --check to gate on them
-evnx sync --dry-run
+With no `.env`, the template is copied into a new `.env`, created readable by you only
+(`0600`). Sync's own `# Generated from .env` header is replaced by one line naming where
+the file came from, and names the spec requires that the template lacks are added under
+their own heading:
+
+```text
+· .env not found, creating from .env.example
+✓ Created .env
+! Replace placeholder values with real credentials!
 ```
 
-### CI/CD mode (safe defaults)
-```bash
-# Skip prompts, always use placeholders, fail on naming issues
-# Actual values option is disabled for security
-evnx sync --force --naming-policy error
+```text
+# Created from .env.example by evnx sync
+
+APP_NAME=shop
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+STRIPE_SECRET_KEY=YOUR_KEY_HERE
+LOG_LEVEL=info
+
+# Added by evnx sync: required by [vars] in .evnx.toml
+SENTRY_DSN=YOUR_URL_HERE
 ```
 
-### Gate a pipeline on a stale template — **v0.5.0+**
-```bash
-# Exits 1 if .env.example is missing variables, 2 if evnx could not check.
-# Writes nothing.
-evnx sync --check
+With an existing `.env`, the missing names are appended under `# Added by evnx sync`
+with the **template's own values**. A placeholder is generated only where the template's
+value is empty or is itself a placeholder, so working defaults such as `FEATURE_FLAG=true`
+arrive intact:
+
+```text
+APP_NAME=bob-shop
+
+# Added by evnx sync
+FEATURE_FLAG=true
+OPTIONAL_CONFIG=YOUR_VALUE_HERE
+NEW_SERVICE_URL=https://analytics.example.com
 ```
 
-Handling all three answers:
+### The contract is a source too
 
-```bash
-evnx sync --check
-case $? in
-  0) echo "in sync" ;;
-  1) echo "::error::.env.example is stale — run 'evnx sync' and commit"; exit 1 ;;
-  2) echo "::error::evnx could not check the files"; exit 1 ;;
-esac
+When the project has a [contract](/guides/commands/spec), reverse adds the names
+declared **required** in `[vars]` that apply to the file being synced, not only the
+template's:
+
+```text
+┌─ Missing Variables ──────────────────────────────────────────────────────────┐
+│ Found 1 variable missing from .env:                                          │
+│   • ONLY_IN_SPEC  (required by [vars] in .evnx.toml)                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+· Force mode: adding the template's values (placeholders where it has none), skipping prompts
+✓ Added 1 variable to .env
 ```
 
-### Custom placeholder config
-```bash
-# Use team-specific placeholder patterns with regex
-# Example placeholders.json:
-# {
-#   "patterns": {
-#     "AWS_.*": "aws_placeholder",
-#     "STRIPE_.*": "sk_test_xxx"
-#   },
-#   "default": "TEAM_DEFAULT_VALUE"
-# }
-evnx sync --template-config .evnx/placeholders.json
-```
-
-### Strict naming validation
-```bash
-# Fail if any variable doesn't match UPPERCASE_WITH_UNDERSCORES
-evnx sync --naming-policy error
-```
+An optional variable being absent is permitted by the contract, so it is not added.
 
 ---
 
-## Interactive mode behavior
+## Preview: `--dry-run`
 
-### Forward sync prompts
-When new variables are found in `.env` but not `.env.example`:
-
+```bash
+evnx sync --dry-run
 ```
-┌─ Variables to Add ─────────────────────────────────────┐
-│ Found 2 variable(s) in .env missing from .env.example:│
-│   • NEW_API_KEY                                       │
-│   • DATABASE_URL                                      │
-└────────────────────────────────────────────────────────┘
 
-Add these to .env.example?
-❯ Yes, add with placeholder values (recommended)
-  Yes, add with actual values ⚠️ SECURITY RISK
+```text
+Preview:
+Target: .env.example (action: Add)
+
+  · NEW_API_KEY = YOUR_KEY_HERE
+  · FEATURE_BETA = YOUR_VALUE_HERE
+
+(dry-run: no files were modified)
+```
+
+Each row is marked with one of two one-column symbols:
+
+| Symbol | Meaning |
+|--------|---------|
+| `·` | A placeholder sync generated |
+| `!` | A value written as it is: in reverse, the template's own value |
+
+A reverse preview that adds placeholders ends with
+`! Remember to replace placeholders with real values`.
+
+<Callout type="warning">
+In 0.10.12 a value written through `allow_actual` is shown with `·`, as if it were a
+placeholder, although the real value is what will be written. Read the value column,
+not only the symbol.
+</Callout>
+
+`--dry-run` exits `0` whatever it finds; the output is the product. To gate on drift,
+use `--check`.
+
+---
+
+## Interactive prompts
+
+### Forward, existing template
+
+```text
+┌─ Variables to Add ───────────────────────────────────────────────────────────┐
+│ Found 2 variables in .env missing from .env.example:                         │
+│   • NEW_API_KEY                                                              │
+│   • DATABASE_URL                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Add these to .env.example?:
+> Yes, add with placeholder values (recommended)
+  Yes, add with actual values ! SECURITY RISK
   Let me choose individually
   No, skip
 ```
 
-### Reverse sync prompts
-When new variables are found in `.env.example` but not `.env`:
+Next comes `Add a comment explaining these variables? [Y/n]`; the comment is written above
+the block it describes. The block is headed `# Synced from .env`.
 
+Choosing actual values asks again (`Are you absolutely sure you want to add ACTUAL
+VALUES? [y/N]`). A credential is still kept out, and the run says which ones:
+
+```text
+! 1 kept out of .env.example: it holds a credential, written as a placeholder
+  • STRIPE_SECRET_KEY — Sensitive config key: STRIPE_SECRET_KEY
+[AUDIT] actual values written to .env.example for: LOG_LEVEL
+✓ Updated .env.example (+2 variables)
 ```
-┌─ Missing Variables ────────────────────────────────────┐
-│ Found 2 variable(s) in .env.example missing from .env:│
-│   • NEW_FEATURE_FLAG                                  │
-│   • OPTIONAL_CONFIG                                   │
-└────────────────────────────────────────────────────────┘
 
-Add to .env?
-❯ Yes, with placeholder values
+That block is headed `# Synced from .env [! ACTUAL VALUES]`.
+
+### Reverse
+
+```text
+┌─ Missing Variables ──────────────────────────────────────────────────────────┐
+│ Found 2 variables missing from .env:                                         │
+│   • FEATURE_FLAG                                                             │
+│   • ANALYTICS_KEY                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Add to .env?:
+> Yes, with the template's values (placeholders where it has none)
   Yes, prompt me for real values
   Let me choose individually
   No, skip
 ```
 
+"Prompt me" asks for each value, offering the template's as the default:
+`Value for FEATURE_FLAG [true]:`.
+
 ---
 
-## Security features
+## Security
 
-### File permissions check
-On Unix systems, evnx warns if `.env` has overly permissive permissions:
+### Actual values and the audit line
 
-```
-⚠️ .env has permissive permissions (0o664). Consider: chmod 600 .env
-ℹ️ Overly permissive .env files may expose secrets to other users
-```
+A value from `.env` reaches the template only two ways: the interactive "actual values"
+choice, and `allow_actual` in a [template config](/guides/reference/sync-configuration#allow_actual).
+Both refuse credentials. The interactive choice writes them as placeholders and names
+them; `allow_actual` refuses the whole run, exit `2`, nothing written.
 
-**Recommendation**: Always use `chmod 600 .env` to restrict access to owner only.
+The interactive choice prints one line to **stderr**, with or without `--verbose`, and
+`-q` does not hide it:
 
-### Atomic file writes
-All file modifications use atomic write operations:
-1. Write to temporary file in same directory
-2. Sync to disk with `fsync`
-3. Atomic rename to target path
-
-This prevents file corruption from interrupted operations or power loss.
-
-### Force mode safety
-When `--force` is used:
-- Interactive prompts are skipped entirely
-- Forward: placeholder values are used, except for keys you list in
-  `allow_actual` in a `--template-config` file. If one of those holds a
-  credential, the whole run is refused — exit 2, nothing written
-- Reverse (**v0.10.3+**): the template's own values are copied; a placeholder is
-  generated only where the template has none
-- Suitable for CI/CD pipelines where non-interactive execution is required
-
-### Audit logging
-Whenever real values are written into `.env.example` — through the interactive
-"actual values" choice or `allow_actual` — one line goes to stderr, with or
-without `--verbose` (**v0.10.3+**; it was verbose-only):
-```
-[AUDIT] actual values written to .env.example for: APP_NAME, LOG_LEVEL
+```text
+[AUDIT] actual values written to .env.example for: LOG_LEVEL
 ```
 
-A credential is never among them, by the same detectors `evnx scan` uses: the
-interactive choice writes it as a placeholder and names it in a warning, and
-`allow_actual` refuses the whole run (exit 2, nothing written).
+It is a line in the run's output, not a log kept anywhere else.
+
+<Callout type="warning">
+In 0.10.12, values written through `allow_actual` print **no** `[AUDIT]` line, and the
+run still says it used placeholder values. The values are checked for credentials
+before anything is written; only the record is missing. To see what `allow_actual`
+wrote, read the template.
+</Callout>
+
+### Permissions and writes
+
+- A `.env` other users can read gets one warning, worded as everywhere else in evnx:
+
+  ```text
+  ! .env is readable by other users (mode 644)
+       →  chmod 600 .env
+  ```
+
+- A new `.env` is created `0600`, a new `.env.example` `0644`. An existing file keeps
+  the mode you gave it.
+- Every write goes to a temporary file beside the target and is renamed into place, so
+  an interrupted run leaves the old file intact.
+- A symlink is written through to its target, and the link stays:
+  `· wrote through .env.example -> real/tmpl`. The `--dry-run` preview names the target
+  too (`Target: .env.example -> real/tmpl`).
 
 ---
 
 ## Environment variables
 
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored output for terminals or log files |
+| Variable | Effect |
+|----------|--------|
+| `CI` | Set to anything but empty, `0` or `false`: no prompts, placeholder values, and the output says `CI is set`. Read by `sync` only |
+| `NO_COLOR` | Plain output, as `--no-color` |
 
 ---
 
 ## Troubleshooting
 
-### ".env file not found" error
-```
+### `.env` not found
+
+```text
 ✗ File not found: .env
 
-┌─ 💡 Getting Started ─────────────────────────────────┐
-│ It looks like this project hasn't been initialized   │
-│ yet. To create .env and .env.example files, run:     │
-│                                                      │
-│ $ evnx init                                          │
-└──────────────────────────────────────────────────────┘
+┌─ Getting started ────────────────────────────────────────────────────────────┐
+│ It looks like this project hasn't been initialized yet.                      │
+│                                                                              │
+│ To create .env and .env.example files, run:                                  │
+│                                                                              │
+│ $ evnx init                                                                  │
+│                                                                              │
+│ Or if you have an existing .env file, place it in this directory and try ... │
+└──────────────────────────────────────────────────────────────────────────────┘
+…
+Error: .env not found - run 'evnx init' to get started
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
-**Solution**: Run `evnx init` to create template files, or copy your existing `.env` to the project directory.
+Exit `2`. Run `evnx init`, put your `.env` in the directory, or, if a template exists,
+create `.env` from it with `evnx sync --direction reverse`. Under `--check`, a missing
+`.env` means the [spec comparison](#with-no-env) instead.
 
-### ".env.example not found" in reverse sync
-```
+### `.env.example` not found (reverse)
+
+```text
 ✗ File not found: .env.example
-
-┌─ 💡 Getting Started ─────────────────────────────────┐
-│ The template file .env.example is missing.           │
-│ To create it, either:                                │
-│ 1. Run 'evnx init' to generate from a blueprint, OR │
-│ 2. Create .env.example manually with your variables │
-└──────────────────────────────────────────────────────┘
+…
+Error: .env.example not found - run 'evnx init' or create it manually
 ```
 
-**Solution**: Run `evnx init` or create `.env.example` manually with variable names (values can be placeholders).
+Exit `2`. Run `evnx init`, or create the template by hand with the variable names.
 
-### Non-standard variable name warnings
+### A misspelt template-config key
+
+```text
+Error: tc.json has a key evnx does not read: `allow_actaul` (did you mean `allow_actual`?)
+  Accepted keys: $schema, description, patterns, default, allow_actual, naming_convention.
+  Nothing was written: a misspelt key would leave the setting it names off.
 ```
-⚠️ Variable 'myCamelCaseVar' doesn't follow convention (UPPERCASE_WITH_UNDERSCORES)
+
+Exit `2`. Before 0.10.12 the key was ignored, so the setting it named was silently off.
+
+### Non-standard variable names
+
+```text
+! Variable 'myCamelVar' doesn't follow convention (UPPERCASE_WITH_UNDERSCORES)
 ```
 
-**Solution**: Rename to `MY_CAMEL_CASE_VAR`, or use `--naming-policy ignore` for legacy projects.
+A warning by default. With `--naming-policy error` it stops the run, exit `2`:
 
-### Placeholder not matching expected pattern
-If a variable like `DATABASE_URL` gets `YOUR_URL_HERE` instead of a PostgreSQL template:
+```text
+Error: Non-standard variable name 'myCamelVar'. Expected: UPPERCASE_WITH_UNDERSCORES
+```
 
-**Check**: The original value in `.env` must start with `postgresql://` (not just `postgres://`) to trigger the specialized template.
+The policy covers the names sync would **write**: the ones new to the template, or every
+name when it creates one. Names already in both files are not checked. Rename the
+variable, or use `--naming-policy ignore` for a legacy project.
 
-**Fix**: Update the value format, or use `--template-config` to define custom patterns:
+### A URL gets `YOUR_URL_HERE`
+
+Either the value's scheme is not one sync knows (see the [table](#placeholder-rules)),
+or the name has no `URL`, `URI` or `DSN` word (`DATABASEURL` is one word). Name a
+placeholder for it in a template config:
+
 ```json
 {
   "patterns": {
-    "DATABASE_URL": "postgresql://user:pass@localhost:5432/mydb"
+    "^DATABASE_URL$": "postgresql://user:pass@localhost:5432/mydb"
   }
 }
 ```
@@ -452,15 +697,8 @@ If a variable like `DATABASE_URL` gets `YOUR_URL_HERE` instead of a PostgreSQL t
 
 ## See also
 
-- [Sync Basics](/guides/getting-started/sync-basic) — Learn sync step-by-step with examples
-- [Team Collaboration](/guides/use-cases/team-collaboration) — Multi-developer workflows and merge strategies
-- [CI/CD Integration](/guides/integrations/ci-cd-sync) — Automation setup for GitHub Actions, GitLab CI, etc.
-- [Configuration Reference](/guides/reference/sync-configuration) — Advanced placeholder config and pattern syntax
-- [Preventing Secret Leaks](/guides/use-cases/prevent-secret-leaks) — Protecting secrets in environment files
-
-
-
-
-
-
-
+- [Sync Basics](/guides/getting-started/sync-basic): sync step by step
+- [Team Collaboration](/guides/use-cases/team-collaboration): onboarding, adding a variable, review
+- [CI/CD Integration](/guides/integrations/ci-cd-sync): the gate in GitHub Actions, GitLab CI and pre-commit
+- [Sync configuration](/guides/reference/sync-configuration): `patterns`, `default`, `allow_actual`
+- [Preventing Secret Leaks](/guides/use-cases/prevent-secret-leaks): keeping secrets out of committed files

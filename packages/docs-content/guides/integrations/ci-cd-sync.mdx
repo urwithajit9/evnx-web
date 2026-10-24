@@ -3,27 +3,25 @@ section: "integrations"
 order: 3
 title: "CI/CD Integration for Sync Validation"
 publishedAt: "2026-03-06"
-updatedAt: "2026-03-06"
-excerpt: "Automate evnx sync validation in GitHub Actions, GitLab CI, and pre-commit hooks."
+updatedAt: "2026-10-25"
+excerpt: "Check .env.example in GitHub Actions, GitLab CI and pre-commit hooks with evnx sync --check: the one-way form for automation, the spec comparison when CI has no .env, and the JSON report."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["sync", "ci-cd", "github-actions", "gitlab", "automation", "validation"]
-commands: ["doctor", "sync"]
-evnxVersion: "0.5.2"
+commands: ["doctor", "spec", "spec init", "sync"]
+evnxVersion: "0.10.18"
 prerequisites:
   - commands/sync
   - getting-started/sync-basic
 draft: false
 ---
 
-# CI/CD Integration for Sync Validation
-
 <Callout type="tip" title="Why automate sync checks?">
-Automating `evnx sync` in CI/CD ensures:
-- `.env.example` stays up to date with code changes
-- No secrets accidentally committed to templates
-- Naming conventions enforced across the team
-- New team members can onboard reliably
+Automating `evnx sync --check` ensures:
+- `.env.example` declares every variable the code needs
+- Placeholder rules and naming conventions are enforced across the team
+- A broken template config fails the pipeline, not the next developer's sync
+- New team members can onboard from the template reliably
 </Callout>
 
 <Prerequisites>
@@ -33,57 +31,74 @@ Automating `evnx sync` in CI/CD ensures:
 
 ---
 
-## Core CI flags for automation
-
-When using `evnx sync` in CI/CD, always include these flags:
-
-| Flag | Purpose | Example |
-|------|---------|---------|
-| `--check` | **v0.5.0+** — write nothing, and report the verdict through the exit code | `--check` |
-| `--force` | Skip interactive prompts | `--force` |
-| `--dry-run` | Preview without writing. ⚠️ Always exits `0` — not a gate | `--dry-run` |
-| `--naming-policy error` | Fail on non-standard names | `--naming-policy error` |
-| `--template-config` | Use team placeholder config | `--template-config .evnx/placeholders.json` |
-
-**Base command for CI — v0.5.0+:**
+## The command for automation
 
 ```bash
-evnx sync --direction forward --check --naming-policy error
+evnx sync --check --direction forward
 ```
 
-`--check` implies `--dry-run`, so `--force` is no longer needed to get past the interactive
-prompt.
+| Flag | Why |
+|------|-----|
+| `--check` | Writes nothing, asks nothing, and reports the verdict through the exit code |
+| `--direction forward` | One-way: fail only on a name the template lacks. Without it the check is two-way, and a `.env` that has not caught up with the template fails too. That is right on a developer's own machine and wrong in a hook or a pipeline |
+| `--naming-policy error` | Optional: stop on a name sync would write that is not `UPPER_SNAKE_CASE` |
+| `--template-config FILE` | Optional: load your placeholder rules, so a broken file fails here |
+| `--format json` | Optional: say *which* names drifted, on stdout |
 
-<Callout type="warning">
-**If you are on v0.4.0 or earlier, there is no working gate.** The command this page used
-to recommend — `evnx sync --direction forward --force --dry-run --naming-policy error` —
-exits `0` whether or not `.env.example` is stale, so any `if !` around it can never fire.
-Upgrade to v0.5.0 for `--check`; until then, treat sync validation as advisory and read the
-output rather than the exit code.
-</Callout>
+`--force` and `--dry-run` do not belong in a gate: `--check` already never prompts or
+writes, and `--dry-run` exits `0` whatever it finds.
 
-### Exit codes under `--check`
+### Exit codes
 
 | Code | Meaning |
 |------|---------|
 | `0` | In sync |
-| `1` | Out of sync — run `evnx sync` and commit the result |
-| `2` | Could not run — a file will not parse, or there was nothing to compare |
+| `1` | Out of sync: the message names the command that fixes it |
+| `2` | No verdict: a file will not parse, the config is wrong, or there was nothing to compare |
 
-⚠️ **CI usually has no `.env`.** Since v0.10.3, `--check` then checks `.env.example`
-against the required `[vars]` in `.evnx.toml`, and `1` names any it does not declare.
-With no `.env` and no spec there is nothing to compare, and the answer is `2` — not a
-pass. (`--skip-without-env` turns that into an announced skip; it is meant for
-pre-commit hooks, not for CI.)
-
-Three rather than two, so a pipeline can distinguish a stale template from a broken run.
 Full detail in the [`evnx sync` reference](/guides/commands/sync#exit-codes).
+
+### CI usually has no `.env`
+
+A runner checks out the repository, and `.env` is gitignored. `--check` then compares
+`.env.example` with the **spec**: every required `[vars]` name in `.evnx.toml` must be in
+the template.
+
+With no spec either there is nothing to compare, and the answer is exit `2`, not a pass:
+
+```text
+Error: nothing to compare: .env does not exist, and .evnx.toml declares no required [vars] to check .env.example against.
+```
+
+So a CI gate needs a spec. Generate one from the template, review it, and commit it:
+
+```bash
+evnx spec init
+```
+
+```text
+✓ wrote 3 variable(s) to .evnx.toml
+```
+
+From then on, the gate fails when someone adds a required variable to the spec and
+forgets the template:
+
+```text
+· .env not found: checking .env.example against the spec ([vars] in .evnx.toml)
+✗ .env.example is missing 1 required variable(s):
+  • DATABASE_URL
+
+✗ Out of sync. Add them to .env.example and commit the result.
+```
+
+`--skip-without-env` would turn "nothing to compare" into a pass. It exists for
+pre-commit hooks on a fresh clone; do not use it in CI.
 
 ---
 
 ## GitHub Actions
 
-### Basic sync validation
+### Basic check
 
 ```yaml
 # .github/workflows/env-sync.yml
@@ -101,34 +116,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install evnx
-        run: cargo install evnx --all-features
-
       - name: Check .env.example is up to date
         run: |
-          evnx sync \
-            --direction forward \
-            --check \
+          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.12 \
+            sync --check --direction forward \
             --naming-policy error \
             --template-config .evnx/placeholders.json
 ```
 
-`--check` fails the step by itself, so no `git diff` afterwards is needed — and the old
-version of this example could not have worked: `--dry-run` writes nothing, so
-`git diff --quiet .env.example` was always quiet and the gate never fired.
+The [container image](/guides/getting-started/installation) needs no install step, and
+pinning its version keeps the gate from changing under you. The check only reads files,
+so it needs no `--user`.
 
 To report the two failure modes differently:
 
 ```yaml
       - name: Check .env.example is up to date
         run: |
-          evnx sync --direction forward --check --naming-policy error
+          set +e
+          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.12 \
+            sync --check --direction forward
           case $? in
             0) ;;
-            1) echo "::error::.env.example is stale — run 'evnx sync' and commit"; exit 1 ;;
-            2) echo "::error::evnx could not check the files"; exit 1 ;;
+            1) echo "::error::.env.example is missing a variable — run 'evnx sync' and commit it"; exit 1 ;;
+            *) echo "::error::evnx could not check the files"; exit 1 ;;
           esac
 ```
+
+`set +e` matters: GitHub's default shell stops at the first failing command, so without
+it the `case` never runs.
+
+### Name the missing variables in the log
+
+```yaml
+      - name: Check .env.example is up to date
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.12 \
+            sync --check --direction forward --format json > drift.json
+          status=$?
+          if [ "$status" -eq 1 ]; then
+            jq -r '.missing[] | "::error::.env.example is missing \(.)"' drift.json
+          fi
+          exit "$status"
+```
+
+Only the report goes to stdout; the banner and any error go to stderr, so `drift.json`
+is clean JSON. On exit `2` it is empty.
 
 ### Block secrets in .env.example
 
@@ -143,59 +177,38 @@ To report the two failure modes differently:
           fi
 ```
 
-### Upload diagnostic report
-
-```yaml
-      - name: Generate sync report
-        if: failure()
-        run: |
-          evnx sync --direction forward --verbose --dry-run > sync-report.txt
-
-      - name: Upload report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sync-diagnostics
-          path: sync-report.txt
-```
-
 ---
 
 ## GitLab CI
-
-### Basic pipeline
 
 ```yaml
 # .gitlab-ci.yml
 env-sync:
   stage: test
-  image: rust:latest
+  image:
+    name: ghcr.io/urwithajit9/evnx:0.10.12
+    entrypoint: [""]
   script:
-    - cargo install evnx
-    - evnx sync \
-        --direction forward \
-        --force \
-        --dry-run \
-        --naming-policy error \
-        --template-config .evnx/placeholders.json
-    - git diff --quiet .env.example || (echo ".env.example out of sync!" && exit 1)
+    - evnx sync --check --direction forward --naming-policy error --template-config .evnx/placeholders.json
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
 ```
 
-### Collect diagnostics on failure
+The image's entrypoint is `evnx` itself; `entrypoint: [""]` gives GitLab the shell it
+runs `script:` in. The check fails the job by itself; there is no `git diff` to add, since
+`--check` never writes.
+
+To print the drifted names in the job log as well:
 
 ```yaml
 env-sync-report:
   stage: test
-  image: rust:latest
+  image:
+    name: ghcr.io/urwithajit9/evnx:0.10.12
+    entrypoint: [""]
   script:
-    - cargo install evnx
-    - evnx sync --direction forward --verbose --dry-run > sync-report.txt 2>&1 || true
-  artifacts:
-    paths: [sync-report.txt]
-    when: always
+    - evnx sync --check --direction forward --format json
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 ```
@@ -204,231 +217,149 @@ env-sync-report:
 
 ## Pre-commit hooks
 
-### Local hook (per-developer)
+### The shipped hook
+
+evnx ships a hook for the [pre-commit](https://pre-commit.com) framework:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/urwithajit9/evnx
+    rev: v0.10.12
+    hooks:
+      - id: evnx-sync
+```
+
+It runs `evnx sync --check --direction forward --skip-without-env`:
+
+- **Your `.env` has a name the template lacks**: the commit stops, exit `1`, and the
+  message names the fix: run `evnx sync --direction forward` and commit `.env.example`.
+- **The template has a name your `.env` lacks**: the commit goes through. You have not
+  pulled a teammate's variable into your `.env` yet; that is not a reason to block you.
+- **A fresh clone with no `.env`**: if `.evnx.toml` has a spec, the template is checked
+  against it; if not, the hook says
+  `nothing to check, skipped` and exits `0`, so a new contributor's first commit is not
+  blocked.
+
+<Callout type="info" title="Changed in 0.10.12">
+This hook used to run `evnx sync --direction forward --placeholder`. pre-commit gives a
+hook no terminal, so on any drift it failed with `IO error: not a terminal`, and on a
+clone with no `.env` it failed `file not found`. It now checks instead of writing.
+
+The writing variant is `evnx-sync-fix` (`evnx sync --force --skip-without-env`): it adds
+missing names to `.env.example` with placeholder values. pre-commit stops a commit when a
+hook changes a file, so stage the updated template and commit again.
+</Callout>
+
+### A local hook
+
+Without the framework, the same check in `.git/hooks/pre-commit`:
 
 ```bash
 #!/bin/bash
 # .git/hooks/pre-commit
 
-if git diff --cached --name-only | grep -qE "^(\.env|\.env\.example)"; then
-
-  if git diff --cached --name-only | grep -q "^\.env$"; then
-    echo "🚫 .env should not be committed!"
-    echo "Add it to .gitignore or remove from staging:"
-    echo "  git reset .env"
-    exit 1
-  fi
-
-  if git diff --cached --name-only | grep -q "^\.env\.example$"; then
-    echo "🔍 Validating .env.example changes..."
-
-    if ! evnx sync --direction forward --check 2>/dev/null; then
-      echo "⚠️  Sync validation failed. Run:"
-      echo "  evnx sync --direction forward"
-      exit 1
-    fi
-  fi
+if git diff --cached --name-only | grep -qx "\.env"; then
+  echo "🚫 .env should not be committed!"
+  echo "Remove it from staging:  git reset .env"
+  exit 1
 fi
 
-exit 0
+evnx sync --check --direction forward --skip-without-env || exit 1
 ```
 
-### Shared hook via pre-commit framework
-
-```yaml
-# .pre-commit-config.yaml
-repos:
-  - repo: local
-    hooks:
-      - id: env-sync-check
-        name: Environment Sync Validation
-        entry: bash -c 'evnx sync --direction forward --check --naming-policy error'
-        language: system
-        pass_filenames: false
-        files: '^(\.env\.example|\.evnx/placeholders\.json)$'
-```
-
----
-
-## JSON output for advanced parsing
-
-<Callout type="warning">
-**Not implemented.** `EVNX_OUTPUT_JSON=1` is honoured by `evnx doctor` only. Setting it on
-`evnx sync` changes nothing, so the `jq` recipes this section used to carry —
-`EVNX_OUTPUT_JSON=1 evnx sync --dry-run --force | jq '.changes | length'` — pipe
-human-readable text into `jq` and fail with a parse error.
-
-The envelope below is kept as the intended shape, not as something you can use today.
-Until it exists, **`--check`'s exit code is the supported machine interface** for sync.
-</Callout>
-
-The planned output:
-
-```json
-{
-  "direction": "forward",
-  "dry_run": true,
-  "changes": [
-    {
-      "file": ".env.example",
-      "action": "add",
-      "variables": [
-        {"key": "NEW_API_KEY", "placeholder": "YOUR_KEY_HERE"}
-      ]
-    }
-  ],
-  "warnings": [],
-  "errors": []
-}
-```
-
-### What to use instead, today
-
-```bash
-evnx sync --direction forward --check
-case $? in
-  0) echo "in sync" ;;
-  1) echo "stale — run 'evnx sync --direction forward' and commit" ; exit 1 ;;
-  2) echo "evnx could not check the files" ; exit 1 ;;
-esac
-```
-
-`evnx doctor` does support the JSON envelope, if you need machine-readable output for the
-surrounding checks:
-
-```bash
-EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
-```
+Errors stay visible: a hook that hides stderr also hides *why* it stopped the commit.
 
 ---
 
 ## Advisory vs blocking modes
 
-### Blocking mode (fail pipeline on issues)
+### Blocking (fail the pipeline)
 
 ```bash
-evnx sync --check --naming-policy error
+evnx sync --check --direction forward --naming-policy error
 ```
 
-Pipeline fails if `.env.example` is out of sync.
-
-### Advisory mode (report but don't fail)
+### Advisory (report, never fail)
 
 ```bash
-evnx sync --check --naming-policy error || true
-```
-
-Or filter output for logging only:
-
-```bash
-evnx sync --dry-run 2>&1 | grep -E "✗|⚠️" >> deploy-log.txt
+evnx sync --check --direction forward --format json || true
 ```
 
 <Callout type="tip" title="When to use advisory mode">
 Use advisory mode for:
-- Initial rollout of sync checks
-- Legacy projects with many violations
+- The first week of a rollout
+- Legacy projects with many existing violations
 - Debugging why a pipeline is failing
 
-Switch to blocking mode once the team is comfortable with the workflow.
+Switch to blocking once the team is used to the workflow.
 </Callout>
 
 ---
 
 ## Multi-service repositories
 
-For monorepos with multiple services:
+For monorepos with one template per service:
 
 ```bash
+failed=0
 for dir in services/*/; do
   echo "🔍 Checking $dir..."
-  (cd "$dir" && evnx sync --direction forward --check) || \
-    echo "❌ Issues in $dir" >> sync-errors.txt
+  (cd "$dir" && evnx sync --check --direction forward) || failed=$((failed+1))
 done
 
-if [ -s sync-errors.txt ]; then
-  echo "🚫 Sync validation failed for some services:"
-  cat sync-errors.txt
+if [ "$failed" -gt 0 ]; then
+  echo "🚫 $failed service(s) failed sync validation"
   exit 1
 fi
 ```
 
-**GitHub Actions example:**
-
-```yaml
-      - name: Check all services
-        run: |
-          ERRORS=0
-          for dir in services/*/; do
-            echo "Checking $dir..."
-            (cd "$dir" && evnx sync --direction forward --check) || ERRORS=$((ERRORS+1))
-          done
-          if [ $ERRORS -gt 0 ]; then
-            echo "::error ::$ERRORS service(s) failed sync validation"
-            exit 1
-          fi
-```
+Each service with no `.env` in CI needs its own spec (`.evnx.toml` beside its template),
+or its check exits `2`.
 
 ---
 
 ## Troubleshooting CI failures
 
+### Exit 2: "nothing to compare"
+
+CI has no `.env` and `.evnx.toml` declares no required `[vars]`. Commit a spec
+(`evnx spec init`, then review it). Do not add `--skip-without-env` to the CI command:
+it makes the gate pass without checking anything.
+
+### Exit 2 from the template config
+
+```text
+Error: tc.json has a key evnx does not read: `allow_actaul` (did you mean `allow_actual`?)
+```
+
+Since 0.10.12 a misspelt key, a missing file or an invalid pattern in `--template-config`
+fails, in CI as locally. Fix the file; see the
+[configuration reference](/guides/reference/sync-configuration).
+
 ### Command not found: evnx
 
-**Fix:** Ensure evnx is installed in the CI environment:
-
-```yaml
-- name: Install evnx
-  run: cargo install evnx --all-features
-```
-
-Or use a pre-built binary:
+Use the container image as above, or install a release binary on the runner. The archive
+holds one file named after its target:
 
 ```yaml
 - name: Install evnx
   run: |
-    curl -L https://github.com/your-org/evnx/releases/latest/download/evnx-x86_64-unknown-linux-gnu.tar.gz | tar xz
-    sudo mv evnx /usr/local/bin/
+    curl -fsSL -o evnx.tar.gz https://github.com/urwithajit9/evnx/releases/download/v0.10.12/evnx-x86_64-unknown-linux-musl.tar.gz
+    tar -xzf evnx.tar.gz
+    sudo install -m 0755 evnx-x86_64-unknown-linux-musl /usr/local/bin/evnx
+    evnx --version
 ```
 
-### File not found: .env.example
+`cargo install evnx --all-features` works too, but compiles from source on every run.
 
-**Fix:** Ensure the file exists in the repo:
+### Machine-readable output for the surrounding checks
 
-```yaml
-- name: Verify template exists
-  run: |
-    if [ ! -f .env.example ]; then
-      echo "::error ::.env.example not found!"
-      echo "Create it with: evnx init or evnx add custom"
-      exit 1
-    fi
-```
-
-### `jq` reports a parse error on sync output
-
-**Cause:** `evnx sync` does not emit JSON. `EVNX_OUTPUT_JSON=1` is read by `evnx doctor`
-only, so the pipe carries human-readable text and `jq` chokes on the first line.
-
-**Fix:** use `--check`'s exit code for sync, and `evnx doctor` when you need JSON:
+`evnx sync --check --format json` covers sync. For the rest of the setup (gitignore,
+permissions, project structure), `evnx doctor` has its own JSON:
 
 ```bash
-evnx sync --direction forward --check   # 0 in sync · 1 stale · 2 error
-EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
-```
-
-### Permission denied on .env
-
-**Fix:** CI shouldn't need .env — ensure it's gitignored:
-
-```yaml
-- name: Verify .env is ignored
-  run: |
-    if git check-ignore .env | grep -q "^\.env$"; then
-      echo "✓ .env is properly ignored"
-    else
-      echo "::warning ::.env should be in .gitignore"
-    fi
+evnx doctor --format json | jq '.summary.errors'
 ```
 
 ---
@@ -436,17 +367,18 @@ EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
 ## Best practices checklist
 
 ### For CI configuration
-- [ ] Use `--force --dry-run` to skip prompts and avoid file writes
+- [ ] Use `evnx sync --check --direction forward`, never `--dry-run` or `--force`, as the gate
+- [ ] Commit a spec (`.evnx.toml` with `[vars]`) so the check has something to compare with
+- [ ] Never add `--skip-without-env` to a CI command
 - [ ] Set `--naming-policy error` to enforce conventions
-- [ ] Include `--template-config` if using custom placeholders
-- [ ] Upload diagnostics as artifacts on failure
-- [ ] Test the workflow locally before committing
+- [ ] Pass `--template-config` if you use custom placeholders
+- [ ] Pin the evnx version (image tag or release)
 
 ### For team adoption
-- [ ] Start with advisory mode (`|| true`) for first week
+- [ ] Add the `evnx-sync` pre-commit hook
+- [ ] Start with advisory mode (`|| true`) for the first week
 - [ ] Document the CI check in CONTRIBUTING.md
-- [ ] Add a "Why did my PR fail?" section to docs
-- [ ] Provide a local command to reproduce CI checks
+- [ ] Tell people the local command that reproduces it: `evnx sync --check`
 
 ### For security
 - [ ] Never log `.env` contents in CI output
@@ -458,12 +390,12 @@ EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
 
 ## Related guides
 
-- [Team Collaboration](/guides/use-cases/team-collaboration) — Human workflows
-- [Command Reference](/guides/commands/sync) — All sync options
-- [Configuration Reference](/guides/reference/sync-configuration) — JSON schema details
+- [Team Collaboration](/guides/use-cases/team-collaboration): human workflows
+- [Command Reference](/guides/commands/sync): all sync options
+- [Configuration Reference](/guides/reference/sync-configuration): placeholder rules
+- [`evnx spec`](/guides/commands/spec): the contract the CI check compares with
 
 <Callout type="success" title="Automate with confidence">
-With these CI/CD patterns, your team can ship faster knowing environment variables are always in sync — without manual checks or security risks.
+With these patterns your pipeline knows the template is complete without ever seeing a
+`.env`, and your hooks stop a missing variable before it reaches review.
 </Callout>
----
-

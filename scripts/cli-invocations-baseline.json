@@ -42,11 +42,6 @@
       "why": "Named as a command that does not exist; the real one is evnx cloud export."
     },
     {
-      "file": "packages/docs-content/guides/reference/sync-configuration.mdx",
-      "invocation": "evnx sync --reverse",
-      "why": "Named as a removed flag; --direction reverse replaced it."
-    },
-    {
       "file": "packages/docs-content/guides/use-cases/use-cases-add-production.mdx",
       "invocation": "evnx validate --category",
       "why": "Named among flags that never existed on validate."

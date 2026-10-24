@@ -322,7 +322,10 @@ Valid `ignore` entries: `missing_variable`, `extra_variable`, `placeholder_value
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `naming_policy` | `"warn"` \| `"error"` \| `"ignore"` | `"warn"` | How `evnx sync` treats variable names outside `SCREAMING_SNAKE_CASE` |
+| `naming_policy` | `"warn"` \| `"error"` \| `"ignore"` | `"warn"` | How `evnx sync` treats variable names outside `SCREAMING_SNAKE_CASE`. `--naming-policy` overrides it. Any other value stops `sync` with exit `2` (since 0.10.12; it was ignored), even when the flag is given |
+
+Placeholder rules for `sync` are not in this file: they go in a JSON file passed with
+`--template-config`. See [Sync configuration](/guides/reference/sync-configuration).
 
 ### `[diff]`
 

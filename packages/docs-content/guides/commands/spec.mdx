@@ -455,16 +455,24 @@ the variables are on disk either way.
 
 `evnx sync --direction reverse` adds declared-but-missing variables to `.env`,
 not just the ones in `.env.example`. In a terminal it asks first; `--force` adds
-them without asking:
+them without asking (and so does a run with no terminal, or with `CI` set):
 
 ```console
 $ evnx validate
   ✗  Missing required variable: ONLY_IN_SPEC
 
 $ evnx sync --direction reverse --force
+┌─ Missing Variables ──────────────────────────────────────────────────────────┐
+│ Found 1 variable missing from .env:                                          │
+│   • ONLY_IN_SPEC  (required by [vars] in .evnx.toml)                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
 · Force mode: adding the template's values (placeholders where it has none), skipping prompts
-✓ Added 1 variables to .env
+✓ Added 1 variable to .env
 ```
+
+Since 0.10.12 the box says which names come from the spec rather than the template,
+and reverse into a **new** `.env` adds them too.
 
 Before v0.5.0 the second command said *".env is up to date"* — two commands
 contradicting each other about the same variable.
