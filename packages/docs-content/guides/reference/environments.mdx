@@ -43,7 +43,7 @@ Every command that takes an env file accepts it:
 
 ```bash
 evnx validate --env-name production      # .env.production
-evnx scan                                # already reads every .env*
+evnx scan .env.production                # a folder walk reads every .env*, but summarises the ones git ignores
 evnx sync --env-name staging --check
 evnx convert --env-name production --to json
 evnx backup --env-name production
