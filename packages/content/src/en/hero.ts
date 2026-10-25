@@ -43,21 +43,25 @@ export const hero = {
    * mockups invented a "scanned in 4 ms" figure and invented rule IDs; both
    * are gone because they are the one kind of claim a reader can falsify by
    * running the tool.
+   *
+   * Lines below are from `evnx scan <staged files>` (the `evnx-scan` hook's
+   * entry) on the 0.10.18 release binary, 2026-10-25, abridged. The previews
+   * are of throw-away values generated for the run.
    */
   terminal: {
     tabs: ["pre-commit", "doctor", "convert"],
     lines: [
       { type: "prompt", content: 'git commit -m "fix: payment retry"' },
-      { type: "dim", content: "evnx pre-commit: scanning 3 staged files" },
+      { type: "dim", content: "evnx — Secret Scanner.....................Failed" },
+      { type: "dim", content: "  evnx scan  scanning .env.production, src/config.ts, src/index.ts" },
       { type: "output", content: "" },
-      { type: "error", content: "● .env.production:4   AWS_ACCESS_KEY_ID" },
-      { type: "dim", content: "                      AKIA••••••••••7Q66" },
-      { type: "error", content: "● src/config.ts:12    STRIPE_SECRET_KEY" },
-      { type: "dim", content: "                      sk_live_••••••••EF2k" },
+      { type: "error", content: "✗  AWS Access Key                  high" },
+      { type: "dim", content: "   .env.production:4 (AWS_ACCESS_KEY_ID)  AKIA…CZ4K" },
+      { type: "error", content: "✗  Stripe Secret Key (LIVE)        high" },
+      { type: "dim", content: "   src/config.ts:12  sk_l…aQNj" },
       { type: "output", content: "" },
-      { type: "error", content: "2 secrets found. Commit blocked." },
-      { type: "dim", content: "hint: keep real values in .env (already ignored)," },
-      { type: "dim", content: "      then run evnx cloud push" },
+      { type: "error", content: "2 findings  ·  2 high" },
+      { type: "dim", content: "1. Revoke or rotate the keys above — assume they are compromised" },
     ] as TerminalLine[],
   },
 

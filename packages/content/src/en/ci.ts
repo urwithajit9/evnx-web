@@ -14,17 +14,21 @@ export const ci: SectionHeading & {
     title: "GitHub Actions",
     language: "yaml",
     // ⚠️ Pinned to a major tag so the snippet stays valid across releases.
-    code: `- uses: urwithajit9/evnx@v1
+    // The action is urwithajit9/evnx-action (the evnx repo has no action.yml);
+    // its inputs are in that repo's action.yml.
+    code: `- uses: urwithajit9/evnx-action@v1
   with:
     command: scan
-    fail-on: critical
-    sarif: true`,
-  },
+    format: sarif
+- uses: github/codeql-action/upload-sarif@v3
+  if: always()
+  with:
+    sarif_file: evnx-results.sarif`,  },
 
   exitCodes: {
     title: "Exit codes a pipeline can branch on",
-    body: "0 clean, 1 warnings, 2 critical. SARIF output puts every finding on the pull request itself, next to the line that caused it.",
+    body: "0 clean, 1 findings, 2 could not run — never reported as clean. SARIF output puts every finding in the Security tab and on the pull request, next to the line that caused it.",
   },
 
-  note: "evnx diff exits non-zero on a healthy project by design — it reports a difference, not a failure. Branch on the summary fields, not the exit code.",
+  note: "evnx diff exits 1 only when .env and its template disagree on which keys exist. A healthy project exits 0, so the exit code is a gate you can use.",
 };

@@ -3,18 +3,27 @@ title: "evnx doctor"
 section: commands
 order: 4
 publishedAt: "2024-03-15"
-excerpt: "Diagnose environment setup issues including .env configuration, Git tracking, project structure, and security best practices. Supports JSON output for CI/CD and auto-fix for common issues."
+updatedAt: "2026-10-25"
+excerpt: "Check the setup around your env files: ignored and untracked by git, valid dotenv, private permissions, a committed template, and the project around them. Repairs .gitignore and file modes with --fix; JSON for CI."
 difficulty: beginner
-timeToComplete: "5 minutes"
+timeToComplete: "8 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
-commands: ["backup", "doctor", "init"]
-evnxVersion: "0.5.2"
+commands: ["backup", "diff", "doctor", "init", "scan", "sync", "validate"]
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
 draft: false
 ---
 
-`evnx doctor` validates your project's environment configuration in seconds. It checks `.env` files, Git setup, project structure, and security practices — then suggests fixes. Perfect for onboarding, pre-deploy checks, and CI/CD validation.
+`evnx doctor` checks the **setup around** your env files in one folder: that git
+ignores them and does not track them, that they parse, that only you can read them,
+that a template is committed beside them, and what kind of project they sit in. It
+prints one line per check, a verdict, and an exit code a script can use. `--fix`
+repairs the two things that can be repaired safely: `.gitignore` and file modes.
+
+It does not look for secrets (that is [`evnx scan`](/guides/commands/scan)) and it
+does not compare keys (that is [`evnx diff`](/guides/commands/diff) or
+`evnx sync --check`). Every output on this page is from evnx 0.10.18.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -28,339 +37,343 @@ draft: false
 evnx doctor [OPTIONS] [PATH]
 ```
 
-**Arguments:**
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `PATH` | `.` | Project directory to check. `--path <PATH>` is the same thing; giving both is an error |
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PATH` | `string` | `.` | Project directory to analyze |
+| Flag | Description |
+|------|-------------|
+| `--fix` | Repair what can be repaired: `.gitignore` entries and file modes. See [`--fix`](#--fix) |
+| `--strict` | Count warnings as problems, so they affect the exit code |
+| `--skip-without-env` | **v0.10.15+** — with no env file, skip (exit 0) and say so. For pre-commit hooks, **not** for CI |
+| `--format <FORMAT>` | `pretty` (default) or `json`. An unknown value is an error, exit 2 |
+| `-v`, `--verbose` | Show the detail line under every check, passed ones included |
+| `-q`, `--quiet` | Print nothing on a healthy project. Problems and errors still print |
+| `--no-color` | Disable colour |
 
-**Options:**
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--fix` | `bool` | `false` | **v0.5.0+** — repair what can be repaired, instead of only reporting it |
-| `--strict` | `bool` | `false` | **v0.5.0+** — count warnings as problems, so they affect the exit code |
-| `--path <PATH>` | `string` | `.` | **v0.5.0+** — same as the positional argument; giving both is an error |
-| `--format` | `pretty\|json` | `pretty` | **v0.5.0+** — machine-readable output. An unrecognised value exits 2 |
-| `--verbose`, `-v` | `bool` | `false` | Show detailed diagnostic output |
-| `--help`, `-h` | `bool` | `false` | Display help information |
-
-### `--fix`
-
-Repairs are conservative and local:
-
-- `.gitignore` gains the `.env*` entries `evnx init` writes, with `!.env.example` and friends carved back out
-- a `.env` readable by anyone is `chmod`'d to `0600`
-
-Nothing is deleted, nothing is committed, and **no file holding secrets is edited**. In
-particular `--fix` will not `git add` your `.env.example` for you — staging content for a
-commit is not a diagnostic tool's call. It tells you the command instead.
-
-```bash
-evnx doctor --fix
-```
-
-<Callout type="info">
-`EVNX_AUTO_FIX=1` does the same thing and still works — it shipped first and is documented.
-Either one saying yes is enough; a flag can turn repair on, never off.
-</Callout>
-
-### `--format` — machine-readable output
-
-**v0.5.0+.**
-
-```bash
-evnx doctor --format json | jq '.summary.errors'
-```
-
-| Value | Output |
-|-------|--------|
-| `pretty` | the default: colour, glyphs, grouped by check |
-| `json` | one document with `project_path`, `checks[]` and `summary` |
-
-An unrecognised value exits `2` rather than falling back to `pretty` — a typo in
-a CI step must not quietly turn a JSON contract into prose the next `jq` cannot
-read.
-
-<Callout type="warning">
-**`EVNX_OUTPUT_JSON=1` does the same thing and still works**, but the flag wins
-when both are given. That is deliberate and differs from `--fix`/`EVNX_AUTO_FIX`,
-where either saying yes is enough: a format is a choice between two answers
-rather than a guard, so an explicit `--format pretty` has to be able to override
-an `EVNX_OUTPUT_JSON=1` exported by a CI image.
-
-⚠️ This flag shipped in v0.5.0 and was documented nowhere until 2026-09-24 — the
-JSON output existed from the beginning, reachable only through the environment
-variable. That is the same shape as `--fix` before v0.5.0, and it is how this
-page came to invent `--check-config`, `--fail-on-warning` and three other flags
-that never parsed: a capability with no discoverable surface gets documented
-into existence sooner or later.
-</Callout>
-
-**Environment Variables:**
-
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `EVNX_OUTPUT_JSON` | `1`, `true`, `json` | `false` | Same as `--format json`. Kept because it shipped first |
-| `EVNX_AUTO_FIX` | `1`, `true` | `false` | Attempt to auto-fix detected issues |
+| Environment variable | Same as |
+|---|---|
+| `EVNX_AUTO_FIX=1` | `--fix`. Either saying yes is enough; stderr says when the variable turned repair on |
+| `EVNX_OUTPUT_JSON=1` | `--format json`. An explicit `--format` wins |
 
 ---
 
 ## What evnx doctor checks
 
-### 🔐 .env file validation
+Five checks, always in this order. The name in the first column is the one JSON uses.
 
-| Check | Description | Severity if Failed |
-|-------|-------------|-------------------|
-| File exists | Verifies at least one `.env*` file is present | ⚠️ Warning |
-| Git ignored | Ensures **every** `.env*` file is in `.gitignore` | 🚨 **Error** |
-| Secure permissions | Checks for `600`/`400` on Unix | ⚠️ Warning |
-| Valid syntax | Validates `KEY=VALUE` format, multiline values, and quotes that never close | ⚠️ Warning |
+| Check | What it looks at | Fails as |
+|---|---|---|
+| `env_file` | every env file: ignored by git, **not tracked**, valid dotenv | error |
+| `env_example` | the template exists and is tracked by git | warning |
+| `project_structure` | the project type, and whether it loads `.env` | warning (one case) |
+| `docker_config` | Docker and Compose files | never fails |
+| `file_permissions` | every env file is private: no access for group or others | warning |
 
-<Callout type="warning" title="The syntax check and the parser used to disagree">
-**Fixed in v0.6.0.** `doctor` reported the continuation lines of a perfectly valid
-multiline value as `invalid syntax`, while `validate` and `convert` accepted the
-same file — so a `.env` holding a PEM key produced two or three complaints about
-nothing. It also could not represent a quoted value whose quote *never* closes,
-and called such a file clean while `validate` failed on it.
+### Which files count as env files
 
-`doctor` and `validate` now come from the same parser, and an unterminated value
-is reported rather than passed.
+`.env` and `.env.<name>` — `.env.production`, `.env.local`, `.env.ci` — and
+**plaintext copies** of them: `.env.bak`, `.env.backup`, `.env.old`, `.env.save`,
+`.env~`. A copy holds the same secrets, so an unignored one is reported as an error.
 
-⚠️ **This note originally named `scan` alongside them and said they "cannot drift
-apart again". That was wrong.** `scan` kept its own `.env` splitting until
-v0.8.0, and the consequence was worse than a spurious warning: a secret inside a
-multiline value — a PEM key, the very example above — was **not reported at
-all**. Corrected here because the claim was load-bearing: it is why nobody
-checked.
-</Callout>
+Not env files: `.envrc`, `.environment`, `.env-notes.md`, and the template family
+below, which is meant to be committed. An `evnx backup` file is recognised by its
+content and left alone, because it is ciphertext.
 
-<Callout type="warning">
-**Before v0.5.0 this checked `.env` and nothing else.** A project whose `.gitignore`
-carried only `.env` — which is what older `evnx init` wrote — got a green tick while
-`.env.production` sat committable. Every `.env*` is checked now, except the
-`.env.example` / `.env.sample` / `.env.template` family, which is *meant* to be
-committed, and `evnx backup` output, which is ciphertext.
-</Callout>
+### `env_file`
 
-<Callout type="danger" title="Security critical">
-A `.env` file committed to Git can expose API keys, database credentials, and other secrets. The "NOT in .gitignore" check fails with **Error** severity because this is a critical security risk.
-</Callout>
-
-### 📋 .env.example validation
-
-| Check | Description | Severity if Failed |
-|-------|-------------|-------------------|
-| File exists | Template for team onboarding | ⚠️ Warning |
-| Git tracked | Ensures template is versioned | ⚠️ Warning |
-
-Having a `.env.example` helps teammates and CI systems know which environment variables are required — without exposing real values.
-
-### 🗂️ Project structure detection
-
-evnx doctor recognizes multiple project types and validates relevant dependencies:
-
-```
-Python (requirements.txt)  → checks for python-dotenv
-Python (pyproject.toml)    → checks for python-dotenv, pydantic-settings
-Python (Poetry)            → checks poetry.lock + pyproject.toml
-Python (Pipenv)            → checks Pipfile
-Node.js                    → checks package.json for dotenv
-Rust                       → checks Cargo.toml for dotenvy
-Go                         → detects go.mod (info only)
-PHP                        → detects composer.json (info only)
+```text
+  ✗  Validate .env file existence, security, and syntax
+     .env is tracked by git: its values are in the repository history
+     → git rm --cached .env, commit, then rotate every secret it held (`evnx scan .` lists them)
+     .env.bak is NOT in .gitignore (security risk): a plaintext copy of an env file
+     .env.production is NOT in .gitignore (security risk)
+     .env.production: Line 2: invalid syntax 'this line is not dotenv'
 ```
 
-<Callout type="info" title="Why dependency checks matter">
-Using a library like `python-dotenv` or `dotenvy` ensures your app actually loads environment variables at runtime. Doctor warns if your project type suggests you should have one but doesn't.
-</Callout>
+Each of these is an **error**:
 
-### 🐳 Docker configuration detection
+- **Tracked by git.** Ignoring a file that is already committed does not remove it:
+  its values are in the history. doctor says so separately from "not in
+  .gitignore", with the commands that fix it, including rotating the secrets.
+- **Not ignored.** doctor asks git (`git check-ignore`), so patterns and negations
+  count exactly as git counts them.
+- **Invalid syntax**, named by file and line. A file that cannot be read, or is not
+  UTF-8, is an error that says which. `.env.json` and `.env.yaml` get no dotenv check.
 
-Doctor detects Docker setup files for informational purposes:
+**With no env file at all**, what doctor says depends on what else is there:
 
+| The folder has | doctor says | Exit |
+|---|---|---|
+| a template, no `.env` (a fresh clone) | error: `.env not found, though .env.example is here: this project expects one`, with `evnx sync --direction reverse` to create it | 1 |
+| project files, no template | warning | 0 |
+| nothing evnx recognises | `nothing to diagnose here` | 2 |
+
+### `env_example` — the template
+
+The template is `[defaults] example` from the project's `.evnx.toml` if set, otherwise
+whichever of `.env.example`, `.env.sample` or `.env.template` is there. Messages name
+the real file. It should exist and be tracked; if it is not tracked, doctor prints the
+`git add` to run. It never runs it for you.
+
+### `project_structure`
+
+The first project type found is reported: Node.js (`package.json`), Python
+(`requirements.txt`, `pyproject.toml`), Rust (`Cargo.toml`), Go (`go.mod`) or PHP
+(`composer.json`). One case is a warning — a `requirements.txt` without
+`python-dotenv`:
+
+```text
+  !  Detect project type and validate dependencies
+     ✓ Detected Python project (Python (requirements))
+     python-dotenv not in requirements.txt
 ```
-✓ docker-compose.yml
-✓ docker-compose.yaml
-✓ Dockerfile
-✓ Containerfile
-✓ .dockerignore
+
+Everything else here passes, and further hints appear only with `-v`.
+
+### `docker_config`
+
+Reports `Dockerfile`, `Containerfile`, `docker-compose.yml`, `docker-compose.yaml`,
+`compose.yaml`, `compose.yml` and `.dockerignore` when present. It never fails.
+
+### `file_permissions`
+
+Every env file and plaintext copy must be **private**: no bits for group or others.
+`600`, `400`, `700` and `500` pass; `640` and `644` do not. Each file is named:
+
+```text
+  !  Check file permissions for sensitive files
+     .env.bak: permissions 644 (recommended: 600)
+     .env.production: permissions 644 (recommended: 600)
 ```
 
-No severity — just helps confirm your deployment configuration is present.
+On Windows the check is skipped and says so: it needs a Unix-like system.
+
+### What doctor does not check
+
+| Question | Command |
+|---|---|
+| Does `.env` have every key the template declares? | `evnx diff`, `evnx sync --check` |
+| Is there a real-looking secret anywhere? | `evnx scan` |
+| Are the values placeholders, weak, or malformed? | `evnx validate` |
+| What about the other folders in this repository? | one `evnx doctor <dir>` per folder — it does not recurse |
 
 ---
 
-## Output formats
+## Output
 
-### Text (default)
-
-Human-readable, color-coded output for terminal use:
+### A healthy project
 
 ```bash
 evnx doctor
 ```
 
-```
-┌─ evnx doctor ─────────────────────────────────────┐
-│ Diagnosing environment setup                      │
-└───────────────────────────────────────────────────┘
+```text
+  evnx doctor  Diagnosing environment setup
 
-Checking .env file...
-  ✓ File exists at .env
-  ✗ File is NOT in .gitignore (security risk)
-  ✓ .env syntax is valid
 
-Checking .env.example...
-  ✓ File exists
-  ✓ File is tracked in Git
+  ✓  Validate .env file existence, security, and syntax
 
-Checking project structure...
-  ✓ Detected Python project (requirements.txt)
-  ⚠️ python-dotenv not in requirements.txt
+  ✓  Check .env.example exists and is Git-tracked
 
-Summary:
-  🚨 1 critical issue
-  ⚠️  1 warning
+  ✓  Detect project type and validate dependencies
 
-Overall health: ⚠️ Needs attention
+  ✓  Check for Docker configuration files
 
-Recommendations:
-  Run with EVNX_AUTO_FIX=1 to auto-correct issues
-  Or manually address the following:
-    • env_file (Validate .env file existence, security, and syntax)
+  ✓  Check file permissions for sensitive files
+
+  5 checks passed
 ```
 
-### Verbose mode
+`✓` passed, `✗` error, `!` warning, `·` information. With `-q` a healthy run prints
+nothing at all.
 
-Add `--verbose` or `-v` for detailed diagnostics:
+### A project with problems
+
+```text
+  evnx doctor  Diagnosing environment setup
+
+
+  ✗  Validate .env file existence, security, and syntax
+     .env is tracked by git: its values are in the repository history
+     → git rm --cached .env, commit, then rotate every secret it held (`evnx scan .` lists them)
+     .env.bak is NOT in .gitignore (security risk): a plaintext copy of an env file
+     .env.production is NOT in .gitignore (security risk)
+     .env.production: Line 2: invalid syntax 'this line is not dotenv'
+
+  !  Check .env.example exists and is Git-tracked
+     .env.example is not tracked in Git — run: git add .env.example
+
+  ✓  Detect project type and validate dependencies
+
+  ·  Check for Docker configuration files
+     No Docker configuration detected
+
+  !  Check file permissions for sensitive files
+     .env.bak: permissions 644 (recommended: 600)
+     .env.production: permissions 644 (recommended: 600)
+
+  1 error  ·  2 warnings  ·  1 check passed
+
+  →  2 issues evnx doctor --fix can repair:
+     ·  Validate .env file existence, security, and syntax
+     ·  Check file permissions for sensitive files
+```
+
+### Verbose
+
+`-v` adds the detail line under every check, including the ones that passed:
+
+```text
+  ✓  Validate .env file existence, security, and syntax
+     .env is properly ignored by git
+     .env syntax is valid
+
+  ✓  Check .env.example exists and is Git-tracked
+     .env.example is tracked in Git
+
+  ✓  Detect project type and validate dependencies
+     Detected Node.js project
+
+  ✓  Check for Docker configuration files
+     Found: Dockerfile
+
+  ✓  Check file permissions for sensitive files
+     .env: permissions 600 (private)
+```
+
+### JSON
 
 ```bash
-evnx doctor --verbose
-```
-
-```
-│ Project path: /home/user/my-app
-
-Checking .env file...
-  ✓ File exists at .env
-  ⚠️ File has 644 permissions (recommended: 600)
-  ✓ File is properly ignored by git
-  ✓ .env syntax is valid
-
-Checking .env.example...
-  ✓ File exists
-  ✓ File is tracked in Git
-  ✓ File is tracked in Git
-
-[... more details ...]
-```
-
-### JSON (for CI/CD)
-
-Machine-readable output for automation and reporting:
-
-```bash
-EVNX_OUTPUT_JSON=1 evnx doctor
+evnx doctor --format json
 ```
 
 ```json
 {
-  "project_path": "./my-app",
-  "timestamp": "2024-03-15T10:30:00Z",
-  "summary": {
-    "total": 5,
-    "errors": 1,
-    "warnings": 2,
-    "passed": 2,
-    "info": 0,
-    "fixable": 1
-  },
+  "project_path": ".",
   "checks": [
     {
       "name": "env_file",
       "description": "Validate .env file existence, security, and syntax",
-      "severity": "error",
-      "details": "❌ .env is NOT in .gitignore (security risk)",
-      "fixable": true,
-      "fixed": false
+      "severity": "ok",
+      "details": null,
+      "fixable": false,
+      "fixed": false,
+      "ran": true
+    },
+    {
+      "name": "project_structure",
+      "description": "Detect project type and validate dependencies",
+      "severity": "ok",
+      "details": "Detected Node.js project",
+      "fixable": false,
+      "fixed": false,
+      "ran": true
     }
-  ]
+  ],
+  "summary": {
+    "total": 5,
+    "errors": 0,
+    "warnings": 0,
+    "passed": 5,
+    "info": 0,
+    "fixable": 0
+  },
+  "timestamp": "2026-10-24T22:15:19.991201973+00:00"
 }
 ```
 
-Useful with `jq`:
+(Two of the five checks shown.) `severity` is `ok`, `info`, `warning` or `error`.
+`ran` is `false` for a check that could not finish (**v0.10.15+**). `details` is plain
+text, one finding per line. `-v` does not change the JSON, and the docs link goes to
+stderr, so stdout holds only the document:
 
 ```bash
-# Count critical errors
-EVNX_OUTPUT_JSON=1 evnx doctor | jq '.summary.errors'
-
-# List only failed checks
-EVNX_OUTPUT_JSON=1 evnx doctor | jq '[.checks[] | select(.severity == "error") | .name]'
-
-# Check if auto-fix resolved issues
-EVNX_OUTPUT_JSON=1 evnx doctor | jq '.checks[] | select(.fixable) | {name, fixed}'
+evnx doctor --format json | jq '[.checks[] | select(.severity == "error") | .name]'
 ```
 
 ---
 
-## Auto-fix mode
-
-Enable automatic remediation for common issues:
+## `--fix`
 
 ```bash
-EVNX_AUTO_FIX=1 evnx doctor --verbose
+evnx doctor --fix
 ```
 
-### What gets auto-fixed
+```text
+✓ Fixed: .gitignore: added .env*, !.env.example, !.env.sample, !.env.template
+  ✗  Validate .env file existence, security, and syntax
+     .env is tracked by git: its values are in the repository history
+     → git rm --cached .env, commit, then rotate every secret it held (`evnx scan .` lists them)
+     .env.production: Line 2: invalid syntax 'this line is not dotenv'
+     ! not fixed: --fix changed what it could; the problem above remains
 
-| Issue | Fix Applied | Platform |
-|-------|------------|----------|
-| Any `.env*` not in `.gitignore` | Appends `.env*` plus `!.env.example`, `!.env.sample`, `!.env.template` | All |
-| `.env` has insecure permissions | Sets mode to `600` | Unix only |
-| `.env.example` not Git-tracked | Reports manual command | All |
+  …
 
-<Callout type="warning" title="Git operations require confirmation">
-Auto-fix cannot run `git add` or `git commit` automatically for security reasons. When doctor detects an untracked `.env.example`, it prints the exact command to run manually.
-</Callout>
+✓ Fixed: .env.bak mode 644 → 600
+✓ Fixed: .env.production mode 644 → 600
+  ✓  Check file permissions for sensitive files
 
-### Example: Auto-fix in action
+  1 error  ·  1 warning  ·  2 checks passed
+```
+
+What it repairs:
+
+| Problem | Repair |
+|---|---|
+| an env file git does not ignore | adds `.env*`, `!.env.example`, `!.env.sample`, `!.env.template` to `.gitignore` — the lines `evnx init` writes |
+| an env file or plaintext copy that others can read | `chmod 600`, never on the template. A symlinked file only when its target is inside the project; otherwise the `chmod` to run is printed |
+
+Every fix is **checked again** afterwards and reported on stderr as `✓ Fixed: …`. A
+problem that remains says `not fixed`, and the run still exits 1 — above, the tracked
+`.env` and the syntax error are for you to fix. Nothing is deleted, nothing is staged or
+committed, and **no file's contents are edited**.
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Healthy. Warnings pass unless `--strict` |
+| `1` | Problems found: an error, or a warning under `--strict`. Also a fix that did not work |
+| `2` | No verdict |
+
+`2` has three causes, and none of them is a clean result:
+
+- **A bad path or flag** — `is not a directory evnx can read`, `--format xml`.
+- **Nothing to diagnose** — a folder with no env file, no template and no project
+  files:
+
+  ```text
+  Error: . has no env file, no .env.example and no project files: nothing to diagnose here
+
+  No verdict: doctor examined nothing. This is not a clean result.
+  ```
+
+- **A check that could not finish** — `No complete verdict: 1 check could not run.`
+  The JSON marks it with `"ran": false`.
 
 ```bash
-$ EVNX_AUTO_FIX=1 evnx doctor --verbose
-
-┌─ evnx doctor ─────────────────────────────────────┐
-│ Diagnosing environment setup                      │
-└───────────────────────────────────────────────────┘
-
-Checking .env file...
-  ✓ File exists at .env
-  ✓ Added .env to .gitignore
-  ✓ Fixed permissions: 644 → 600
-  ✓ .env syntax is valid
-
-[... other checks ...]
-
-Summary:
-  ✓ 0 issues found
-
-Overall health: ✓ Excellent
+evnx doctor
+case $? in
+  0) echo "healthy" ;;
+  1) echo "problems — see the report" ;;
+  2) echo "doctor did not run — fix the path or the folder" ;;
+esac
 ```
 
 ---
 
-## CI/CD usage
+## In CI
 
-### GitHub Actions — block on critical issues
+The exit code is the gate. Use `--strict` if warnings should fail the build too:
 
 ```yaml
 # .github/workflows/env-health.yml
 name: Environment Health Check
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+on: [pull_request]
 
 jobs:
   doctor:
@@ -369,150 +382,64 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install evnx
-        run: cargo install evnx --all-features
+        run: curl -fsSL https://dotenv.space/install.sh | bash
 
       - name: Run diagnostics
-        run: |
-          EVNX_OUTPUT_JSON=1 evnx doctor > report.json
+        run: evnx doctor --strict --format json > report.json
 
       - name: Upload report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: doctor-report
           path: report.json
-
-      - name: Fail on critical issues
-        run: |
-          ERRORS=$(jq '.summary.errors' report.json)
-          if [ "$ERRORS" -gt 0 ]; then
-            echo "🚨 $ERRORS critical issues found"
-            exit 1
-          fi
 ```
 
-### GitLab CI — collect diagnostics
+`if: always()` keeps the report when the check fails, which is when you want it.
 
-```yaml
-# .gitlab-ci.yml
-env-doctor:
-  stage: test
-  script:
-    - cargo install evnx
-    - EVNX_OUTPUT_JSON=1 evnx doctor --path ./service > doctor-report.json
-  artifacts:
-    paths: [doctor-report.json]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-```
-
-### Advisory mode — report without blocking
-
-Use `|| true` to collect diagnostics without failing the pipeline:
-
-```bash
-# Continue even if doctor finds issues
-evnx doctor || true
-
-# Or filter output for logging
-evnx doctor 2>&1 | grep -E "✗|⚠️|🚨" >> deploy-log.txt
-```
-
----
-
-## Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Healthy — no errors, and no warnings when `--strict` is given |
-| `1` | Problems found |
-| `2` | **v0.5.0+** — doctor could not run, so there is no verdict |
-
-**`2` is not a louder `1`.** A directory that cannot be read and a directory that is merely
-unhealthy are different answers. Before v0.5.0, `evnx doctor ./typo` diagnosed the missing
-directory as a project with no `.env` — a finding about your code rather than about your
-path, which is how a CI step passes on an empty checkout.
-
-Warnings exit `0` unless you ask otherwise. A missing `.env.example` is worth saying and is
-not worth failing a build that never asked about it — add `--strict` when it is.
-
-```bash
-evnx doctor
-case $? in
-  0) echo "healthy" ;;
-  1) echo "problems — see the report" ;;
-  2) echo "doctor did not run — fix the path" ;;
-esac
-```
-
-<Callout type="tip" title="Testing exit codes locally">
-```bash
-evnx doctor; echo $?          # 0 when healthy
-
-rm .gitignore                 # now .env is committable
-evnx doctor; echo $?          # 1
-
-evnx doctor ./no-such-dir; echo $?   # 2
-```
+<Callout type="warning" title="A CI checkout usually has no .env">
+In CI the `.env` is not in the repository, so a project with a template gets the
+"`.env` not found" error. That is correct for a job that is supposed to have one.
+Do **not** add `--skip-without-env` to make it pass: in CI a check that never ran
+must not pass. Run doctor where the env file exists, or run
+`evnx scan` and `evnx sync --check` instead.
 </Callout>
 
 ---
 
-## Project-type examples
+## As a pre-commit hook
 
-### Python (requirements.txt)
+Use the hook evnx ships:
 
-```bash
-# Setup
-echo "FLASK_APP=app.py" > .env
-echo "FLASK_APP=" > .env.example
-echo ".env" >> .gitignore
-git add .env.example
-
-# Check
-evnx doctor
-# ✓ All Python-specific checks pass
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/urwithajit9/evnx
+    rev: v0.10.18
+    hooks:
+      - id: evnx-doctor
 ```
 
-### Python (Poetry)
+Its entry is `evnx doctor --skip-without-env`: errors fail the commit, warnings do
+not, and a fresh clone with only a template is skipped instead of failing every new
+contributor's first commit.
+
+<Callout type="warning" title="A hand-written `entry: evnx doctor` fails fresh clones">
+Since v0.10.15 a template without a `.env` is an error. A local hook that runs plain
+`evnx doctor` therefore blocks the first commit in every fresh clone. Add
+`--skip-without-env`, or switch to the shipped `evnx-doctor` hook.
+</Callout>
+
+---
+
+## More than one folder
+
+doctor checks one folder. For a repository with several services, run it once per
+folder:
 
 ```bash
-# Poetry projects use pyproject.toml
-evnx doctor --verbose
-# ✓ Detects Poetry config
-# ℹ️ Suggests pydantic-settings if dotenv not found
-```
-
-### Node.js
-
-```bash
-# Ensure dotenv is in dependencies
-npm install dotenv --save
-
-# Check
-evnx doctor --verbose
-# ✓ Detects package.json
-# ℹ️ Confirms 'dotenv' package presence
-```
-
-### Rust
-
-```bash
-# Add dotenvy to Cargo.toml
-# [dependencies]
-# dotenvy = "0.15"
-
-evnx doctor
-# ✓ Detects Cargo.toml
-# ℹ️ Validates dotenvy/dotenv crate
-```
-
-### Multi-service repository
-
-```bash
-# Check each service independently
 for dir in services/*/; do
-  echo "Checking $dir..."
-  evnx doctor --path "$dir" || echo "❌ Issues in $dir"
+  evnx doctor "$dir" || echo "issues in $dir"
 done
 ```
 
@@ -520,128 +447,45 @@ done
 
 ## Troubleshooting
 
-### ❌ "File is NOT in .gitignore" but it is
+### "NOT in .gitignore" but it is
+
+doctor asks git, so the usual causes are git's rules, not a typo:
+
+- a later line un-ignores it — `!.env` after `.env*`;
+- the file is **tracked**: git keeps tracking a committed file whatever `.gitignore`
+  says. doctor reports that separately as "tracked by git".
 
 ```bash
-# Check for exact match (no trailing spaces)
-cat .gitignore | grep -n "^\.env$"
-
-# Fix: Ensure no leading/trailing whitespace
-echo ".env" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' >> .gitignore
+git check-ignore -v .env      # which rule applies, if any
+git ls-files .env             # prints .env if it is tracked
 ```
 
-### ❌ Permission check fails on Windows
+### "tracked by git: its values are in the repository history"
 
-```bash
-# Expected: Permission checks are skipped on Windows
-# If you see an error, ensure you're on latest evnx version
+Follow the arrow line: `git rm --cached .env`, commit, then rotate every secret the
+file held. `evnx scan .` lists them. Removing the file from the index does not remove
+it from history.
 
-# Workaround: Manually verify file properties
-# Right-click .env → Properties → Security tab
-```
+### "nothing to diagnose here"
 
-### ❌ Git commands fail ("not a git repository")
+You ran doctor in a folder with no env file, no template and no project files, or in
+the wrong folder. It exits 2 on purpose: an empty checkout must not pass as healthy.
 
-```bash
-# Doctor gracefully degrades when Git is unavailable
-# To suppress Git-related warnings:
-git init  # Initialize repo if needed
+### "not fixed"
 
-# Or check outside Git:
-evnx doctor --verbose 2>&1 | grep -v "git"
-```
+`--fix` changed what it could, and the problem that remains is not one it repairs:
+a tracked file, a syntax error, or a symlink target outside the project.
 
-### ❌ JSON output is malformed
+### Permission check on Windows
 
-```bash
-# Ensure no other output interferes
-EVNX_OUTPUT_JSON=1 evnx doctor 2>/dev/null | jq .
-
-# Avoid --verbose when parsing JSON in scripts
-```
-
-### ❌ Auto-fix doesn't apply all changes
-
-```bash
-# Auto-fix limitations:
-# • Git operations require manual confirmation (security)
-# • Windows permission fixes not supported
-
-# Manual follow-up:
-git add .env.example && git commit -m "chore: add env template"
-```
-
----
-
-## Best practices
-
-### ✅ For development
-
-```bash
-# Run doctor after cloning a repo
-git clone my-project && cd my-project
-evnx doctor
-
-# Add to pre-commit hooks (optional)
-# .pre-commit-config.yaml
-- repo: local
-  hooks:
-    - id: env-doctor
-      name: Environment Health Check
-      entry: evnx doctor
-      language: system
-      pass_filenames: false
-```
-
-### ✅ For production deployments
-
-```bash
-# Validate environment before deploy
-if ! EVNX_OUTPUT_JSON=1 evnx doctor | jq -e '.summary.errors == 0'; then
-  echo "🚨 Environment issues detected - aborting deploy"
-  exit 1
-fi
-
-# Log report for audit
-EVNX_OUTPUT_JSON=1 evnx doctor >> deploy-log.json
-```
-
-### ✅ For team onboarding
-
-```bash
-# Include in README
-## Setup
-1. Clone repo
-2. Run `evnx doctor` to validate environment
-3. Fix any reported issues
-4. Run `evnx init` if .env.example exists
-
-# Share baseline report
-evnx doctor --verbose > .evnx-baseline.txt
-# Commit baseline for reference (not .env!)
-```
-
-### ✅ Security checklist
-
-- [ ] `.env` is in `.gitignore` (🚨 critical)
-- [ ] `.env` permissions are `600` (Unix)
-- [ ] `.env.example` contains no real secrets
-- [ ] `.env.example` is tracked in Git
-- [ ] No hardcoded secrets in source code
+It is skipped, and says so: Windows has no Unix mode bits to read.
 
 ---
 
 ## Related commands
 
-- **[evnx init](/guides/commands/init)** — create `.env.example` and project scaffolding
-- **[evnx validate](/guides/commands/validate)** — check variable types, required fields, and value strength
-- **[evnx scan](/guides/commands/scan)** — detect secrets and high-entropy strings in `.env` files
-- **[evnx migrate](/guides/commands/migrate)** — move detected secrets to cloud secret managers
-
-<Callout type="tip" title="Workflow recommendation">
-Use `evnx doctor` early and often:
-1. After cloning: `evnx doctor` to validate setup
-2. Before committing: `evnx doctor` to catch config issues
-3. In CI: `EVNX_OUTPUT_JSON=1 evnx doctor` for automated health checks
-4. Before deploy: `EVNX_AUTO_FIX=1 evnx doctor --verbose` to auto-remediate
-</Callout>
+- **[evnx scan](/guides/commands/scan)** — look for real-looking secrets in files
+- **[evnx validate](/guides/commands/validate)** — placeholders, weak and malformed values
+- **[evnx diff](/guides/commands/diff)** — keys missing from, or extra to, the template
+- **[evnx sync](/guides/commands/sync)** — create `.env` from the template, or the template from `.env`
+- **[evnx init](/guides/commands/init)** — set up a project's template and `.gitignore`

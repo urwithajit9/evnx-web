@@ -3,7 +3,7 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-25"
 excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
@@ -166,9 +166,13 @@ evnx add blueprint t3_modern --path ./apps/web --yes
 
 ## What `add` writes
 
+The template is the project's own (**v0.10.16+**): `[defaults] example` in `.evnx.toml`
+if set, otherwise whichever of `.env.example`, `.env.sample` or `.env.template` exists,
+and `.env.example` when there is none.
+
 | File | What happens |
 |------|--------------|
-| `.env.example` | The names it lacks are appended, under the same section headings `init` writes, with a `# Added by evnx add on <date>` line |
+| the template (`.env.example`) | The names it lacks are appended, under the same section headings `init` writes, with a `# Added by evnx add on <date>` line |
 | `.env` | The names it lacks are appended with their placeholders. A name it already has is left alone, so a value you set stays the one in effect |
 | `.env`, when there is none | Created as a copy of `.env.example`, as `evnx init` does: asked in a terminal, done under `--yes` |
 | `.gitignore` | Written only when `add` creates `.env` (`.gitignore` first). Otherwise checked: `add` warns if the `.env` it wrote to could be committed |
@@ -238,12 +242,18 @@ Dry run (for Redis): nothing was written.
   .env: would add 4 variables: REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 ```
 
-`--json` prints one document and nothing else on stdout:
+`--json` prints one document and nothing else on stdout. This is the same dry run, in a
+folder whose `.env.example` already holds a different `REDIS_URL` (evnx 0.10.18):
 
 ```console
 $ evnx add service redis --dry-run --json
 {
-  "added": [],
+  "added": [
+    "REDIS_DB",
+    "REDIS_HOST",
+    "REDIS_PASSWORD",
+    "REDIS_PORT"
+  ],
   "conflicts": [
     {
       "existing": "redis://cache.internal:6379/0",
@@ -251,19 +261,32 @@ $ evnx add service redis --dry-run --json
       "new": "redis://localhost:6379/0"
     }
   ],
+  "contract": {
+    "action": "none",
+    "added": [],
+    "file": null
+  },
   "dry_run": true,
-  "env_added": [],
-  "env_committable": false,
-  "env_created": false,
-  "skipped": [
+  "env_added": [
     "REDIS_DB",
     "REDIS_HOST",
     "REDIS_PASSWORD",
     "REDIS_PORT"
   ],
+  "env_committable": false,
+  "env_created": false,
+  "gitignore": [],
+  "notices": [],
+  "skipped": [],
+  "template": ".env.example",
   "written": false
 }
 ```
+
+`template` names the file `add` wrote to (see below), `contract` says what happened to
+`[vars]` in `.evnx.toml` (`none` here: the project has no `.evnx.toml`), `gitignore`
+lists the lines added to `.gitignore`, and `notices` carries the warnings the pretty
+output prints.
 
 Without a terminal and without `--yes`, `add` stops and says what to run:
 

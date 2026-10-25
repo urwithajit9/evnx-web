@@ -7,7 +7,7 @@ excerpt: "How the CLI, evnx-crypto and evnx-server fit together — what each co
 difficulty: advanced
 timeToComplete: "15 minutes"
 tags: ["architecture", "cryptography", "reference", "zero-knowledge", "evnx"]
-commands: ["vault share"]
+commands: ["vault create", "vault role", "vault share"]
 evnxVersion: "0.5.2"
 prerequisites:
   - reference/concepts-security-model
@@ -52,6 +52,13 @@ Master key
                                       │
                                       └── AES-256-GCM encrypts ──► the blob
 ```
+
+**The master password is proven before it is used** (v0.10.18+). Argon2id accepts any
+input, so a typo derives a perfectly good-looking wrong key. Every command that asks for
+the password first opens your account's sealed private key with the derived master key;
+if that fails, the command stops and nothing is created. Before, `evnx vault create`
+wrapped a brand-new vault key under the typo, producing a vault that the real password
+could never open.
 
 **A login runs Argon2id twice.** The two derivations use different salts *and* different domain separators, which is the load-bearing detail: the server necessarily stores something derived from your SRP password, because that is how authentication works. With separate salts, compromising that stored value is a step toward nothing — your master key is not recoverable from the SRP side at any price.
 
@@ -168,6 +175,15 @@ The two columns move together: both `NULL` for your own copy, both present for a
 The recipient's public keys are fetched **from the server**. A malicious server could substitute its own and read what you share. There is no third party to check them against, and out-of-band fingerprint verification is not built.
 
 So for a shared vault, "the server cannot read your secrets" narrows to "cannot read them *passively*". A vault you never share is unaffected — its key never goes near a key exchange.
+</Callout>
+
+<Callout type="warning" title="Fixed in 0.10.18: a share could rewrite an existing member">
+Adding a member was an upsert: sharing with someone already in the vault replaced their
+role and their wrapped key. An owner sharing with their own address became a developer,
+and an admin could demote the owner and then remove them. The server now refuses a share
+to an existing member with **409** and writes nothing, for every client, and the CLI
+checks the member list before asking for the password. A role changes only through
+`evnx vault role`, which enforces the rank rules.
 </Callout>
 
 <Callout type="info" title="An API that made the wrong choice easy">

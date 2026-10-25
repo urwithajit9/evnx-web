@@ -3,6 +3,7 @@ title: "GitHub Actions"
 section: integrations
 order: 1
 publishedAt: "2024-03-15"
+updatedAt: "2026-10-25"
 excerpt: "Run evnx scan and validate in your GitHub Actions CI pipeline. Block PRs on secret detection, upload SARIF to the Security tab, and annotate pull request diffs."
 difficulty: beginner
 timeToComplete: "15 minutes"
@@ -113,9 +114,9 @@ jobs:
         run: curl -fsSL https://dotenv.space/install.sh | bash
 
       - name: Validate environment files
-        run: evnx validate --strict
-        # Exits 1 if strict warnings are found
-        # Remove --strict for advisory-only validation
+        run: evnx validate --fail-on warning --format github-actions
+        # Exits 1 on errors and on warnings, with ::error annotations on the PR.
+        # Drop --fail-on warning to fail on errors only; add --exit-zero for advisory-only.
 ```
 
 ---
@@ -180,8 +181,9 @@ evnx scan --format github
 Outputs:
 
 ```
-::error file=./.env,line=8,title=Secret detected (high)::AWS_SECRET_ACCESS_KEY matches AWS Secret Access Key. Rotate it at https://console.aws.amazon.com/iam
-::warning file=./config/.env.staging,line=3,title=Secret detected (medium)::STRIPE_SECRET_KEY matches Stripe Secret Key (LIVE). Rotate it at https://dashboard.stripe.com/apikeys
+::error file=./.env.local,line=1,title=Secret detected (high)::DATABASE_URL matches Credentials in a connection string. Rotate this credential at its source
+::error file=./.env.production,line=2,title=Secret detected (high)::AWS_ACCESS_KEY_ID matches AWS Access Key. Rotate it at https://console.aws.amazon.com/iam
+::error file=./.env.production,line=3,title=Secret detected (high)::STRIPE_SECRET_KEY matches Stripe Secret Key (LIVE). Rotate it at https://dashboard.stripe.com/apikeys
 ```
 
 The value is never included — only the variable name and the matched pattern. Annotations
@@ -246,7 +248,7 @@ jobs:
           sarif_file: evnx.sarif
 
       - name: Validate configuration
-        run: evnx validate --strict
+        run: evnx validate --fail-on warning --format github-actions
 ```
 
 ---

@@ -193,26 +193,27 @@ overridden by `--env-name`, and by an explicit `--env` path.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `severity` | `"high"` \| `"medium"` \| `"low"` | `"low"` | Lowest confidence worth reporting. `"high"` reports only detections matching a known provider format |
-| `exclude` | list of strings | `[]` | Paths this project never scans |
+| `severity` | `"high"` \| `"medium"` \| `"low"` | `"low"` | Lowest confidence worth reporting. Filters the report, the counts and the exit code together. `"high"` keeps provider formats, this project's own rules, passwords in connection strings and long values under secret-like names |
+| `exclude` | list of strings | `[]` | Paths this project never scans in a folder walk. See below |
 | `ignore_placeholders` | bool | `false` | Skip values that look like filler |
 | `patterns` | list of tables | `[]` | **v0.5.0+** — secret formats this project recognises beyond the built-in ones. See below |
 | `disable` | list of strings | `[]` | **v0.5.3+** — built-in rules this project does not want, by name |
 | `builtins` | bool | `true` | **v0.5.3+** — `false` scans with **only** this project's rules |
+| `extensions` | list of strings | every file | **v0.10.3+** — read only files with these extensions in folder walks, e.g. `["env", "yml", "json"]`. Narrows the scan, so it is announced |
+| `max_file_size` | size | `"1MiB"` | **v0.10.14+** — skip walked files larger than this: `"5MB"`, `"512K"`, or a number of bytes. Below 1 MiB it narrows the scan, so it is announced |
 
 <Callout type="info">
-**`exclude` entries without `*` are substrings; entries with `*` are globs.**
+**An `exclude` entry with `*`, `?` or `[` is a glob; any other entry matches a whole path
+component** (**v0.10.14+**).
 
-A pattern with no `*` matches anywhere in the path, so `"fixtures"` excludes
-`./fixtures/.env` and `./test/fixtures/.env` alike.
+`"fixtures"` excludes `./fixtures/.env` and `./test/fixtures/.env` alike, but `"env"` does
+not exclude `.env`. A glob is tried against the path from the folder and the file name, so
+`"fixtures/**"`, `"*fixtures*"` and `"*.log"` all work.
 
-A pattern containing `*` is tried against the path as walked, the path relative to the scan
-root, and the file name — so `"fixtures/**"`, `"./fixtures/**"`, `"*fixtures*"` and
-`"*.log"` all work.
-
-⚠️ Before v0.5.0 a glob was matched only against the whole path *including* its leading
-`./`, so `"fixtures/**"` matched nothing and said nothing about it. Patterns written around
-that limitation still behave identically.
+⚠️ Before 0.10.14 an entry without `*` matched as a substring anywhere in the path. Before
+v0.5.0 a glob was matched only against the whole path *including* its leading `./`. The
+`.env.example` family, `.git`, `node_modules`, `target`, `dist` and `build` are skipped
+whatever this says, and a file named on the command line is always read.
 </Callout>
 
 #### `[[scan.patterns]]`
@@ -263,9 +264,14 @@ alone, with exit `2`, and leaves other commands working. Full behaviour in
 disable = ["Stripe Secret Key (test)"]
 ```
 
-Names are the ones that appear in scan output, matched case-insensitively. The full list:
-`AWS Access Key`, `Stripe Secret Key (LIVE)`, `Stripe Secret Key (test)`, `GitHub Token`,
-`OpenAI API Key`, `Anthropic API Key`, `Private Key`.
+Names are the ones that appear in scan output, matched case-insensitively. The thirteen
+rules: `AWS Access Key`, `AWS Temporary Access Key (STS)`, `GitHub Token`,
+`GitHub Fine-grained PAT`, `Slack Token`, `Google API Key`, `JSON Web Token`,
+`Stripe Secret Key (LIVE)`, `Stripe Secret Key (test)`, `OpenAI API Key`,
+`Anthropic API Key`, `Private Key`, `Credentials in a connection string`. `disable` also
+takes the heuristics' names — `Sensitive config key`, `High-entropy string`,
+`AWS Secret Access Key` — and disabling a rule also silences the name-based finding for the
+values it would have matched. `evnx scan --help` prints the same list.
 
 To scan for **only** your own formats:
 
@@ -300,29 +306,35 @@ regex = "ACME-[A-Z0-9]{10}"
   documented.
 </Callout>
 
-⚠️ **The two heuristics are not rules and cannot be disabled this way.** The AWS secret
-access key is matched on the variable's *name* plus entropy — its shape is only 40 base64
-characters, so as a bare pattern it would match any 40-character token — and the generic
-high-entropy check is a last-resort fallback. Use `severity` to silence those: both are
-reported below `high`.
+ⓘ **The heuristics are not patterns.** The AWS secret access key is matched on the
+variable's *name* plus entropy — its shape is only 40 base64 characters, so as a bare
+pattern it would match any 40-character token — and the generic high-entropy check is a
+last-resort fallback. They cannot be replaced by a `[[scan.patterns]]` entry, only turned
+off by name in `disable`, or filtered with `severity`.
 
 ### `[validate]`
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `strict` | bool | `false` | Also report variables present in `.env` but absent from the example file |
+| `strict` | bool | `false` | Also report variables present but not declared: absent from the example file, or from `[vars]` when the project has a contract |
 | `validate_formats` | bool | `false` | Check URL, port and email values parse |
-| `ignore` | list of strings | `[]` | Issue types to suppress |
+| `ignore` | list of strings | `[]` | Issue types to suppress. Added to by `--ignore` |
+| `fail_on` | `"error"` \| `"warning"` | `"error"` | **v0.10.8+** — what makes `validate` exit 1. `"warning"` fails on warnings too; `--exit-zero` still wins |
 
-Valid `ignore` entries: `missing_variable`, `extra_variable`, `placeholder_value`,
-`boolean_trap`, `weak_secret`, `localhost_in_docker`, `invalid_url`, `invalid_port`,
-`invalid_email`.
+Valid `ignore` entries, all fifteen: `missing_variable`, `extra_variable`,
+`placeholder_value`, `boolean_trap`, `weak_secret`, `localhost_in_docker`, `duplicate_key`,
+`invalid_url`, `invalid_port`, `invalid_email`, `format_mismatch`, `unknown_spec_key`,
+`unknown_environment`, `env_not_ignored`, `env_tracked`. An unknown entry is an error that
+lists them.
 
 ### `[sync]`
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `naming_policy` | `"warn"` \| `"error"` \| `"ignore"` | `"warn"` | How `evnx sync` treats variable names outside `SCREAMING_SNAKE_CASE` |
+| `naming_policy` | `"warn"` \| `"error"` \| `"ignore"` | `"warn"` | How `evnx sync` treats variable names outside `SCREAMING_SNAKE_CASE`. `--naming-policy` overrides it. Any other value stops `sync` with exit `2` (since 0.10.12; it was ignored), even when the flag is given |
+
+Placeholder rules for `sync` are not in this file: they go in a JSON file passed with
+`--template-config`. See [Sync configuration](/guides/reference/sync-configuration).
 
 ### `[diff]`
 
@@ -357,7 +369,7 @@ command behaves. Read by `validate`, `scan` and `sync`.
 | `required` | bool | `true` | Unstated means required. `false` marks a variable that may be absent |
 | `secret` | bool | *unstated* | `true` reports a credential the heuristics cannot name; `false` retracts a guess made from the variable's name |
 | `format` | string | none | `url`, `int`, `port`, `bool`, `email`, or a regular expression |
-| `description` | string | none | Written into `.env.example` by `evnx sync` |
+| `description` | string | none | Shown in `evnx validate`'s suggestion when the variable is missing. `evnx sync` does not read it |
 | `environments` | list of strings | all | Which environments the variable is required in |
 
 ```toml

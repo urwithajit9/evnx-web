@@ -37,19 +37,9 @@
       "why": "'Corrected September 2026: this block ended with evnx doctor --check-updates, which does not exist.'"
     },
     {
-      "file": "packages/docs-content/guides/getting-started/quick-start.mdx",
-      "invocation": "evnx sync --generate-example",
-      "why": "Named as a removed flag, with the current spelling given beside it."
-    },
-    {
       "file": "packages/docs-content/guides/reference/exporting-your-data.mdx",
       "invocation": "evnx auth export",
       "why": "Named as a command that does not exist; the real one is evnx cloud export."
-    },
-    {
-      "file": "packages/docs-content/guides/reference/sync-configuration.mdx",
-      "invocation": "evnx sync --reverse",
-      "why": "Named as a removed flag; --direction reverse replaced it."
     },
     {
       "file": "packages/docs-content/guides/use-cases/use-cases-add-production.mdx",

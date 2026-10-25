@@ -196,7 +196,7 @@ excerpt: "What this guide covers in one sentence."
 difficulty: intermediate  # beginner | intermediate | advanced
 timeToComplete: "10 minutes"
 tags: ["cloud", "vault"]
-evnxVersion: "0.5.2"      # minimum CLI version the page needs
+evnxVersion: "0.10.18"    # the CLI release this page was last checked against
 prerequisites:
   - commands/auth
 draft: true
@@ -229,14 +229,22 @@ Every word on the landing page lives in `packages/content/src/en/*.ts`; section 
 
 ## Releasing a new evnx version
 
-1. `pnpm config:sync` — picks up the new version from the registries (`versions.json`).
-2. `pnpm changelog:sync` — regenerates `/changelog` from the CLI's `CHANGELOG.md`.
-3. With a fresh `--all-features` build of the CLI next door:
-   - `pnpm cli:diff vX.Y.Z` — what the release changed and which guides it touches
-   - `pnpm cli:index` and `pnpm guide:commands` — regenerate the indexes
-   - `pnpm cli:check` — every `evnx …` in the guides still resolves
-4. Update the guides `cli:diff` named, bumping `evnxVersion` where a page now needs the new release.
-5. Commit and push.
+CI fails on every PR after a CLI release until steps 1–3 land, because it checks
+`versions.json` and the command index against `@evnx/cli@latest`.
+
+1. Get the **release** binary, not a local build: download the release archive and its
+   `.sha256`, run `sha256sum -c`, and point `EVNX_BIN` at it. A stale `evnx` earlier on
+   `PATH` is common; check `type -a evnx`.
+2. `EVNX_API_URL=http://127.0.0.1:9 pnpm config:sync` — picks up the new version from the
+   registries (`versions.json`). The URL keeps it from calling the production API.
+3. `pnpm changelog:sync`, `pnpm cli:index` and `pnpm guide:commands`, then commit the
+   generated files on their own: `chore: evnx X.Y.Z — versions.json and command index`.
+4. `pnpm cli:diff vX.Y.Z` — what the release changed and which guides it touches. Update
+   those guides from **real runs** of the release binary (cloud commands against a local
+   evnx-server, never `api.evnx.dev`), and raise `evnxVersion` only on a page whose examples
+   you re-ran on that release.
+5. `pnpm cli:check`, `pnpm guide:commands:check` and `pnpm check:links`, all with
+   `EVNX_BIN` set, then commit and push.
 
 `/changelog` shows each release's summary and highlights. Releases up to v0.4.0 use hand-written highlights (`CURATED` in `apps/web/app/(marketing)/changelog/page.tsx`); never add later releases there.
 

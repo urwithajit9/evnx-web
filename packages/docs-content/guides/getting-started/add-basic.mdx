@@ -3,13 +3,13 @@ section: "getting-started"
 order: 5
 title: "Add Basics — Incrementally Build Your Environment"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-25"
 excerpt: "Learn how to use evnx add to incrementally add environment variables from services, frameworks, blueprints, or custom input. Perfect for beginners."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["add", "tutorial", "beginner", "environment-variables", "cli"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "validate"]
-evnxVersion: "0.10.7"
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
   - getting-started/init-basic
@@ -52,7 +52,12 @@ $ evnx init --yes
 ✓ Created .env from template
 ✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example (no variables yet)
+  ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
 ```
+
+`init` also creates `.evnx.toml` (**v0.10.16+**), the project's variable contract. From
+here on, every `add` records the variables it introduces under `[vars]` in that file,
+and the commands that read it print `config    .evnx.toml` first.
 
 ## Step 2: add a service
 
@@ -60,6 +65,7 @@ Without `--yes`, `add` shows what it will write and asks first:
 
 ```console
 $ evnx add service postgresql
+  config    .evnx.toml
 
   Add Service  Adding variables for 'postgresql'
 
@@ -67,7 +73,8 @@ Preview:
 6 variables
   • service ×6
   Categories: Database
-Add these 6 variables to .env.example and .env? yes
+Add these 6 variables to .env.example and .env? [Y/n] yes
+  ✓ added 6 variable(s) to [vars] in .evnx.toml
 ✓ Added 6 variables for PostgreSQL
 ```
 
@@ -86,7 +93,7 @@ DB_PORT=5432
 # (required)
 DB_USER=your_db_user_value
 
-# Added by evnx add on 2026-10-17 12:14
+# Added by evnx add on 2026-10-25 07:30
 ```
 
 `.env` gets the same names. Replace the placeholders there with your values;
@@ -104,6 +111,8 @@ can also leave the id out (`evnx add service`) and pick from a list.
 
 ```console
 $ evnx add framework django --yes
+  config    .evnx.toml
+  ✓ added 4 variable(s) to [vars] in .evnx.toml
 ! 1 variable with a different value in .env.example: kept as it is
   • DATABASE_URL (existing: "postgresql://user:password@localhost:5432/dbname", new: "sqlite:///db.sqlite3")
 ✓ Added 4 variables for Django, skipped 1 already present
@@ -119,6 +128,7 @@ so, and added the other four.
 
 ```console
 $ evnx add blueprint django_enterprise --dry-run
+  config    .evnx.toml
 Dry run (from blueprint 'Django Secure (Django + Postgres + Celery)'): nothing was written.
   .env.example: would add 15 variables: AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SECRET_ACCESS_KEY, RABBITMQ_DEFAULT_PASS, RABBITMQ_DEFAULT_USER, RABBITMQ_URL, REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, REDIS_URL, SENTRY_AUTH_TOKEN, SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT
   already there, would skip: ALLOWED_HOSTS, DATABASE_URL, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEBUG, DJANGO_SETTINGS_MODULE, SECRET_KEY
@@ -137,6 +147,17 @@ As arguments, one or several at once:
 evnx add custom API_URL=https://api.example.com DEBUG=false --yes
 ```
 
+```console
+  config    .evnx.toml
+  ✓ added 1 variable(s) to [vars] in .evnx.toml
+! 1 variable with a different value in .env.example: kept as it is
+  • DEBUG (existing: "True", new: "true")
+✓ Added 1 custom variable, skipped 1 already present
+```
+
+Django already declared `DEBUG=True` in step 3, so `add` keeps it and says so, as it
+did for `DATABASE_URL`. A name you add is never allowed to change one that is there.
+
 Or at the prompt: a name, a value, and `More options?` for a description, a
 category and whether it is required. An empty name finishes.
 
@@ -148,7 +169,11 @@ Description (Enter for none): Stripe webhook signing secret
 Category: Application
 Is this variable required? yes
 Variable name (or Enter to finish):
+
+Preview:
+  • 1 variable to add
 Append these variables to .env.example and .env? yes
+  ✓ added 1 variable(s) to [vars] in .evnx.toml
 ✓ Added 1 custom variable
 ```
 
@@ -174,6 +199,7 @@ in `.env`.
 
 ```console
 $ evnx add service postgresql --yes
+  config    .evnx.toml
 · Nothing to add: 6 variables for PostgreSQL already in .env.example
 ```
 
@@ -194,6 +220,8 @@ Error: there is no terminal to confirm with.
 
 Add --yes to write without asking:
   evnx add service twilio --yes
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
 ---

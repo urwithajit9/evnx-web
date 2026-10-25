@@ -3,23 +3,23 @@ section: "reference"
 order: 5
 title: "Sync Configuration Reference"
 publishedAt: "2026-03-06"
-updatedAt: "2026-09-29"
-excerpt: "Advanced configuration for evnx sync: placeholder JSON schema, pattern matching, and security options."
+updatedAt: "2026-10-25"
+excerpt: "Configuring evnx sync: the placeholder JSON file (patterns, default, allow_actual), naming policy, environment variables and exit codes."
 difficulty: "advanced"
 timeToComplete: "25 minutes"
 tags: ["sync", "reference", "configuration", "json-schema", "advanced"]
-commands: ["doctor", "scan", "sync"]
-evnxVersion: "0.5.2"
+commands: ["scan", "sync"]
+evnxVersion: "0.10.18"
 prerequisites:
   - commands/sync
   - getting-started/sync-basic
 draft: false
 ---
 
-# Sync Configuration Reference
-
 <Callout type="tip" title="Who this is for">
-This reference is for advanced users configuring custom placeholder patterns, enforcing naming policies, or integrating sync into complex workflows.
+This reference is for teams that want their own placeholder conventions in
+`.env.example`, real values for harmless configuration, or a naming policy enforced in
+CI.
 </Callout>
 
 <Prerequisites>
@@ -27,11 +27,23 @@ This reference is for advanced users configuring custom placeholder patterns, en
   <Prerequisite href="/guides/getting-started/sync-basic">Understand sync basics</Prerequisite>
 </Prerequisites>
 
+`evnx sync` takes its settings from two places:
+
+| Setting | Where |
+|---------|-------|
+| Placeholder rules: `patterns`, `default`, `allow_actual` | A JSON file passed with `--template-config` |
+| Naming policy | `--naming-policy`, or `[sync] naming_policy` in [`.evnx.toml`](/guides/reference/configuration-file) |
+
 ---
 
-## PlaceholderConfig JSON schema
+## The placeholder JSON file
 
-Create `.evnx/placeholders.json` to customize placeholder generation:
+Commit it beside the template, for example as `.evnx/placeholders.json`, and pass it on
+every run:
+
+```bash
+evnx sync --template-config .evnx/placeholders.json
+```
 
 ```json
 {
@@ -40,85 +52,94 @@ Create `.evnx/placeholders.json` to customize placeholder generation:
   "patterns": {
     ".*_API_KEY$": "sk_demo_XXXXXXXXXXXXXXXX",
     ".*_SECRET$": "demo_secret_placeholder",
-    "DATABASE_URL": "postgresql://demo:demo@localhost:5432/demo_db",
-    "REDIS_URL": "redis://localhost:6379/0",
+    "^DATABASE_URL$": "postgresql://demo:demo@localhost:5432/demo_db",
+    "^REDIS_URL$": "redis://localhost:6379/0",
     ".*_PORT$": "8080",
-    ".*_HOST$": "localhost",
-    ".*_URL$": "https://api.demo.example.com",
-    "DEBUG": "true",
-    "ENVIRONMENT": "development",
-    "LOG_LEVEL": "debug"
+    "^ENVIRONMENT$": "development"
   },
   "default": "REPLACE_IN_PRODUCTION",
-  "allow_actual": [
-    "APP_NAME",
-    "APP_VERSION",
-    "ENVIRONMENT",
-    "LOG_LEVEL"
-  ],
-  "naming_convention": {
-    "style": "SCREAMING_SNAKE_CASE",
-    "allow_prefixes": ["MY_APP_", "SERVICE_"],
-    "warn_on_lowercase": true
-  }
+  "allow_actual": ["APP_NAME", "APP_VERSION", "LOG_LEVEL"]
 }
 ```
 
-### Schema reference
+### Keys
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `$schema` | `string` | No | Accepted and ignored by evnx. Point your editor at it for completion and inline validation: [`evnx.dev/schemas/placeholders.v1.json`](https://evnx.dev/schemas/placeholders.v1.json) |
-| `description` | `string` | No | Accepted and ignored. A note for whoever reads the file |
-| `patterns` | `object` | No | Regex pattern to placeholder mappings. See [Pattern precedence](#pattern-precedence) when more than one matches |
-| `default` | `string` | No | Fallback placeholder for unmatched keys |
-| `allow_actual` | `string[]` | No | Keys whose **real value** is written to the template. Guarded since 0.7.0 — see [allow_actual](#allow_actual) |
-| `naming_convention` | `object` | No | ⚠️ **Not read from this file.** Set naming policy with `--naming-policy` or `[sync] naming_policy` in `.evnx.toml`. Since 0.7.0 evnx warns if you set it here |
+| Key | Type | Description |
+|-----|------|-------------|
+| `$schema` | `string` | Accepted and ignored by evnx. Point your editor at it for completion and inline validation: [`evnx.dev/schemas/placeholders.v1.json`](https://evnx.dev/schemas/placeholders.v1.json) |
+| `description` | `string` | Accepted and ignored. A note for whoever reads the file |
+| `patterns` | `object` | Regular expression → placeholder. See [Patterns](#patterns) |
+| `default` | `string` | The placeholder for a key no pattern or built-in rule matches. Without it, `YOUR_VALUE_HERE` |
+| `allow_actual` | `string[]` | Keys whose **real value** is written to the template. A credential is refused. See [`allow_actual`](#allow_actual) |
+| `naming_convention` | `object` | **Not read.** Accepted with a warning; see [Naming policy](#naming-policy) |
+
+**Any other key is an error** (since 0.10.12). A misspelt key used to be ignored, which
+left the setting it named silently off:
+
+```text
+Error: tc.json has a key evnx does not read: `allow_actaul` (did you mean `allow_actual`?)
+  Accepted keys: $schema, description, patterns, default, allow_actual, naming_convention.
+  Nothing was written: a misspelt key would leave the setting it names off.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+Exit `2`, nothing written. The same goes for a file that is missing, is not valid JSON,
+has a value of the wrong type, or holds a pattern that is not a valid regular expression.
+Since 0.10.12 the file is loaded on every path, including `--check` with no `.env` in CI,
+so a mistake fails there as it does locally.
+
+### Which rule a key gets
+
+The first that applies wins:
+
+1. `allow_actual` lists the key: its real value.
+2. A `patterns` entry matches it: that placeholder.
+3. The [built-in rules](/guides/commands/sync#placeholder-rules), by whole words of the
+   name (`SECRET`/`KEY`/`TOKEN` → `YOUR_KEY_HERE`, a URL by its scheme, and so on).
+4. `default`, or `YOUR_VALUE_HERE`.
+
+To see which placeholder each key would get, preview:
+
+```bash
+evnx sync --dry-run --template-config .evnx/placeholders.json
+```
+
+Reverse sync uses the same file: where the template's value for a missing key is empty
+or a placeholder, the placeholder written into `.env` follows these rules.
 
 ---
 
-## Pattern matching syntax
+## Patterns
 
-Patterns use **Rust regex** with implicit case-insensitive matching.
+Each key of `patterns` is a [Rust regular expression](https://docs.rs/regex/latest/regex/#syntax),
+matched **case-insensitively** against the variable name. It is not anchored: `DATABASE_URL`
+as a pattern also matches `DATABASE_URL_RO`. Anchor it (`^DATABASE_URL$`) to mean one
+variable.
 
-### Pattern examples
+| Pattern | Matches |
+|---------|---------|
+| `.*_API_KEY$` | `STRIPE_API_KEY`, `AWS_API_KEY` |
+| `^DATABASE_URL$` | `DATABASE_URL` only |
+| `DATABASE_URL` | `DATABASE_URL`, `DATABASE_URL_RO`, `OLD_DATABASE_URL` |
+| `.*_PORT$` | `SERVER_PORT`, `DB_PORT`, `REDIS_PORT` |
+| `^DEBUG` | `DEBUG`, `DEBUG_MODE`, `DEBUG_LEVEL` |
+| `.*(PASSWORD\|PASS).*` | `DB_PASSWORD`, `ADMIN_PASS`, and also `PASSPORT_ID` |
 
-| Pattern | Matches | Example output |
-|---------|---------|---------------|
-| `.*_API_KEY$` | `STRIPE_API_KEY`, `AWS_API_KEY` | `sk_demo_XXXXXXXXXXXXXXXX` |
-| `^DATABASE_URL$` | Exact match only: `DATABASE_URL` | `postgresql://demo:demo@localhost:5432/demo_db` |
-| `.*_PORT$` | `SERVER_PORT`, `DB_PORT`, `REDIS_PORT` | `8080` |
-| `^DEBUG` | `DEBUG`, `DEBUG_MODE`, `DEBUG_LEVEL` | `true` |
-| `.*(PASSWORD|PASS).*` | `DB_PASSWORD`, `ADMIN_PASS` | `YOUR_PASSWORD_HERE` |
-
-### Regex cheat sheet
-
-```regex
-.*      Match any characters (zero or more)
-.+      Match any characters (one or more)
-^       Start of string
-$       End of string
-|       OR operator
-()      Grouping
-[]      Character class
-?       Zero or one of preceding
-*       Zero or more of preceding
-+       One or more of preceding
-```
-
-<Callout type="warning" title="Case sensitivity">
-All patterns are matched case-insensitively. `.*_api_key$` matches `STRIPE_API_KEY`, `stripe_api_key`, and `Stripe_Api_Key`.
+<Callout type="warning" title="A pattern is a substring match">
+The built-in rules match whole words of a name; a pattern does not. `PASS` as a pattern
+matches `PASSPORT_ID` and `BYPASS_CACHE`. Anchor and delimit what you mean:
+`(^|_)PASS(_|$)`.
 </Callout>
 
 ### Pattern precedence
 
-More than one pattern usually matches a given key. `STRIPE_SECRET_KEY` matches
-`SECRET`, `_KEY$` and `^STRIPE_` all at once. evnx picks the most specific, in this
-order:
+More than one pattern often matches a key. `STRIPE_SECRET_KEY` matches `SECRET`, `_KEY$`
+and `^STRIPE_` at once. evnx picks the most specific, in this order:
 
-1. **An exact key match** — a pattern that is simply the variable's name.
+1. **An exact key match**: a pattern that is simply the variable's name.
 2. **The longest pattern.** `.*_SECRET_KEY$` beats `SECRET`; anything beats `.*`.
-3. **Declaration order** — the first one written in the file wins.
+3. **Declaration order**: the first one written in the file wins.
 
 ```json
 {
@@ -133,155 +154,148 @@ order:
 
 `STRIPE_SECRET_KEY` gets `<the-exact-key>`, whatever order you write them in.
 
-<Callout type="warning" title="Deterministic since 0.7.0 — before it, it was not">
-On v0.6.0 and earlier the winner depends on internal hash ordering, so the
-same `.env` can produce a different `.env.example` on each run — and
-`.env.example` is a committed file, so `git diff` showed changes nobody made. If
-you pinned a template config against the old behaviour, check the result once after
-upgrading.
+<Callout type="info" title="Deterministic since 0.7.0">
+On v0.6.0 and earlier the winner depended on internal hash ordering, so the same `.env`
+could produce a different `.env.example` on each run. If you pinned a template config
+against the old behaviour, check the result once after upgrading.
 </Callout>
 
-<Callout type="warning" title="A pattern that is not valid regex is an error">
-Since 0.7.0, `evnx sync` refuses to run and names the pattern, and nothing is
-written. On v0.6.0 and earlier it is skipped silently, and the key fell through to
-`default` — so the template looked fine and did not follow your rules.
-</Callout>
+A pattern that is not a valid regular expression stops the run and is named:
+
+```text
+Error: tc5.json declares a placeholder pattern that is not a valid regular expression: "("
+  regex parse error:
+    (?i)(
+        ^
+error: unclosed group
+  Nothing was written. Fix the pattern, or remove it.
+```
 
 ---
 
 ## `allow_actual`
 
-Every value in `.env.example` is normally replaced by a placeholder. `allow_actual`
-lists keys that keep their **real value** instead.
+Every value in `.env.example` is normally a placeholder. `allow_actual` lists keys that
+keep their **real value** instead:
 
 ```json
 {
   "default": "REPLACE_IN_PRODUCTION",
-  "allow_actual": ["APP_NAME", "APP_VERSION", "ENVIRONMENT", "LOG_LEVEL"]
+  "allow_actual": ["APP_NAME", "LOG_LEVEL"]
 }
 ```
 
-```bash
-# .env                          # .env.example, after evnx sync
-APP_NAME=my-app                 APP_NAME=my-app
-LOG_LEVEL=debug                 LOG_LEVEL=debug
-STRIPE_API_KEY=sk_live_…        STRIPE_API_KEY=REPLACE_IN_PRODUCTION
+With a `.env` holding `APP_NAME=my-app`, `LOG_LEVEL=debug` and a live
+`STRIPE_API_KEY`, `evnx sync --template-config placeholders.json` creates:
+
+```text
+# Generated from .env
+# Replace all placeholder values with real credentials
+
+APP_NAME=my-app
+LOG_LEVEL=debug
+STRIPE_API_KEY=YOUR_KEY_HERE
 ```
 
-This is for the part of a `.env` that is **configuration rather than credentials**.
-For `APP_NAME` or `LOG_LEVEL` the real value is the useful example, and
-`YOUR_VALUE_HERE` is strictly worse. It also means `evnx sync --reverse` gives a new
-teammate working defaults in their `.env`, leaving only the genuine secrets to
-obtain.
+`STRIPE_API_KEY` got `YOUR_KEY_HERE`, not the `default`: the built-in rule for `KEY`
+comes before `default`.
 
-### Listing a secret is refused, not warned about
+This is for the part of a `.env` that is **configuration rather than credentials**. For
+`APP_NAME` or `LOG_LEVEL` the real value is the useful example, and `YOUR_VALUE_HERE`
+is strictly worse. It also means `evnx sync --direction reverse` gives a new teammate
+working defaults in their `.env`, because reverse copies the template's values.
 
-<Callout type="warning" title="evnx checks every value before writing">
-A listed key whose value looks like a credential **fails the sync**. Nothing is
-written, every offending key is named at once, and the exit code is `2`.
+### A credential is refused, not warned about
 
-```
-Error: `allow_actual` would copy a real credential into .env.example, which is a
-committed file. Nothing was written.
+Before anything is written, every listed value is checked with the detectors
+`evnx scan` uses, plus a check for credentials in a connection string. One hit fails
+the whole run: nothing is written, every offending key is named, exit `2`.
 
-  DATABASE_URL — a password embedded in a URL
+```text
+Error: `allow_actual` would copy a real credential into .env.example, which is a committed file. Nothing was written.
+
+  DATABASE_URL — Credentials in a connection string
   JWT_SECRET — Sensitive config key: JWT_SECRET
+
+  `allow_actual` is for configuration whose real value is the useful example — APP_NAME, LOG_LEVEL, ENVIRONMENT.
+  Remove these keys from it and they will be written as placeholders.
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
-Remove those keys from `allow_actual` and they are written as placeholders again.
-The check uses the same detectors as `evnx scan`, plus a check for a password
-embedded in a connection string.
+<Callout type="warning" title="No audit line for allow_actual in 0.10.12">
+The interactive "actual values" choice prints
+`[AUDIT] actual values written to .env.example for: …` to stderr. Values written through
+`allow_actual` print no such line, the run still says it used placeholder values, and
+the `--dry-run` preview marks them `·` like placeholders. The credential check above
+still runs; only the record is missing. Read the template to see what it wrote.
 </Callout>
 
-<Callout type="warning" title="On v0.6.0 and earlier this field does nothing">
-On v0.6.0 and earlier, `allow_actual` is parsed and never read: listed keys get
-placeholders like any other. The behaviour described above arrives in the next
-release. Nothing leaked — the failure was in the safe
-direction — but the documented behaviour did not happen. If you have been relying on
-it, check your `.env.example` after upgrading, because values that were previously
-placeholders will now be real.
-</Callout>
+On v0.6.0 and earlier, `allow_actual` was parsed and never read: listed keys got
+placeholders like any other. If you set it then, your next sync writes real values for
+those keys.
 
 ---
 
-## Naming convention configuration
+## Naming policy
 
-Control how variable names are validated.
+Variable names outside `UPPER_SNAKE_CASE` are checked against a policy:
 
-<Callout type="warning" title="Not read from placeholders.json">
-`naming_convention` in this file is **ignored**. Naming policy comes from
-`--naming-policy` on the command line, or `[sync] naming_policy` in `.evnx.toml`.
-Since 0.7.0, `evnx sync` warns when it finds `naming_convention` here rather than
-discarding it silently. The fields below describe the intended shape and are kept
-for when the file does support it.
-</Callout>
+| Policy | Behaviour |
+|--------|-----------|
+| `warn` (default) | `! Variable 'myCamelVar' doesn't follow convention (UPPERCASE_WITH_UNDERSCORES)`, and the run continues |
+| `error` | The run stops with no verdict, exit `2`, in every mode |
+| `ignore` | Nothing |
 
-### `naming_convention` object
+Set it on the command line, or for the project in `.evnx.toml`. The flag wins:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `style` | `enum` | `SCREAMING_SNAKE_CASE` | Expected naming style |
-| `allow_prefixes` | `string[]` | `[]` | Prefixes exempt from style check |
-| `warn_on_lowercase` | `bool` | `true` | Warn if any lowercase letters found |
-
-### Supported styles
-
-| Style | Pattern | Examples |
-|-------|---------|----------|
-| `SCREAMING_SNAKE_CASE` | `^[A-Z][A-Z0-9_]*$` | `DATABASE_URL`, `API_KEY` |
-| `snake_case` | `^[a-z][a-z0-9_]*$` | `database_url`, `api_key` |
-| `camelCase` | `^[a-z][a-zA-Z0-9]*$` | `databaseUrl`, `apiKey` |
-| `PascalCase` | `^[A-Z][a-zA-Z0-9]*$` | `DatabaseUrl`, `ApiKey` |
-| `kebab-case` | `^[a-z][a-z0-9-]*$` | `database-url`, `api-key` |
-
-### Example: Allow project prefixes
-
-```json
-{
-  "naming_convention": {
-    "style": "SCREAMING_SNAKE_CASE",
-    "allow_prefixes": ["MY_APP_", "SERVICE_", "LEGACY_"],
-    "warn_on_lowercase": true
-  }
-}
+```toml
+[sync]
+naming_policy = "error"
 ```
 
-**Valid with this config:**
+An invalid value in the file is exit `2` even when `--naming-policy` overrides it, so a
+typo cannot sit unnoticed:
 
-```
-MY_APP_DATABASE_URL=...
-SERVICE_API_KEY=...
-LEGACY_OLD_VAR=...
-DATABASE_URL=...
+```text
+  config    .evnx.toml
+Error: .evnx.toml [sync] naming_policy: unknown naming policy 'strict' — expected one of: warn, error, ignore
+
+No verdict: evnx did not finish. This is not a clean result.
 ```
 
-**Invalid (would warn/error):**
+The policy covers the names sync would **write**: names new to the template, or every
+name when it creates the template. Names already in both files are not checked.
 
+### `naming_convention` in the JSON file
+
+`naming_convention` is accepted in the placeholder file, because earlier versions of
+this page documented it, and is **not read**. evnx warns once and carries on:
+
+```text
+! tc3.json sets `naming_convention`, which evnx does not read from this file. Use --naming-policy, or [sync] naming_policy in .evnx.toml.
 ```
-myApp_databaseUrl=...
-```
+
+There is no prefix allowance or alternative style: the only rule is `UPPER_SNAKE_CASE`.
 
 ---
 
 ## Environment variables
 
-Control sync behavior via environment variables.
-
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
-
-**Usage:**
+| Variable | Effect |
+|----------|--------|
+| `CI` | Set to anything but empty, `0` or `false`: no prompts, placeholder values, and the output says `CI is set`. Read by `sync` only (since 0.10.12) |
+| `NO_COLOR` | Plain output, as `--no-color` |
 
 ```bash
-# Disable colors for CI logs
-NO_COLOR=1 evnx sync --verbose
+# Plain output in CI logs
+NO_COLOR=1 evnx sync --check --direction forward
 ```
 
-<Callout type="warning" title="Corrected in v0.10.3">
-This table listed `CI`, `EVNX_SYNC_DRY_RUN` and `EVNX_SYNC_FORCE`. evnx has never
-read any of them. Use `--dry-run`, `--check` or `--force`; a run without a
-terminal never prompts.
+<Callout type="info">
+Until 0.10.12 evnx read none of the environment variables this page once listed: `CI`,
+`EVNX_SYNC_DRY_RUN`, `EVNX_SYNC_FORCE`. `CI` is read now; the other two still do not
+exist. Use `--dry-run`, `--check` or `--force`.
 </Callout>
 
 ---
@@ -291,59 +305,26 @@ terminal never prompts.
 Every file is written to a temporary file beside it and renamed into place, so an
 interrupted run leaves the old file intact rather than half a new one.
 
-- A new `.env` is created readable by you only (0600); a new `.env.example` is 0644,
+- A new `.env` is created readable by you only (`0600`); a new `.env.example` is `0644`,
   because it is meant to be committed.
-- An existing file keeps the mode you gave it (**v0.10.3+**; sync used to force 0600
-  onto a `.env` you had set to 0640).
-- A symlink is written through to its target, and the link stays (**v0.10.3+**; it
-  used to be replaced by a plain file).
+- An existing file keeps the mode you gave it.
+- A symlink is written through to its target, and the link stays. The run says so:
+  `· wrote through .env.example -> real/tmpl`.
 
 ---
 
-## Security audit logging
-
-Whenever real values are written into `.env.example` — through the interactive
-"actual values" choice or `allow_actual` — one line goes to stderr, with or without
-`--verbose`, and `-q` does not hide it (**v0.10.3+**):
-
-```
-[AUDIT] actual values written to .env.example for: APP_NAME, LOG_LEVEL
-```
-
-A credential never gets there, by the same detectors `evnx scan` uses: the
-interactive choice writes it as a placeholder and names it in a warning, and
-`allow_actual` refuses the whole run (exit 2, nothing written).
-
-<Callout type="warning" title="Corrected in v0.10.3">
-An earlier version of this page showed audit lines with a timestamp, a user and an
-action. evnx has never written those; the line above is the whole of it.
-</Callout>
-
----
-
-## Exit codes and error handling
-
-### Exit code reference
+## Exit codes
 
 | Code | Meaning | Typical cause |
-|------|---------|--------------|
-| `0` | Success | Sync completed; under `--check`, the files are in sync |
-| `1` | Out of sync | `--check` only: run `evnx sync` and commit the result |
-| `2` | Could not run | A missing or unparseable file, invalid JSON in `--template-config`, `--naming-policy error` refusing a name, a credential in `allow_actual` |
+|------|---------|---------------|
+| `0` | Done | Sync wrote or had nothing to write; a `--dry-run`; under `--check`, the files are in sync |
+| `1` | Out of sync | `--check` only. The message names the command that fixes each side |
+| `2` | No verdict | A missing source file (`.env` forward, `.env.example` reverse) or an unparseable one; a template config that is missing, not JSON, holds an unknown key or an invalid pattern; an invalid `[sync] naming_policy`; `--naming-policy error` refusing a name; a credential in `allow_actual`; under `--check`, nothing to compare or an empty `.env` |
 
-### Error message format
+An error is an `Error:` line on stderr, then the line every evnx command ends a run
+without a verdict with:
 
-An error is one `Error:` line on stderr, then the line every evnx command ends a
-failed run with, and exit `2`:
-
-```
-✗ File not found: .env
-Error: .env file not found - run 'evnx init' to get started
-
-No verdict: evnx did not finish. This is not a clean result.
-```
-
-```
+```text
 Error: Failed to parse placeholder config as JSON: key must be a string at line 1 column 2
 
 No verdict: evnx did not finish. This is not a clean result.
@@ -351,110 +332,65 @@ No verdict: evnx did not finish. This is not a clean result.
 
 ---
 
-## Advanced usage patterns
+## Recipes
 
-### Conditional sync in scripts
-
-```bash
-#!/bin/bash
-if git diff --quiet HEAD -- .env; then
-  echo "✓ .env unchanged, skipping sync"
-  exit 0
-fi
-
-echo "🔄 .env changed, updating template..."
-# --check writes nothing and reports the verdict through the exit code (v0.5.0+).
-# `git diff` cannot be used here: --dry-run never writes, so it is always quiet.
-if ! evnx sync --direction forward --check; then
-  echo "⚠️  .env.example needs updates"
-  echo "Run: evnx sync --direction forward"
-  exit 1
-fi
-```
-
-### Sync with custom error handling
-
-<Callout type="warning">
-`evnx sync` does not emit JSON — `EVNX_OUTPUT_JSON=1` is read by `evnx doctor` only, so the
-recipe that used to sit here piped human-readable text into `jq`. Use `--check`'s exit code
-instead; it distinguishes the two failures that mattered.
-</Callout>
+### Gate a pull request
 
 ```bash
-evnx sync --direction forward --check
+evnx sync --check --direction forward --template-config .evnx/placeholders.json
 case $? in
   0) echo "✓ in sync" ;;
-  1) echo "🚫 .env.example is stale — run 'evnx sync --direction forward'" ; exit 1 ;;
-  2) echo "🚫 evnx could not check the files" ; exit 1 ;;
+  1) echo "🚫 .env.example is missing a variable — run 'evnx sync' and commit it"; exit 1 ;;
+  2) echo "🚫 evnx could not check the files"; exit 1 ;;
 esac
-
-warnings=$(echo "$output" | jq -r '.warnings | length')
-if [ "$warnings" -gt 0 ]; then
-  echo "⚠️  $warnings warnings (non-blocking):"
-  echo "$output" | jq -r '.warnings[]'
-fi
 ```
 
-### Multi-environment sync
+Passing `--template-config` in CI is worth it even though `--check` writes nothing: a
+broken config file fails the job instead of the next developer's sync.
+
+### Report what drifted
 
 ```bash
-for env in development staging production; do
-  echo "🔄 Syncing $env environment..."
-  evnx sync \
-    --direction forward \
-    --template-config ".evnx/placeholders-$env.json" \
-    --naming-policy error \
-    --dry-run
+evnx sync --check --direction forward --format json > drift.json
+status=$?
+if [ "$status" -eq 1 ]; then
+  echo "Missing from .env.example:"
+  jq -r '.missing[]' drift.json
+fi
+exit "$status"
+```
+
+### Several environments, one template
+
+```bash
+for env in staging production; do
+  echo "Checking .env.$env…"
+  evnx sync --env-name "$env" --check --direction forward || exit 1
 done
 ```
 
+Each `.env.<name>` must declare nothing the template lacks. A missing file is exit `2`,
+naming the environments that do exist.
+
 ---
 
-## Troubleshooting advanced issues
+## Troubleshooting
 
-### Custom pattern not matching
+### A pattern is not applied
 
-**Debug steps:**
+1. Check the key in the file is `patterns`, spelt so: any other key is an error now, so
+   if the run succeeds, the key is right.
+2. Remember a pattern is a case-insensitive, unanchored regular expression, and a more
+   specific pattern (an exact name, then the longest) wins over yours.
+3. Preview the result: `evnx sync --dry-run --template-config .evnx/placeholders.json`
+   lists the placeholder every key would get. `--verbose` does not show pattern matching.
+4. `allow_actual` outranks `patterns`: a key listed there keeps its real value.
 
-```bash
-# 1. Validate JSON syntax
-cat .evnx/placeholders.json | jq . || echo "Invalid JSON"
+### The naming policy does not fire
 
-# 2. Test regex pattern manually
-echo "STRIPE_API_KEY" | grep -iE ".*_API_KEY$"
-
-# 3. Run sync with verbose to see pattern evaluation
-evnx sync --template-config .evnx/placeholders.json --verbose 2>&1 | grep -i "pattern|match"
-```
-
-**Common fixes:**
-
-- Escape special regex chars: `.*_API_KEY$` not `.*_API_KEY*`
-- Remember patterns are case-insensitive by default
-- Ensure pattern key exists in `patterns` object
-
-### Naming policy not enforcing
-
-**Check:**
-
-```bash
-evnx sync --naming-policy error --verbose 2>&1 | grep "naming_policy"
-cat .evnx/placeholders.json | jq '.naming_convention'
-```
-
-**Fix:** CLI flags override config file. Use `--naming-policy error` explicitly in CI.
-
-### Atomic write failing on Windows
-
-**Cause:** File rename semantics differ on Windows.
-
-**Workaround:**
-
-```bash
-# Use WSL or Git Bash for sync operations
-# Or ensure no other process has .env open during sync
-evnx sync
-```
+The policy only checks names sync would write. A name already in `.env.example` passes,
+whatever its spelling. Check the effective policy: `--naming-policy` on the command line
+wins over `[sync] naming_policy`.
 
 ---
 
@@ -462,14 +398,5 @@ evnx sync
 
 - [JSON Schema for placeholders](https://evnx.dev/schemas/placeholders.v1.json)
 - [Rust regex syntax](https://docs.rs/regex/latest/regex/#syntax)
-- [Atomic file operations](https://stefan-marr.de/2022/03/atomic-file-operations/)
-- [Security audit best practices](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
-
-<Callout type="success" title="Master advanced sync">
-With this reference, you can customize sync for any team workflow, enforce strict policies, and integrate deeply with your toolchain.
-</Callout>
-
-
----
-
-
+- [`.evnx.toml` reference](/guides/reference/configuration-file)
+- [`evnx sync` command reference](/guides/commands/sync)

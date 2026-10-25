@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.17",
+  "evnx_version": "0.10.18",
   "features": [
     "net",
     "migrate",
@@ -321,6 +321,10 @@
         {
           "path": "vault rekey",
           "about": "Rotate a vault's key without removing anyone"
+        },
+        {
+          "path": "vault leave",
+          "about": "Leave a vault that was shared with you"
         }
       ]
     },

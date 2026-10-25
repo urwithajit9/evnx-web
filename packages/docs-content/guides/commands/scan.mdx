@@ -3,18 +3,19 @@ title: "evnx scan"
 section: commands
 order: 5
 publishedAt: "2026-03-05"
+updatedAt: "2026-10-25"
 excerpt: "Scan .env files for secrets, high-entropy strings, and known credential patterns. Supports JSON, SARIF, and GitHub Actions annotation output."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions","evnx"]
-commands: ["backup", "migrate", "scan", "validate"]
-evnxVersion: "0.5.2"
+commands: ["backup", "scan", "validate"]
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
 draft: false
 ---
 
-`evnx scan` detects secrets and sensitive data in your `.env` files before they leave your machine. It runs in under 200ms and integrates directly into pre-commit hooks and CI/CD pipelines.
+`evnx scan` finds values that look like real secrets — provider keys, tokens, private keys, passwords in connection strings — before they leave your machine. A folder scan reads every file, not only `.env`, and in a git repository it counts what git would commit. It is built for pre-commit hooks and CI. Every output on this page is from evnx 0.10.18.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -25,7 +26,7 @@ draft: false
 ## Command signature
 
 ```bash
-evnx scan [OPTIONS] [PATH]
+evnx scan [OPTIONS] [PATH]...
 ```
 
 **Options:**
@@ -36,10 +37,15 @@ evnx scan [OPTIONS] [PATH]
 | `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format. **An unrecognised value is an error** — it used to fall back to `pretty` silently |
 | `--severity` | `high\|medium\|low` (`all` = `low`) | `low` | **v0.5.0+** — lowest confidence worth reporting. Filters the findings, the counts and the exit code together |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (advisory mode) |
-| `--exclude` | `string[]` | `[]` | Glob or substring patterns to skip |
+| `--exclude` | `string[]` | `.env.example` | Paths to skip in a folder walk. A value with `*`, `?` or `[` is a glob; any other value matches a **whole path component**. Adds to `[scan] exclude` |
+| `--max-file-size` | size | `1MiB` | **v0.10.14+** — skip walked files larger than this (`500K`, `5MB`, `2MiB`). A file you name is read whatever its size |
+| `--include-ignored` | `bool` | `false` | **v0.10.14+** — count findings in files git ignores and does not track. See [In a git repository](#in-a-git-repository) |
 | `--extensions` | `string[]` | — | **v0.10.3+** — read only files with these extensions in folders (`env,yml,json`). Opt-in, and announced on every run. `[scan] extensions` in `.evnx.toml` sets it per project |
 | `--pattern` | `regex[]` | `[]` | **v0.5.0+** — also report values matching this expression. Repeatable. Combines with `[[scan.patterns]]` |
 | `--ignore-placeholders` | `bool` | `false` | Skip values that look like placeholders (`changeme`, `your_key_here`) |
+| `--no-ignore-placeholders` | `bool` | `false` | Report them even when `[scan] ignore_placeholders` is `true`. The last of the two flags wins |
+| `-q`, `--quiet` | `bool` | `false` | Print nothing when clean. Findings, and the line saying a scan was narrowed, still print |
+| `-v`, `--verbose` | `bool` | `false` | Show the rules in force and each file read |
 
 <Callout type="warning">
 `--path`, `--recursive`, `--ignore`, `--include-example`, `--output` and `--exit-code`
@@ -58,12 +64,17 @@ It works now; see [Teaching it your own formats](#teaching-it-your-own-formats).
 
 ### Known credential patterns
 
-evnx ships with these rules. The list is generated from the source, so it is what the
-binary actually has:
+evnx ships with these thirteen rules. `evnx scan --help` lists them by name, and `-v` prints
+the ones in force:
 
 | Rule | Severity | Expression |
 |---|---|---|
 | `AWS Access Key` | high | `AKIA[0-9A-Z]{16}` |
+| `AWS Temporary Access Key (STS)` | high | `ASIA[0-9A-Z]{16}` |
+| `GitHub Fine-grained PAT` | high | `github_pat_[A-Za-z0-9_]{40,}` |
+| `Slack Token` | high | `xox[abprs]-[0-9A-Za-z-]{10,}\|xapp-[0-9]-[A-Za-z0-9-]{10,}` |
+| `Google API Key` | medium | `AIza[0-9A-Za-z_\-]{35}` |
+| `JSON Web Token` | medium | `eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}` |
 | `Stripe Secret Key (LIVE)` | high | `sk_live_[0-9a-zA-Z]{24,}` |
 | `Stripe Secret Key (test)` | medium | `sk_test_[0-9a-zA-Z]{24,}` |
 | `GitHub Token` | high | `\b(?:ghp\|gho\|ghu\|ghs)_[A-Za-z0-9]{36,40}\b` |
@@ -72,12 +83,21 @@ binary actually has:
 | `Private Key` | high | `-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----` |
 | `Credentials in a connection string` | high | `[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s/?#@]+:[^\s/?#@]+@[^\s/?#]+` |
 
-Two further checks are **not** rules, because neither can be expressed as one:
+`Google API Key` and `JSON Web Token` are `medium` on purpose: many Google keys are browser
+keys meant to ship in a page, and many JWTs are public ID tokens.
+
+Three further checks are **not** rules, because none can be expressed as one:
 
 | Check | Severity | How it decides |
 |---|---|---|
-| `AWS Secret Access Key` | medium | 40 base64-ish characters **and** a variable name containing `AWS` **and** entropy > 4.5. Its shape alone matches any 40-character token, so the name is part of the test |
+| `Sensitive config key` | high | The variable's **name** looks like a secret (`*_SECRET`, `*_TOKEN`, `STRIPE_SECRET_KEY` …). The value was not checked, and the output says so |
+| `AWS Secret Access Key` | medium, **high** under an `AWS_SECRET_*` name | 40 base64-ish characters **and** a variable name containing `AWS` **and** entropy > 4.5. Its shape alone matches any 40-character token, so the name is part of the test |
 | `High-entropy string` | low | 32+ characters with entropy > 4.8. The last resort |
+
+**Stand-ins are never findings** (**v0.10.14+**). AWS's documented example keys
+(`AKIAIOSFODNN7EXAMPLE`) and placeholder-shaped values are recognised and skipped, and a
+name-only match on a value that is an address (a URL, a host) is dropped. Under
+`--severity high`, a long value under a secret-like name is still kept.
 
 <Callout type="warning">
   ⚠️ **This list previously named three patterns that do not exist** — a Stripe
@@ -109,9 +129,11 @@ so this is caught now — which means **a repository with one now fails
 `evnx scan --severity high`** where it did not before. That is the point, but re-run
 your pipeline once after upgrading rather than discovering it on a release branch.
 
-Two things it deliberately does **not** flag: `postgresql://reader@host/db`, which is a
-username with no password, and `https://api.example.com/users/me@example.com`, where
-the `@` is in the path rather than the authority.
+Things it deliberately does **not** flag: `postgresql://reader@host/db`, which is a
+username with no password; `https://api.example.com/users/me@example.com`, where the `@` is
+in the path rather than the authority; and (**v0.10.14+**) stand-ins such as
+`postgres://user:password@localhost:5432/app` and documentation hosts, which is what a
+template holds.
 </Callout>
 
 These are the formats evnx ships with. For the ones only your project knows — an internal
@@ -119,12 +141,12 @@ token, a vendor key shape — see [Teaching it your own formats](#teaching-it-yo
 
 ### High-entropy detection
 
-Beyond known patterns, `evnx scan` flags any value of 32 characters or more whose Shannon entropy exceeds 4.8. This catches:
+Beyond known patterns, `evnx scan` flags any value of 32 characters or more whose Shannon entropy exceeds 4.8. It is the low-confidence last resort, for:
 
 - Custom API keys that don't match a known format
 - Base64-encoded secrets embedded in `.env`
-- JWTs (which contain base64-encoded payloads)
-- Private keys accidentally pasted as values
+
+JWTs and private keys have rules of their own (`JSON Web Token`, `Private Key`).
 
 <Callout type="warning" title="Multiline values: fixed in v0.8.0">
 ⚠️ **Before v0.8.0 a secret inside a multiline value was not reported at all** —
@@ -168,12 +190,13 @@ evnx recognises nine:
 | `VITE_` | Vite |
 | `PUBLIC_` | SvelteKit and Astro |
 
-```bash
+```text
 $ evnx scan .env.local
   ✗  Stripe Secret Key (LIVE)                    high
-     .env.local:3 (NEXT_PUBLIC_STRIPE_KEY)  sk_l…1234
-     !  NEXT_PUBLIC_ is inlined into the client bundle by Next.js — anyone who
-        loads your site can read this
+     .env.local:1 (NEXT_PUBLIC_STRIPE_KEY)  sk_l…1234
+     !  matches a live key format, not a placeholder
+     !  NEXT_PUBLIC_ is inlined into the client bundle by Next.js — anyone who loads your site can read this
+     →  rename to STRIPE_KEY and read it server-side
      →  revoke at https://dashboard.stripe.com/apikeys
 ```
 
@@ -226,20 +249,43 @@ Human-readable, color-coded output for terminal use:
 evnx scan
 ```
 
+```text
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env
+
+  ✗  AWS Access Key                              high
+     ./.env:1 (AWS_ACCESS_KEY_ID)  AKIA…LKEY
+     !  matches a live key format, not a placeholder
+     →  revoke at https://console.aws.amazon.com/iam
+
+  ✗  Stripe Secret Key (LIVE)                    high
+     ./.env:2 (STRIPE_SECRET_KEY)  sk_l…hijk
+     !  matches a live key format, not a placeholder
+     →  revoke at https://dashboard.stripe.com/apikeys
+
+  ✗  GitHub Token                                high
+     ./.env:3 (GITHUB_TOKEN)  ghp_…Q7r8
+     !  matches a live key format, not a placeholder
+     →  revoke at https://github.com/settings/tokens
+
+  ✗  Credentials in a connection string          high
+     ./.env:4 (DATABASE_URL)  post…5432
+     !  a password in a postgres:// URL, not a placeholder
+
+  4 findings  ·  4 high
+
+
+Next steps:
+  1. Revoke or rotate the keys above — assume they are compromised
+  2. Remove them from history: git filter-repo --path .env --invert-paths
+  3. Force push, after coordinating with everyone who has a clone
 ```
-[SCAN] Scanning .env...
 
-[ERROR] AWS_SECRET_ACCESS_KEY
-        Pattern: aws_secret_access_key (confidence: high)
-        Line 8
-        Recommendation: Use `evnx migrate --to aws-secrets-manager`
-
-[WARNING] STRIPE_SECRET_KEY
-          Pattern: stripe_live_key (confidence: medium)
-          Value appears to be a placeholder — verify before deploying
-
-[SUMMARY] 1 error, 1 warning — run `evnx migrate` to move secrets to a manager
-```
+A value is only ever shown as a short preview (`AKIA…LKEY`). Findings are sorted by file
+and line, and one credential is one finding. The "Next steps" follow git: for a file git
+ignores and does not track, they say nothing was committed instead of telling you to
+rewrite history.
 
 ### JSON
 
@@ -252,33 +298,38 @@ evnx scan --format json
 ```json
 {
   "files_scanned": 1,
-  "secrets_found": 2,
+  "unreadable": [],
+  "skipped": [],
+  "secrets_found": 1,
   "findings": [
     {
-      "pattern": "AWS Secret Access Key",
+      "pattern": "AWS Access Key",
       "confidence": "high",
-      "value_preview": "wJal…EYab",
-      "location": "./.env:1 (AWS_SECRET_ACCESS_KEY)",
-      "variable": "AWS_SECRET_ACCESS_KEY",
+      "value_preview": "AKIA…LKEY",
+      "location": "./.env:1 (AWS_ACCESS_KEY_ID)",
+      "variable": "AWS_ACCESS_KEY_ID",
       "action_url": "https://console.aws.amazon.com/iam",
-      "matched_by": "value"
-    },
-    {
-      "pattern": "Stripe Secret Key (LIVE)",
-      "confidence": "high",
-      "value_preview": "sk_l…efXY",
-      "location": "./.env:2 (STRIPE_SECRET_KEY)",
-      "variable": "STRIPE_SECRET_KEY",
-      "action_url": "https://dashboard.stripe.com/apikeys",
       "matched_by": "value"
     }
   ],
-  "high_confidence": 2,
+  "high_confidence": 1,
   "medium_confidence": 0,
   "low_confidence": 0,
-  "summary": { "total": 2, "high": 2, "medium": 0, "low": 0, "files_scanned": 1 }
+  "summary": {
+    "total": 1,
+    "high": 1,
+    "medium": 0,
+    "low": 0,
+    "files_scanned": 1,
+    "files_unreadable": 0,
+    "files_skipped": 0
+  }
 }
 ```
+
+(One finding of the four shown.) In a git repository the document also carries
+`ignored_by_git` — `[{"path": "./.env", "findings": 1}]` — and `summary.ignored_by_git`,
+the findings in files git ignores, which are not in `findings` or the totals.
 
 <Callout type="warning">
 ⚠️ **The recipes on this page used to name fields that do not exist.** A finding carries
@@ -388,22 +439,22 @@ affected.
 
 ### Block commits with pre-commit
 
+evnx ships the hooks:
+
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: local
+  - repo: https://github.com/urwithajit9/evnx
+    rev: v0.10.18
     hooks:
-      - id: evnx-scan
-        name: evnx — scan for secrets
-        entry: evnx scan --severity high
-        language: system
-        files: '\.env'
-        pass_filenames: false
+      - id: evnx-scan        # the staged files, before each commit
+      - id: evnx-scan-push   # a SARIF scan before each push
 ```
 
-`--severity high` means only high-confidence findings block the commit; anything below is
-neither reported nor counted. `scan` already exits `1` when it reports something, so no
-extra flag is needed to make the hook fail.
+`evnx-scan` runs `evnx scan` on the files being committed, which are always read and
+reported in full. To block only on high-confidence findings, add
+`args: [--severity high]` to the hook. `scan` already exits `1` when it reports something,
+so no extra flag is needed to make the hook fail.
 
 <Callout type="warning">
 This hook used to read `evnx scan --exit-code --severity high`. **`--exit-code` does not
@@ -633,11 +684,11 @@ Measured over 400 files, 60,000 lines, 6.3 MB, no findings:
 Expressions are also matched without backtracking, so a pattern committed to `.evnx.toml`
 cannot hang the scan for everyone who clones the repository.
 
-<Callout type="warning">
-**A pattern made only of literal text will match its own declaration**, because `.evnx.toml`
-is scanned like any other file. `--exclude .evnx.toml` if that bothers you — but note that
-excluding it also means a secret pasted into that file would never be found, which is why
-evnx does not exclude it for you. Expressions with metacharacters do not self-match.
+<Callout type="info">
+**A pattern does not match its own declaration** (**v0.10.14+**). `.evnx.toml` is still
+scanned like any other file, so a secret pasted into it is found, but the `regex = "…"` line
+of a `[[scan.patterns]]` entry is not reported. Before 0.10.14 a literal pattern matched
+itself there.
 </Callout>
 
 <Callout type="info" title="Not to be confused with `evnx validate --pattern`">
@@ -671,26 +722,30 @@ tokens in a seed file.
 command reads them. A value marked `# evnx-ignore: test fixture` is still reported, and
 there is no `[scan] ignore` key either.
 
-`.evnx.toml`'s `[scan]` section **does** work as of v0.5.0 — `severity`, `exclude`,
-`ignore_placeholders` and `patterns` are all read. On v0.4.x the loader existed but nothing
-called it, which is where the older claim came from.
+`.evnx.toml`'s `[scan]` section **does** work — `severity`, `exclude`,
+`ignore_placeholders`, `patterns`, `disable`, `builtins`, `extensions` and `max_file_size`
+are all read, and `[vars] secret = false` retracts a name-based guess. On v0.4.x the loader
+existed but nothing called it, which is where the older claim came from. See the
+[`.evnx.toml` reference](/guides/reference/configuration-file).
 
-The three mechanisms below are the ones that exist.
+The mechanisms below are the ones that exist.
 </Callout>
 
 ### Skip files and paths — `--exclude`
 
-Glob or substring; repeatable. Combines with `[scan] exclude` from `.evnx.toml` rather than
-replacing it — the config holds the project's standing exclusions, the flag is this run's.
+Repeatable. Combines with `[scan] exclude` from `.evnx.toml` rather than replacing it — the
+config holds the project's standing exclusions, the flag is this run's.
 
 ```bash
 evnx scan --exclude 'fixtures/**' --exclude '*.test.js'
 ```
 
-A pattern **without** `*` matches anywhere in the path, so `fixtures` skips
-`./fixtures/.env` and `./test/fixtures/.env` alike. A pattern **with** `*` is a glob, and is
-tried against the path as walked, the path relative to the scan root, and the file name —
-so `fixtures/**`, `./fixtures/**`, `*fixtures*` and `*.log` all work.
+A value **with** `*`, `?` or `[` is a glob, tried against the path from the folder and
+against the file name — so `fixtures/**`, `*fixtures*` and `*.log` all work. Any other value
+matches a **whole path component** (**v0.10.14+**): `fixtures` skips `./fixtures/.env` and
+`./test/fixtures/.env`, but `env` no longer skips `.env`. Before 0.10.14 a plain value
+matched as a substring anywhere in the path. A file you name on the command line is read
+whatever `--exclude` says.
 
 <Callout type="warning">
 **v0.5.0+.** Before this, a glob was only ever matched against the whole path *including*
@@ -700,7 +755,7 @@ did — the matching was widened, never redefined.
 </Callout>
 
 `.git/`, `node_modules/`, `target/`, `dist/`, `build/`, `.env.example`, `.env.sample`,
-`.env.template` and `evnx backup` output are excluded already.
+`.env.template`, editor swap files and `evnx backup` output are excluded already.
 
 ### Skip obvious placeholders — `--ignore-placeholders`
 
@@ -725,9 +780,9 @@ evnx scan --severity high
 ## Scanning a whole project
 
 `evnx scan` is **already recursive**, and since **v0.10.3** it reads **every file** in a
-folder. Binary files and files over 1024 KiB are skipped, and the scan says how many on
-stderr (`-v` lists each, with the reason; `--format json` has a `skipped` list). A file
-you name is always read. Paths are positional:
+folder. Binary files and files over 1 MiB (`--max-file-size`, **v0.10.14+**) are skipped,
+and the scan says how many on stderr (`-v` lists each, with the reason; `--format json` has
+a `skipped` list). A file you name is always read. Paths are positional:
 
 ```bash
 # The default: this directory and everything under it
@@ -740,8 +795,39 @@ evnx scan config/.env.production
 evnx scan .env config/ src/
 ```
 
-`.git/`, `node_modules/`, `target/`, `dist/`, `build/`, the `.env.example` family and
-`evnx backup` output are always skipped.
+`.git/`, `node_modules/`, `target/`, `dist/`, `build/`, the `.env.example` family, editor
+swap files and `evnx backup` output are always skipped.
+
+### In a git repository
+
+**v0.10.14+.** A folder walk counts what git would commit. A filled-in `.env` that
+`.gitignore` covers is where secrets belong, so its findings are summarised in one line and
+do not fail the scan:
+
+```text
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env, ./.env.bak, ./.gitignore
+
+  ✓  No secrets in files git would commit
+
+  3 files scanned
+  ·  git ignores ./.env and ./.env.bak — 8 findings there are not counted, because they are not committed (--include-ignored lists them)
+```
+
+That exits `0`. `--include-ignored` counts them, and naming the file reports it in full:
+
+```text
+$ evnx scan .env
+  …
+  4 findings  ·  4 high
+
+Next steps:
+  1. git ignores .env and does not track it, so nothing was committed
+  2. Rotate a key only if the file was shared another way — a copy, an archive, a container image
+```
+
+A file git **tracks** is always counted, ignored or not, because it is in the history.
 
 <Callout type="warning" title="Before v0.10.3 a folder scan read only some extensions">
 The walk read only files whose extension was on a built-in list, so `config/id_rsa.pem`
@@ -774,8 +860,8 @@ path it could not read and says plainly that there is no verdict.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Clean — nothing at or above `--severity`, or `--exit-zero` was set |
-| `1` | Findings reported |
+| `0` | Clean — nothing at or above `--severity` in files git would commit, or `--exit-zero` was set |
+| `1` | Findings reported, or a file that could not be read |
 | `2` | **v0.5.0+** — the scan could not be completed, so there is no verdict |
 
 **`2` is not a louder `1`.** "I found nothing" and "I could not look" are different

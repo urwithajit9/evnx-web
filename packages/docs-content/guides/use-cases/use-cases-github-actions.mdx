@@ -92,11 +92,14 @@ evnx migrate \
 The output below comes from a `.env` with 14 variables, in a repository that already holds `DATABASE_URL` and `REDIS_URL`.
 
 <Step title="Scan and validate your .env first">
-Avoid uploading test keys or placeholder values to GitHub.
+Avoid uploading placeholder values to GitHub. `validate` reports placeholders and weak
+values; `scan` reports what looks like a real secret, which in the file you are migrating
+is expected. Name the file, because in a git repository a folder scan only summarises a
+gitignored `.env`:
 
 ```bash
-evnx scan
-evnx validate --strict
+evnx scan .env
+evnx validate
 ```
 </Step>
 

@@ -439,11 +439,27 @@ secret = true
 It **only appends**. A name already declared is left exactly as it is, so a
 hand-written `required = false` is never reset by an unrelated `evnx add`.
 
-| Project state | What happens |
+What `evnx add` does depends on the project:
+
+| Project state | What `add` does |
 |---|---|
 | No `.evnx.toml` | Nothing, silently — you have not opted in |
 | `.evnx.toml`, no `[vars]` | A note on stderr: `.evnx.toml has no [vars] section — the new variables are not under contract`, pointing at `evnx spec init` |
 | `[vars]` present | Appended, with a count |
+
+`evnx init` opts the project in itself (**v0.10.16+**): it creates `.evnx.toml` on every
+run, with the variables it set up in `[vars]`, or with an empty `[vars]` when it set up
+none, so that a later `evnx add` records into it:
+
+```console
+$ evnx init --with redis --yes
+  …
+  ✓ created .evnx.toml with 5 variable(s) in [vars]
+
+$ evnx init --yes
+  …
+  ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
+```
 
 <Callout type="info">
 The note is on **stderr** and never fatal, so nothing new can fail a CI job.
@@ -455,16 +471,24 @@ the variables are on disk either way.
 
 `evnx sync --direction reverse` adds declared-but-missing variables to `.env`,
 not just the ones in `.env.example`. In a terminal it asks first; `--force` adds
-them without asking:
+them without asking (and so does a run with no terminal, or with `CI` set):
 
 ```console
 $ evnx validate
   ✗  Missing required variable: ONLY_IN_SPEC
 
 $ evnx sync --direction reverse --force
+┌─ Missing Variables ──────────────────────────────────────────────────────────┐
+│ Found 1 variable missing from .env:                                          │
+│   • ONLY_IN_SPEC  (required by [vars] in .evnx.toml)                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
 · Force mode: adding the template's values (placeholders where it has none), skipping prompts
-✓ Added 1 variables to .env
+✓ Added 1 variable to .env
 ```
+
+Since 0.10.12 the box says which names come from the spec rather than the template,
+and reverse into a **new** `.env` adds them too.
 
 Before v0.5.0 the second command said *".env is up to date"* — two commands
 contradicting each other about the same variable.

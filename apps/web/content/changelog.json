@@ -1,7 +1,82 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
-  "latest": "0.10.17",
+  "latest": "0.10.18",
   "releases": [
+    {
+      "version": "0.10.18",
+      "date": "2026-10-25",
+      "summary": "The patch for `evnx org`, `vault` and `cloud` (package R-org-vault-cloud,",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "A role is read the same way by `vault` and `org`"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx vault members <id>` works with a vault-scoped API token"
+        },
+        {
+          "type": "improvement",
+          "text": "The master password is checked before it is used"
+        },
+        {
+          "type": "improvement",
+          "text": "Admins can share from the CLI"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx vault leave <vault>`"
+        },
+        {
+          "type": "improvement",
+          "text": "Revoking the owner is refused before any work"
+        },
+        {
+          "type": "improvement",
+          "text": "A vault name is lower-case letters, digits and hyphens, checked before the password"
+        },
+        {
+          "type": "improvement",
+          "text": "`--version` is 1 or more"
+        },
+        {
+          "type": "improvement",
+          "text": "`cloud history` names who pushed by email"
+        },
+        {
+          "type": "improvement",
+          "text": "The push hints name the vault"
+        },
+        {
+          "type": "improvement",
+          "text": "Every cloud confirmation names `--yes` when there is no terminal"
+        },
+        {
+          "type": "improvement",
+          "text": "`-q` for every cloud command"
+        },
+        {
+          "type": "improvement",
+          "text": "`cloud watch` reports failed polls and skips your own pushes"
+        },
+        {
+          "type": "improvement",
+          "text": "`cloud pull` keeps the file it writes out of git"
+        },
+        {
+          "type": "improvement",
+          "text": "Pushing the default `.env` into a production vault asks first"
+        },
+        {
+          "type": "improvement",
+          "text": "README: the whole of `vault`, `cloud` and `org`"
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.17...v0.10.18"
+      }
+    },
     {
       "version": "0.10.17",
       "date": "2026-10-23",

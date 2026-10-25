@@ -1,7 +1,7 @@
 ---
 title: "Zero-Knowledge Cloud Sync: Architecture of Secure Env Storage"
 publishedAt: "2026-03-10"
-updatedAt: "2026-09-16"
+updatedAt: "2026-10-25"
 excerpt: "A deep dive into client-side encryption, key derivation, and how evnx cloud implements zero-knowledge architecture for environment variables."
 author: "ajit"
 category: "deep-dive"
@@ -373,9 +373,11 @@ identities. Current statement:
 every version under a fresh key and re-wraps it for everyone who stays. What it cannot do is
 recall what a removed member already read — rotate those secrets at their source.
 
-**Master key rotation is still not built.** That is the genuinely hard one the section above
-describes: rotating a master key means re-wrapping every vault key that depends on it,
-atomically. It is planned and it is not shipped.
+**Master key rotation shipped in v0.7.0** (*updated for v0.10.18*). It is the genuinely
+hard one the section above describes: rotating a master key means re-wrapping every vault
+key that depends on it, atomically. `evnx auth rotate-master-password` does that, and
+`evnx vault rekey` (v0.8.0) rotates a vault key without removing anyone. See
+[Changing your master password](/guides/reference/changing-your-master-password).
 
 What exists today is in **[evnx cloud](/guides/commands/cloud)** and
 **[evnx vault](/guides/commands/vault)**.

@@ -3,13 +3,13 @@ title: "evnx cloud"
 section: commands
 order: 9
 publishedAt: "2026-09-16"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-25"
 excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "spec init"]
-evnxVersion: "0.8.0"
+commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "spec init", "vault list"]
+evnxVersion: "0.10.18"
 prerequisites:
   - commands/auth
   - commands/vault
@@ -45,6 +45,9 @@ evnx cloud watch
 | `pull` | Download a version and decrypt it |
 | `run` | **v0.5.0+** — run a command with a vault's variables in its environment, writing no file |
 | `history` | List a vault's versions, newest first |
+| `diff` | **v0.10.0+** — which keys changed between two versions |
+| `watch` | **v0.10.0+** — report when someone else pushes a new version |
+| `audit` | **v0.10.0+** — who pushed, pulled, shared and re-keyed |
 | `delete-version` | Delete one version, and its encrypted blob |
 | `export` | **v0.8.0+** — write every version to a directory, **decrypted** |
 | `link` | Bind this directory to a vault |
@@ -98,14 +101,40 @@ pushed **local development secrets into the production vault**, encrypted, versi
 shared with everyone holding a key.
 
 A derived name that does not exist is not an error, because most projects genuinely have
-only `.env`. What makes that safe is the reporting. Pairing a production vault with a
-plain `.env` also prints a warning.
+only `.env`. What makes that safe is the reporting, and, from v0.10.18, the question
+below.
 </Callout>
+
+### Pushing the default `.env` into production asks first — **v0.10.18+**
+
+When the file is the default `.env` and the vault is a production vault, `push` asks
+before it encrypts anything:
+
+```text
+  file      ./.env (default)
+  ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+Push ./.env into production vault my-api/production? [y/N]
+```
+
+With no terminal (a script, a CI job), it is refused with exit 2 instead of pushing:
+
+```text
+Error: there is no terminal to confirm with.
+
+./.env is the default file and my-api/production is a production vault, so this is asked first. Name the file you mean (--file or --env-name), or add --yes:
+  evnx cloud push --vault my-api/production --yes
+```
+
+Only that case asks. A file you named with `--file` or `--env-name` never does, and
+neither does a derived `.env.production`. By id, a signed-in session looks the
+vault's environment up for the question. A vault-scoped API token cannot look it up,
+so it is not asked.
 
 <OptionTable>
   <Option flag="--vault" type="string">Vault to push to: `name`, `name/environment`, or an id. Optional in a bound directory.</Option>
-  <Option flag="--file" type="path">File to push. Defaults to `.env.&lt;environment&gt;` when the vault names one and that file exists, otherwise `.env`.</Option>
+  <Option flag="--file" type="path">File to push. Defaults to `.env.&lt;environment&gt;` when the vault names one and that file exists, otherwise `.env`. Short form `-f`.</Option>
   <Option flag="--env-name" type="string">**v0.5.0+** — push `.env.&lt;NAME&gt;`. Conflicts with `--file`; a name whose file does not exist is an error.</Option>
+  <Option flag="--yes" type="flag">**v0.10.18+** — push the default `.env` into a production vault without asking. Short form `-y`.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
   <Option flag="--server" type="url">Server to talk to. Plain `http://` is refused for anything but loopback.</Option>
 </OptionTable>
@@ -132,15 +161,45 @@ one. The file written is always printed.
 
 <OptionTable>
   <Option flag="--vault" type="string">Vault to pull from. Optional in a bound directory.</Option>
-  <Option flag="--file" type="path" default=".env">Where to write the decrypted file.</Option>
-  <Option flag="--version" type="number" default="latest">Version to pull.</Option>
+  <Option flag="--file" type="path">Where to write the decrypted file. Derived as above; `-` writes to stdout and creates no file. Short form `-f`.</Option>
+  <Option flag="--env-name" type="string">Write `.env.&lt;NAME&gt;` instead of the derived or default file.</Option>
+  <Option flag="--version" type="number" default="latest">Version to pull, **1 or more**.</Option>
   <Option flag="--force" type="flag">Overwrite the target without asking.</Option>
+  <Option flag="--gitignore" type="flag">**v0.10.18+** — add the pulled file to `.gitignore` without asking.</Option>
+  <Option flag="--no-gitignore" type="flag">**v0.10.18+** — skip the `.gitignore` check.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
 </OptionTable>
 
 <Callout type="warning" title="--version here means the vault version">
 Because `pull` takes a `--version` of its own, clap's automatic `--version` flag is disabled on this subcommand. For the program version use `evnx --version`.
 </Callout>
+
+**v0.10.18+**, `--version` is checked before anything is sent: `0` is a usage error
+(exit 2), and a version the vault does not have is named:
+
+```text
+Error: version 9 of my-api/production does not exist.
+  `evnx cloud history --vault my-api/production` lists the versions it has.
+```
+
+### Keeping the pulled file out of git — **v0.10.18+**
+
+In a git repository, `pull` runs the same `.gitignore` step as `template`, `convert`
+and `restore`. If the file it wrote is not ignored, it asks on a terminal. With no
+terminal it warns and leaves `.gitignore` alone:
+
+```text
+  file      ./.env (default)
+  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ✓ pulled version 2 of my-api/production into ./.env
+! '.env' may contain secrets and is not in .gitignore
+```
+
+`--gitignore` adds it without asking (`✓ Added '.env' to .gitignore`), and
+`--no-gitignore` skips the check. `--file -` writes no file, so nothing is checked.
+
+Pulling over a file that differs from the version asks first. With no terminal it
+stops and names `--force`, the flag that replaces the file.
 
 ---
 
@@ -263,7 +322,18 @@ evnx cloud run --vault x -- ./deploy.sh   # ./deploy.sh returns 2 → this retur
 
 A child killed by a signal has no code to pass through; that is reported and
 becomes `1`. Failures *before* the child starts — not signed in, no such vault,
-the wrong password — are evnx's own errors and exit `1`.
+the wrong password — are evnx's own errors. They exit `2` and end with
+`No verdict: evnx did not finish.`, so they cannot be mistaken for a child that
+returned 1:
+
+```text
+Error: no vault called "no-such-vault". Run `evnx vault list` to see what you have.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+A wrong master password is refused straight after the prompt (**v0.10.18+**),
+before anything is downloaded or run.
 
 ---
 
@@ -275,11 +345,18 @@ evnx cloud history --vault my-api/production --limit 50
 ```
 
 <TerminalOutput title="evnx cloud history">
-VERSION   PUSHED BY          KEYS   WHEN
-12        you@example.com    14     2 hours ago
-11        ci-deploy          14     yesterday
-10        you@example.com    13     3 days ago
+  VERSION  KEYS     SIZE  PUSHED BY        PUSHED
+        4     3    148 B  you              2026-10-24 21:52
+        3     4    185 B  bob@example.com  2026-10-24 21:51
+        2     3    159 B  bob@example.com  2026-10-24 21:51
+        1     2    158 B  you              2026-10-24 21:51
+
+  Restore one with:  evnx cloud pull --version 4
 </TerminalOutput>
+
+`PUSHED BY` names other members by email (**v0.10.18+**; before, everyone but you
+was an 8-character id), and the column widens to fit. Your own pushes say `you`.
+Someone who has since left the vault keeps the short id.
 
 `history` is **read-only in the strongest sense**: no password prompt, no decryption, no blob download. It reads metadata the server already holds in the clear, which is why it is safe to run from a script or a read-only token.
 
@@ -348,6 +425,7 @@ A BLAKE3 digest of ciphertext says only *that* bytes differ, never what they are
 ```bash
 evnx cloud watch
 evnx cloud watch --vault my-api/production --interval 30
+evnx cloud watch --vault my-api/production --once
 ```
 
 Runs in the foreground until Ctrl-C, like `tail -f`. It tells you when a new version appears and names what changed:
@@ -355,15 +433,50 @@ Runs in the foreground until Ctrl-C, like `tail -f`. It tells you when a new ver
 <TerminalOutput title="evnx cloud watch">
   evnx cloud watch  my-api/production
   At v2. Watching for newer versions.
-  Polling every 15s · metadata only, no password · Ctrl-C to stop
+  Polling every 5s · metadata only, no password · Ctrl-C to stop
+  Your own pushes are skipped; --include-mine shows them.
 
-  ▲ v3 · +STRIPE_KEY, -LEGACY_TOKEN · 2026-10-04 18:28
+  ▲ v3 · +FEATURE_NEW_CHECKOUT · 2026-10-24 21:51
     evnx cloud pull --vault my-api/production
-  ▲ v4 · same keys, different contents · 2026-10-05 06:28
+  ▲ v4 · -SENTRY_DSN · 2026-10-24 21:52
     evnx cloud pull --vault my-api/production
 </TerminalOutput>
 
+When the names match but the contents differ, the line reads
+`same keys, different contents` instead.
+
 The point is finding out a teammate changed a secret **before** your next deploy picks it up silently — not saving you from typing `pull`.
+
+| Flag | Description |
+|---|---|
+| `--vault <VAULT>` | Vault to watch. Optional in a bound directory |
+| `--interval <SECONDS>` | Seconds between polls. Default `15`, minimum `5` |
+| `--once` | Check once and exit. For scripts and tests |
+| `--include-mine` | **v0.10.18+** — report your own pushes too |
+
+### Your own pushes are skipped — **v0.10.18+**
+
+A push you made is not news to you, so by default `watch` reports only other
+people's. In the run above, a teammate's watcher on the same vault showed v4 and
+not v3, because v3 was theirs. `--include-mine` shows every push.
+
+### Failed polls are reported, and it stops after ten — **v0.10.18+**
+
+Before, a failed poll showed only under `--verbose`, so an expired login looked
+exactly like a quiet vault. Now, from the third failed poll in a row, it says so on
+stderr, it says when polling works again, and after ten in a row it stops with exit 2:
+
+<TerminalOutput title="evnx cloud watch — the server goes away">
+  ! 3 polls in a row have failed (stopping at 10): could not reach https://api.evnx.dev: Connection refused (os error 111)
+  ! 4 polls in a row have failed (stopping at 10): could not reach https://api.evnx.dev: Connection refused (os error 111)
+  ✓ polling again, after 4 failed poll(s)
+  …
+  ! 9 polls in a row have failed (stopping at 10): could not reach https://api.evnx.dev: Connection refused (os error 111)
+Error: stopped after 10 failed polls in a row: could not reach https://api.evnx.dev: Connection refused (os error 111)
+  Check the connection and your login (`evnx auth status`), then run `evnx cloud watch` again.
+</TerminalOutput>
+
+ⓘ Output from a local test server, shown here as `https://api.evnx.dev`.
 
 <Callout type="warning">
 **It never pulls, and that is deliberate.**
@@ -378,7 +491,7 @@ So it polls **metadata only**: no password, no decryption, no blob download. Tak
 <Callout type="info">
 **`--interval` has a 5-second floor.** A one-second poll against a shared API is a denial of service someone writes by accident, and knowing two seconds sooner is worth nothing.
 
-A failed poll is reported under `--verbose` and the loop continues — a watcher that exits on one network blip is one nobody trusts to leave running.
+One or two failed polls are not reported and the loop continues — a watcher that exits on one network blip is one nobody trusts to leave running.
 </Callout>
 
 ⓘ Two pushes between polls are reported as one event, compared against the version you last saw rather than the one immediately before — otherwise a key that appeared and vanished would be invisible.
@@ -532,29 +645,49 @@ form, which is less of a context switch when you are already in a browser pastin
 result into your CI provider's secret store.
 </Callout>
 
+A token scoped to one vault cannot list vaults, so in a pipeline name the vault by its
+**id**, which `evnx vault list --verbose` prints. By name, the command stops with
+`a vault-scoped API token cannot list vaults, so "my-api/production" cannot be resolved by name.`
+The examples keep the id in a CI variable; it is not a secret.
+
 <CodeTabs defaultTab="GitHub Actions">
   <Tab label="GitHub Actions">
 ```yaml
 - name: Fetch secrets
   env:
     EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
+    EVNX_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+    EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
   run: |
-    evnx cloud pull --vault my-api/production --file .env --force
+    printf '%s' "$EVNX_PASSWORD" | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --force --password-stdin
 ```
   </Tab>
   <Tab label="GitLab CI">
 ```yaml
 fetch-secrets:
   script:
-    - evnx cloud pull --vault my-api/production --file .env --force
+    - printf '%s' "$EVNX_PASSWORD" | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --force --password-stdin
   variables:
     EVNX_TOKEN: $EVNX_TOKEN
+    EVNX_PASSWORD: $EVNX_MASTER_PASSWORD
+    EVNX_VAULT_ID: $EVNX_VAULT_ID
 ```
   </Tab>
 </CodeTabs>
 
-<Callout type="warning" title="A read-only token cannot pull">
+<Callout type="info" title="A read-only token is enough to pull">
 Pulling is a GET, so a read-only token handles deploys perfectly. Give a job a read-write token only when it genuinely pushes — a rotation job, say. Scope it to one vault while you are there.
+</Callout>
+
+<Callout type="info" title="Scripting cloud commands — v0.10.18+">
+- **`-q` prints nothing on success** for every `cloud`, `vault`, `org` and `auth`
+  command. Tables you asked for, warnings and errors still print, and
+  `evnx auth token create … -q` prints the new token alone on stdout. ⚠️ A script
+  that read a `✓ pushed …` line from stdout under `-q` now gets nothing.
+- **Every confirmation names its flag when there is no terminal**: `--yes` for
+  `delete-version`, and `--force` for a `pull` over a file that differs.
+- **A job that pushes the default `.env` into a production vault** needs `--yes`,
+  or better, `--file` naming the file it means.
 </Callout>
 
 <Callout type="info" title="Pulling still needs the master password">

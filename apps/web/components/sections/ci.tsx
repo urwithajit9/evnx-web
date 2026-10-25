@@ -19,8 +19,8 @@ export function Ci() {
         <div className="p-6 rounded-xl border border-border-muted bg-bg-base">
           <h3 className="font-serif text-xl font-bold mb-3">{ci.exitCodes.title}</h3>
           <p className="text-text-secondary leading-relaxed mb-5">{ci.exitCodes.body}</p>
-          {/* ⚠️ `evnx diff` exits non-zero on a healthy project by design. Saying
-              so here prevents the obvious, wrong CI gate. */}
+          {/* ⚠️ Since evnx 0.10.13 `evnx diff` exits 1 only on key drift against
+              the template, so a healthy project exits 0 and the code can gate CI. */}
           <p className="text-sm text-text-muted leading-relaxed border-t border-border-muted pt-4">
             {ci.note}
           </p>

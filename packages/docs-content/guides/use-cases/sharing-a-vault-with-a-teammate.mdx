@@ -3,13 +3,13 @@ section: "use-cases"
 order: 3
 title: "Sharing a Vault, and Taking It Back"
 publishedAt: "2026-09-29"
-updatedAt: "2026-10-22"
+updatedAt: "2026-10-25"
 excerpt: "The full two-account walkthrough: share an encrypted vault, have the other person pull it, then revoke and confirm the old key no longer works."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["cloud", "vault", "sharing", "team", "revocation", "workflow"]
-commands: ["auth register", "cloud link", "cloud pull", "cloud push", "vault create", "vault list", "vault members", "vault revoke", "vault share"]
-evnxVersion: "0.10.14"
+commands: ["auth register", "cloud link", "cloud pull", "cloud push", "vault create", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
+evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/cloud-sync-quickstart
   - commands/vault
@@ -56,19 +56,22 @@ evnx cloud push --vault my-app/production
 ```
   ✓ created my-app/production
 
-  Push a .env into it with:  evnx cloud push
+  Push a .env into it with:  evnx cloud push --vault my-app/production
 ```
 
 ```
   file      ./.env (default)
   ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+Push ./.env into production vault my-app/production? [y/N] yes
   ✓ pushed ./.env to my-app/production as version 1
 ```
 
-Pass `--vault`. The hint after `vault create` leaves it out, but a folder isn't tied to
-a vault until you run `evnx cloud link my-app/production`, so a bare `evnx cloud push`
-stops with `no vault given and this directory has no binding`. Name the file
-`.env.production` and the push picks it up for a production vault without the warning.
+Pass `--vault`: a folder isn't tied to a vault until you run
+`evnx cloud link my-app/production`. Pushing the default `.env` into a production
+vault asks first (**v0.10.18+**), because a forgotten `--file` is how development
+secrets end up in production. Name the file `.env.production` and the push picks it
+up without the warning or the question. In a script with no terminal, the push is
+refused unless you add `--yes` or name the file with `--file`.
 
 Your `.env` is encrypted on this machine. The server receives ciphertext and a
 BLAKE3 hash, and never holds anything that can open it.
@@ -91,19 +94,19 @@ itself, because it has never held the key in a usable form.
 - **developer** — pull and push
 - **admin** — that, plus sharing, changing roles and revoking
 
-The server lets an **admin** share, because handing out a key is not a
-developer-level act. Only the **owner** can delete the vault.
+An **admin** can share, because handing out a key is not a developer-level act. Only
+the **owner** can make someone an admin, and only the owner can delete the vault.
 
-⚠️ In practice only the person who **created** the vault can share it today. The CLI
-shares from the creator's own copy of the key, and an admin who was given the vault
-gets this instead:
+**v0.10.18+** the CLI lets an admin share too (see step 5). Before, it shared only
+from the creator's own copy and refused an admin. A developer or viewer is told which
+role sharing needs, before the password prompt:
 
 ```
-Error: my-app/production was shared with you rather than created by you, and re-sharing
-is not supported. Ask the owner to share it directly.
+Error: sharing my-app/production needs the admin or owner role; you are a developer on it.
+  Ask its owner, or an admin, to share it.
 ```
 
-The dashboard shows the Share form to the owner only.
+The dashboard still shows the Share form to the owner only.
 </Callout>
 
 <Callout type="info" title="Who can remove whom">
@@ -115,11 +118,11 @@ The **owner cannot be removed by anyone, including themselves**: a vault with no
 owner has nobody who can delete it or promote a replacement, and there is no
 transfer-ownership command yet.
 
-Leaving a vault yourself isn't available from the CLI. `vault revoke` with your own
-address is refused, and an admin has to remove you:
+Anyone else can leave on their own with `evnx vault leave` (**v0.10.18+**, see
+step 6). `vault revoke` with your own address points there:
 
 ```
-Error: to leave my-app/production yourself, ask an admin to remove you.
+Error: to leave my-app/production yourself:  evnx vault leave my-app/production
 ```
 </Callout>
 
@@ -127,6 +130,19 @@ Error: to leave my-app/production yourself, ask an admin to remove you.
 `share` historically took `--with` while `revoke` and `role` took `--user`, so
 whichever you learned first was wrong half the time. Both work on all three from
 v0.6.0, and neither is deprecated.
+</Callout>
+
+<Callout type="info" title="Sharing again changes nothing">
+**v0.10.18+** sharing with someone who is already a member never rewrites their role
+or their key. At the same role it says so and exits 0:
+
+```
+  teammate@example.com is already a developer on my-app/production — nothing changed.
+```
+
+At a different role it is refused, and the `evnx vault role` command that makes the
+change is printed instead. Sharing with yourself or with the owner is refused too.
+The server refuses all of these as well, so an older CLI cannot do it either.
 </Callout>
 
 ## 3. Check that it landed
@@ -191,11 +207,57 @@ and sharing with an account that has no ML-KEM key on file is refused rather tha
 downgraded.
 </Callout>
 
+## 5. Optional: let them share it on
+
+**v0.10.18+.** Make your teammate an admin, and they can share the vault with a third
+person themselves, from their own copy of the key:
+
+```bash
+evnx vault role my-app/production --user teammate@example.com --role admin
+```
+
+```
+  ✓ teammate@example.com is now admin on my-app/production
+```
+
+Then, on the teammate's machine:
+
+```bash
+evnx vault share my-app/production --with sam@example.com --role developer
+```
+
+```
+  ✓ shared my-app/production with sam@example.com as developer
+
+  They can pull it with:  evnx cloud pull --vault my-app/production
+```
+
+An admin shares as `viewer` or `developer`. Only the owner can make an admin, so an
+admin asking for `--role admin` is refused before the password prompt.
+
+## 6. Someone leaves on their own
+
+**v0.10.18+.** A member who no longer needs the vault removes themselves:
+
+```bash
+evnx vault leave my-app/production --yes
+```
+
+```
+  ✓ left my-app/production
+  Anything you pulled is still on this machine. The vault key was not rotated: someone who stays can run `evnx vault rekey my-app/production`.
+```
+
+Without `--yes` it asks first. Read the second line: leaving deletes their copy of
+the key, but **does not rotate it**. If the person leaving held secrets that matter,
+run `evnx vault rekey my-app/production` after they go, or use step 7 instead, which
+rotates the key as part of removing them.
+
 ---
 
 ## Taking it back
 
-## 5. Revoke, which rotates the key
+## 7. Revoke, which rotates the key
 
 ```bash
 evnx vault revoke my-app/production --user teammate@example.com
@@ -225,7 +287,7 @@ the swap in a single transaction, so interrupting the command cannot leave the v
 half-rotated — but once it completes, the old key is gone.
 </Callout>
 
-## 6. Confirm the old access is actually gone
+## 8. Confirm the old access is actually gone
 
 This is the step people skip, and it is the only one that proves anything. On the
 removed person's machine:
@@ -247,7 +309,7 @@ Error: no vault called "my-app/production". Run `evnx vault list` to see what yo
 The vault is **not in the list**, and a pull fails. Revocation that leaves the
 old key working is theatre, and the only way to know which you have is to look.
 
-## 7. Confirm you did not lock yourself out
+## 9. Confirm you did not lock yourself out
 
 ```bash
 evnx cloud pull --vault my-app/production --force
@@ -286,8 +348,8 @@ can make the old value worthless.
 Every step above is available at [app.evnx.dev](https://app.evnx.dev): open a vault,
 then **Members**.
 
-- **Share with** — shown to the owner only. The API would let an admin share, but
-  neither the dashboard nor the CLI does yet.
+- **Share with** — shown to the owner only. An admin who needs to share uses the CLI
+  (step 5).
 - **Remove** offers *Remove and rotate the key* and *Remove without rotating*. Pick
   the first unless you have a specific reason not to; the second leaves the removed
   member's copy of the key able to open existing blobs.
@@ -318,14 +380,26 @@ in uploads the key, and the full message says so:
 Sharing is refused rather than falling back to a weaker wrap, which is why this is
 an error and not a warning.
 
-**`the vault owner cannot be removed.`**
+**`you@example.com owns my-app/production, and the owner cannot be removed.`**
 
-By anyone, including the owner. Transfer ownership first — which is not built yet.
+By anyone, including the owner, and refused before any work is done. Transfer
+ownership first — which is not built yet.
+
+**`sharing my-app/production needs the admin or owner role; you are a developer on it.`**
+
+Only an admin or the owner can share. Ask one of them, or ask the owner to make you
+an admin.
 
 **`Insufficient permissions`**
 
 Your role doesn't allow it: a viewer pushing, or an admin removing another admin
 (removing someone requires outranking them).
+
+**`there is no terminal to confirm with.`**
+
+A command that asks first (`revoke`, `leave`, `delete`, a production push of `.env`)
+ran with no terminal, in a script or CI. Nothing was sent. The message ends with the
+same command plus `--yes`; add it if that is what you meant.
 
 **A vault you can see in the dashboard is `not found` from the CLI.**
 

@@ -1,7 +1,7 @@
 ---
 title: ".env vs .env.example vs .env.production: Theory & Best Practices"
 publishedAt: "2026-03-09"
-updatedAt: "2026-10-01"
+updatedAt: "2026-10-25"
 excerpt: "A comprehensive guide to environment variable management: understand the critical differences between .env files, avoid catastrophic security mistakes, and learn how modern tools like evnx, dmno, and varlock solve configuration drift."
 author: ajit
 tags: ["environment-variables", "security", "devops", "best-practices", "evnx", "configuration-management", "12factor"]
@@ -260,65 +260,73 @@ This is where purpose-built tooling transforms configuration management from a c
 
 `evnx` is a Rust-based CLI tool designed to keep your environment configuration consistent, secure, and synchronized across teams and environments.
 
-### `evnx sync`: Automatic Schema Synchronization
+<Callout type="info" title="Updated for v0.10.18">
+This section used to describe an `evnx sync` that scans source code and writes JSDoc
+annotations into `.env.example`, and an `evnx diff` that checks types. Neither has ever
+existed. Below is what the two commands do, with output from evnx 0.10.18.
+</Callout>
 
-Instead of manually editing `.env.example`, let `evnx` scan your codebase and update it automatically:
+### `evnx sync`: keep `.env.example` in step with `.env`
+
+`sync` compares the **names** in your `.env` and `.env.example`, and adds the ones the
+template lacks, with placeholder values — never your real ones:
 
 ```bash
-# Scan your entire project for environment variable usage
-npx @evnx/cli sync
-
-# [SCAN] Analyzing source files...
-# [FOUND] process.env.DATABASE_URL in src/db/connect.ts:12
-# [FOUND] process.env.STRIPE_SECRET_KEY in src/payments/charge.ts:45
-# [FOUND] process.env.NEW_ANALYTICS_KEY in src/tracking/init.ts:8
-# [UPDATE] Added NEW_ANALYTICS_KEY to .env.example
-# [UPDATE] Added type annotations from JSDoc comments
-# [SUCCESS] .env.example is now synchronized with codebase
+npx @evnx/cli sync --force
 ```
 
-**How it works**:
-1. Parses your source code (TypeScript, JavaScript, Python, Ruby, etc.)
-2. Identifies all `process.env.*`, `os.getenv()`, `ENV[]` references
-3. Extracts metadata from comments (type, required, default, description)
-4. Updates `.env.example` with new variables and annotations
-5. Preserves existing comments and formatting
+```text
+┌─ Variables to Add ───────────────────────────────────────────────────────────┐
+│ Found 1 variable in .env missing from .env.example:                          │
+│   • NEW_ANALYTICS_KEY                                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
 
-**Annotation Support**:
-```typescript
-// src/config/analytics.ts
-/**
- * @env NEW_ANALYTICS_KEY
- * @type string
- * @required
- * @pattern "^ak_[a-zA-Z0-9]{32}$"
- * @description "Write key for analytics service"
- */
-const analyticsKey = process.env.NEW_ANALYTICS_KEY;
+· Force mode: using placeholder values and skipping prompts
+✓ Added 1 variable to .env.example
 ```
 
-After `evnx sync`, your `.env.example` automatically includes:
 ```bash
-# @type string @required @pattern "^ak_[a-zA-Z0-9]{32}$"
-# @description "Write key for analytics service"
-NEW_ANALYTICS_KEY=
+# .env.example now ends with:
+# Synced from .env
+NEW_ANALYTICS_KEY=YOUR_KEY_HERE
 ```
+
+`--direction reverse` goes the other way and fills a new `.env` from the template.
+`sync --check` writes nothing and exits `1` when the files disagree, which makes it a CI
+check. On a terminal, plain `evnx sync` asks before it writes.
+
+### Finding the variables your code reads: `evnx init --from-source`
+
+To start from the code rather than from `.env`, `evnx init --from-source` scans the
+project's source for the variables it reads and compares them with `.env.example`. It
+reports both what is missing and what is declared but read nowhere, and it only ever
+appends. It is a heuristic: dynamic access such as `process.env[key]` is invisible to it.
 
 ### `evnx diff`: Pre-Deployment Safety Checks
 
-Before merging a PR or deploying to production, verify that your target environment has all required variables:
+`diff` compares an env file with the template by key name:
 
 ```bash
-# Check local environment against code requirements
 npx @evnx/cli diff
-
-# [DIFF] Comparing environment to code requirements...
-# [MISSING] ANALYTICS_WRITE_KEY: required but not set
-# [TYPE_MISMATCH] DEBUG: expected boolean, got string "yes"
-# [VALID] DATABASE_URL: valid URL format
-# [WARNING] STRIPE_SECRET_KEY: uses test key in production-like env
-# [RESULT] 2 issues found. Fix before deploying.
 ```
+
+```text
+  evnx diff  .env ↔ .env.example
+
+Missing from .env (present in .env.example):
+  + REDIS_URL
+
+Extra in .env (not in .env.example):
+  - LOCAL_DEBUG_MODE
+
+  1 missing from .env  ·  1 not in .env.example
+  values not compared against a template (--values to compare them)
+```
+
+It does not check types or formats; that is `evnx validate`. Against a template it compares
+names only (v0.10.13+), so a healthy project exits `0` and the exit code is usable in CI.
+Between two real environments (`--env-name production --against staging`) it compares
+values too, without printing them.
 
 **CI/CD Integration Example**:
 ```yaml
@@ -333,16 +341,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install evnx
         run: npm install -g @evnx/cli
-      - name: Validate .env.example sync
-        run: evnx sync --check  # Fails if .env.example is outdated
-      - name: Validate production env
-        # Gate on the JSON, not the exit code. `evnx diff` exits 1 whenever any
-        # VALUE differs -- and a placeholder in .env.example differing from the
-        # real value is the entire point of that file, so the bare command fails
-        # on a perfectly healthy project.
-        run: |
-          missing=$(evnx diff --env .env.production --format json | jq '.summary.missing')
-          [ "$missing" -eq 0 ] || { echo "missing $missing variable(s)"; exit 1; }
+      - name: Validate production env has every template key
+        run: evnx diff --env .env.production --fail-on missing
 ```
 
 ### Pre-commit Hook: Catch Mistakes Before They Leave Your Machine
@@ -351,13 +351,16 @@ jobs:
 # .husky/pre-commit
 #!/bin/sh
 npx @evnx/cli scan --severity high   # Exits 1 on a high-confidence detection
-npx @evnx/cli sync --check           # Block if .env.example is outdated
+npx @evnx/cli sync --check --direction forward --skip-without-env   # .env.example lacks a name in .env
 ```
 
-**Performance**: Cold start ~180ms, cached runs ~40ms. Fast enough that developers don't disable it.
+`--skip-without-env` matters: a fresh clone has a template and no `.env`, and without the
+flag the hook blocks every new contributor's first commit. With the pre-commit framework,
+evnx ships this as the `evnx-sync` hook.
 
-<Callout type="tip" title="Monorepo Support">
-evnx automatically detects package boundaries in monorepos (pnpm, npm workspaces, Nx, Turborepo) and manages `.env.example` files per package, preventing cross-package configuration leaks.
+<Callout type="tip" title="Monorepos">
+evnx works on one folder at a time. In a monorepo, run `sync`, `diff` and `doctor` in each
+package that has its own `.env` — for example with a loop over `packages/*/`.
 </Callout>
 
 ---
@@ -637,7 +640,7 @@ validateEnv(process.env); // Throws if invalid
 
 ### 🚀 Deployment & Operations
 - [ ] Inject production secrets via your platform's secret management (never commit)
-- [ ] Validate production environment variables before deployment (`evnx diff --env production`)
+- [ ] Validate production environment variables before deployment (`evnx diff --env-name production --fail-on missing`)
 - [ ] Monitor for configuration-related errors in your observability platform
 - [ ] Have a rollback plan for configuration-related incidents
 - [ ] Document the process for rotating secrets without downtime

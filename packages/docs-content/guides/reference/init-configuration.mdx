@@ -3,23 +3,23 @@ section: "reference"
 order: 4
 title: "Init Configuration Reference"
 publishedAt: "2026-03-06"
-updatedAt: "2026-03-06"
-excerpt: "Configuration options for evnx init: schema customization, CLI flags, and environment variables."
+updatedAt: "2026-10-25"
+excerpt: "What shapes evnx init: the compiled-in component catalogue, the flags, CI, and the four files it writes. Checked against evnx 0.10.18."
 difficulty: "intermediate"
-timeToComplete: "15 minutes"
+timeToComplete: "12 minutes"
 tags: ["init", "reference", "configuration", "schema", "setup"]
-commands: ["add", "add custom", "init", "sync", "validate"]
-evnxVersion: "0.5.2"
+commands: ["add", "init", "sync", "validate"]
+evnxVersion: "0.10.18"
 prerequisites:
   - commands/init
   - getting-started/init-basic
 draft: false
 ---
 
-# Init Configuration Reference
-
 <Callout type="warning" title="Configuration scope">
-Unlike `evnx sync`, the `init` command does **not** support runtime configuration files like `placeholders.json`. Configuration is managed via the embedded `schema.json` and CLI flags. See [limitations](#what-init-does-not-support) for details.
+Unlike `evnx sync`, `init` reads no runtime configuration file such as `placeholders.json`.
+What it can generate comes from a component catalogue compiled into the binary; how it
+runs comes from its flags and `CI`. See [what init does not support](#what-init-does-not-support).
 </Callout>
 
 <Prerequisites>
@@ -29,28 +29,34 @@ Unlike `evnx sync`, the `init` command does **not** support runtime configuratio
 
 ---
 
-## Schema-driven configuration
+## The component catalogue
 
-All `init` behavior is driven by `src/assets/schema.json`, embedded at compile-time.
+Every language, framework, service, piece of infrastructure and blueprint `init` knows is
+in `src/assets/schema.json`, embedded at compile time with `include_str!`. There is no
+runtime override. To see what your installed version knows:
 
-### Schema structure overview
+```bash
+evnx init --list-components
+```
+
+0.10.18 knows **56 components** and **ten blueprints**.
+
+### Its shape
+
+An abridged excerpt of the real file:
 
 ```json
 {
   "languages": {
     "javascript_typescript": {
-      "name": "JavaScript / TypeScript",
+      "display_name": "JavaScript / TypeScript",
       "frameworks": {
         "nextjs": {
-          "name": "Next.js",
-          "vars": {
-            "NEXTAUTH_URL": {
-              "description": "Canonical URL for your app",
-              "default": "http://localhost:3000",
-              "required": true,
-              "sensitive": false
-            }
-          }
+          "display_name": "Next.js",
+          "vars": ["NEXT_PUBLIC_API_URL", "NEXTAUTH_SECRET", "NEXTAUTH_URL", "NEXT_PUBLIC_APP_URL"],
+          "defaults": { "NEXTAUTH_URL": "http://localhost:3000" },
+          "descriptions": { "NEXTAUTH_URL": "Canonical URL for your app" },
+          "categories": { "NEXTAUTH_URL": "Application" }
         }
       }
     }
@@ -58,16 +64,19 @@ All `init` behavior is driven by `src/assets/schema.json`, embedded at compile-t
   "services": {
     "databases": {
       "postgresql": {
-        "name": "PostgreSQL",
-        "vars": {
-          "DATABASE_URL": {
-            "description": "PostgreSQL connection string",
-            "default": "postgresql://localhost:5432/app",
-            "required": true,
-            "sensitive": true
-          }
-        }
+        "display_name": "PostgreSQL",
+        "vars": ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DATABASE_URL"],
+        "defaults": { "DB_PORT": "5432", "DATABASE_URL": "postgresql://user:password@localhost:5432/dbname" },
+        "category": "Database",
+        "required": ["DB_NAME", "DB_USER"]
       }
+    }
+  },
+  "infrastructure": {
+    "vercel": {
+      "display_name": "Vercel",
+      "vars": ["VERCEL_TOKEN", "VERCEL_ORG_ID", "VERCEL_PROJECT_ID", "NEXT_PUBLIC_VERCEL_ENV"],
+      "category": "Deployment Platform"
     }
   },
   "stacks": {
@@ -77,188 +86,179 @@ All `init` behavior is driven by `src/assets/schema.json`, embedded at compile-t
       "components": {
         "language": "javascript_typescript",
         "framework": "nextjs",
-        "services": ["postgresql", "clerk", "aws_s3"],
+        "services": ["postgresql", "clerk", "aws_s3", "stripe"],
         "infrastructure": ["github_actions", "vercel"]
-      }
+      },
+      "tags": ["fullstack", "typescript", "auth", "payments", "saas"]
     }
   }
 }
 ```
 
-### Variable definition fields
+### Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `description` | `string` | Yes | Human-readable explanation |
-| `default` | `string` | No | Placeholder value for `.env.example` |
-| `required` | `bool` | No | Marks variable as mandatory for validation |
-| `sensitive` | `bool` | No | Triggers security warnings if used in `.env` |
-| `pattern` | `string` | No | Regex hint for validation (future use) |
+| Where | Field | Meaning |
+|---|---|---|
+| language, framework, service, infrastructure | `display_name` | The name shown in menus and previews |
+| framework, service, infrastructure | `vars` | The variable **names**, as a list, in output order |
+| framework, service, infrastructure | `defaults` | Name → placeholder value for `.env.example`. A name without one gets a generated placeholder |
+| framework, service, infrastructure | `descriptions` | Name → the comment written above it |
+| framework | `categories` | Name → its section heading |
+| service, infrastructure | `category` | One section heading for all its variables |
+| service | `required` | The names marked `(required)` in the template and `required = true` in `[vars]` |
+| stack | `name`, `description`, `tags` | What the blueprint menu shows |
+| stack | `components` | `language`, `framework`, `services`, `infrastructure`: a blueprint is a component list, so `--blueprint t3_modern` is `--with nextjs,postgresql,clerk,aws_s3,stripe,github_actions,vercel` |
 
-<Callout type="tip" title="Extend without recompiling?">
-Currently, `schema.json` is embedded via `include_str!`. To customize, you must fork and rebuild. Future versions may support external schema loading via `--schema-path`.
-</Callout>
+Services are grouped under `databases`, `messaging_queues`, `auth_providers`, `storage`,
+`monitoring_logging`, `payments`, `ai_ml` and `email_sms`.
+
+⚠️ Earlier versions of this page described a per-variable object with `required`,
+`default`, `sensitive` and `pattern` fields. That shape has never existed.
+
+### What is not in the catalogue
+
+Some behaviour is Rust code, not data, and cannot be changed by editing the file:
+component **aliases** (`postgres`, `pg`, `next`, `k8s` …), the browser-variable copies
+(`NEXT_PUBLIC_*` on Next.js), generated placeholders, **project detection**
+(`package.json`, `docker-compose.yml`, `fly.toml` and friends) and the `--from-source`
+scanner.
 
 ---
 
-## CLI flags reference
+## Flags
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--path`, `-p` | `string` | `.` | Output directory for generated files |
-| `--yes`, `-y` | `bool` | `false` | Skip prompts, use defaults (non-interactive) |
-| `--verbose`, `-v` | `bool` | `false` | Enable detailed debug output |
-| `--help`, `-h` | `bool` | `false` | Display help information |
+| Flag | Description |
+|------|-------------|
+| `--path`, `-p <PATH>` | Output directory. Default `.` |
+| `--yes`, `-y` | Skip all prompts. Blank files unless `--blueprint` or `--with` names a stack; beside an existing template, keeps it and creates `.env` from it |
+| `--blueprint <ID>` | Generate from a named stack, e.g. `t3_modern`. An unknown id lists the valid ones |
+| `--with <LIST>` | Name the components, e.g. `nextjs,postgresql,stripe`. Repeatable and comma-separated; an unknown name suggests near matches |
+| `--list-components` | Print every name `--with` accepts, and exit |
+| `--detect` | Accept what the project declares, without asking |
+| `--from-source` | Build the template from the variables the code reads. Only appends; not valid with `--force` |
+| `--force` | Replace an existing `.env.example`. Without it, `--with` / `--blueprint` over a template exits 2. `.env` is never replaced |
+| `--dry-run` | **v0.10.16+** — show what would be written, write nothing |
+| `--json` | **v0.10.16+** — one JSON document on stdout, with the same fields as `evnx add --json`. Needs `--yes` or `--dry-run` |
+| `--verbose`, `-v` | More detail |
+| `--quiet`, `-q` | Print nothing on success. Findings, warnings, errors and requested data still print |
+| `--no-color` | Disable colour |
 
-### Flag behavior details
+`--dry-run` lists every file it would touch:
 
-#### `--path`
-- Accepts relative or absolute paths
-- Creates parent directories if missing
-- Does **not** validate if path is writable until write time
-
-#### `--yes` (non-interactive mode)
-- Creates a **blank** setup: an empty `.env.example`, a `.env`, and the
-  `.gitignore` entries
-- Skips preview and confirmation prompts
-- Deterministic — the same commit scaffolds the same files every time
-- Ideal for CI/CD, Docker builds, or scripting
-
-<Callout type="warning">
-**Corrected for v0.5.0.** This said `--yes` defaults to "Blueprint mode (first
-available blueprint)", which was the non-determinism bug: the list came from a
-hash map, so the chosen stack varied between runs. Use `--blueprint <name>` to
-pick one, or `--with <components>` to name them.
-</Callout>
-
-#### `--verbose`
-- Prints selection summary:
-  ```
-  [DEBUG] Selection summary:
-    Language: javascript_typescript
-    Framework: nextjs
-    Services: ["postgresql", "clerk"]
-    Infrastructure: ["vercel"]
-  ```
-- Shows schema loading and variable resolution steps
+```text
+Dry run: nothing was written.
+  .env.example: would be created with 5 variables: REDIS_DB, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT, REDIS_URL
+  .env: would be created (0600) with 5 variables
+  .gitignore: would add .env*, !.env.example, !.env.sample, !.env.template
+  .evnx.toml: would be created with 5 variables in [vars]
+```
 
 ---
 
 ## Environment variables
 
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `NO_COLOR` | `1`, `true` | `false` | Disable colored terminal output |
+| Variable | Values | Description |
+|----------|--------|-------------|
+| `NO_COLOR` | any value | Disable coloured output |
+| `CI` | any value except `0` / `false` | **v0.10.16+** — never ask, even at a terminal. With nothing named, exit 2 and list the forms to use |
 
-**Usage:**
-
-```bash
-# Disable colors for CI logs
-NO_COLOR=1 evnx init --verbose
-
-# In CI, say what you want: there is no terminal to ask
-evnx init --yes
+```text
+Error: CI is set, so init does not ask.
+Name what you want instead:
+  evnx init --yes                     blank files
+  evnx init --yes --blueprint <id>    a named stack
+  evnx init --yes --with <a,b,c>      components (evnx init --list-components)
 ```
 
-<Callout type="warning" title="There is no CI detection">
-An earlier version of this page said `CI=true` makes `init` behave as if `--yes`
-was passed. evnx has never read `CI`. Without a terminal, `init` stops before
-writing anything, exits `2`, and names the flags to use instead — pass `--yes`
-(and `--blueprint`, `--with` or `--from-source` to choose what is written).
-</Callout>
+Without `CI`, a run with no terminal stops the same way. Before 0.10.16 init did not read
+`CI`, and this page said so.
+
+---
+
+## The files init writes
+
+| File | When | Behaviour |
+|------|------|-----------|
+| the template | always | The project's template is `[defaults] example` in `.evnx.toml` if set, else whichever of `.env.example`, `.env.sample` or `.env.template` exists, else a new `.env.example`. An existing one is **kept** by `--yes`, and **refused** under `--with` / `--blueprint` unless `--force` |
+| `.env` | always | Created from the template, mode `0600`. If it exists and a stack is named, the names it lacks are appended (`✓ Added 5 variables to .env; the values already there are kept`). Never overwritten |
+| `.gitignore` | when the lines are missing | The block below, appended |
+| `.evnx.toml` | always, **v0.10.16+** | The variable contract: the variables init set up under `[vars]`, or an empty `[vars]` for blank files |
+
+The `.gitignore` block:
+
+```gitignore
+# ── evnx generated ─────────────────────────────────────────
+# Written by evnx. These files may contain secrets — do not commit.
+.env*
+!.env.example
+!.env.sample
+!.env.template
+```
+
+The refusal names the commands that add to a template instead of replacing it:
+
+```text
+Error: ./.env.example already exists.
+
+Refusing to overwrite it without being asked to — it is a tracked file and the contents may be hand-maintained.
+Re-run with --force to replace it, or remove it first.
+To add the variables to it instead, keeping what is there: evnx add blueprint <id> or evnx add service <id>.
+```
 
 ---
 
 ## What init does NOT support
 
-<Callout type="danger" title="Important limitations">
-The following features available in `evnx sync` are **not** supported by `init`:
-</Callout>
-
-| Feature | Status | Workaround / Alternative |
-|---------|--------|-------------------------|
-| `--template-config` (custom placeholder JSON) | ❌ Not supported | Edit `schema.json` defaults, then rebuild |
-| `--naming-policy` (warn/error/ignore) | ❌ Not supported | Use `evnx validate` post-init for naming checks |
-| `--dry-run` (preview without writing) | ❌ Not supported | Preview is shown interactively; use `--yes` + manual inspection |
-| `--placeholder` (force placeholder values) | ❌ Not supported | Placeholders come from schema `default` field |
-| `--force` (skip all prompts) | ⚠️ Partial: `--yes` covers this | Use `--yes` for non-interactive mode |
-| External schema path (`--schema-path`) | ❌ Not supported | Fork repo and modify `src/assets/schema.json` |
-| Runtime variable overrides | ❌ Not supported | Use `evnx add` post-init to customize |
+| Feature | Status | Instead |
+|---------|--------|---------|
+| `--template-config` (custom placeholder JSON) | ❌ | Edit `.env.example` after init, or `evnx sync --template-config` |
+| `--naming-policy` | ❌ | `evnx sync --naming-policy` |
+| `--placeholder` | ❌ | Placeholders come from the catalogue's `defaults`, or are generated |
+| An external schema (`--schema-path`) | ❌ | Fork, edit `src/assets/schema.json`, rebuild |
+| Overriding a value with `evnx add` | ❌ | `add` keeps a value already there and says so (`kept as it is`) |
+| `--dry-run` | ✅ **v0.10.16+** | — |
+| `--force` | ✅ a separate flag | `--yes` does not imply it |
 
 ---
 
-## Customizing placeholder values
+## Customising placeholder values
 
-Since `init` pulls defaults from `schema.json`, here's how to customize:
+### Edit the template after init (simplest)
 
-### Option 1: Edit schema (requires rebuild)
+```bash
+evnx init --yes --blueprint t3_modern
+nano .env.example     # change the placeholders your team prefers
+```
+
+The template is a committed file you own; init never touches it again unless you pass
+`--force`.
+
+### Change the catalogue (needs a rebuild)
+
+Placeholders live in the `defaults` map of the component that declares the variable:
 
 ```json
-// src/assets/schema.json
-"NEXTAUTH_SECRET": {
-  "description": "Secret for NextAuth.js session encryption",
-  "default": "your_team_prefix_XXXXXXXX",  // ← Customize here
-  "required": true,
-  "sensitive": true
+"nextjs": {
+  "display_name": "Next.js",
+  "vars": ["NEXTAUTH_SECRET", "NEXTAUTH_URL"],
+  "defaults": {
+    "NEXTAUTH_SECRET": "your_team_prefix_XXXXXXXX",
+    "NEXTAUTH_URL": "http://localhost:3000"
+  }
 }
 ```
 
-Then rebuild:
-```bash
-cargo build --release
-# Binary now uses your custom defaults
-```
-
-### Option 2: Post-init customization with `evnx add`
+Then rebuild with every feature, as the release does:
 
 ```bash
-# Run init first
-evnx init --yes
-
-# Then add/override variables interactively
-evnx add custom
-
-Variable name: NEXTAUTH_SECRET
-Example/placeholder: my_custom_placeholder_123
-Add another? no
-
-✓ Updated .env.example
+cargo build --release --all-features
 ```
 
-### Option 3: Manual edit (simplest)
-
-```bash
-evnx init --yes
-nano .env.example  # Edit placeholders directly
-```
-
-<Callout type="tip" title="Team consistency">
-If your team needs custom placeholders, document them in your `CONTRIBUTING.md` and use `evnx add` as a post-init step in your onboarding script.
-</Callout>
-
----
-
-## File generation behavior
-
-### Output files
-
-| File | Created by | Overwrite policy |
-|------|-----------|-----------------|
-| `.env.example` | Only if missing | **Refused if it exists** — pass `--force` to replace it |
-| `.env` | Only if missing | Never overwritten (protects local secrets) |
-| `.gitignore` | Appended if patterns missing | Safe append; no duplicate entries |
-
-### .gitignore patterns auto-added
-
-```gitignore
-# Environment files
-.env
-.env.local
-.env.*.local
-```
-
-<Callout type="warning" title="Existing .gitignore">
-If you manage `.gitignore` manually, review after `init` to ensure no conflicts with your existing rules.
+<Callout type="info" title="Why not evnx add?">
+`evnx add` adds names a template lacks. For a name that is already there with a
+different value it keeps the existing one and reports it
+(`! 1 variable with a different value in .env.example: kept as it is`), so it cannot be
+used to override a placeholder.
 </Callout>
 
 ---
@@ -268,7 +268,7 @@ If you manage `.gitignore` manually, review after `init` to ensure no conflicts 
 ### Monorepo initialization
 
 ```bash
-# Initialize each package with isolated .env files
+# One template, .env and .evnx.toml per package
 for pkg in packages/*; do
   evnx init --path "$pkg" --yes
 done
@@ -277,83 +277,56 @@ done
 ### Docker build integration
 
 ```dockerfile
-# Dockerfile
-RUN evnx init --yes --path /app/config --verbose
-# Generated files available at /app/config/.env.example
+RUN evnx init --yes --path /app/config
+# /app/config now holds .env.example, .env (0600), .gitignore and .evnx.toml
 ```
 
 ### Pre-commit hook validation
 
 ```bash
-# .git/hooks/pre-commit
 #!/bin/bash
+# .git/hooks/pre-commit
 if [ ! -f .env.example ]; then
-  echo "⚠️  .env.example missing. Run: evnx init"
+  echo "⚠️  .env.example missing. Run: evnx init --yes"
   exit 1
 fi
 evnx validate --quiet || exit 1
 ```
 
-### Schema validation before rebuild
-
-```bash
-# Validate schema.json syntax before rebuilding
-cat src/assets/schema.json | jq . > /dev/null && echo "✓ Schema valid" || echo "✗ Invalid JSON"
-```
+`validate` exits 1 for problems and 2 when it cannot run (no `.env`, for instance), so
+the hook blocks on both.
 
 ---
 
 ## Troubleshooting
 
-### Schema changes not reflecting
+### Catalogue changes not reflecting
 
-**Cause:** `schema.json` is embedded at compile-time.
+The catalogue is embedded at compile time. Rebuild after editing:
 
-**Fix:** Rebuild after editing:
 ```bash
-cargo clean && cargo build --release
+cargo build --release --all-features
 ```
 
-### .env not created
+### `.env` was not changed
 
-**Cause:** `init` only creates `.env` if it doesn't exist.
+`init` never overwrites a value. With a stack named it appends only the names `.env`
+lacks; with `--yes` alone it leaves an existing `.env` as it is and says
+`already set up`. To bring `.env` up to date with the template, use
+`evnx sync --direction reverse`.
 
-**Fix:** Delete existing `.env` to regenerate, or use `evnx sync --direction reverse` to populate from `.env.example`.
+### `CI is set, so init does not ask`
+
+Name what you want: `evnx init --yes`, `--blueprint <id>` or `--with <a,b,c>`.
 
 ### Permission denied on write
 
-**Cause:** Output path not writable.
-
-**Fix:**
-```bash
-# Check permissions
-ls -ld ./target/path
-
-# Fix or use different path
-evnx init --path /tmp/myproject --yes
-```
-
-### Verbose output not showing details
-
-**Cause:** `--verbose` must be passed explicitly; `CI=true` doesn't auto-enable it.
-
-**Fix:**
-```bash
-evnx init --verbose
-# Or combine:
-CI=1 evnx init --verbose --yes
-```
+The output path is not writable. Check it with `ls -ld`, or choose another with `--path`.
 
 ---
 
 ## Related references
 
-- [Schema JSON structure](https://github.com/urwithajit9/evnx/blob/main/src/assets/schema.json)
-- [Dialoguer CLI library](https://docs.rs/dialoguer)
-- [Colored terminal output](https://docs.rs/colored)
-- [Anyhow error handling](https://docs.rs/anyhow)
-
-<Callout type="success" title="Configure init effectively">
-While `init` has fewer runtime options than `sync`, its schema-driven design makes it powerful for team-standardized setup. Customize the schema, document your workflow, and use `evnx add` for post-init tweaks.
-</Callout>
----
+- [evnx init](/guides/commands/init) — the command, its modes and exit codes
+- [Init basics](/guides/getting-started/init-basic) — a first run, step by step
+- [The catalogue source](https://github.com/urwithajit9/evnx/blob/main/src/assets/schema.json) — `schema.json` on `main`

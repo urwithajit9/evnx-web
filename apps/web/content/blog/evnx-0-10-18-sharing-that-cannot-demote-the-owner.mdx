@@ -1,0 +1,227 @@
+---
+title: "evnx 0.10.18: Sharing That Can't Demote the Owner"
+publishedAt: "2026-10-25"
+excerpt: "The patch for evnx vault, cloud and org. Sharing never rewrites a member, the master password is proven before it is used, admins can share and members can leave, and every prompt says what to pass when there is no terminal."
+author: "ajit"
+category: "release"
+tags: ["release", "cloud", "vault", "sharing", "security", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "zero-knowledge-cloud-sync-architecture-of-secure-env-storage"
+  - "api-tokens-ci-what-they-unlock"
+---
+
+evnx 0.10.18 is a patch for the cloud half of the CLI: `evnx vault`, `evnx cloud` and
+`evnx org`. Most of it is about one question — *what happens when a command is given
+something it should not act on?* — and the answer is now the same everywhere: it is
+refused **before** the password prompt, before anything is sent, and it says what to run
+instead.
+
+Every output below is from the 0.10.18 release binary against a local evnx-server, with
+throw-away accounts. The full list is in the [changelog](/changelog).
+
+---
+
+## ⚠️ If you script evnx
+
+Five changes can affect a script. Check these first:
+
+| Change | What to do |
+|---|---|
+| `cloud push` of the default `.env` into a **production** vault with no terminal now exits 2 | Name the file (`--file .env.production`), or add `--yes` |
+| Under `-q`, cloud commands print nothing on success | A script that read `✓ pushed …` from stdout gets nothing. Use the exit code |
+| `vault create` with upper case exits 2, before the password prompt | Use a lower-case name: `my-api`, not `My-Api` |
+| `cloud history`'s `PUSHED BY` holds emails, and its width follows them | Parse by column name, not position |
+| `cloud pull` into a git repository may print a `.gitignore` question or warning | `--no-gitignore` skips it |
+
+---
+
+## Sharing never rewrites a member
+
+Before 0.10.18, adding a member was an overwrite. Sharing with someone **already** in the
+vault replaced their role and their copy of the key, and printed `shared`. With your own
+address, an owner became a developer and could no longer delete the vault. An admin could
+demote the owner and then remove them.
+
+The fix landed on the server first (evnx-server `d2663fa`, live on 2026-10-25): a share to
+an existing member is a **409** and writes nothing — for every client, older CLIs and the
+dashboard included. 0.10.18 also checks the member list itself, before the key lookup and
+the password:
+
+```text
+  alice@example.com is already an admin on my-api/production — nothing changed.
+```
+
+```text
+Error: alice@example.com is already an admin on my-api/production.
+  To make them developer:  evnx vault role my-api/production --user alice@example.com --role developer
+```
+
+```text
+Error: That is you: you already hold my-api/production as owner. Sharing cannot change your own role.
+```
+
+A role now changes through `evnx vault role` only, which enforces the rank rules.
+
+---
+
+## The master password is proven before it is used
+
+Argon2id will derive a key from anything you type. Every command that asked for the master
+password used whatever key came out, and found out it was wrong later, at a vault key,
+with "probably wrong password". `vault create` opens no vault key, so it sealed a brand-new
+vault under the typo: created, counted against your plan, never openable with the real
+password.
+
+Now the password must open your account's sealed keypair first. A wrong one is refused
+right after the prompt:
+
+```text
+Error: that master password did not open your keypair, so it is not the one this account was registered with. Nothing has been changed.
+  If you have already changed it on another machine, use the new one.
+```
+
+**If you created a vault under a typo with an older evnx and pushed to it with that same
+typo**, 0.10.18 refuses the typo at the check. evnx 0.10.17 still opens it with the typo:
+export its versions with 0.10.17, then delete the vault and create it again.
+
+---
+
+## Admins can share, and members can leave
+
+An admin holds a copy of the key that was shared to them, and the CLI used to refuse to
+share from it. Now it opens that copy with the admin's keypair, as `vault rekey` already
+did. An admin shares as viewer or developer; only the owner makes an admin. A developer
+asking to share is told which role it takes, before the password:
+
+```text
+Error: sharing my-api/production needs the admin or owner role; you are a developer on it.
+  Ask its owner, or an admin, to share it.
+```
+
+And there is finally a way out of a vault someone shared with you:
+
+```bash
+evnx vault leave my-api/production
+```
+
+```text
+  About to leave my-api/production (viewer).
+  Your copy of its key is deleted from the server. The vault key is not rotated.
+Leave my-api/production? [y/N] yes
+  ✓ left my-api/production
+  Anything you pulled is still on this machine. The vault key was not rotated: someone who stays can run `evnx vault rekey my-api/production`.
+```
+
+Read the last line. Leaving is polite, not a revocation: if the secrets matter, someone who
+stays runs `evnx vault rekey`. The owner cannot leave, and revoking the owner is now refused
+before any work — it used to re-encrypt every version first and only then hear the server
+say no.
+
+---
+
+## Scripts get told what to pass
+
+Every cloud confirmation — `vault delete`, `revoke`, `rekey`, `leave`,
+`cloud delete-version`, `auth sessions revoke`, `auth token revoke`,
+`rotate-master-password` — used to fail with `IO error: not a terminal` when there was
+none. Now each one stops before sending anything and prints the command with the flag:
+
+```text
+Error: there is no terminal to confirm with.
+
+Add --yes (-y) to go ahead without being asked:
+  evnx vault revoke my-api/production --user bob@example.com --yes
+```
+
+`-q` now works for every `auth`, `org`, `vault` and `cloud` command: nothing on success,
+while tables, warnings, errors and a new token (alone on stdout) still print.
+
+---
+
+## A production push asks first
+
+A forgotten `--file` used to push your development `.env` into a production vault with
+only a warning. Now, when the file is the default `.env` and the vault is production, it
+asks:
+
+```text
+  file      ./.env (default)
+  ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+Push ./.env into production vault my-api/production? [y/N]
+```
+
+With no terminal it is refused unless you add `--yes`. A file you named with `--file` or
+`--env-name` is never asked about.
+
+---
+
+## `cloud watch` tells you when it is blind
+
+`cloud watch` reported failed polls only under `-v`, so an expired login looked exactly
+like a quiet vault. Now it warns from the third failed poll in a row, says when polling
+works again, and stops with exit 2 after ten:
+
+```text
+  ! 3 polls in a row have failed (stopping at 10): could not reach https://api.evnx.dev: Connection refused (os error 111)
+  ✓ polling again, after 4 failed poll(s)
+```
+
+It also skips **your own** pushes, which were never news to you. `--include-mine` shows
+them.
+
+---
+
+## Smaller fixes
+
+- **`cloud pull` keeps the file out of git**, with the same `.gitignore` step `template`,
+  `convert` and `restore` use (`--gitignore`, `--no-gitignore`).
+- **`cloud history` names who pushed by email** instead of an 8-character id.
+- **Push hints name the vault**: `Push a .env into it with:  evnx cloud push --vault my-api/production`.
+  The old hint failed in any directory not bound with `evnx cloud link`.
+- **`--version` is 1 or more** for `cloud pull`, `run` and `delete-version`, and a missing
+  version is named, with `evnx cloud history` to look.
+- **Vault names are lower-case letters, digits and hyphens**, checked before the password,
+  with the lower-case name suggested.
+- **`vault members <id>` works with a vault-scoped API token.** Note that such a token
+  cannot resolve a vault by **name**: in CI, pass the id, which `evnx vault list --verbose`
+  prints. The [CI guide](/guides/integrations/ci-cd-cloud-tokens) now says so.
+- **Roles are read the same way** by `vault` and `org`: any case, spaces trimmed, and
+  `owner` refused with the reason.
+
+🔒 **Security:** `tokio` 1.49.0 → 1.53.3 (RUSTSEC-2026-0386). evnx never calls the affected
+`AsyncFd` constructors; tokio is there for the HTTP client.
+
+---
+
+## Upgrading
+
+`evnx update` prints the upgrade command for the channel you installed with. For example:
+
+```bash
+brew upgrade evnx
+npm install -g @evnx/cli@latest
+cargo install evnx --all-features --force
+```
+
+pipx users: `evnx update` wrongly says `pip install --upgrade evnx`; run
+`pipx upgrade evnx` instead. Every channel —
+[Managing your evnx install](/guides/reference/managing-your-evnx-install) has the full
+table.
+
+---
+
+## Docs updated for 0.10.18
+
+- [evnx vault](/guides/commands/vault) — `leave`, who can share with whom, the password check
+- [evnx cloud](/guides/commands/cloud) — the production prompt, `watch`, pull's `.gitignore` step
+- [evnx org](/guides/commands/org) — role messages, prompts, `-q`
+- [Sharing a Vault, and Taking It Back](/guides/use-cases/sharing-a-vault-with-a-teammate) and
+  [How Sharing a Vault Works](/guides/reference/how-vault-sharing-works) — re-run end to end
+- [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens) — name the vault by id
+
+The same release of the docs also rewrote [evnx doctor](/guides/commands/doctor),
+[evnx diff](/guides/commands/diff), [evnx scan](/guides/commands/scan), the
+[Quick Start](/guides/getting-started/quick-start) and the sync pages from real runs of
+0.10.18.

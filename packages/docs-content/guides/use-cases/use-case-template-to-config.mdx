@@ -3,7 +3,7 @@ section: "use-cases"
 order: 5
 title: "Production Use Cases — Real-World `evnx template` Workflows"
 publishedAt: "2026-03-11"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-25"
 excerpt: "Explore real production scenarios where `evnx template` eliminates manual config file editing — with before/after comparisons showing the friction of hand-crafted files vs. template-driven generation."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
@@ -252,8 +252,8 @@ SUPPORT_EMAIL=ops@mycompany.com
 
 ```bash
 evnx template \
-  -i k8s/configmap.yaml.template \
-  -o k8s/configmap.yaml \
+  --input k8s/configmap.yaml.template \
+  --output k8s/configmap.yaml \
   --env .env.production \
   --verbose
 
@@ -522,8 +522,8 @@ SERVICE_NAME=api-dev
 ```bash
 # Production API
 evnx template \
-  -i nginx/service.conf.template \
-  -o nginx/api.conf \
+  --input nginx/service.conf.template \
+  --output nginx/api.conf \
   --env .env.api.production \
   --verbose
 
@@ -532,8 +532,8 @@ evnx template \
 
 # Dev API (LOG_LEVEL not in .env.api.dev)
 evnx template \
-  -i nginx/service.conf.template \
-  -o nginx/api.dev.conf \
+  --input nginx/service.conf.template \
+  --output nginx/api.dev.conf \
   --env .env.api.dev \
   --verbose
 

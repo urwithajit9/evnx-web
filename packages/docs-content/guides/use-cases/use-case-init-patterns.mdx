@@ -3,7 +3,7 @@ section: "use-cases"
 order: 1
 title: "Init in the Wild — Real Developer Scenarios"
 publishedAt: "2026-03-06"
-updatedAt: "2026-10-13"
+updatedAt: "2026-10-25"
 excerpt: "See how real developers use evnx init in daily workflows: Blank for scripts, Blueprint for quick starts, and Architect for custom stacks."
 difficulty: "beginner"
 timeToComplete: "12 minutes"
@@ -45,7 +45,7 @@ Maya is writing a one-off ETL script to migrate legacy data. She doesn't need a 
 ```console
 $ cd ~/projects/data-migration
 $ evnx init
-How do you want to start?: Blank      — create empty .env files
+How do you want to start? Blank      — create empty .env files
 
   Blank Template  Creating minimal .env files
 
@@ -53,6 +53,7 @@ How do you want to start?: Blank      — create empty .env files
 ✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example (no variables yet)
 · Tip: Run 'evnx add' to add variables interactively
+  ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
 ```
 
 Blank is pre-selected, so that was one Enter. `evnx init --yes` does the same with no prompt.
@@ -60,32 +61,22 @@ Blank is pre-selected, so that was one Enter. `evnx init --yes` does the same wi
 **Maya adds her variables:**
 
 ```console
-$ evnx add custom
-· Enter variables one at a time. Empty name to finish.
-Variable name (or Enter to finish): SOURCE_DB_URL
-Value for SOURCE_DB_URL (.env only; .env.example gets YOUR_URL_HERE): postgresql://old-server:5432/legacy
-Add a description comment? no
-Assign to a category? no
-Is this variable required? yes
-Add another variable? yes
-Variable name (or Enter to finish): DEST_API_KEY
-Value for DEST_API_KEY (.env only; .env.example gets YOUR_KEY_HERE): your_dest_api_key
-Add a description comment? no
-Assign to a category? no
-Is this variable required? yes
-Add another variable? no
-
-Preview:
-  • 2 variables to add
-Append these variables to .env.example? yes
+$ evnx add custom SOURCE_DB_URL=postgresql://old-server:5432/legacy DEST_API_KEY=your_dest_api_key --required --yes
+  config    .evnx.toml
+  ✓ added 2 variable(s) to [vars] in .evnx.toml
 ✓ Added 2 custom variables
 ```
 
-<Callout type="warning" title="evnx add: y answers at once">
-In `evnx add` (0.10.1), typing `y` or `n` answers a yes/no question immediately, so
-do **not** press Enter after it: that Enter answers the next question with its
-default. `evnx init` already waits for Enter (since 0.10.1); `add` gets the same
-fix in 0.10.2.
+One line, as arguments. Run `evnx add custom` with no names to be asked instead: a name,
+a value (hidden for a name that looks like a secret, and written to `.env` only),
+`More options?` for a description, a category and whether it is required, and a final
+`Append these variables to .env.example and .env?`. Yes/no questions take their answer
+on Enter.
+
+<Callout type="warning" title="A value on the command line lands in your shell history">
+That is fine for a URL. For a real secret, give the name alone
+(`evnx add custom DEST_API_KEY --required`) and type the value at the hidden prompt, or
+keep the placeholder and fill in `.env`.
 </Callout>
 
 **Result:**
@@ -99,7 +90,7 @@ SOURCE_DB_URL=YOUR_URL_HERE
 # (required)
 DEST_API_KEY=YOUR_KEY_HERE
 
-# Added by evnx add custom on 2026-10-13 21:47
+# Added by evnx add custom on 2026-10-25 07:46
 ```
 
 That is `.env.example`. `evnx add` appends the same names to `.env` with the values Maya typed, so both files stay in step and only `.env` holds the values (**v0.10.3+**).
@@ -114,8 +105,8 @@ nano .env
 python migrate.py
 # ✅ Reads os.environ['SOURCE_DB_URL'] (loaded from .env, e.g. by python-dotenv)
 
-# 3. Commit the template and the ignore rules, never .env
-git add .env.example .gitignore
+# 3. Commit the template, the contract and the ignore rules, never .env
+git add .env.example .evnx.toml .gitignore
 git commit -m "Add config template for migration script"
 ```
 
@@ -137,7 +128,7 @@ Alex needs to prototype a new dashboard. His team uses the "T3 Turbo" stack (Nex
 ```console
 $ cd ~/projects/saas-dashboard
 $ evnx init
-How do you want to start?: Blueprint  — use a pre-configured stack
+How do you want to start? Blueprint  — use a pre-configured stack
 
   Blueprint Mode  Select a pre-configured stack
 
@@ -154,6 +145,7 @@ Generate .env files with these variables? yes
 ✓ Created .env from template
 ✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example with 28 variables
+  ✓ created .evnx.toml with 28 variable(s) in [vars]
 ```
 
 Keys: Down, Enter (Blueprint); Enter (T3 Turbo is first); `y` Enter. Without
@@ -172,7 +164,7 @@ npm run dev
 # ✅ App loads at http://localhost:3000
 
 # 3. Commit the template for teammates
-git add .env.example .gitignore
+git add .env.example .evnx.toml .gitignore
 git commit -m "Add env template for T3 stack"
 ```
 
@@ -184,14 +176,19 @@ When Alex's teammate Jordan clones the repo:
 git clone https://github.com/team/saas-dashboard
 cd saas-dashboard
 
-# Jordan creates a local .env from the template, then edits it
-cp .env.example .env
+# Jordan creates a local .env from the template (mode 0600), then edits it
+evnx init --yes
 
 # validate lists every placeholder still to replace (exit 1 until done)
 evnx validate
-#   ✗  NEXTAUTH_SECRET is too weak or predictable
-#      →  Run: openssl rand -hex 32
+#   ✗  DB_NAME looks like a placeholder
+#      .env
+#
+#   ✗  DB_PASSWORD looks like a placeholder
+#      .env
+#      ·  fixable with --fix
 #   ...
+#   23 errors
 
 # once every value is real:
 evnx validate
@@ -220,7 +217,7 @@ Redis. Time to architect.
 ```console
 $ cd ~/projects/event-processor
 $ evnx init
-How do you want to start?: Architect  — build a custom stack
+How do you want to start? Architect  — build a custom stack
 
   Architect Mode  Build your custom stack: language → framework → services → infra
 
@@ -239,6 +236,7 @@ Generate .env files with these variables? yes
 ✓ Created .env from template
 ✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example with 19 variables
+  ✓ created .evnx.toml with 19 variable(s) in [vars]
 ```
 
 Services are a checklist: move with Up/Down, toggle with Space, confirm with Enter.
@@ -287,7 +285,7 @@ kubectl apply -f k8s/
 # ✅ Pod starts with correct env vars
 
 # 5. Share template with team
-git add .env.example
+git add .env.example .evnx.toml
 git commit -m "Add env template for event-processor service"
 ```
 
@@ -347,8 +345,12 @@ graph TD
 # In your Makefile
 setup:
 	evnx init --yes --path ./config
-	evnx validate --quiet || echo "⚠️  Review .env.example"
+	evnx validate --env config/.env --example config/.env.example --quiet
 ```
+
+`validate` needs the paths: run from the root, it finds no `.env` and exits 2, and an
+`|| echo` after it would hide that. It exits 1 while placeholders remain, which fails the
+target on purpose.
 
 ### Tip 2: Combine modes for complex projects
 
@@ -417,6 +419,7 @@ git check-ignore -v .env
 # git status never lists ignored files: .env must not appear at all
 git status --short
 # ?? .env.example
+# ?? .evnx.toml
 # ?? .gitignore
 ```
 
@@ -442,7 +445,7 @@ Now that you've seen init in action:
 1. **[Add Variables Guide](/guides/getting-started/add-basic)** — Extend your template post-init
 2. **[Sync Basics](/guides/getting-started/sync-basic)** — Keep files in sync with your team
 3. **[Blueprint Catalog](/guides/commands/init)** — Explore all pre-configured stacks
-4. **[Schema Reference](/guides/commands/spec)** — Add custom languages or services
+4. **[Variable contract](/guides/commands/spec)** — declare what each variable is: required, format, secret
 
 <Callout type="success" title="You're ready for any project">
 Whether you're shipping a hackathon prototype or architecting a microservice, `evnx init` adapts to your workflow. Pick the right mode, generate your template, and start coding with confidence.
