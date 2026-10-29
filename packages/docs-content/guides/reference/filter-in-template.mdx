@@ -3,7 +3,7 @@ title: "Writing Templates and Using Filters"
 section: guides
 order: 3
 publishedAt: "2026-03-11"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Learn to write template files and use every evnx filter correctly — with precise input/output behavior, config-format guidance, and the pitfalls that cause silent misconfiguration."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
@@ -112,7 +112,7 @@ debug: $DEBUG
 Filters transform a variable's value at substitution time. They are written inside double braces, separated from the variable name by a pipe: `{{VAR|filter}}`.
 
 <Callout type="danger">
-  <strong>Filters are not chainable.</strong> <code>{"{{PORT|int|default:8080}}"}</code> and <code>{"{{PORT|default:8080|int}}"}</code> are errors (<strong>v0.10.5+</strong>): the run names the line and writes nothing. They used to be written through or, for a filter after a default, rendered as <code>8080|int</code>. If you need a default and a type assertion, handle the value in your <code>.env</code> file (e.g. <code>PORT=8080</code>) rather than in the template. Chaining is planned for 0.11.0.
+  <strong>Filters are not chainable.</strong> <code>{"{{PORT|int|default:8080}}"}</code> and <code>{"{{PORT|default:8080|int}}"}</code> are errors (<strong>v0.10.5+</strong>): the run names the line and writes nothing. They used to be written through or, for a filter after a default, rendered as <code>8080|int</code>. If you need a default and a type assertion, handle the value in your <code>.env</code> file (e.g. <code>PORT=8080</code>) rather than in the template. Chaining is still not supported in 0.11.0; it comes with the template engine planned for 0.12.0.
 </Callout>
 
 <Callout type="warning">
@@ -368,7 +368,7 @@ When `|default:` is specified with no value (nothing after the colon), the fallb
 
 **When to use it:**
 - Optional config fields that have a safe default (`|default:warn`, `|default:30`)
-- Optional secrets that are only set in some environments — `|default:` (empty) suppresses the warning and produces an empty value rather than leaving the token unresolved
+- Optional secrets that are only set in some environments — `|default:` (empty) produces an empty value; without it an undefined variable is an error (**v0.11.0+**) and nothing is written
 - Any variable that might be absent on a developer's local `.env` but required in CI
 
 ---
@@ -474,7 +474,7 @@ Without `|bool`, `DEBUG=yes` would produce `debug: yes` in YAML — which YAML 1
 
 ### Using `|default:` for optional variables
 
-When a variable is optional — only set in some environments — use `|default:` to prevent the undefined variable warning and avoid leaving an unresolved token in the output:
+When a variable is optional — only set in some environments — use `|default:`. Since 0.11.0 an undefined variable is an error and the run writes nothing, so a variable that may be absent needs a fallback:
 
 ```yaml
 # Template

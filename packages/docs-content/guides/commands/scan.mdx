@@ -3,7 +3,7 @@ title: "evnx scan"
 section: commands
 order: 5
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Scan .env files for secrets, high-entropy strings, and known credential patterns. Supports JSON, SARIF, and GitHub Actions annotation output."
 difficulty: beginner
 timeToComplete: "10 minutes"
@@ -33,7 +33,7 @@ evnx scan [OPTIONS] [PATH]...
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `[PATH]...` | positional | `.` | Files or directories to scan. Repeatable: `evnx scan .env config/` |
+| `[PATH]...` | positional | `.` | Files or directories to scan. Repeatable: `evnx scan .env config/`. `-` reads stdin (**v0.11.0+**) |
 | `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format. **An unrecognised value is an error** — it used to fall back to `pretty` silently |
 | `--severity` | `high\|medium\|low` (`all` = `low`) | `low` | **v0.5.0+** — lowest confidence worth reporting. Filters the findings, the counts and the exit code together |
 | `--exit-zero` | `bool` | `false` | Always exit 0 (advisory mode) |
@@ -298,6 +298,9 @@ evnx scan --format json
 ```json
 {
   "files_scanned": 1,
+  "files": [
+    { "path": "./.env", "read_as": "dotenv" }
+  ],
   "unreadable": [],
   "skipped": [],
   "secrets_found": 1,
@@ -637,6 +640,18 @@ gate that used to catch it.
 
 ### Files that are not `.env`
 
+**Which checks run depends on how a file is read** (**v0.11.0+**: said, not just done).
+A file named like a `.env` (`.env`, `.env.*`, `app.env`) is read as assignments and
+checked by **name and value**: `DB_PASSWORD=…` is flagged by its name. Any other file —
+`config.txt`, `settings.ini`, source code — gets the **value patterns only**, so the same
+line there is found only if the value itself looks like a credential. `-v` says which on
+each file, and JSON lists it in `files[].read_as` (`dotenv` or `text`):
+
+```text
+⋯ Scanning: ./config.txt (read as text: value patterns only, names not checked)
+⋯ Scanning: ./v.env (read as .env: names and values checked)
+```
+
 Rules — yours and the built-in ones alike — are matched against the whole line in
 non-`.env` files, so a short or multi-word format is found where the entropy heuristics
 could not see it:
@@ -756,6 +771,9 @@ did — the matching was widened, never redefined.
 
 `.git/`, `node_modules/`, `target/`, `dist/`, `build/`, `.env.example`, `.env.sample`,
 `.env.template`, editor swap files and `evnx backup` output are excluded already.
+**v0.11.0+** — an `evnx backup` file is recognised by its **content**: a plaintext
+`cp .env .env.backup` is scanned like any `.env`. It used to be skipped by its name,
+secrets and all, with exit 0.
 
 ### Skip obvious placeholders — `--ignore-placeholders`
 
@@ -796,7 +814,24 @@ evnx scan .env config/ src/
 ```
 
 `.git/`, `node_modules/`, `target/`, `dist/`, `build/`, the `.env.example` family, editor
-swap files and `evnx backup` output are always skipped.
+swap files and `evnx backup` output (by content, **v0.11.0+**) are always skipped.
+
+### Scanning stdin — `evnx scan -`
+
+**v0.11.0+** — scan text that is not a file, without writing it to disk: a diff before
+you commit it, a log before you paste it, a file an agent is about to write.
+
+```bash
+git diff | evnx scan -
+kubectl logs deploy/api | evnx scan - --format json
+evnx scan . -            # stdin beside paths
+```
+
+Stdin is read as a `.env` when it parses as one and as text otherwise (`-v` and
+`files[].read_as` say which); findings are labelled `<stdin>`. **Empty stdin is an
+error, exit 2**, not a clean result, so `cat missing-file | evnx scan -` cannot pass a
+CI step. A finding in stdin gets no `git filter-repo` advice; it is told to keep the key
+out of wherever that text was going.
 
 ### In a git repository
 

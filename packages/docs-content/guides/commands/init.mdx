@@ -3,7 +3,7 @@ section: "commands"
 order: 1
 title: "evnx init"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
@@ -52,6 +52,7 @@ evnx init [OPTIONS]
 | `--blueprint <ID>` | `string` | — | generate from a named stack, e.g. `t3_modern` |
 | `--force` | `bool` | `false` | replace an existing `.env.example`. `.env` is never overwritten. Not valid with `--from-source`, which only appends (exit 2 since 0.10.1) |
 | `--path`, `-p` | `string` | `.` | output directory for generated files |
+| `--env-name <NAME>` | `string` | `[defaults] env_name` | **v0.11.0+** — write `.env.<NAME>` instead of `.env` (`--env-name staging` → `.env.staging`). The template and `.gitignore` are the project's, as without it |
 | `--yes`, `-y` | `bool` | `false` | skip prompts. With no template, writes blank files; with one, keeps it and creates `.env` from it |
 | `--dry-run` | `bool` | `false` | **v0.10.16+** — show what would be written, and write nothing |
 | `--json` | `bool` | `false` | **v0.10.16+** — print the result as one JSON document. Needs `--yes` or `--dry-run` |
@@ -241,6 +242,34 @@ for you.
 </Callout>
 
 ---
+
+## Another environment, and other folders
+
+**v0.11.0+** — `--env-name` creates or fills `.env.<NAME>` from the template, and the
+next steps name that file:
+
+```console
+$ evnx init --env-name staging --yes
+· .env.example is the project's template: kept as it is
+✓ Created .env.staging from .env.example
+  ✓ created .evnx.toml with 1 variable(s) in [vars]
+Next steps:
+  1. Edit .env.staging and replace placeholder values
+  2. Commit .env.example and .evnx.toml; never commit .env.staging
+```
+
+`[defaults] env_name` in `.evnx.toml` steers `init` the same way, as it already steered
+`validate`, `sync` and `diff`.
+
+In a monorepo, `init` at the root says when a subfolder already has a `.env`, because
+commands run at the root read the root's file, not that one:
+
+```text
+! services/api/.env also exists: commands run here read .env, not that one — to set up that folder instead: evnx init -p services/api
+```
+
+`.evnx.toml` is written before anything is printed, so `evnx init --yes | head -1`
+still leaves a complete project (**v0.11.0+**).
 
 ## Exit codes
 

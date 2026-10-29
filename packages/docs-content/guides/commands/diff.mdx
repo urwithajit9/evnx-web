@@ -3,7 +3,7 @@ section: "commands"
 order: 4
 title: "evnx diff"
 publishedAt: "2026-03-11"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Compare .env with its template by key name, or two environments by key and value. Values stay hidden unless asked for; --fail-on picks what fails the run, so the exit code is a CI gate."
 difficulty: "beginner"
 timeToComplete: "6 minutes"
@@ -70,7 +70,7 @@ evnx diff --format json | jq -e '.summary.missing == 0'
 | `--fail-on <WHAT>` | What fails the run: `missing`, `extra`, `different`, comma-separated. All three by default |
 | `--skip-without-env` | With no `.env`, skip (exit 0) and say so. For pre-commit hooks, not CI |
 | `--with-stats` | Add a `stats` object to the JSON. `--format json` only |
-| `-i`, `--interactive` | Prompt for each change. `--format patch` only. ⚠️ Nothing is written |
+| `-i`, `--interactive` | Prompt for each change and write the chosen ones, keeping `.bak` (**v0.11.0+**). `--format patch` only; not with `--reverse` |
 | `-v`, `--verbose` | Say what is compared and what fails the run |
 | `-q`, `--quiet` | Print nothing when there is nothing to report |
 
@@ -215,7 +215,7 @@ evnx diff --format json
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "compared": "keys",
   "missing": [
     "REDIS_URL"
@@ -243,14 +243,17 @@ values are compared, each `different` item says what it holds:
   "key": "DATABASE_URL",
   "example_value": null,
   "env_value": null,
-  "value_state": "withheld",
-  "values_redacted": false
+  "value_state": "withheld"
 }
 ```
 
 `value_state` is `withheld` (no `--show-values`), `masked` (a secret, shown as `***` or
-with its password masked) or `shown`. `values_redacted` is kept for compatibility: it is
-`true` exactly when `value_state` is `masked`.
+with its password masked) or `shown`.
+
+<Callout type="warning">
+**Schema 2 (v0.11.0+).** `values_redacted` is gone and `schema_version` is `2`. Read
+`value_state` instead: `value_state == "masked"` is the old `values_redacted == true`.
+</Callout>
 
 `--with-stats` adds:
 
@@ -265,22 +268,34 @@ Without `--format json` it is refused, exit 2.
 
 ### `patch`
 
+**v0.11.0+** — a unified diff of the left file (`.env`) that `patch -p1` applies:
+
+```console
+$ evnx diff --format patch
+# LOCAL_DEBUG_MODE is only in .env; this patch keeps it
+--- a/.env
++++ b/.env
+@@ -2,0 +3,1 @@
++REDIS_URL=redis://localhost:6379
+```
+
 ```bash
-evnx diff --format patch
+evnx diff --format patch > changes.patch && patch -p1 < changes.patch
 ```
 
-```text
-# Add these to .env:
-+ REDIS_URL=<withheld>
+- **Against a template** it appends the names `.env` is missing, with the template's
+  lines. Those are committed placeholders, so the patch prints nothing of `.env`.
+- **A key only in `.env` is kept**, and named in a `#` line before the diff, which
+  `patch` skips. Nothing is removed.
+- **When values are compared** (`--values`, `--against`, `--reverse`) the patch also
+  replaces the lines that differ, so it carries real values: it needs `--show-values`,
+  and without it the run stops with exit `2` rather than print a patch that would
+  write `<withheld>` into your file.
+- A value spread over several lines is never half-replaced: the key is named in a `#`
+  line, to change by hand.
 
-# Remove these from .env:
-- LOCAL_DEBUG_MODE=<withheld>
-```
-
-A list of add, remove and, when values are compared, update lines. **It is not input for
-`patch(1)`.** Values print as `<withheld>`; with `--show-values` they print exactly,
-secrets included, so the lines can be copied into a file — and stderr warns that the output
-holds real values.
+Before 0.11.0 this printed `# Add these to .env:` / `+ KEY=<withheld>` sections that
+`patch` rejected ("Only garbage was found in the patch input").
 
 ### `--interactive`
 
@@ -288,8 +303,15 @@ holds real values.
 evnx diff --format patch --interactive
 ```
 
-Asks about each change in turn. ⚠️ **Nothing is written**: the answers are listed, not
-applied (planned for 0.11.0). Without `--format patch` it is refused, exit 2.
+Asks about each change in turn, then **writes the chosen ones** to the left file and
+keeps the previous file as `.env.bak` (**v0.11.0+**). Values in the questions are
+`<withheld>` unless `--show-values`. The exit code is the comparison's, made before the
+write.
+
+It needs a terminal; without one it refuses (exit `2`) and names
+`evnx diff --format patch`. `--interactive --reverse` is refused too: it would write
+`.env`'s values into the committed template. To add names to the template, use
+`evnx sync`, which writes placeholders.
 
 ---
 
@@ -306,8 +328,13 @@ With `--show-values`, `pretty` and `json` still mask secrets, two ways:
 - **By value.** A password inside a URL is masked whatever the key is called
   (`postgres://admin:***@db.internal:5432/app`), and so is a value shaped like a token.
 
-`patch` and `--interactive` with `--show-values` print exact values, because their output
-exists to be applied. Do not run them where the output is logged.
+A `patch` that carries values, and `--interactive` with `--show-values`, print exact
+values, because their output exists to be applied. Do not run them where the output is
+logged.
+
+**v0.11.0+** — a name containing `PUBLIC_KEY` or `PUBLISHABLE_KEY` is not a secret by its
+name (`VAPID_PUBLIC_KEY`, `STRIPE_PUBLISHABLE_KEY`); a value shaped like a secret is still
+masked.
 
 ---
 
@@ -320,7 +347,8 @@ exists to be applied. Do not run them where the output is logged.
 | `2` | No verdict: a missing or unreadable file, an unknown `--env-name`, a bad flag, or a refused combination |
 
 The refused combinations are `--with-stats` without `--format json`, `--interactive`
-without `--format patch`, and `--fail-on different` without values to compare. Each ends
+without `--format patch` or with `--reverse`, a `--format patch` that would carry values
+without `--show-values`, and `--fail-on different` without values to compare. Each ends
 with `No verdict: evnx did not run. This is not a clean result.`
 
 ```bash

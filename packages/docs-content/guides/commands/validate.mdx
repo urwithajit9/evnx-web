@@ -3,7 +3,7 @@ title: "evnx validate"
 section: commands
 order: 4
 publishedAt: "2026-03-09"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-29"
 excerpt: "Reference for evnx validate: check .env against .env.example and the [vars] contract, catch missing, placeholder, weak and misformatted values, and fix what can be fixed."
 difficulty: beginner
 timeToComplete: "10 minutes"
@@ -129,7 +129,7 @@ see [Optional variables](#optional-variables).
 
 ```console
 $ evnx validate --ignore boolean_traps
-Error: unknown issue type 'boolean_traps' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked
+Error: unknown issue type 'boolean_traps' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked, reader_mismatch
 
 No verdict: evnx did not finish. This is not a clean result.
 ```
@@ -148,7 +148,7 @@ These are the issue types — the names `--ignore` takes and the `type` field in
 |------|----------|------|---------|
 | `missing_variable` | error | A variable in `.env.example` (or required in `[vars]`) is absent from `.env` | Adds it — see [Fixing](#fixing-with---fix) |
 | `placeholder_value` | error | The value is empty, `changeme`, `<…>`, anything starting `your_`, and similar | Only for the app's own secrets and passwords |
-| `weak_secret` | error | A secret-shaped name (`*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_TOKEN`, …) whose real value is too short — under 32 characters for `SECRET_KEY`, `*_SECRET_KEY` and `NEXTAUTH_SECRET`, under 16 for the rest — or mostly a weak word such as `password` or `1234` | Only with `--rotate-weak-secrets`, and never for a key a provider issues |
+| `weak_secret` | error | A secret-shaped name (`*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_TOKEN`, …; since 0.11.0 not `*PUBLIC_KEY*` or `*PUBLISHABLE_KEY*`) whose real value is too short — under 32 characters for `SECRET_KEY`, `*_SECRET_KEY` and `NEXTAUTH_SECRET`, under 16 for the rest — or mostly a weak word such as `password` or `1234` | Only with `--rotate-weak-secrets`, and never for a key a provider issues |
 | `boolean_trap` | warning | The value is exactly `True` or `False` | Lowercases it |
 | `duplicate_key` | warning | The same key is assigned more than once. Names the lines and which one takes effect | — |
 | `extra_variable` | warning | **`--strict` only.** A variable set but not declared, or one set in a file its `environments` exclude | — |
@@ -161,6 +161,11 @@ These are the issue types — the names `--ignore` takes and the `type` field in
 | `unknown_environment` | warning | **v0.10.8+** — see [Environment names](#environment-names) | — |
 | `env_not_ignored` | warning | **v0.10.8+** — the env file is not covered by `.gitignore` | — |
 | `env_tracked` | error | **v0.10.8+** — the env file is already tracked by git | — |
+| `reader_mismatch` | warning | **v0.11.0+** — a line a program this project uses reads differently from evnx. See [below](#readers-that-disagree) | — never: it would choose a reader for you |
+
+**v0.11.0+** — "Run with --fix to auto-correct common issues" appears under *Next
+steps* only when a finding shown is one `--fix` can repair. It used to appear for every
+failed run, including a `--fix` run that had just declined.
 
 `SECRET_KEY=changeme` is one finding, the placeholder. Before **v0.10.8** it was also
 reported as `weak_secret`, so error counts can be lower than they were.
@@ -344,8 +349,7 @@ $ evnx validate --fix
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 3 errors
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -372,8 +376,7 @@ Fixed (2):
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -423,8 +426,7 @@ $ evnx validate
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -434,6 +436,39 @@ already has until `git rm --cached` removes it. This is the same git check
 [`evnx doctor`](/guides/commands/doctor) uses.
 
 ---
+
+## Readers that disagree
+
+**v0.11.0+** — a `.env` has no specification, and the programs that read it disagree on
+a few line shapes. evnx reads as Docker Compose does, and does not change its values.
+Instead, when the project uses a reader that reads a line differently, `validate` says
+so as `reader_mismatch`:
+
+```text
+  !  API_KEY (line 2): Node dotenv reads it as empty, while evnx and python-dotenv read it as written
+     .env:2
+     →  Leave the value empty (KEY=) and put the comment on its own line above it.
+  !  PW (line 3): Node dotenv cuts the value at `#`, while evnx and python-dotenv read it as written
+     .env:3
+     →  Quote the value (KEY="…#…") so every reader keeps the part after `#`.
+```
+
+What each reader does was **measured by running it** (Docker Compose v5.3.1,
+python-dotenv 1.2.2, Node `dotenv` 18.0.9 with and without `dotenv-expand` 12.0.1):
+
+| Line | evnx, Compose, python-dotenv | Node `dotenv` |
+|---|---|---|
+| `API_KEY=   # fill this in later` | `# fill this in later` | empty |
+| `COLOR=#ff0000` | `#ff0000` | empty |
+| `PW=Tr0ub4dor#3` | `Tr0ub4dor#3` | `Tr0ub4dor` |
+| `URL=${HOST}:5432` | expanded | written as is, unless `dotenv-expand` is used |
+| `export KEY=v`, `V=x # c` | agree | agree |
+
+Readers are detected from the project: a compose file, a Python manifest naming
+`python-dotenv`, `pydantic-settings` or `dynaconf`, a `package.json` naming `dotenv` (and
+`dotenv-expand`). A project with none of them, or whose readers agree, hears nothing. The
+finding is a warning (it fails under `--strict`), never names a value, and is skipped with
+`--ignore reader_mismatch`. `evnx doctor` sums it up in one line.
 
 ## Optional variables
 
@@ -574,8 +609,7 @@ $ evnx validate
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 2 errors
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -871,8 +905,7 @@ $ evnx validate
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error, 2 warnings
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```

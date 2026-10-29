@@ -3,7 +3,7 @@ section: "commands"
 order: 18
 title: "evnx update"
 publishedAt: "2026-09-29"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Find out whether a newer evnx exists, and get the upgrade command for the way you installed it."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
@@ -48,7 +48,7 @@ evnx update [--check [--json]]
 ```console
 $ evnx update
 
-  evnx 0.10.7
+  evnx 0.11.0
 
   Installed via Homebrew. Upgrade with:
 
@@ -58,8 +58,9 @@ $ evnx update
 ```
 
 The channel is read from the **path of the running binary**, and from the files pip
-leaves beside it — there is nothing to fetch. It tells seven channels apart: cargo,
-Homebrew, Scoop, winget, npm, pip and the install script. `~/.cargo/bin/evnx` is a
+leaves beside it — there is nothing to fetch. It tells these apart: cargo, Homebrew,
+Scoop, winget, npm, pip, pipx (**v0.11.0+**), pip under a Python that refuses pip
+(**v0.11.0+**) and the install script. `~/.cargo/bin/evnx` is a
 cargo install, `…/Cellar/evnx/…` is Homebrew, `…/scoop/apps/evnx/…` is Scoop, and so on.
 
 With `-q`, only the command:
@@ -85,32 +86,29 @@ of any name (a `pyvenv.cfg` beside its `bin/` or `Scripts\`), or an
 `pip install --user` or a system pip install read as the install script, and pip
 users were told to run the curl installer.
 
-`pip install --user` and the install script both write to `~/.local/bin` (and system
-pip and the script to `/usr/local/bin`). With no pip record there, evnx cannot tell
-them apart and says so:
+**v0.11.0+** — a shared folder (`~/.local/bin`, `/usr/local/bin`) with no pip record in
+it is the install script's, and only its command is printed. It used to list pip first,
+and a system Python that refuses pip (PEP 668) refused that command:
 
 ```text
-  evnx 0.10.7
+  evnx 0.11.0
 
-  Installed via the install script or pip: both write to this folder.
-  Upgrade with the one you used:
+  Installed via the install script. Upgrade with:
 
-      pip            pip install --upgrade evnx
-      script         curl -fsSL https://dotenv.space/install.sh | bash
+      curl -fsSL https://dotenv.space/install.sh | bash
 ```
 
-<Callout type="warning" title="Installed with pipx? Use pipx upgrade evnx">
-evnx does not recognise pipx yet. A pipx install lives in its own virtual environment,
-so `evnx update` says `Installed via pip` and suggests `pip install --upgrade evnx`,
-which does not upgrade a pipx install. Run **`pipx upgrade evnx`** instead. This is a
-known bug in the channel detection, and this note goes when it is fixed. See
-[Managing your evnx install](/guides/reference/managing-your-evnx-install).
-</Callout>
+- **pipx** is recognised by its virtual environment and told `pipx upgrade evnx`. It
+  used to be read as pip and told `pip install --upgrade evnx`, which does not upgrade
+  a pipx install.
+- **pip under a Python that refuses pip** (an "externally managed" system Python) is
+  told to move to pipx, `pipx install evnx`, never to pass
+  `--break-system-packages`.
 
 ### When it cannot tell
 
 ```text
-  evnx 0.10.7
+  evnx 0.11.0
 
   note: could not tell how evnx was installed.
 
@@ -122,6 +120,7 @@ known bug in the channel detection, and this note goes when it is fixed. See
       winget         winget upgrade urwithajit9.evnx
       npm            npm install -g @evnx/cli@latest
       pip            pip install --upgrade evnx
+      pipx           pipx upgrade evnx
       script         curl -fsSL https://dotenv.space/install.sh | bash
 
   To see whether a newer version exists:  evnx update --check
@@ -227,8 +226,15 @@ $ evnx update --check --json
 |---|---|
 | `schema` | `1` |
 | `status` | `current`, `behind` or `ahead` (a build newer than the latest release) |
-| `channel` | `cargo`, `homebrew`, `scoop`, `winget`, `npm`, `pip`, `script-or-pip` or `unknown` |
-| `command` | the upgrade command, or `null` when evnx cannot name one (`script-or-pip`, `unknown`) |
+| `channel` | `cargo`, `homebrew`, `scoop`, `winget`, `npm`, `pip`, `pipx`, `pip-externally-managed`, `script` or `unknown` |
+| `command` | the upgrade command, or `null` when evnx cannot name one (`unknown`) |
+
+<Callout type="warning" title="v0.11.0: new channel values">
+`script-or-pip` is gone: a shared folder with no pip record is `script`, with its
+`command` filled in. New: `pipx`, and `pip-externally-managed`, whose `command` is
+`pipx install evnx`. **Migrate:** match on the new values, and treat an unknown one as
+`unknown`.
+</Callout>
 | `release_url` | the release page |
 
 The exit code is the same as without `--json`. When the check cannot run, nothing is

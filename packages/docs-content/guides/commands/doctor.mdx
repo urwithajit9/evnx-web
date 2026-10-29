@@ -3,7 +3,7 @@ title: "evnx doctor"
 section: commands
 order: 4
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Check the setup around your env files: ignored and untracked by git, valid dotenv, private permissions, a committed template, and the project around them. Repairs .gitignore and file modes with --fix; JSON for CI."
 difficulty: beginner
 timeToComplete: "8 minutes"
@@ -60,14 +60,15 @@ evnx doctor [OPTIONS] [PATH]
 
 ## What evnx doctor checks
 
-Five checks, always in this order. The name in the first column is the one JSON uses.
+Six checks, always in this order. The name in the first column is the one JSON uses.
 
 | Check | What it looks at | Fails as |
 |---|---|---|
-| `env_file` | every env file: ignored by git, **not tracked**, valid dotenv | error |
+| `env_file` | every env file: ignored by git, **not tracked**, valid dotenv; whether the project's readers read it alike (**v0.11.0+**) | error (readers: warning) |
 | `env_example` | the template exists and is tracked by git | warning |
-| `project_structure` | the project type, and whether it loads `.env` | warning (one case) |
-| `docker_config` | Docker and Compose files | never fails |
+| `project_structure` | every project type, and whether it loads `.env` | warning (one case) |
+| `docker_config` | Docker and Compose files; whether `.dockerignore` keeps `.env` out of an image (**v0.11.0+**) | warning |
+| `ai_agents` | **v0.11.0+** — whether an AI coding agent configured in the project can read `.env` | warning |
 | `file_permissions` | every env file is private: no access for group or others | warning |
 
 ### Which files count as env files
@@ -101,6 +102,19 @@ Each of these is an **error**:
 - **Invalid syntax**, named by file and line. A file that cannot be read, or is not
   UTF-8, is an error that says which. `.env.json` and `.env.yaml` get no dotenv check.
 
+**Readers that disagree** (**v0.11.0+**) — one line, a warning, when a program the
+project uses reads some line of `.env` differently from evnx:
+
+```text
+  !  Validate .env file existence, security, and syntax
+     .env is read by evnx and Node dotenv; 1 line is read differently — run `evnx validate`
+```
+
+The readers are detected from the project: a compose file (Docker Compose), a Python
+manifest naming `python-dotenv`, `pydantic-settings` or `dynaconf`, a `package.json`
+naming `dotenv`. They are named so a wrong detection is visible. `evnx validate` lists the
+lines; see [what differs between readers](/guides/commands/validate#readers-that-disagree).
+
 **With no env file at all**, what doctor says depends on what else is there:
 
 | The folder has | doctor says | Exit |
@@ -118,10 +132,20 @@ the real file. It should exist and be tracked; if it is not tracked, doctor prin
 
 ### `project_structure`
 
-The first project type found is reported: Node.js (`package.json`), Python
-(`requirements.txt`, `pyproject.toml`), Rust (`Cargo.toml`), Go (`go.mod`) or PHP
-(`composer.json`). One case is a warning — a `requirements.txt` without
-`python-dotenv`:
+**Every** project type found is reported (**v0.11.0+**; it reported the first): Node.js
+(`package.json`), Python (`requirements.txt`, `pyproject.toml`), Rust (`Cargo.toml`),
+Go (`go.mod`) or PHP (`composer.json`). A repository with a Python API and a Node front
+end shows both with `-v`:
+
+```text
+  ✓  Detect project type and validate dependencies
+     Detected Python project (Python (requirements))
+     python-dotenv dependency found
+     Detected Node.js project
+     Detected Rust project
+```
+
+One case is a warning — a `requirements.txt` without `python-dotenv`:
 
 ```text
   !  Detect project type and validate dependencies
@@ -134,7 +158,41 @@ Everything else here passes, and further hints appear only with `-v`.
 ### `docker_config`
 
 Reports `Dockerfile`, `Containerfile`, `docker-compose.yml`, `docker-compose.yaml`,
-`compose.yaml`, `compose.yml` and `.dockerignore` when present. It never fails.
+`compose.yaml`, `compose.yml` and `.dockerignore` when present.
+
+**v0.11.0+** — with a `Dockerfile` (or `Containerfile`) and `.env` in the build context, it
+warns when `.dockerignore` does not keep `.env` out: a `COPY . .` copies it into the
+image, where anyone who pulls the image can read it.
+
+```text
+  !  Check for Docker configuration files
+     Dockerfile with no .dockerignore: a `COPY . .` copies .env into the image
+     → evnx doctor --fix adds .env* to .dockerignore
+```
+
+`--fix` adds `.env*` (keeping `!.env.example`) to `.dockerignore`.
+
+### `ai_agents`
+
+**v0.11.0+** — for each AI coding agent whose configuration is already in the project,
+whether it can read `.env`:
+
+| Agent | Reads `.env` unless | `--fix` |
+|---|---|---|
+| Claude Code | `.claude/settings.json` (or `settings.local.json`) denies `Read(./.env)` and `Read(./.env.*)` | prints the lines to add; never rewrites the file |
+| Cursor, Aider, Gemini CLI, Windsurf | `.gitignore` or the agent's own file (`.cursorignore`, `.aiderignore`, `.geminiignore`, `.codeiumignore`) excludes it | adds `.env*` to the agent's file |
+| Copilot | — content exclusion is an organisation setting | named as not checkable from the repository |
+
+```text
+  !  Check that AI coding agents cannot read .env
+     Claude Code can read .env: add to permissions.deny in .claude/settings.json:
+         "Read(./.env)", "Read(./.env.*)"
+       (an agent allowed to run shell commands can still read it)
+```
+
+Nothing is created for an agent the project does not use. This prevents accidental
+exposure only: an agent that may run shell commands can still `cat .env`. See
+[Using evnx with AI coding agents](/guides/use-cases/ai-coding-agents).
 
 ### `file_permissions`
 
@@ -180,9 +238,11 @@ evnx doctor
 
   ✓  Check for Docker configuration files
 
+  ✓  Check that AI coding agents cannot read .env
+
   ✓  Check file permissions for sensitive files
 
-  5 checks passed
+  6 checks passed
 ```
 
 `✓` passed, `✗` error, `!` warning, `·` information. With `-q` a healthy run prints
@@ -209,11 +269,13 @@ nothing at all.
   ·  Check for Docker configuration files
      No Docker configuration detected
 
+  ✓  Check that AI coding agents cannot read .env
+
   !  Check file permissions for sensitive files
      .env.bak: permissions 644 (recommended: 600)
      .env.production: permissions 644 (recommended: 600)
 
-  1 error  ·  2 warnings  ·  1 check passed
+  1 error  ·  2 warnings  ·  2 checks passed
 
   →  2 issues evnx doctor --fix can repair:
      ·  Validate .env file existence, security, and syntax
@@ -237,6 +299,9 @@ nothing at all.
 
   ✓  Check for Docker configuration files
      Found: Dockerfile
+
+  ✓  Check that AI coding agents cannot read .env
+     No AI coding agent configuration detected
 
   ✓  Check file permissions for sensitive files
      .env: permissions 600 (private)
@@ -283,7 +348,7 @@ evnx doctor --format json
 }
 ```
 
-(Two of the five checks shown.) `severity` is `ok`, `info`, `warning` or `error`.
+(Two of the six checks shown.) `severity` is `ok`, `info`, `warning` or `error`.
 `ran` is `false` for a check that could not finish (**v0.10.15+**). `details` is plain
 text, one finding per line. `-v` does not change the JSON, and the docs link goes to
 stderr, so stdout holds only the document:
@@ -314,7 +379,7 @@ evnx doctor --fix
 ✓ Fixed: .env.production mode 644 → 600
   ✓  Check file permissions for sensitive files
 
-  1 error  ·  1 warning  ·  2 checks passed
+  1 error  ·  1 warning  ·  3 checks passed
 ```
 
 What it repairs:

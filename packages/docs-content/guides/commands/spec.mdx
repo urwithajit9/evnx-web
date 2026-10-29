@@ -3,12 +3,12 @@ title: "evnx spec"
 section: commands
 order: 12
 publishedAt: "2026-09-22"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-29"
 excerpt: "Declare what each variable is — required, a URL, a secret, production-only — in a contract .env.example cannot express. Generated from your project, then enforced by evnx validate."
 difficulty: intermediate
 timeToComplete: "8 minutes"
 tags: ["spec", "contract", "validate", "schema", "evnx"]
-commands: ["add", "add service", "diff", "init", "scan", "spec init", "sync", "template", "validate"]
+commands: ["add", "add service", "diff", "init", "scan", "spec check", "spec init", "sync", "template", "validate"]
 evnxVersion: "0.10.7"
 prerequisites:
   - getting-started/installation
@@ -38,6 +38,7 @@ evnx spec init --stdout
 evnx spec init --merge
 evnx spec init --env-name staging
 evnx spec init --with django,postgresql,stripe
+evnx spec check
 </CommandSignature>
 
 ---
@@ -66,10 +67,26 @@ secret       = true
 | Field | Type | Meaning |
 |---|---|---|
 | `required` | `bool` | Must be present. **Defaults to `true`** — see below |
-| `format` | `string` | `url`, `int`, `port`, `bool`, `email`, or a regex |
+| `format` | `string` | `url`, `int`, `port`, `bool`, `email`, or `regex:<pattern>` |
 | `secret` | `bool` | Declares the value sensitive. Unstated is not the same as `false` |
 | `description` | `string` | Shown in `validate`'s suggestion when the variable is missing |
 | `environments` | `list` | The variable applies **only** in these |
+
+<Callout type="warning" title="v0.11.0: a regex is written `regex:`">
+`format = "^sk_"` used to be compiled as a regular expression, so a misspelt name
+(`format = "urll"`) became a pattern that failed every value. Since 0.11.0 a regex is
+written `format = "regex:^sk_"`, and any other value must be one of the five names.
+An unknown name stops every command that reads the config, with a suggestion:
+
+```text
+2 | format = "urll"
+  |          ^^^^^^
+`urll` is not a format — did you mean `url`?
+Formats: url, int, port, bool, email. A regular expression is written `regex:urll` (bare patterns were read as regexes before 0.11.0).
+```
+
+**Migrate:** prefix bare patterns, `format = "^sk_"` → `format = "regex:^sk_"`.
+</Callout>
 
 `format = "bool"` accepts `true`, `yes`, `on`, `1`, `y` and `false`, `no`, `off`,
 `0`, `n`, in any case (**v0.10.6+**; `on`, `off`, `y` and `n` used to fail) — the
@@ -506,14 +523,66 @@ versions of this page described an `explained by [vars] environments` line and a
 
 ---
 
+## Checking it: `evnx spec check`
+
+**v0.11.0+** — a read-only check of the contract against `.env.example`, and against
+`.env` when there is one:
+
+- every variable `[vars]` declares for every environment must be in the template;
+- every name in the template must be declared in `[vars]`;
+- with a `.env`, every required variable must be in it.
+
+A variable limited to some environments (`environments = [...]`) may live in their
+own templates, so it is not required in `.env.example`. It needs no `.env`, so it runs
+in CI and in a fresh clone:
+
+```console
+$ evnx spec check
+  config    .evnx.toml
+  ✓ .env.example agrees with [vars] (3 declared)
+· .env not found, so only the template was checked
+```
+
+```console
+$ evnx spec check
+  config    .evnx.toml
+  ✗ declared in [vars], missing from .env.example: DATABASE_URL
+  ✗ in .env.example, not declared in [vars]: DEBUG
+  ✗ required by [vars], missing from .env: DATABASE_URL
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--example` | `.env.example`, or `[defaults] example` | The template to check |
+| `--env` | `.env`, or `[defaults] env_name` | The env file; skipped when absent unless named |
+| `--env-name` | — | Check `.env.<NAME>` instead of `.env` |
+
+Exit `0`: they agree, or there is no `[vars]` (skipped, and said). Exit `1`: they
+disagree. Exit `2`: the template is missing or does not parse, or a file named by
+`--env` / `--env-name` does not exist. `-q` prints only what disagrees.
+
+As a pre-commit hook:
+
+```yaml
+- repo: https://github.com/urwithajit9/evnx
+  rev: v0.11.0
+  hooks:
+    - id: evnx-spec-check
+```
+
+---
+
 ## Exit codes
+
+`spec check`'s are above. `spec init`'s:
 
 | Code | Meaning |
 |---|---|
 | `0` | The spec was written, printed with `--stdout`, or every variable was already declared |
 | `2` | Nothing was written — no variables to read, nothing to write, a file named by `--env` or `--example` that does not exist, a file that does not parse, `[vars]` already present without `--merge`, an unknown component, or an argument error |
 
-A format that will not compile as a regex is refused when the **config is read**,
+A format that is not one of the five names or a `regex:` that will not compile is
+refused when the **config is read**,
 not the first time a value happens to be checked against it — so a broken
 contract fails the next command, whatever it is, rather than lying dormant.
 

@@ -3,7 +3,7 @@ section: "commands"
 order: 3
 title: "evnx sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Reference for evnx sync: keep .env and .env.example in step by name, gate CI with --check, and generate placeholders a template can safely carry."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
@@ -573,8 +573,8 @@ choice, and `allow_actual` in a [template config](/guides/reference/sync-configu
 Both refuse credentials. The interactive choice writes them as placeholders and names
 them; `allow_actual` refuses the whole run, exit `2`, nothing written.
 
-The interactive choice prints one line to **stderr**, with or without `--verbose`, and
-`-q` does not hide it:
+The interactive choice, and since 0.11.0 `allow_actual` too, prints one line to
+**stderr**, with or without `--verbose`, and `-q` does not hide it:
 
 ```text
 [AUDIT] actual values written to .env.example for: LOG_LEVEL
@@ -582,12 +582,9 @@ The interactive choice prints one line to **stderr**, with or without `--verbose
 
 It is a line in the run's output, not a log kept anywhere else.
 
-<Callout type="warning">
-In 0.10.12, values written through `allow_actual` print **no** `[AUDIT]` line, and the
-run still says it used placeholder values. The values are checked for credentials
-before anything is written; only the record is missing. To see what `allow_actual`
-wrote, read the template.
-</Callout>
+Before 0.11.0, values written through `allow_actual` printed **no** `[AUDIT]` line, and
+the run said it had used placeholder values. They were still checked for credentials
+first; only the record was missing.
 
 ### Permissions and writes
 

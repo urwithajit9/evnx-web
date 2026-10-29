@@ -3,12 +3,12 @@ section: "reference"
 order: 6
 title: "Environment files"
 publishedAt: "2026-09-21"
-updatedAt: "2026-09-21"
+updatedAt: "2026-10-29"
 excerpt: "How evnx addresses .env.production, .env.staging and friends — the --env-name flag, what gets gitignored, and why there is no layered loading."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["environments", "reference", "env-name", "gitignore", "multi-environment"]
-commands: ["backup", "cloud push", "convert", "diff", "doctor", "init", "scan", "sync", "validate"]
+commands: ["add custom", "backup", "cloud push", "convert", "diff", "doctor", "init", "scan", "sync", "validate"]
 evnxVersion: "0.5.2"
 prerequisites:
   - commands/init
@@ -43,6 +43,8 @@ Every command that takes an env file accepts it:
 
 ```bash
 evnx validate --env-name production      # .env.production
+evnx init --env-name staging --yes       # creates .env.staging from the template (v0.11.0+)
+evnx add custom API_URL --env-name staging --yes   # appends to .env.staging (v0.11.0+)
 evnx scan .env.production                # a folder walk reads every .env*, but summarises the ones git ignores
 evnx sync --env-name staging --check
 evnx convert --env-name production --to json

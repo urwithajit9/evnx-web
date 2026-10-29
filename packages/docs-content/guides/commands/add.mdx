@@ -3,7 +3,7 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
@@ -54,6 +54,7 @@ to pick from. `evnx add --list` prints every id.
 | Flag | Description |
 |------|-------------|
 | `--path`, `-p` | Folder holding `.env.example` and `.env` (default `.`) |
+| `--env-name <NAME>` | **v0.11.0+** — write to `.env.<NAME>` instead of `.env`, one file per run (loop over names for several). Defaults to `[defaults] env_name` |
 | `--yes`, `-y` | Do not ask; needed in scripts and CI |
 | `--dry-run` | Show what would be added, skipped and kept; write nothing |
 | `--json` | Print the result as one JSON document (with `--yes` or `--dry-run`) |

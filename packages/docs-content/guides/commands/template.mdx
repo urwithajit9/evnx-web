@@ -3,7 +3,7 @@ section: "commands"
 order: 4
 title: "evnx template"
 publishedAt: "2026-03-11"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-29"
 excerpt: "Reference documentation for the evnx template command: generate configuration files from templates with variable substitution and filters."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
@@ -107,7 +107,8 @@ evnx template --input <TEMPLATE> --output <OUTPUT> [OPTIONS]
 |------|---------|-------------|
 | `--env` | `.env` | The env file to take values from. Without `--env`, `[defaults] env_name` in `.evnx.toml` applies when it is set |
 | `--env-name` | — | Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
-| `--strict` | off | Refuse to write when a placeholder has no value |
+| `--allow-unresolved` | off | **v0.11.0+** — write a placeholder that has no value through literally and exit `0`. Without it, an unresolved placeholder is an error and nothing is written |
+| `--strict` | — | The default since 0.11.0. Still accepted, with a notice; removed in 1.0 |
 | `--dry-run` | off | **v0.10.5+** — render and report what would be written; write nothing |
 | `--mkdir` | off | **v0.10.5+** — create the output's missing directories |
 | `--mode` | `0600` for a new file | **v0.10.3+** — the output's file mode in octal (`0640`), applied to a new or an existing file |
@@ -156,19 +157,20 @@ evnx template --input <TEMPLATE> --output <OUTPUT> [OPTIONS]
 
 - **A missing directory is an error** that names `--mkdir` (see below).
 - **Nothing is written when a run fails** — an unknown filter, a bad `|bool` or
-  `|int` value, or `--strict` with an unresolved placeholder all stop the run before
-  the file is touched.
+  `|int` value, or an unresolved placeholder (without `--allow-unresolved`) all stop
+  the run before the file is touched.
 
 ---
 
-## `--strict`
+## Unresolved placeholders and `--allow-unresolved`
 
-Without it, a placeholder with no value is **copied through literally** and the command
-exits `0`:
+**v0.11.0+** — a placeholder with no value is an **error**: nothing is written, every
+unresolved name is listed, and the exit code is `2`.
 
 ```text
 # in.tmpl
-database_url = {{DATABASE_URL}}
+db: {{DATABASE_URL}}
+cache: {{REDIS_URL}}
 ```
 
 ```console
@@ -176,45 +178,41 @@ $ evnx template --input in.tmpl --output app.conf --no-gitignore
 
   Generate config from template
 
-✓ Loaded 1 variables from .env
+✓ Loaded 2 variables from .env
 ✓ Read template from in.tmpl
-! Variable 'DATABASE_URL' referenced in template but not defined in .env
-✓ Generated config at app.conf
-· 1 placeholder was left unresolved and written through literally. Use --strict to make this an error.
-  Docs: https://docs.evnx.dev/cli/commands/template
-
-$ cat app.conf
-database_url = {{DATABASE_URL}}
-```
-
-That file is no longer a template — it is a config file whose `database_url` is the
-literal string `{{DATABASE_URL}}`, and whatever reads it next treats that as the
-setting. `--strict` makes it an error:
-
-```console
-$ evnx template --input in.tmpl --output app.conf --strict --no-gitignore
-
-  Generate config from template
-
-✓ Loaded 1 variables from .env
-✓ Read template from in.tmpl
-! Variable 'DATABASE_URL' referenced in template but not defined in .env
-Error: 1 variable referenced in in.tmpl has no value in .env: DATABASE_URL
+! Variable 'REDIS_URL' referenced in template but not defined in .env
+Error: 1 variable referenced in in.tmpl has no value in .env: REDIS_URL
 
 Define it there, or give it a fallback with {{NAME|default:value}}.
+To write unresolved placeholders through as they are: --allow-unresolved.
 Nothing was written to app.conf.
 
 No verdict: evnx did not finish. This is not a clean result.
+```
+
+Before 0.11.0 this run wrote `cache: {{REDIS_URL}}` into `app.conf` and exited `0`. That
+file is no longer a template: whatever reads it next takes the literal string
+`{{REDIS_URL}}` as the setting. Where that pass-through is what you want, say so:
+
+```console
+$ evnx template --input in.tmpl --output app.conf --no-gitignore --allow-unresolved
+...
+✓ Generated config at app.conf
+· 1 placeholder was left unresolved and written through literally (--allow-unresolved).
 ```
 
 <Callout type="info">
 The refusal happens **before** the output is written, so a failed run leaves no
 half-built config behind for the next step in your pipeline to pick up.
 
-A placeholder with a `|default:` is not undefined, so `--strict` accepts it:
+A placeholder with a `|default:` is not unresolved:
 `{{DATABASE_URL|default:sqlite://local.db}}` renders as `sqlite://local.db`. That is
-how you keep a variable optional under a strict build.
+how you keep a variable optional.
 </Callout>
+
+`--strict` used to opt in to this check. It is the default now, so the flag only prints
+`· --strict is the default since 0.11.0 and is no longer needed; it is removed in 1.0`.
+Drop it from scripts before 1.0.
 
 ---
 
@@ -234,7 +232,6 @@ $ evnx template --input config.yaml.template --output config.yaml --dry-run
 ! Variable 'REGION' referenced in template but not defined in .env
 Dry run: nothing was written.
   would create config.yaml
-  1 placeholder would be left unresolved
 ```
 
 The report for an output that exists, for one that is a symlink, and for stdout:
@@ -251,12 +248,12 @@ A dry run:
 - **never prints a value** — not the rendered text, not even with `--output -`;
 - **leaves `.gitignore` alone**, with or without `--gitignore`;
 - **fails where the real run would**, with the same message and exit `2`: an unknown
-  filter, a bad `|bool` or `|int` value, `--strict` with an unresolved placeholder, a
-  missing directory without `--mkdir`, an `--output` that is the template or the env
-  file.
+  filter, a bad `|bool` or `|int` value, an unresolved placeholder (without
+  `--allow-unresolved`), a missing directory without `--mkdir`, an `--output` that is
+  the template or the env file.
 
-That makes `--dry-run --strict` a check that a template renders against an env file,
-without leaving a file full of secrets on the CI runner.
+That makes `--dry-run` a check that a template renders against an env file, without
+leaving a file full of secrets on the CI runner.
 
 ---
 
@@ -364,7 +361,7 @@ The template engine supports three styles for referencing variables from your `.
 |--------|---------|-------------|
 | `{{VAR}}` | `{{DATABASE_URL}}` | Template style; the only one that takes a filter |
 | `${VAR}` | `${DATABASE_URL}` | Shell style |
-| `$VAR` | `$DATABASE_URL` | Bare; the name is the letters, digits and `_` that follow the `$` |
+| `$VAR` | `$DATABASE_URL` | Bare; substituted when the name is defined, otherwise left exactly as written (**v0.11.0+**) |
 
 Spaces inside the braces are allowed (**v0.5.0+**), so these all render the same value:
 
@@ -373,10 +370,17 @@ Spaces inside the braces are allowed (**v0.5.0+**), so these all render the same
 {{APP_ENV|upper}}  {{ APP_ENV | upper }}
 ```
 
-A `$` that is not followed by a name, as in `price=$5`, is left alone. A name that is
-not in the env file — `$PATHNAME` in `https://example.com/$PATHNAME` — gets the same
-warning as `{{PATHNAME}}` and is written through unchanged, or stops the run under
-`--strict`.
+A `$` that is not followed by a name, as in `price=$5`, is left alone.
+
+**A bare `$NAME` that is not in the env file is left alone too** (**v0.11.0+**), with no
+warning: in nginx, shell or Makefile text, `$host`, `$document_root` and `$1` are that
+program's syntax, not yours. `{{NAME}}` and `${NAME}` are always references, so an
+undefined one is the error described above.
+
+```text
+# .env:  HOST=db
+x=$HOST  y=$host  z=${HOST}      →      x=db  y=$host  z=db
+```
 
 ---
 
@@ -425,9 +429,13 @@ that is not a filter name stays part of the default's text, so `{{SEP|default:a|
 renders `a|b` when `SEP` is empty.
 
 Before 0.10.5, `{{APP_ENV|upper|json}}` was copied into the output unchanged with exit
-`0`, and `{{PORT|default:8080|int}}` rendered `8080|int`. Chaining is planned for
-0.11.0. Until then, a value that needs both a fallback and `|int` or `|bool` gets its
-fallback in `.env`.
+`0`, and `{{PORT|default:8080|int}}` rendered `8080|int`. Chaining is still not
+supported in 0.11.0; it comes with the new template engine planned for 0.12.0. Until
+then, a value that needs both a fallback and `|int` or `|bool` gets its fallback in
+`.env`.
+
+Each `|default:` uses its own text (**v0.11.0+**): with `E` empty,
+`{{E|default:one}} {{E|default:two}}` renders `one two`. It rendered `one one`.
 
 ### Unknown filters are errors
 
@@ -566,7 +574,7 @@ Only the rendered text reaches stdout, so it can be piped to the next command.
 ### Check a template in CI without writing it
 
 ```bash
-evnx template --input config.yaml.template --output config.yaml --env-name production --strict --dry-run
+evnx template --input config.yaml.template --output config.yaml --env-name production --dry-run
 ```
 
 ### Generate multiple configs in a script
@@ -617,8 +625,8 @@ evnx template \
 
 | Code | Meaning | Use case |
 |------|---------|----------|
-| `0` | ✅ Written — or, with `--dry-run`, it would have been | Success in scripts/CI. Also returned when placeholders were left unresolved without `--strict` |
-| `2` | 🚨 Nothing was written | A missing template or env file, a bad line in the env file, an unknown or chained filter, a bad `\|bool` or `\|int` value, an unresolved placeholder under `--strict`, a missing directory without `--mkdir`, an `--output` that is the template or the env file, I/O or permission errors |
+| `0` | ✅ Written — or, with `--dry-run`, it would have been | Success in scripts/CI. Also returned when placeholders were written through with `--allow-unresolved` |
+| `2` | 🚨 Nothing was written | A missing template or env file, a bad line in the env file, an unknown or chained filter, a bad `\|bool` or `\|int` value, an unresolved placeholder (without `--allow-unresolved`), a missing directory without `--mkdir`, an `--output` that is the template or the env file, I/O or permission errors |
 
 `--dry-run` exits with the code the real run would.
 
@@ -637,11 +645,11 @@ Error: Failed to parse environment file: .env.production: Invalid format at line
 Each line is `KEY=value` (spaces around `=` are accepted), `#` starts a comment, and a
 value with spaces can be quoted: `KEY="value with spaces"`.
 
-### "Variable 'X' referenced in template but not defined" warning
+### "has no value in .env" error
 
 ```text
 ! Variable 'MISSING_VAR' referenced in template but not defined in .env
-· 1 placeholder was left unresolved and written through literally. Use --strict to make this an error.
+Error: 1 variable referenced in in.tmpl has no value in .env: MISSING_VAR
 ```
 
 **Solution**: Add the missing variable to your `.env` file, or give it a fallback:
@@ -650,8 +658,9 @@ value with spaces can be quoted: `KEY="value with spaces"`.
 {{MISSING_VAR|default:fallback_value}}
 ```
 
-In CI, add `--strict` so this fails the build instead of producing a config file with
-`{{MISSING_VAR}}` in it.
+If the placeholder is meant to survive into the output (another tool fills it later),
+pass `--allow-unresolved`. A bare `$name` is never this error: undefined, it is left
+alone.
 
 ### "filters evnx cannot apply" error
 

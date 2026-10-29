@@ -3,7 +3,7 @@ section: "commands"
 order: 4
 title: "evnx convert"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-19"
+updatedAt: "2026-10-29"
 excerpt: "Reference for evnx convert: turn a .env into the format one of 14 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
@@ -63,6 +63,7 @@ Without `--to`, evnx opens a format menu when there is a terminal, and exits `2`
 | `--no-gitignore` | — | Skip the `.gitignore` check for `FILE` |
 | `--include <PATTERN>` | all | Keep only names matching a glob; see [Filtering](#filtering) |
 | `--exclude <PATTERN>` | none | Drop names matching a glob; exclude wins |
+| `--only <WHICH>` | — | **v0.11.0+** — `secrets` keeps only the variables whose name or value says secret (`*_PASSWORD`, a provider key, a URL with a password, …); `public` keeps the rest. Applied with `--include` and `--exclude` |
 | `--allow-empty` | off | Convert even when no variable is left |
 | `--allow-collisions` | off | When two names become one, keep the last value |
 | `--prefix <PREFIX>` | — | Prepend to every name. Letters, digits and `_`, not starting with a digit |
@@ -189,6 +190,32 @@ Error: --include/--exclude left nothing to convert — all 9 variable(s) were fi
 
 An empty `.env` is refused the same way. `--allow-empty` converts it to the empty
 output and exits `0`.
+
+### Secrets or the rest: `--only`
+
+**v0.11.0+** — split a `.env` by what its variables hold: public values to a build
+system, secrets to a secret manager.
+
+```bash
+evnx convert --to json --only public   > public.json
+evnx convert --to aws-secrets --only secrets
+```
+
+A variable is a secret when its **name** says so (`*_PASSWORD`, `*_SECRET`, `*_TOKEN`,
+`*_KEY`, …) or its **value** does: a provider key (`sk_live_…`, `ghp_…`), a private key, a
+URL with a password in it. From
+
+```text
+APP_NAME=shop
+PORT=8080
+DB_PASSWORD=hunter22hunter
+DATABASE_URL=postgres://u:pw@h/db
+STRIPE_KEY=sk_live_51H8xQ2eZvKYlo2CpR4mN7bV9
+```
+
+`--only secrets` keeps `DB_PASSWORD`, `DATABASE_URL` (its password) and `STRIPE_KEY`;
+`--only public` keeps `APP_NAME` and `PORT`. It combines with `--include` and
+`--exclude`; when they leave nothing, the error names `--only`.
 
 ---
 
