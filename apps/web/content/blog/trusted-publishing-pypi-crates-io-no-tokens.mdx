@@ -1,0 +1,143 @@
+---
+title: "No Registry Tokens: Trusted Publishing to PyPI and crates.io"
+publishedAt: "2026-10-29"
+excerpt: "evnx used to publish to PyPI with a long-lived API token and to crates.io by hand. From v0.11.0 both trade a GitHub OIDC token for a short-lived one inside the release job — and the step that was skipped twice is gone."
+author: "ajit"
+category: "deep-dive"
+tags: ["security", "supply-chain", "pypi", "crates-io", "github-actions", "release", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "signing-every-evnx-release-slsa-provenance"
+  - "publishing-cli-to-winget"
+---
+
+A release pipeline that holds a registry token holds a credential that can publish your
+package from anywhere, until someone remembers to rotate it. evnx had two problems of
+that shape: PyPI published with a long-lived `PYPI_API_TOKEN` stored in the repository's
+secrets, and crates.io was not automated at all — someone ran `cargo publish` by hand
+after each tag. For evnx's sister crate, that manual step was skipped twice.
+
+From v0.11.0 both registries use **trusted publishing**.
+
+---
+
+## How it works
+
+The registry is told, once, which GitHub repository and workflow may publish the
+package. When that workflow runs, GitHub gives the job an OIDC token that says, signed,
+*I am workflow X in repository Y, running for ref Z*. The job hands that to the registry,
+which checks it against the configuration and returns a token valid for minutes, for that
+package only.
+
+Nothing long-lived is stored. A leaked repository secret cannot publish, because there is
+none to leak.
+
+---
+
+## PyPI
+
+The publish job asks for `id-token: write` and simply stops passing a password:
+
+```yaml
+publish:
+  permissions:
+    contents: read
+    id-token: write
+  environment:
+    name: pypi
+  steps:
+    - uses: pypa/gh-action-pypi-publish@<pinned commit> # release/v1
+```
+
+Without `password:`, the action authenticates with OIDC. The trusted publisher on
+pypi.org names the repository, the workflow file and the environment. As a bonus, the
+action uploads **PEP 740 attestations**, so PyPI shows where each wheel was built.
+
+---
+
+## crates.io
+
+crates.io's version needed a job of its own, because nothing published the crate before.
+It runs in `release.yml`, after the GitHub Release exists:
+
+```yaml
+publish-crate:
+  needs: release
+  permissions:
+    contents: read
+    id-token: write
+  steps:
+    - uses: rust-lang/crates-io-auth-action@<pinned commit> # v1.0.5
+      id: auth
+    - run: cargo publish --all-features
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+```
+
+The auth action exchanges the OIDC token for a crates.io token and **revokes it when the
+job ends**. Two guards around it:
+
+- **The tag must equal `Cargo.toml`'s version**, or nothing is published.
+- **A version already on crates.io is skipped**, not failed, so re-running a release
+  after a partial failure is safe.
+
+We pinned v1.0.5 rather than the newest release, which was a week old: a job that holds a
+publishing credential should not be the first user of a new version.
+
+Once the first release has gone through it, crates.io has one more setting worth turning
+on: *require trusted publishing for all new versions*, after which a plain API token is
+refused for this crate.
+
+---
+
+## The first run
+
+v0.11.0, tagged on 29 October 2026, was the first release to go out this way, and both
+registries took it on the first attempt.
+
+**PyPI.** `python-publish.yml` built the source distribution and four wheels (Linux
+x86_64, macOS x86_64 and arm64, Windows x86_64) and uploaded them with no stored token.
+Every file carries a PEP 740 attestation, which PyPI serves from its integrity API. It
+names the publisher it trusted:
+
+```bash
+curl -s -H 'Accept: application/vnd.pypi.integrity.v1+json' \
+  https://pypi.org/integrity/evnx/0.11.0/evnx-0.11.0-py3-none-macosx_10_12_x86_64.whl/provenance \
+  | jq -c '.attestation_bundles[0].publisher'
+```
+
+```json
+{"environment":null,"kind":"GitHub","repository":"urwithajit9/evnx","workflow":"python-publish.yml"}
+```
+
+**crates.io.** The new `publish-crate` job ran a minute after the release was created
+and published `evnx 0.11.0` at 06:26 UTC. The version records how it was published:
+no user, and the run and commit that did it:
+
+```bash
+curl -s -A 'your-name (contact)' https://crates.io/api/v1/crates/evnx/0.11.0 \
+  | jq -c '.version | {num, published_by, trustpub_data}'
+```
+
+```json
+{"num":"0.11.0","published_by":null,"trustpub_data":{"provider":"github","repository":"urwithajit9/evnx","run_id":"40828561441","sha":"a255caf95b0f3824810b3d16ce4e77a0dea7dd13"}}
+```
+
+`run_id` is the same release run that built and signed the archives, and `sha` is the
+tagged commit. Before this release the crate's versions said who ran `cargo publish`; now
+they say which workflow run did, which anyone can open and read.
+
+With one release through both, the next steps are the settings that make the old way
+impossible: delete `PYPI_API_TOKEN` from the repository, and tick *require trusted
+publishing* on crates.io.
+
+---
+
+## What changed for a release
+
+| | Before | From v0.11.0 |
+|---|---|---|
+| PyPI | `PYPI_API_TOKEN` in repository secrets | OIDC, nothing stored, PEP 740 attestations |
+| crates.io | `cargo publish` by hand, after the tag | a job in `release.yml`, OIDC, token revoked at the end |
+| Release archives | checksums | checksums and [SLSA build provenance](/blog/signing-every-evnx-release-slsa-provenance) |

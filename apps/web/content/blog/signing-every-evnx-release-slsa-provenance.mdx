@@ -1,0 +1,149 @@
+---
+title: "Signing Every evnx Release: SLSA Build Provenance, From Plan to Production"
+publishedAt: "2026-10-29"
+excerpt: "A checksum proves a download is intact, not where it came from. How evnx added SLSA build provenance to every release archive, the three dry runs it took, what a Sigstore timeout taught us, and exactly what the signature does and does not prove."
+author: "ajit"
+category: "deep-dive"
+tags: ["security", "supply-chain", "slsa", "sigstore", "github-actions", "release", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "evnx-0-11-0-what-you-hit-and-the-contracts"
+  - "publishing-cli-to-winget"
+---
+
+Every evnx release has shipped a `.sha256` beside each archive. That file answers one
+question: *did this download arrive intact?* It cannot answer the more important one:
+*was this archive built by evnx's release pipeline, from evnx's source?* The checksum
+comes from the same place as the archive, so anyone who can replace one can replace the
+other.
+
+From v0.11.0, every archive also carries a **SLSA build provenance** attestation. This is
+how we added it, what went wrong on the way, and exactly what it proves.
+
+---
+
+## What provenance is
+
+A provenance attestation is a signed statement: *this file, with this SHA-256, was
+produced by this workflow, in this repository, from this commit and tag, on this kind of
+runner.* SLSA ("supply-chain levels for software artifacts") names how strong that
+statement is:
+
+| Level | What it means |
+|---|---|
+| L1 | Provenance exists |
+| **L2** | It is **signed** by the build platform, so the project cannot forge it after the fact |
+| L3 | The build ran in an isolated, hardened environment the project's own steps cannot tamper with |
+
+evnx is at **L2**. GitHub's `actions/attest-build-provenance` signs with
+[Sigstore](https://www.sigstore.dev): the job gets a short-lived OIDC identity from
+GitHub, Sigstore's certificate authority issues a certificate for that identity (valid for
+about ten minutes, which is all the signing step needs), the signature goes into Rekor,
+Sigstore's public transparency log, and the attestation is stored with the repository.
+There is no long-lived signing key for anyone to steal.
+
+It is free for public repositories. (A private repository needs GitHub Enterprise Cloud,
+which matters below.)
+
+---
+
+## Three decisions
+
+**Sign in the job that built the file.** The first version signed in the `release` job,
+over archives it had downloaded from the seven build jobs. That statement reads "the
+release run saw these files", not "this build step produced them". So each of the seven
+matrix build jobs now attests its own archive right after packaging it, with the minimum
+permissions it needs (`id-token`, `attestations` and `artifact-metadata` write, contents
+read). The Windows job signs two subjects, its `.tar.gz` and its `.zip`.
+
+**The release checks itself.** A `verify-provenance` job runs after the GitHub Release
+exists, downloads every published archive, and verifies each one strictly: right
+repository, right workflow file, right tag, GitHub-hosted runner. The command printed in
+the release notes is therefore proven on every release, not first tried by a user. It
+gates nothing — it runs after publishing and cannot unpublish — but it fails loudly.
+
+**`install.sh` checks automatically.** After the checksum, if a signed-in `gh` (2.49+) is
+on the machine, the installer verifies provenance and **refuses** an archive that fails.
+Without `gh`, or not signed in, or for a release older than v0.11.0, it says the check
+was skipped and carries on. It never makes `gh` a requirement for installing.
+
+---
+
+## The dry runs
+
+A release fires five registries the moment the tag is pushed, so a broken release
+workflow is the worst possible place to find a bug. We ran the real `release.yml` on a
+**public fork** under a separate account, with every publishing job removed, and tagged
+the fork only.
+
+**Run 1** proved the design: seven builds signed, sixteen assets released,
+`verify-provenance` green, and by hand, a tampered file, the wrong repository and the
+wrong tag all failed verification. It also found a hole in the dry-run procedure:
+deleting `npm-publish.yml` on the dry-run branch did not stop it. It runs on
+`workflow_run`, and **GitHub takes a `workflow_run` workflow from the default branch**,
+so the fork's `main` still had it. It failed only because a fork has no npm token. The
+runbook now disables the publisher workflows in the fork's Actions settings.
+
+**Run 2**, after upgrading the release's actions (checkout v7, download-artifact v8, a new
+rust-toolchain), took four attempts:
+
+- two of the seven builds failed at signing with
+  `error fetching tlog entry … network timeout` from `rekor.sigstore.dev`. The entry had
+  been written; reading it back timed out. Rekor answered normally minutes later;
+- on the reruns, the Intel macOS job waited for a runner that never came and was
+  cancelled, twice;
+- the fourth attempt was green.
+
+Neither cause was in our workflow. But the first one matters on a real release: a failed
+signature holds back the GitHub Release and every channel after it, while PyPI and the
+GitHub Marketplace action, which fire on the tag themselves, publish anyway.
+
+---
+
+## One retry
+
+So each build now attests, and if that fails, waits sixty seconds and attests once more.
+The first attempt is allowed to fail without failing the job; the retry is not. A passing
+Sigstore blip recovers inside the job and nobody has to click "re-run". If both attempts
+fail, the job fails exactly as before, and the runbook says what to do: re-run the failed
+jobs, and never move or delete the tag.
+
+A retry after a half-written attempt can leave a second attestation for the same file.
+That is harmless: verification needs one valid attestation, and both say the same thing.
+
+---
+
+## In the real release
+
+v0.11.0 was tagged on 29 October 2026, and the release run went through in one attempt:
+
+| Step | Result |
+|---|---|
+| Seven build jobs, each attesting its own archive | all seven attested **on the first try**; every "wait" and "retry" step was skipped |
+| Create Release | published at 06:25 UTC, about five minutes after the tag |
+| Verify provenance | passed in 31 seconds, over the release's eight archives: seven `.tar.gz` and the Windows `.zip` |
+| crates.io, container image, Homebrew, Scoop, winget | all green in the same run |
+
+So the retry was not needed this time. The two dry runs had needed it twice; this run
+saw no Sigstore timeout, and the retry remains for the release that does.
+
+Checked by hand afterwards: the `x86_64-unknown-linux-musl` archive verifies under the
+strict policy (signer workflow, `refs/tags/v0.11.0`), and the same file with one byte
+appended has no attestation at all.
+
+---
+
+## What it proves, and what it does not
+
+It proves an archive was built by `urwithajit9/evnx`'s release workflow, from a specific
+tag and commit, on a GitHub-hosted runner, and has not changed since. A file from a
+mirror, a compromised CDN or a lookalike repository fails.
+
+It does **not** prove the source is safe: a malicious commit that reaches a tag is built
+and signed like any other. It does not cover the npm, PyPI, Homebrew, Scoop or winget
+packages, which repackage the same binaries through their own systems (PyPI publishes its
+own attestations now; see [trusted publishing](/blog/trusted-publishing-pypi-crates-io-no-tokens)).
+And it is L2, not L3: the build steps run in the same job as the signing.
+
+To check one yourself: [How to verify an evnx download](/blog/how-to-verify-an-evnx-download).
