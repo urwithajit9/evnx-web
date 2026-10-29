@@ -129,7 +129,12 @@ export function getBlogPost(slug: string): BlogPost | null {
   const candidates = [`${slug}.mdx`, `${slug}.md`]
   for (const candidate of candidates) {
     const filePath = path.join(CONTENT_ROOT, 'blog', candidate)
-    if (fs.existsSync(filePath)) return parseBlogFile(candidate)
+    if (fs.existsSync(filePath)) {
+      // RM-W1: a draft was hidden from the lists but still served at its URL,
+      // indexable, in production. Now it is a 404 there, as everywhere else.
+      const post = parseBlogFile(candidate)
+      return isProd() && post.draft ? null : post
+    }
   }
   return null
 }

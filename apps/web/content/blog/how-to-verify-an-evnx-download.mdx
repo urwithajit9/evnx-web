@@ -1,0 +1,197 @@
+---
+title: "How to Verify an evnx Download"
+publishedAt: "2026-10-29"
+excerpt: "Two checks, two different questions: the checksum says a download is intact, build provenance says where it was built. Both commands for evnx, what failure looks like, and the one that install.sh already runs for you."
+author: "ajit"
+category: "tutorial"
+tags: ["security", "supply-chain", "slsa", "install", "github-cli", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "signing-every-evnx-release-slsa-provenance"
+---
+
+You downloaded `evnx-x86_64-unknown-linux-musl.tar.gz`. Before you run what is inside it,
+two questions are worth asking, and they have different answers:
+
+| Question | Check | Proves |
+|---|---|---|
+| Did it arrive intact? | the `.sha256` beside it | the bytes match what was published |
+| Was it built by evnx's release pipeline? | **build provenance** (v0.11.0+) | which repository, workflow, tag and runner produced it |
+
+The checksum alone cannot answer the second question: it is published in the same place
+as the archive, so anyone who can replace one can replace the other.
+
+---
+
+## The quick way: let the installer do it
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | bash
+```
+
+The script verifies the checksum, then, if a signed-in GitHub CLI is installed, the build
+provenance. An archive that fails either check is not installed.
+
+On a machine whose `gh` is not signed in, a v0.11.0 install prints:
+
+```text
+[INFO] Downloading from https://github.com/urwithajit9/evnx/releases/download/v0.11.0/evnx-x86_64-unknown-linux-gnu.tar.gz
+[INFO] Verifying checksum...
+evnx-x86_64-unknown-linux-gnu.tar.gz: OK
+[INFO] Checksum verified ✓
+[INFO] Provenance not checked: gh is not signed in (gh auth login). To check: gh attestation verify evnx-x86_64-unknown-linux-gnu.tar.gz -R urwithajit9/evnx --signer-workflow urwithajit9/evnx/.github/workflows/release.yml --source-ref refs/tags/v0.11.0
+[INFO] ✓ Installed evnx 0.11.0 to /home/you/.local/bin/evnx
+```
+
+With a signed-in `gh` (2.49 or later), that line reads
+`Provenance verified ✓ (built by urwithajit9/evnx's release workflow from v0.11.0)`, and
+an archive that does not verify is refused before anything is installed. Without `gh`,
+or with `gh` not signed in, the script says the check was skipped, prints the command
+that would run it, and carries on. It never refuses to install for want of `gh`.
+
+---
+
+## By hand
+
+### 1 · Download the archive and its checksum
+
+```bash
+curl -fsSLO https://github.com/urwithajit9/evnx/releases/download/v0.11.0/evnx-x86_64-unknown-linux-musl.tar.gz
+curl -fsSLO https://github.com/urwithajit9/evnx/releases/download/v0.11.0/evnx-x86_64-unknown-linux-musl.tar.gz.sha256
+```
+
+### 2 · The checksum
+
+```bash
+sha256sum -c evnx-x86_64-unknown-linux-musl.tar.gz.sha256      # macOS: shasum -a 256 -c
+```
+
+```text
+evnx-x86_64-unknown-linux-musl.tar.gz: OK
+```
+
+### 3 · The provenance
+
+`gh attestation verify` needs the GitHub CLI, signed in (`gh auth login`); without a
+login it stops with exit 4.
+
+```bash
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx
+```
+
+That checks the file was attested by a workflow in `urwithajit9/evnx`. The **strict**
+form pins down exactly which one, from which tag, on which kind of runner:
+
+```bash
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \
+  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml \
+  --source-ref refs/tags/v0.11.0 \
+  --deny-self-hosted-runners
+```
+
+```text
+Loaded digest sha256:e931d6d882deba924c940ea46e1d84781851fec372d71d6e289f7ba98eb914cc for file://evnx-x86_64-unknown-linux-musl.tar.gz
+Loaded 1 attestations from bundle.json
+
+The following policy criteria will be enforced:
+- Predicate type must match:................ https://slsa.dev/provenance/v1
+- Source Repository Owner URI must match:... https://github.com/urwithajit9
+- Source Repository URI must match:......... https://github.com/urwithajit9/evnx
+- Source repo ref must match:............... refs/tags/v0.11.0
+- Subject Alternative Name must match regex: ^https://github\.com/urwithajit9/evnx/\.github/workflows/release\.yml
+- OIDC Issuer must match:................... https://token.actions.githubusercontent.com
+
+✓ Verification succeeded!
+
+The following 1 attestation matched the policy criteria
+
+- Attestation #1
+  - Build repo:..... urwithajit9/evnx
+  - Build workflow:. .github/workflows/release.yml@refs/tags/v0.11.0
+  - Signer repo:.... urwithajit9/evnx
+  - Signer workflow: .github/workflows/release.yml@refs/tags/v0.11.0
+```
+
+That run used a downloaded bundle, the next step, which is why it says
+`Loaded 1 attestations from bundle.json`; signed in, `gh` fetches the same attestation
+itself and the policy lines are the same.
+
+| Flag | Shuts out |
+|---|---|
+| `-R urwithajit9/evnx` | a file built in any other repository, a fork included |
+| `--signer-workflow …/release.yml` | a file attested by some other workflow in the repository |
+| `--source-ref refs/tags/v0.11.0` | an older or newer build passed off as this version |
+| `--deny-self-hosted-runners` | a build on a machine GitHub does not run |
+
+### 3b · Without signing in to GitHub
+
+The attestations of a public repository are public. Fetch the one for your file by its
+digest, and `gh` verifies the bundle without a login:
+
+```bash
+digest=$(sha256sum evnx-x86_64-unknown-linux-musl.tar.gz | cut -d' ' -f1)
+curl -fsSL "https://api.github.com/repos/urwithajit9/evnx/attestations/sha256:$digest" \
+  | jq '.attestations[0].bundle' > bundle.json
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \
+  --bundle bundle.json \
+  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml \
+  --source-ref refs/tags/v0.11.0
+```
+
+The signature is still checked against Sigstore's public trust root, which `gh`
+downloads; the login only saved you the `curl`. A file with no attestation makes that
+`curl` fail with HTTP 404, which is the first of the failures below.
+
+### 4 · Install it
+
+```bash
+tar -xzf evnx-x86_64-unknown-linux-musl.tar.gz
+install -m 755 evnx-x86_64-unknown-linux-musl ~/.local/bin/evnx
+```
+
+The archive holds one file, named after its target.
+
+---
+
+## What failure looks like
+
+Each of these was run against the v0.11.0 archive above. Every one exits `1`.
+
+- **A changed file** (one byte appended) has a different SHA-256, so there is no
+  attestation for it at all: the lookup by digest returns HTTP 404. Checked against the
+  bundle of the real file instead, Sigstore refuses it:
+
+  ```text
+  ✗ Sigstore verification failed
+
+  Error: verifying with issuer "sigstore.dev"
+  ```
+
+- **The right file, the wrong repository** (`-R someone/else`): signed in, the lookup
+  finds nothing for that repository. Against the downloaded bundle it fails the same way,
+  `✗ Sigstore verification failed`.
+- **The right file, the wrong tag** (`--source-ref refs/tags/v0.10.18`): the attestation is
+  found and rejected by the policy:
+
+  ```text
+  ✗ Policy verification failed
+
+  Error: expected SourceRepositoryRef to be refs/tags/v0.10.18, got refs/tags/v0.11.0
+  ```
+
+Any of these on a file you downloaded from evnx's own release page means stop: do not
+run it, and [report it](https://github.com/urwithajit9/evnx/security).
+
+---
+
+## Limits
+
+- Releases before **v0.11.0** carry no attestation. `install.sh` skips the check for
+  them; verifying one by hand finds nothing.
+- Provenance proves where a file was built, not that the source is safe.
+- It covers the GitHub Release archives. npm, Homebrew, Scoop and winget repackage the
+  same binaries through their own systems.
+
+How the signing works, and the dry runs it took:
+[Signing every evnx release](/blog/signing-every-evnx-release-slsa-provenance).
