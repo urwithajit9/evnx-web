@@ -20,14 +20,15 @@ type MethodId =
   | "source"
   | "gh"
   | "scoop"
-  | "winget";
+  | "winget"
+  | "docker";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
 const OS_METHODS: Record<OS, MethodId[]> = {
-  mac:   ["curl", "homebrew", "cargo", "npm", "pip", "source", "gh"],
-  linux: ["curl", "cargo", "pip", "npm", "homebrew", "source", "gh"],
-  win:   ["cargo", "npm", "pip", "scoop", "winget", "gh"],
+  mac:   ["curl", "homebrew", "cargo", "npm", "pip", "docker", "source", "gh"],
+  linux: ["curl", "cargo", "pip", "npm", "homebrew", "docker", "source", "gh"],
+  win:   ["cargo", "npm", "pip", "scoop", "winget", "docker", "gh"],
 };
 
 const METHOD_LABELS: Record<MethodId, { label: string; recommended?: boolean }> = {
@@ -40,6 +41,7 @@ const METHOD_LABELS: Record<MethodId, { label: string; recommended?: boolean }> 
   gh:       { label: "GitHub Releases" },
   scoop:    { label: "Scoop" },
   winget:   { label: "winget" },
+  docker:   { label: "Docker" },
 };
 
 const CHANNELS: { label: string; className: string }[] = [
@@ -310,9 +312,44 @@ function CurlPanel() {
         </a>
         .
       </p>
+      <p className="text-sm text-text-secondary mb-2 leading-relaxed">
+        The script checks the archive&apos;s SHA-256 before installing, and from v0.11.0 its
+        build provenance too: with a signed-in GitHub CLI (<IC>gh</IC> 2.49+), an archive
+        that was not built by evnx&apos;s release workflow from that tag is refused. Without{" "}
+        <IC>gh</IC> it says the check was skipped.
+      </p>
+      <CmdLine
+        label="Pin a version"
+        code="curl -fsSL https://dotenv.space/install.sh | EVNX_VERSION=0.11.0 bash"
+      />
       <InfoBox variant="success">
         Recommended for most macOS and Linux users. No Rust toolchain or language runtime
-        required.
+        required. <IC>https://dotenv.space/install.sh</IC> serves the same script.
+      </InfoBox>
+    </>
+  );
+}
+
+function DockerPanel() {
+  return (
+    <>
+      <p className="text-sm text-text-secondary mb-4 leading-relaxed">
+        Every release publishes an image to the GitHub Container Registry, built from the same
+        static binaries as the archives. Mount your project and run any command:
+      </p>
+      <CmdLine
+        label="Read-only commands (scan, validate, diff)"
+        code={`docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:${EVNX_VERSION} scan`}
+      />
+      <CmdLine
+        label="Commands that write (sync, init, add, template) — run as yourself"
+        code={`docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/urwithajit9/evnx:${EVNX_VERSION} sync --direction forward`}
+      />
+      <InfoBox variant="info">
+        Tags are the version (<IC>{EVNX_VERSION}</IC>) and <IC>latest</IC>; the project is
+        mounted at <IC>/work</IC>. Without <IC>--user</IC> the container runs as its own
+        non-root user, and files it writes are not yours to edit. Cloud commands need your
+        credentials inside the container, so prefer an installed binary for those.
       </InfoBox>
     </>
   );
@@ -603,10 +640,17 @@ cp target/release/evnx ~/.local/bin/`}</CodeBlock>
 }
 
 function GHPanel() {
+  const base = "https://github.com/urwithajit9/evnx/releases/latest/download";
+  const unix = (target: string, sum: string) =>
+    `curl -fsSLO ${base}/evnx-${target}.tar.gz\n` +
+    `curl -fsSLO ${base}/evnx-${target}.tar.gz.sha256\n` +
+    `${sum} evnx-${target}.tar.gz.sha256\n` +
+    `tar -xzf evnx-${target}.tar.gz\n` +
+    `mkdir -p ~/.local/bin && install -m 755 evnx-${target} ~/.local/bin/evnx`;
   return (
     <>
       <p className="text-sm text-text-secondary mb-4 leading-relaxed">
-        Pre-built binaries for every platform are available on the{" "}
+        Pre-built archives for every platform are on the{" "}
         <a
           href={`${GITHUB_URL}/releases`}
           target="_blank"
@@ -615,32 +659,27 @@ function GHPanel() {
         >
           GitHub Releases page
         </a>
-        . Useful for CI/CD pipelines and air-gapped environments where package managers are
-        unavailable.
+        , each with a <IC>.sha256</IC> beside it. Useful for CI/CD pipelines and air-gapped
+        environments. Replace <IC>latest/download</IC> with <IC>download/v{EVNX_VERSION}</IC>{" "}
+        to pin a version.
       </p>
 
       <div className="space-y-3">
-        <CmdLine
-          label="macOS — Apple Silicon (arm64)"
-          code={`curl -Lo evnx https://github.com/urwithajit9/evnx/releases/latest/download/evnx-aarch64-apple-darwin\nchmod +x evnx && mv evnx ~/.local/bin/`}
-        />
-        <CmdLine
-          label="macOS — Intel (x86_64)"
-          code={`curl -Lo evnx https://github.com/urwithajit9/evnx/releases/latest/download/evnx-x86_64-apple-darwin\nchmod +x evnx && mv evnx ~/.local/bin/`}
-        />
-        <CmdLine
-          label="Linux — x86_64"
-          code={`curl -Lo evnx https://github.com/urwithajit9/evnx/releases/latest/download/evnx-x86_64-unknown-linux-gnu\nchmod +x evnx && mv evnx ~/.local/bin/`}
-        />
+        <CmdLine label="macOS — Apple Silicon (arm64)" code={unix("aarch64-apple-darwin", "shasum -a 256 -c")} />
+        <CmdLine label="macOS — Intel (x86_64)" code={unix("x86_64-apple-darwin", "shasum -a 256 -c")} />
+        <CmdLine label="Linux — x86_64 (static, any distro)" code={unix("x86_64-unknown-linux-musl", "sha256sum -c")} />
+        <CmdLine label="Linux — arm64 (static, any distro)" code={unix("aarch64-unknown-linux-musl", "sha256sum -c")} />
         <CmdLine
           label="Windows — x86_64 (PowerShell)"
-          code="Invoke-WebRequest -Uri https://github.com/urwithajit9/evnx/releases/latest/download/evnx-x86_64-pc-windows-msvc.exe -OutFile evnx.exe"
+          code={`Invoke-WebRequest -Uri ${base}/evnx-x86_64-pc-windows-msvc.zip -OutFile evnx.zip\nExpand-Archive evnx.zip -DestinationPath .\nRename-Item evnx-x86_64-pc-windows-msvc.exe evnx.exe`}
         />
       </div>
 
       <InfoBox variant="info">
-        All release assets are signed and checksums are published alongside each release.
-        Verify with: <IC>{"sha256sum -c evnx-*.sha256"}</IC>
+        The checksum proves the download is intact. From v0.11.0 every archive also carries a
+        signed build provenance attestation, which proves where it was built: verify it with
+        the GitHub CLI, signed in (<IC>gh auth login</IC>):{" "}
+        <IC>{"gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx"}</IC>
       </InfoBox>
     </>
   );
@@ -859,6 +898,7 @@ export function InstallPageClient() {
             {activeTab === "gh"       && <GHPanel />}
             {activeTab === "scoop"    && <ScoopPanel />}
             {activeTab === "winget"   && <WingetPanel />}
+            {activeTab === "docker"   && <DockerPanel />}
           </div>
 
           {/* ── Verify installation ────────────────────────────────────────── */}
