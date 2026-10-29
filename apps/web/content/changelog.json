@@ -1,7 +1,198 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
-  "latest": "0.10.18",
+  "latest": "0.11.0",
   "releases": [
+    {
+      "version": "0.11.0",
+      "date": "2026-10-29",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "`template`: an unresolved placeholder is an error"
+        },
+        {
+          "type": "improvement",
+          "text": "`spec`: a regex format is written `regex:<pattern>`"
+        },
+        {
+          "type": "improvement",
+          "text": "`diff --format json`: `values_redacted` is gone; `schema_version` is 2"
+        },
+        {
+          "type": "improvement",
+          "text": "`diff --format patch` is a unified diff"
+        },
+        {
+          "type": "improvement",
+          "text": "`restore` writes back to the file the backup was made from"
+        },
+        {
+          "type": "improvement",
+          "text": "`update --check --json`: new `channel` values"
+        },
+        {
+          "type": "improvement",
+          "text": "A relative `[defaults] example` is read from the folder holding `.evnx.toml`"
+        },
+        {
+          "type": "improvement",
+          "text": "`doctor` checks whether an AI coding agent can read `.env`"
+        },
+        {
+          "type": "improvement",
+          "text": "Release archives carry build provenance"
+        },
+        {
+          "type": "improvement",
+          "text": "`install.sh` checks provenance when the GitHub CLI can"
+        },
+        {
+          "type": "improvement",
+          "text": "A public key is not a secret by its name"
+        },
+        {
+          "type": "improvement",
+          "text": "`cloud pull` keeps the file it replaces, and its mode"
+        },
+        {
+          "type": "improvement",
+          "text": "Internal"
+        },
+        {
+          "type": "improvement",
+          "text": "`template` leaves bare `$NAME` alone"
+        },
+        {
+          "type": "improvement",
+          "text": "`template`: each `|default:` uses its own text"
+        },
+        {
+          "type": "improvement",
+          "text": "`scan` reads a plaintext `.env.backup`"
+        },
+        {
+          "type": "improvement",
+          "text": "`scan` says how it read each file"
+        },
+        {
+          "type": "improvement",
+          "text": "crates.io and PyPI publish by trusted publishing"
+        },
+        {
+          "type": "improvement",
+          "text": "Cloud commands a production server can trust"
+        },
+        {
+          "type": "improvement",
+          "text": "`[cloud] file`: a binding can name the file"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx cloud diff --local`"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx spec check`"
+        },
+        {
+          "type": "improvement",
+          "text": "`diff --format patch` is a patch"
+        },
+        {
+          "type": "improvement",
+          "text": "`diff --interactive` writes what you choose"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx run -- <cmd>`"
+        },
+        {
+          "type": "improvement",
+          "text": "Secrets are masked in `run` and `cloud run` output"
+        },
+        {
+          "type": "improvement",
+          "text": "`validate` and `doctor` say where your `.env`'s readers disagree"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx scan -` reads stdin"
+        },
+        {
+          "type": "improvement",
+          "text": "`convert --only secrets|public`"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx update` prints a command that works for the copy that is running"
+        },
+        {
+          "type": "improvement",
+          "text": "`install.sh` reports the copy it installed, and names the one that runs"
+        },
+        {
+          "type": "improvement",
+          "text": "`cloud export --to` takes `convert`'s names and collision rule"
+        },
+        {
+          "type": "improvement",
+          "text": "`sync --check --format json` sorts `missing` and `template_only` again"
+        },
+        {
+          "type": "improvement",
+          "text": "`init` names a `.env` in a subfolder"
+        },
+        {
+          "type": "improvement",
+          "text": "`init --env-name NAME` and `add … --env-name NAME`"
+        },
+        {
+          "type": "improvement",
+          "text": "One \"did you mean\" for every `--env-name`"
+        },
+        {
+          "type": "improvement",
+          "text": "`doctor` warns when `.dockerignore` lets `.env` into an image"
+        },
+        {
+          "type": "improvement",
+          "text": "`migrate` in CI names each secret"
+        },
+        {
+          "type": "improvement",
+          "text": "A master-password prompt with no terminal names `--password-stdin`"
+        },
+        {
+          "type": "improvement",
+          "text": "`init` writes `.evnx.toml` before printing anything"
+        },
+        {
+          "type": "improvement",
+          "text": "`sync` audits real values written through `allow_actual`"
+        },
+        {
+          "type": "improvement",
+          "text": "`doctor` reports every detected project type"
+        },
+        {
+          "type": "improvement",
+          "text": "`validate` suggests `--fix` only when a finding shown is fixable"
+        },
+        {
+          "type": "improvement",
+          "text": "Hints and messages that named the wrong thing:"
+        },
+        {
+          "type": "improvement",
+          "text": "Help texts that described old behaviour"
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.10.18...v0.11.0"
+      }
+    },
     {
       "version": "0.10.18",
       "date": "2026-10-25",
