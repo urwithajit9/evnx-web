@@ -3,7 +3,7 @@ section: "commands"
 order: 6
 title: "evnx migrate"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-20"
+updatedAt: "2026-10-29"
 excerpt: "Generate the commands that move your .env into a cloud secret manager. evnx writes them out; you run them. GitHub Actions is the one destination it uploads to directly."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
@@ -334,6 +334,11 @@ evnx migrate --to github --repo owner/repo
 # In CI: token from the environment, existing secrets left alone
 evnx migrate --to github-actions --repo owner/repo --yes --skip-existing
 ```
+
+**v0.11.0+** — a CI log names each secret: with no terminal, every `✓ NAME` and
+`✗ NAME — error` line is printed. They were swallowed by the hidden progress bar, so a
+log said `1 failed` and named nothing. With no token at all the error says what to set:
+`Set GITHUB_TOKEN, or pass --github-token`.
 
 ---
 

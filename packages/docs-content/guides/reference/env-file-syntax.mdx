@@ -3,7 +3,7 @@ section: "reference"
 order: 1
 title: ".env Syntax Reference"
 publishedAt: "2026-09-29"
-updatedAt: "2026-09-29"
+updatedAt: "2026-10-29"
 excerpt: "Exactly what evnx accepts in a .env file: the four quoting forms, which escapes resolve where, multiline values, variable expansion, and what does not work."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
@@ -287,6 +287,15 @@ it. Both now use the same parser.
 </Callout>
 
 ---
+
+## Other programs read some lines differently
+
+This page describes how **evnx** reads a `.env`, which is how Docker Compose reads it.
+Other loaders disagree on a few line shapes: Node `dotenv` reads `KEY=   # note` and
+`KEY=#ff0000` as empty, cuts `PW=a#b` at the `#`, and leaves `${VAR}` unexpanded without
+`dotenv-expand`. Since 0.11.0 `evnx validate` reports those lines when your project uses
+such a reader; the measured table is in
+[Readers that disagree](/guides/commands/validate#readers-that-disagree).
 
 ## Which form to use
 

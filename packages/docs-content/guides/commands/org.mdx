@@ -3,7 +3,7 @@ title: "evnx org"
 section: commands
 order: 10
 publishedAt: "2026-10-04"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Organisations hold a plan and a set of seats. A seat decides which plan's limits apply to its holder — and nothing else. An organisation cannot give anyone access to a vault."
 difficulty: intermediate
 timeToComplete: "8 minutes"
@@ -299,8 +299,11 @@ sending anything and name the flag, where older versions failed with
 Error: there is no terminal to confirm with.
 
 Add --yes (-y) to go ahead without being asked:
-  evnx org remove <member> --yes
+  evnx org remove alice@example.com --org acme --yes
 ```
+
+The hint names the member and `--org` (**v0.11.0+**; `remove` printed a literal
+`<member>`), so it can be copied as it is.
 
 <Callout type="warning">
 Removing someone frees their seat, which drops their limits back to their own plan. It does not recall anything they already pulled, and it does not touch any vault — if they were a member of one, they still are. Use [`evnx vault revoke`](/guides/commands/vault) for that, which re-keys the vault.

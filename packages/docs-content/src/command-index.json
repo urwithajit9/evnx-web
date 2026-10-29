@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.10.18",
+  "evnx_version": "0.11.0",
   "features": [
     "net",
     "migrate",
@@ -403,8 +403,20 @@
         {
           "path": "spec init",
           "about": "Generate a first spec from this project, or from named components"
+        },
+        {
+          "path": "spec check",
+          "about": "Check the contract against `.env.example`, and `.env` when there is one. Read-only; suited to a pre-commit hook and to CI"
         }
       ]
+    },
+    {
+      "name": "run",
+      "about": "Run a command with a `.env`'s variables in its environment",
+      "aliases": [],
+      "guide": "/guides/commands/run",
+      "guide_draft": false,
+      "subcommands": []
     },
     {
       "name": "commands",

@@ -3,7 +3,7 @@ title: ".evnx.toml Configuration"
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-18"
+updatedAt: "2026-10-29"
 excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
@@ -171,6 +171,7 @@ keep = 3                       # previous backups to retain
 # ─── evnx cloud ──────────────────────────────────────────────────────────────
 [cloud]
 vault = "my-app/production"    # written by `evnx cloud link` — see below
+file  = "deploy/.env"          # `evnx cloud link … --file` (v0.11.0+), from this file's folder
 
 # ─── The variable contract ───────────────────────────────────────────────────
 [vars]
@@ -184,7 +185,13 @@ DEBUG_BANNER = { required = false }
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `env_name` | string | — | Resolves to `.env.<name>` for every command that takes `--env`. The file must exist; a name that resolves to nothing is an error, not a quiet fall back to `.env` |
-| `example` | string | `.env.example` | The template `validate`, `sync` and `diff` compare against |
+| `example` | string | `.env.example` | The template `validate`, `sync`, `diff` and `spec check` compare against. A relative path is read from the folder holding this `.evnx.toml` (**v0.11.0+**) |
+
+**v0.11.0+** — a relative `example` is resolved from the `.evnx.toml`'s folder, the way
+`.gitignore` and `docker-compose.yml` read their paths. A root `.evnx.toml` naming
+`deploy/compose/.env.example` used to send a command run inside `deploy/compose` to
+`deploy/compose/deploy/compose/.env.example`. Flags on the command line stay relative
+to where you run the command.
 
 `env_name` is the one to reach for in a project whose real file is `.env.production`. It is
 overridden by `--env-name`, and by an explicit `--env` path.
@@ -297,7 +304,7 @@ regex = "ACME-[A-Z0-9]{10}"
   security overrides and announces them on every run that loads a config:
 
   ```
-  config    .evnx.toml (scan.disable=1 built-in rule(s))
+  config    .evnx.toml (scan.disable=1 built-in detector(s))
   config    .evnx.toml (scan.builtins=false (no built-in rules))
   ```
 
@@ -353,10 +360,12 @@ Placeholder rules for `sync` are not in this file: they go in a JSON file passed
 | Key | Type | Effect |
 |---|---|---|
 | `vault` | string | The vault this directory is bound to, as `name/environment` |
+| `file` | string | **v0.11.0+** — the file `cloud push`, `cloud pull` and `cloud diff --local` use with that vault, relative to this `.evnx.toml`'s folder, so every folder below it means the same file. `--file` and `--env-name` still win. Written by `evnx cloud link <vault> --file <path>`; a path outside the project is refused |
 
 <Callout type="tip">
-You do not write this one by hand. `evnx cloud link` writes it for you, preserving your
-comments, key order, and any keys it does not recognise.
+You do not write these by hand. `evnx cloud link` writes them for you, preserving your
+comments, key order, and any keys it does not recognise. The binding is found from any
+folder below the `.evnx.toml`, so it covers all of them.
 </Callout>
 
 ### `[vars]`
@@ -368,7 +377,7 @@ command behaves. Read by `validate`, `scan` and `sync`.
 |---|---|---|---|
 | `required` | bool | `true` | Unstated means required. `false` marks a variable that may be absent |
 | `secret` | bool | *unstated* | `true` reports a credential the heuristics cannot name; `false` retracts a guess made from the variable's name |
-| `format` | string | none | `url`, `int`, `port`, `bool`, `email`, or a regular expression |
+| `format` | string | none | `url`, `int`, `port`, `bool`, `email`, or `regex:<pattern>` (**v0.11.0+**: an unknown name is an error, not a regex) |
 | `description` | string | none | Shown in `evnx validate`'s suggestion when the variable is missing. `evnx sync` does not read it |
 | `environments` | list of strings | all | Which environments the variable is required in |
 

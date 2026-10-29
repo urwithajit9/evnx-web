@@ -1,0 +1,151 @@
+---
+title: "Using evnx with AI coding agents"
+section: use-cases
+order: 6
+publishedAt: "2026-10-29"
+updatedAt: "2026-10-29"
+excerpt: "AI coding agents read the files in your project, and .env is a file. How to keep its values out of an agent's context, let the agent run commands that need them anyway, and what to do when a key ends up in a chat."
+difficulty: beginner
+timeToComplete: "10 minutes"
+tags: ["ai-agents", "security", "claude-code", "cursor", "doctor", "run", "best-practices"]
+commands: ["cloud push", "cloud run", "doctor", "run", "scan"]
+evnxVersion: "0.11.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+An AI coding agent works by reading your project: it opens files to understand the
+code, and sends what it read to a model. **`.env` is a file in your project.** Unless
+something stops it, an agent that is looking for how the database is configured will
+open `.env`, and your real `DATABASE_URL` is now in a conversation, a log, and possibly
+a provider's retention.
+
+This guide covers three things: keeping `.env` out of what the agent reads, letting the
+agent run commands that need the values without reading them, and what to do when a
+key is pasted anyway.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx (v0.11.0 or later)</Prerequisite>
+</Prerequisites>
+
+## 1 · Check what can read `.env`
+
+```bash
+evnx doctor
+```
+
+**v0.11.0+** — for every agent whose configuration is already in the project, doctor
+says whether it can read `.env`:
+
+```text
+  !  Check that AI coding agents cannot read .env
+     Claude Code can read .env: add to permissions.deny in .claude/settings.json:
+         "Read(./.env)", "Read(./.env.*)"
+       (an agent allowed to run shell commands can still read it)
+```
+
+It checks only agents the project already uses, and creates nothing for the others.
+`evnx doctor --fix` adds the ignore line where an agent has an ignore file; it never
+rewrites Claude Code's settings, which hold your other permissions too.
+
+## 2 · Keep `.env` out of what the agent reads
+
+| Agent | What keeps `.env` out | Notes |
+|---|---|---|
+| **Claude Code** | `permissions.deny` in `.claude/settings.json` (or `settings.local.json`) | Reads any file otherwise; `.gitignore` does not apply |
+| **Cursor** | `.gitignore`, or `.cursorignore` | |
+| **Aider** | `.gitignore`, or `.aiderignore` | |
+| **Gemini CLI** | `.gitignore`, or `.geminiignore` | |
+| **Windsurf** | `.gitignore`, or `.codeiumignore` | |
+| **GitHub Copilot** | content exclusion, an organisation or repository setting on GitHub | Not visible from the project, so doctor names it rather than checking it |
+
+For Claude Code, add both patterns, the second for `.env.production` and friends:
+
+```json
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(./.env.*)"]
+  }
+}
+```
+
+For the agents that honour `.gitignore`, the line evnx already adds for you on `init` is
+enough: `.env*` with `!.env.example`. An agent-specific file is for a project that
+deliberately does not ignore something an agent should still not read.
+
+<Callout type="warning" title="This prevents accidents, not determined access">
+An agent that may run shell commands can still run `cat .env`. Ignore settings stop the
+file being pulled into context while the agent reads the code, which is how nearly every
+leak happens. They are not a sandbox. If an agent must not have a secret at all, do not
+put that secret where the agent runs.
+</Callout>
+
+## 3 · Let the agent run commands without reading the file
+
+The agent often needs the values to *run* something — the tests, a migration, a dev
+server — without needing to *see* them. Give it a command that injects them:
+
+```bash
+evnx run -- npm test
+evnx run -- python manage.py migrate
+```
+
+[`evnx run`](/guides/commands/run) reads `.env` and passes the variables in the
+command's environment. The agent sees the command and its output, not the file. And
+because an agent's output is not a terminal, **secret values in that output are masked
+as `***` by default**, so a test that prints its configuration on failure does not put
+the database password in the transcript:
+
+```text
+port=8080 pw=***
+```
+
+With a vault instead of a local file, the same works with
+[`evnx cloud run`](/guides/commands/cloud#running-a-command-without-writing-a-file):
+
+```bash
+evnx cloud run --vault my-api/development -- npm test
+```
+
+A good instruction for the agent, in its project notes (`CLAUDE.md`, `.cursorrules`,
+`AGENTS.md`): *"Never read `.env` files. Run commands that need configuration through
+`evnx run -- <command>`."*
+
+## 4 · Check what an agent is about to write
+
+Before you accept a file or a diff an agent produced, scan it without saving it:
+
+```bash
+git diff | evnx scan -
+```
+
+**v0.11.0+** — `evnx scan -` reads stdin, in memory. A key the agent copied into source
+code is reported before it is committed.
+
+## 5 · If a key was pasted into a chat
+
+Treat it as leaked, whatever the tool says about retention:
+
+1. **Rotate it** at the provider — a new key, and the old one revoked. Deleting the
+   message does not un-send it.
+2. Update `.env` (or the vault: `evnx cloud push`).
+3. Run `evnx scan .` to check the key did not also land in a file.
+
+A key in a conversation is in that provider's logs and possibly in a shared transcript,
+a screenshot or a support ticket. Rotation is the only step that makes it worthless.
+
+## What this does not do
+
+- It does not stop an agent with shell access from reading the file on purpose.
+- Masking stops accidental printing; a command that encodes a value (base64, splitting
+  it) gets past it.
+- It does not cover secrets an agent sees elsewhere: a terminal you share with it, a
+  config you paste, a cloud console open in its browser.
+
+## See also
+
+- [evnx doctor](/guides/commands/doctor#ai_agents) — the `ai_agents` check
+- [evnx run](/guides/commands/run) — injection and masking
+- [evnx scan](/guides/commands/scan) — `scan -`
+- [Prevent secret leaks](/guides/use-cases/prevent-secret-leaks) — the layers before an agent

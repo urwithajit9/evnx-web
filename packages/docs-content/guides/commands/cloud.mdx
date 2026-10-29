@@ -3,12 +3,12 @@ title: "evnx cloud"
 section: commands
 order: 9
 publishedAt: "2026-09-16"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "spec init", "vault list"]
+commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "run", "spec init", "vault list"]
 evnxVersion: "0.10.18"
 prerequisites:
   - commands/auth
@@ -62,7 +62,22 @@ evnx cloud watch
 evnx cloud link my-api/production
 ```
 
-This writes `[cloud] vault` into `.evnx.toml`, preserving everything else already in the file. After it, `push` and `pull` need no `--vault`.
+This writes `[cloud] vault` into `.evnx.toml`, preserving everything else already in the file. After it, `push` and `pull` need no `--vault`, in that folder **and every folder below it**. **v0.11.0+** — `link` names the folder it bound, which is often not the one you are in:
+
+```text
+  ✓ bound /home/you/my-api and every folder below it to my-api/production
+  written to /home/you/my-api/.evnx.toml
+```
+
+It said "bound this directory" while writing the git root's `.evnx.toml`.
+
+### Binding the file too: `--file` — **v0.11.0+**
+
+```bash
+cd deploy && evnx cloud link my-api/production --file .env
+```
+
+This also writes `[cloud] file = "deploy/.env"`, relative to the `.evnx.toml`'s folder. `push`, `pull` and `diff --local` then use that file from **every** folder below the binding; without it they use `./.env` from wherever they run, so the same command in the project root and in `deploy/` read different files for one production vault. `--file` and `--env-name` on the command still win, the binding's file applies only with the binding's vault (not with an explicit `--vault`), and a path outside the project is refused.
 
 The file is the project's one `.evnx.toml`: the config in force, found at or above the current folder, or, with none, a new one at the git root — where `evnx spec init` writes too (**v0.10.6+**; run from a subfolder with no config, it used to create one in that subfolder).
 
@@ -85,13 +100,15 @@ evnx cloud push --vault my-api/staging --file .env.staging
 
 ### Which file gets pushed — **v0.5.0+**
 
-`push` derives the file from the vault's environment: pushing `my-api/production` uses
-`.env.production` when that file exists, and `.env` otherwise. **The file chosen is
-printed every time:**
+In order: `--file`, `--env-name`, the binding's `[cloud] file` (**v0.11.0+**), then the
+vault's environment: pushing `my-api/production` uses `.env.production` when that file
+exists, and `.env` otherwise. **The file chosen is printed every time**, as an absolute
+path since 0.11.0, under the vault it came from:
 
 ```
-  file      .env.production (matched the vault environment)
-  file      .env (default)
+  config    .evnx.toml
+  vault     my-api/production  ([cloud] vault)
+  file      /home/you/my-api/.env.production (matched the vault environment)
 ```
 
 <Callout type="warning">
@@ -111,7 +128,7 @@ When the file is the default `.env` and the vault is a production vault, `push` 
 before it encrypts anything:
 
 ```text
-  file      ./.env (default)
+  file      /home/you/my-api/.env (default)
   ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
 Push ./.env into production vault my-api/production? [y/N]
 ```
@@ -125,7 +142,7 @@ Error: there is no terminal to confirm with.
   evnx cloud push --vault my-api/production --yes
 ```
 
-Only that case asks. A file you named with `--file` or `--env-name` never does, and
+Only that case asks. A file you named with `--file`, `--env-name` or `[cloud] file` never does, and
 neither does a derived `.env.production`. By id, a signed-in session looks the
 vault's environment up for the question. A vault-scoped API token cannot look it up,
 so it is not asked.
@@ -164,7 +181,7 @@ one. The file written is always printed.
   <Option flag="--file" type="path">Where to write the decrypted file. Derived as above; `-` writes to stdout and creates no file. Short form `-f`.</Option>
   <Option flag="--env-name" type="string">Write `.env.&lt;NAME&gt;` instead of the derived or default file.</Option>
   <Option flag="--version" type="number" default="latest">Version to pull, **1 or more**.</Option>
-  <Option flag="--force" type="flag">Overwrite the target without asking.</Option>
+  <Option flag="--force" type="flag">Overwrite the target without asking. The replaced file is still kept as `.bak` (**v0.11.0+**).</Option>
   <Option flag="--gitignore" type="flag">**v0.10.18+** — add the pulled file to `.gitignore` without asking.</Option>
   <Option flag="--no-gitignore" type="flag">**v0.10.18+** — skip the `.gitignore` check.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
@@ -189,8 +206,7 @@ and `restore`. If the file it wrote is not ignored, it asks on a terminal. With 
 terminal it warns and leaves `.gitignore` alone:
 
 ```text
-  file      ./.env (default)
-  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  file      /home/you/my-api/.env (default)
   ✓ pulled version 2 of my-api/production into ./.env
 ! '.env' may contain secrets and is not in .gitignore
 ```
@@ -198,8 +214,24 @@ terminal it warns and leaves `.gitignore` alone:
 `--gitignore` adds it without asking (`✓ Added '.env' to .gitignore`), and
 `--no-gitignore` skips the check. `--file -` writes no file, so nothing is checked.
 
-Pulling over a file that differs from the version asks first. With no terminal it
-stops and names `--force`, the flag that replaces the file.
+### Replacing a file that differs
+
+A pull of identical content says `.env is already up to date.` and writes nothing. Over
+a file that **differs**, `pull` says so the right way round, and asks:
+
+```text
+  ! .env exists and differs from version 2 of my-api/production (production); pulling replaces it.
+Overwrite .env? (the current file is kept as a .bak copy) [y/N]
+```
+
+(**v0.11.0+**; it used to print the push warning "writing to a production vault from
+./.env", which describes the opposite direction.) With no terminal it stops and names
+`--force`. Whichever way the yes comes, **the replaced file is kept as `.env.bak`**
+(then `.bak.2`, …), protected by `.gitignore` like the file itself, and the pull says so:
+`✓ kept the previous ./.env as ./.env.bak`. The write is atomic, goes through a symlink
+rather than replacing it, and an existing file keeps its mode, with a warning if others
+can read it (**v0.11.0+**; it was forced to `0600`). To compare first without writing
+anything, use [`cloud diff --local`](#comparing-your-file-with-a-version).
 
 ---
 
@@ -288,6 +320,7 @@ A missing command says so, and says this.
 | `--include <GLOB>` | Inject only names matching these globs, comma-separated |
 | `--exclude <GLOB>` | Skip names matching these. Applied after `--include` |
 | `--password-stdin` | Read the master password from stdin |
+| `--mask` / `--no-mask` | **v0.11.0+** — mask secret values in the command's output as `***`. On by default when output is not a terminal; see below |
 
 A build step that needs only public configuration has no reason to hold your
 database password:
@@ -310,6 +343,21 @@ Error: --include/--exclude left nothing to inject — all 12 variable(s) were fi
 
 The patterns are case-sensitive globs matched against variable names.
 </Callout>
+
+### Masking secrets in the output — **v0.11.0+**
+
+A deploy script that echoes its configuration, or a stack trace that prints it, would
+put a secret in a CI log that is kept. `cloud run` (and the local
+[`evnx run`](/guides/commands/run)) passes the child's stdout and stderr through a
+masker: values the classifier calls secret print as `***`.
+
+- **On by default when output is not a terminal** (a CI log, an agent); `--no-mask`
+  turns it off. At a terminal it is off unless you pass `--mask`.
+- Only secrets are masked, by name or by value, and values shorter than 6 characters
+  are left alone, so `PORT=8080` does not turn every `8080` into `***`.
+- A secret split across two writes is still masked.
+- It prevents accidents, not exfiltration: a child that transforms a value (base64,
+  splitting it) gets past it.
 
 ### Exit codes
 
@@ -346,10 +394,10 @@ evnx cloud history --vault my-api/production --limit 50
 
 <TerminalOutput title="evnx cloud history">
   VERSION  KEYS     SIZE  PUSHED BY        PUSHED
-        4     3    148 B  you              2026-10-24 21:52
-        3     4    185 B  bob@example.com  2026-10-24 21:51
-        2     3    159 B  bob@example.com  2026-10-24 21:51
-        1     2    158 B  you              2026-10-24 21:51
+        4     3    148 B  you              2026-10-24 21:52 UTC
+        3     4    185 B  bob@example.com  2026-10-24 21:51 UTC
+        2     3    159 B  bob@example.com  2026-10-24 21:51 UTC
+        1     2    158 B  you              2026-10-24 21:51 UTC
 
   Restore one with:  evnx cloud pull --version 4
 </TerminalOutput>
@@ -357,6 +405,10 @@ evnx cloud history --vault my-api/production --limit 50
 `PUSHED BY` names other members by email (**v0.10.18+**; before, everyone but you
 was an 8-character id), and the column widens to fit. Your own pushes say `you`.
 Someone who has since left the vault keeps the short id.
+
+Times are the server's, in **UTC**, and say so (**v0.11.0+**; every cloud table —
+`history`, `audit`, `sessions`, `devices`, `token list`). A server in Seoul read
+`16:21` as local time; it was 01:21 KST the next day.
 
 `history` is **read-only in the strongest sense**: no password prompt, no decryption, no blob download. It reads metadata the server already holds in the clear, which is why it is safe to run from a script or a read-only token.
 
@@ -406,7 +458,7 @@ So when the names match, the blob hashes are compared instead:
   ciphertext, never a value, so there is nothing here to compare.
 </TerminalOutput>
 
-To see *which* value changed, the comparison has to happen where the values exist — on your machine:
+To see *which* value changed, the comparison has to happen where the values exist — on your machine. For your current file against a version, that is `cloud diff --local`, below; for two versions against each other:
 
 ```bash
 evnx cloud export --vault my-api/production --all-versions --output ./versions
@@ -415,6 +467,35 @@ evnx cloud export --vault my-api/production --all-versions --output ./versions
 <Callout type="info">
 A BLAKE3 digest of ciphertext says only *that* bytes differ, never what they are. Reporting it leaks nothing the server did not already hold.
 </Callout>
+
+### Comparing your file with a version
+
+**v0.11.0+**
+
+```bash
+evnx cloud diff --local
+evnx cloud diff --local --version 3 --file deploy/.env
+```
+
+`--local` compares **your local file** with a version of the vault, by key name:
+`+` only in the vault, `-` only in your file, `~` the value differs. The version is
+decrypted in memory (it needs the master password, or `--password-stdin`), values are
+never printed, and nothing is written.
+
+<TerminalOutput title="evnx cloud diff --local">
+  evnx cloud diff --local  .env ↔ version 3 of my-api/production
+
+  + SENTRY_DSN  only in the vault
+  - LOCAL_DEBUG  only in .env
+  ~ DATABASE_URL  value differs
+
+  1 only in the vault  ·  1 only in .env  ·  1 changed
+</TerminalOutput>
+
+It exits `0` when the file is identical to the version and `1` when it is not, so it is
+the check to run before and after a deploy. It replaces pulling into a scratch folder
+and running `cmp`, which writes production secrets in plaintext to `/tmp`. The file is
+chosen as `pull` chooses it (`--file`, `--env-name`, `[cloud] file`, then `.env`).
 
 ---
 
@@ -557,7 +638,9 @@ in evnx. `pull` writes a single file and asks first; `run` writes none at all.
 With no `--to` the files are the **exact bytes you pushed** — comments,
 ordering and quoting included — because that is how they were encrypted.
 `--to json` and the other thirteen `evnx convert` formats are available, and a
-conversion keeps only keys and values.
+conversion keeps only keys and values. Since 0.11.0 `--to` names the variables exactly
+as `evnx convert` does, with its collision check, so the two give byte-identical
+output.
 
 Full guide, including what it refuses and why an export goes stale:
 [Getting your secrets out](/guides/reference/getting-your-secrets-out).
@@ -633,6 +716,17 @@ already exists — otherwise you are testing your credential store, not the serv
 ## Using it in CI
 
 Never put your master password in a pipeline unless the job genuinely needs plaintext.
+
+**v0.11.0+** — a command that needs the master password and has no terminal to ask on
+says how to pipe it, with your own command and flags:
+
+```text
+Error: no terminal to ask for the master password: pipe it with --password-stdin
+
+  printf '%s\n' "$EVNX_PASSWORD" | evnx cloud pull --vault my-api/production --password-stdin
+```
+
+It failed with `reading the master password: IO error: not a terminal`.
 Use a token, scoped as narrowly as the job needs:
 
 ```bash

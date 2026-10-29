@@ -3,7 +3,7 @@ title: "Managing your evnx install"
 section: reference
 order: 11
 publishedAt: "2026-10-23"
-updatedAt: "2026-10-23"
+updatedAt: "2026-10-29"
 excerpt: "Every install channel with its upgrade and uninstall command, how to find out which evnx you are actually running, and fixes for the problems people really hit: an old version after upgrading, pip refusing to install, pipx not linking, missing cloud commands."
 difficulty: beginner
 timeToComplete: "10 minutes"
@@ -196,11 +196,9 @@ pipx gives evnx its own virtual environment and links the command into
 `~/.local/bin`. The PyPI wheels contain the full program, cloud commands included,
 from **0.10.0** on. Earlier wheels were built without them.
 
-<Callout type="warning" title="evnx update gives pipx users the wrong command">
-On a pipx install, `evnx update` currently says `Installed via pip` and suggests
-`pip install --upgrade evnx`. That command does not upgrade a pipx install. **Use
-`pipx upgrade evnx`.** This is a known bug in evnx's channel detection.
-</Callout>
+Since 0.11.0, `evnx update` recognises a pipx install and prints `pipx upgrade evnx`.
+Before that it read pipx as pip and suggested `pip install --upgrade evnx`, which does not
+upgrade a pipx install.
 
 ### pip
 

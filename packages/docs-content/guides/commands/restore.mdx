@@ -3,7 +3,7 @@ title: "evnx restore"
 section: commands
 order: 4
 publishedAt: "2026-03-10"
-updatedAt: "2026-10-20"
+updatedAt: "2026-10-29"
 excerpt: "Decrypt a backup made by evnx backup back into a .env file. Never replaces a file silently, keeps the one it replaces, says why a backup will not open, and has exit codes a script can branch on."
 difficulty: beginner
 timeToComplete: "5 minutes"
@@ -55,7 +55,7 @@ evnx restore <BACKUP> [OPTIONS]
 | Argument / flag | Default | Description |
 |-----------------|---------|-------------|
 | `<BACKUP>` | required | The backup file to decrypt, as written by `evnx backup`. A file on disk; for a vault, use [`evnx cloud pull`](/guides/commands/cloud) |
-| `--output <PATH>` | `.env` | Where to write the restored file. Not the backup itself |
+| `--output <PATH>` | the file the backup was made from | **v0.11.0+** — `.env.staging` for a backup of `.env.staging`, in the current folder (it was always `.env`). A recorded name that is not `.env` or `.env.<name>` restores to `.env`. Not the backup itself |
 | `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. Also accepted as `--force` |
 | `--inspect` | off | Show the variable names in the backup — never values — and write nothing |
 | `--dry-run` | off | Decrypt and check the content, and write nothing |
@@ -69,6 +69,14 @@ evnx restore <BACKUP> [OPTIONS]
 [The passphrase](#the-passphrase).
 
 ---
+
+
+<Callout type="warning" title="v0.11.0: restore writes back to the original file">
+A backup of `.env.staging` used to be restored over `.env` unless you passed
+`--output`. Since 0.11.0 it restores to `.env.staging`, the name recorded in the backup
+(shown as `Original file` in `--inspect`). **Migrate:** pass `--output .env` where you
+relied on the old destination.
+</Callout>
 
 ## Basic usage
 

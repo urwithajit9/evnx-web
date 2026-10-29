@@ -1,0 +1,202 @@
+---
+title: "evnx 0.11.0: Fixing What You Hit, and Settling the Contracts"
+publishedAt: "2026-10-29"
+excerpt: "evnx 0.11.0 lands five behaviour changes that were decided and held for a minor release, a local evnx run with secrets masked in its output, a real patch from diff, spec check, readers that disagree about your .env, build provenance on every archive, and the fixes a paying user hit on a production server."
+author: "ajit"
+category: "release"
+tags: ["release", "breaking-changes", "security", "provenance", "ai-agents", "evnx"]
+featured: true
+draft: false
+relatedSlugs:
+  - "evnx-0-10-18-sharing-that-cannot-demote-the-owner"
+  - "api-tokens-ci-what-they-unlock"
+---
+
+evnx 0.11.0 is a minor release, and in `0.x` that is where behaviour changes go. Five
+changes that were decided during the 0.10 line and held back land here, each with a
+migration line. Around them: a local `evnx run`, a `diff` patch that applies, a contract
+check you can run in a pre-commit hook, and every release archive now signed with build
+provenance.
+
+The outputs below are from a build of the v0.11.0 release commit. The full list is in
+the [changelog](/changelog).
+
+---
+
+## ⚠️ If you script evnx
+
+Five changes can break a script. Each is a decision recorded before this release, and
+each has a one-line migration:
+
+| Change | Migrate |
+|---|---|
+| **`template`: an unresolved placeholder is an error.** `{{X}}` with no value used to be written through, exit 0; now nothing is written, every name is listed, exit 2 | add `--allow-unresolved` where the pass-through was intended. `--strict` is now the default and only prints a notice |
+| **`spec`: a regex is written `regex:<pattern>`.** A misspelt format name (`urll`) used to become a regex that failed every value; it is now an error with "did you mean" | `format = "^sk_"` → `format = "regex:^sk_"` |
+| **`diff --format json` is schema 2.** `values_redacted` is gone | read `value_state` (`withheld`, `masked`, `shown`) |
+| **`diff --format patch` is a unified diff** that `patch -p1` applies, not a list of `+ KEY=<withheld>` lines | apply the patch, or read `--format json` |
+| **`restore` writes back to the file the backup was made from.** A backup of `.env.staging` used to restore over `.env` | pass `--output .env` to keep the old destination |
+
+Two more change values a script may match on: `update --check --json` has new `channel`
+values (`pipx`, `pip-externally-managed`, `script`; `script-or-pip` is gone), and a
+relative `[defaults] example` in `.evnx.toml` is now read from the toml's own folder.
+
+---
+
+## `evnx run`: secrets in a command, not in its output
+
+```bash
+evnx run -- npm test
+```
+
+[`evnx run`](/guides/commands/run) is the local counterpart of `evnx cloud run`: it
+reads `.env` and passes the variables in the command's environment block, so the
+command never opens the file and `ps` never shows a value. New in this release, for both:
+**secret values in the output are masked** when that output is not a terminal.
+
+```bash
+evnx run -- sh -c 'echo "port=$PORT pw=$DB_PASSWORD"' | cat
+```
+
+```text
+port=8080 pw=***
+```
+
+That default is for the two places output is kept: a CI log and an AI coding agent's
+transcript. `--no-mask` turns it off; at a terminal it is off unless you pass `--mask`.
+Only values the classifier calls secret are masked, so `8080` stays `8080`. It is honest
+about its limit: masking stops `echo $KEY` and a stack trace that prints its config, not
+a command that base64-encodes the value on purpose.
+
+---
+
+## AI coding agents read `.env`
+
+An agent reads your project to understand it, and `.env` is a file in your project.
+`evnx doctor` now checks whether an agent configured in the project can read it:
+
+```text
+  !  Check that AI coding agents cannot read .env
+     Claude Code can read .env: add to permissions.deny in .claude/settings.json:
+         "Read(./.env)", "Read(./.env.*)"
+       (an agent allowed to run shell commands can still read it)
+```
+
+It knows Claude Code, Cursor, Aider, Gemini CLI, Windsurf and Copilot, checks only the
+ones you use, and `--fix` adds `.env*` to an agent's ignore file (it never rewrites Claude
+Code's settings). The new guide, [Using evnx with AI coding agents](/guides/use-cases/ai-coding-agents),
+puts it together: keep the file out of context, run the agent's commands through
+`evnx run`, scan what it writes with `git diff | evnx scan -`, and rotate a key that was
+pasted.
+
+---
+
+## Your `.env` has more than one reader
+
+A `.env` has no specification. We measured how three common loaders read the same lines,
+by running each one:
+
+| Line | evnx, Docker Compose, python-dotenv | Node `dotenv` |
+|---|---|---|
+| `API_KEY=   # fill this in later` | `# fill this in later` | empty |
+| `COLOR=#ff0000` | `#ff0000` | empty |
+| `PW=Tr0ub4dor#3` | `Tr0ub4dor#3` | `Tr0ub4dor` |
+| `URL=${HOST}:5432` | expanded | as written, unless `dotenv-expand` |
+
+evnx's parser does not change. Instead, `validate` reports `reader_mismatch` for a line a
+reader **your project uses** reads differently, with the one-line fix, and `doctor`
+names the readers it found:
+
+```text
+  !  PW (line 3): Node dotenv cuts the value at `#`, while evnx and python-dotenv read it as written
+     →  Quote the value (KEY="…#…") so every reader keeps the part after `#`.
+```
+
+The table lives in the evnx repository and a weekly workflow re-runs the real loaders
+against it, so a loader that changes is noticed. (The measurement also corrected us: we
+had assumed python-dotenv read the first line as empty. It does not.)
+
+---
+
+## A `diff` patch that applies, and `spec check`
+
+`evnx diff --format patch` now prints a unified diff of `.env`:
+
+```text
+# LOCAL_DEBUG_MODE is only in .env; this patch keeps it
+--- a/.env
++++ b/.env
+@@ -2,0 +3,1 @@
++REDIS_URL=redis://localhost:6379
+```
+
+Against a template it prints only the template's lines, so nothing of `.env` is in it, and
+`patch -p1` applies it. `--interactive` now writes what you choose and keeps `.env.bak`.
+
+[`evnx spec check`](/guides/commands/spec#checking-it-evnx-spec-check) checks the `[vars]`
+contract against `.env.example`, both ways, and `.env` when there is one. It needs no
+`.env`, so it runs in CI and in a fresh clone, and ships as the `evnx-spec-check`
+pre-commit hook.
+
+---
+
+## What a production server taught us
+
+A paying customer pushed, pulled and compared a production `.env` on a server, and their
+session showed five things that were wrong:
+
+- `cloud pull` warned "writing to a production vault from ./.env" — the sentence for a
+  push. It now says the local file differs and pulling replaces it, and keeps the
+  replaced file as `.env.bak`.
+- History said `16:21` with no zone; the server was in Seoul. Times now end in `UTC`.
+- `cloud link` said "bound this directory" while binding the project root and every
+  folder below it. It names the folder now.
+- The file came from wherever the command ran. A binding can now name it:
+  `evnx cloud link app/production --file deploy/.env`.
+- To check the server matched the vault they pulled into `/tmp` and ran `cmp`, writing
+  production secrets to `/tmp`. **`evnx cloud diff --local`** compares in memory, by key
+  name, exit 0 or 1, and writes nothing.
+
+---
+
+## Every archive is signed
+
+From this release, each `.tar.gz` and `.zip` carries a Sigstore-signed SLSA build
+provenance attestation, made in the job that compiled it:
+
+```bash
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx
+```
+
+The checksum proves a download is intact; the attestation proves where it was built: this
+repository's release workflow, from the tag, on a GitHub-hosted runner. Every release now
+verifies its own published archives before it finishes, and `install.sh` checks
+provenance automatically when a signed-in `gh` is available. PyPI and crates.io now
+publish by trusted publishing, so no long-lived registry token is stored.
+
+---
+
+## Smaller fixes
+
+- `scan -` reads stdin; empty stdin is an error, not a clean scan.
+- `scan` reads a plaintext `.env.backup` (it skipped it by name), and says per file which
+  checks ran.
+- `convert --only secrets|public` splits a `.env` by the classifier.
+- `convert --to azure-keyvault` passes each value through a private temp file, never
+  `--value` on a command line.
+- `init --env-name` and `add --env-name`; `init` names a `.env` in a subfolder.
+- `doctor` warns when `.dockerignore` lets `.env` into an image, and reports every
+  project type.
+- `evnx update` gives pipx and system-pip installs a command that works.
+- `template` leaves a bare `$host` alone, and each `|default:` uses its own text.
+- A master-password prompt with no terminal names `--password-stdin`, with your command.
+
+---
+
+## Upgrading
+
+```bash
+evnx update            # prints the upgrade command for how you installed it
+```
+
+Then check the five changes above against your scripts. The install page has every
+channel, with a way to [verify your download](/guides/getting-started/installation#verify-your-download).

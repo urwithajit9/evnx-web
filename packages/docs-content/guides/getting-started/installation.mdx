@@ -3,7 +3,7 @@ title: "Installing evnx"
 section: getting-started
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-25"
+updatedAt: "2026-10-29"
 excerpt: "Get evnx running on macOS, Linux, or Windows in under two minutes. Includes pre-commit hook setup."
 difficulty: beginner
 timeToComplete: "2 minutes"
@@ -35,9 +35,19 @@ The script:
 1. Detects your OS and architecture (x86_64 / arm64)
 2. Downloads the correct binary from GitHub Releases
 3. Verifies the checksum, and refuses to install if it is missing or wrong
-4. Installs to `/usr/local/bin` if you can write there, otherwise to `~/.local/bin`
+4. **v0.11.0+** — with a signed-in GitHub CLI (`gh` 2.49+), verifies the archive's build
+   provenance: one not built by evnx's release workflow from that tag is refused. Without
+   `gh`, it says the check was skipped
+5. Installs to `/usr/local/bin` if you can write there, otherwise to `~/.local/bin`
    if that folder exists. It does **not** edit your `PATH`; if `~/.local/bin` is not
    on it, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile
+
+Pin a version, or choose the folder:
+
+```bash
+curl -fsSL https://dotenv.space/install.sh | EVNX_VERSION=0.11.0 bash
+curl -fsSL https://dotenv.space/install.sh | EVNX_INSTALL_DIR="$HOME/bin" bash
+```
 
 Verify the installation:
 
@@ -119,7 +129,7 @@ writes into a mounted directory.
 Pin a version rather than tracking `latest` in a pipeline:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 scan
+docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.11.0 scan
 ```
 
 In GitHub Actions the container form usually reads better than an install step:
@@ -127,7 +137,7 @@ In GitHub Actions the container form usually reads better than an install step:
 ```yaml
 - name: Scan for secrets
   run: |
-    docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.10.18 \
+    docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:0.11.0 \
       scan --severity high
 ```
 
@@ -199,16 +209,40 @@ evnx --help
 #   cloud        Sync encrypted .env files with evnx cloud
 #   doctor       Check .env files, Git config, project structure, and security
 #   spec         Declare what each variable is: required, format, secret
+#   run          Run a command with a `.env`'s variables in its environment
 #   commands     Every command this build has, and which features it was compiled with [aliases: surface]
 #   completions  Generate shell completions
 #   update       Show how to upgrade, and optionally whether a newer release exists
 ```
 
-That is the 0.10.18 listing. `evnx commands` prints every subcommand as well, and which
+That is the 0.11.0 listing. `evnx commands` prints every subcommand as well, and which
 features your build was compiled with.
 
 
 ---
+
+## Verify your download
+
+**v0.11.0+** — every release archive has a `.sha256` beside it and a signed **build
+provenance** attestation. The checksum proves the file is intact; the attestation proves
+it was built by evnx's release workflow, from the tagged commit, on a GitHub-hosted
+runner.
+
+```bash
+curl -fsSLO https://github.com/urwithajit9/evnx/releases/download/v0.11.0/evnx-x86_64-unknown-linux-musl.tar.gz
+curl -fsSLO https://github.com/urwithajit9/evnx/releases/download/v0.11.0/evnx-x86_64-unknown-linux-musl.tar.gz.sha256
+sha256sum -c evnx-x86_64-unknown-linux-musl.tar.gz.sha256        # macOS: shasum -a 256 -c
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \
+  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml \
+  --source-ref refs/tags/v0.11.0 --deny-self-hosted-runners
+tar -xzf evnx-x86_64-unknown-linux-musl.tar.gz
+install -m 755 evnx-x86_64-unknown-linux-musl ~/.local/bin/evnx
+```
+
+The archive holds one file named after its target (`evnx-x86_64-unknown-linux-musl`;
+on Windows a `.zip` with `evnx-x86_64-pc-windows-msvc.exe`). `gh attestation verify`
+needs `gh auth login`. A tampered file, another repository or another tag fails it.
+Releases before v0.11.0 carry no attestation; the install script checks both for you.
 
 ## Run Your First Check
 

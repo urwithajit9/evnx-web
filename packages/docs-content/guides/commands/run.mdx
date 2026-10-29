@@ -1,0 +1,177 @@
+---
+title: "evnx run"
+section: commands
+order: 19
+publishedAt: "2026-10-29"
+updatedAt: "2026-10-29"
+excerpt: "Run a command with a .env file's variables in its environment, without the command reading the file — and with secret values masked in its output wherever that output is kept."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["run", "environment", "masking", "ci-cd", "ai-agents", "evnx"]
+commands: ["cloud run", "convert", "run", "template"]
+evnxVersion: "0.11.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx run` reads a `.env` file and starts a command with those variables in its
+environment. The command never opens the file itself, the values travel in its
+**environment block** rather than its arguments (so `ps` shows the command, not the
+secrets), and where the output is kept — a CI log, an agent's transcript — secret
+values come out as `***`.
+
+It is the local counterpart of [`evnx cloud run`](/guides/commands/cloud#running-a-command-without-writing-a-file),
+which does the same with a vault. **v0.11.0+**.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+## Quick example
+
+```text
+# .env
+PORT=8080
+DB_PASSWORD=hunter22hunter
+```
+
+```bash
+evnx run -- sh -c 'echo "port=$PORT pw=$DB_PASSWORD"' | cat
+```
+
+```text
+port=8080 pw=***
+```
+
+The output went to a pipe, not a terminal, so the secret was masked. `PORT` is not a
+secret and prints as it is.
+
+---
+
+## Command signature
+
+```bash
+evnx run [OPTIONS] -- <COMMAND>...
+```
+
+The `--` is required: everything after it belongs to the command, so a flag meant for
+it (`-- npm run build --prod`) is never mistaken for one of evnx's. The command runs
+directly, **not through a shell**; for a pipeline or a shell builtin, ask for one:
+
+```bash
+evnx run -- sh -c 'psql "$DATABASE_URL" < schema.sql'
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--env <ENV>` | `.env`, or `[defaults] env_name` | The file to read |
+| `--env-name <NAME>` | — | Read `.env.<NAME>` instead. Conflicts with `--env` |
+| `--include <GLOB>` | all | Inject only names matching these globs, comma-separated |
+| `--exclude <GLOB>` | none | Skip names matching these; applied after `--include` |
+| `--mask` | see below | Mask secret values in the output |
+| `--no-mask` | see below | Never mask the output. Conflicts with `--mask` |
+| `--allow-unsafe-names` | off | Inject names that make a program load or run other code (below) |
+| `--verbose`, `-v` | off | Name the variables injected (names only) |
+
+---
+
+## Masking
+
+The command's stdout and stderr pass through evnx, and values the classifier calls
+**secret** — by name (`*_PASSWORD`, `*_SECRET`, `*_TOKEN`, `*_KEY`, …) or by value (a
+provider key, a private key, a URL with a password) — print as `***`.
+
+| Where the output goes | Default |
+|---|---|
+| Not a terminal: a pipe, a file, a CI log, an agent | **masked**; `--no-mask` turns it off |
+| A terminal | not masked; `--mask` turns it on |
+
+```bash
+evnx run --no-mask -- sh -c 'echo "pw=$DB_PASSWORD"' | cat     # pw=hunter22hunter
+```
+
+- Values shorter than 6 characters are left alone, so `PORT=8080` does not turn every
+  `8080` into `***`.
+- A secret split across two writes is still masked: evnx holds back only the bytes that
+  could be the start of a secret.
+- **It prevents accidents, not exfiltration.** A command that transforms a value —
+  base64, splitting it, reversing it — gets past it. Masking stops `echo $KEY` and a
+  stack trace that prints its config from landing in a log; it is not a sandbox.
+
+---
+
+## What is not passed on
+
+- **evnx's own settings.** `EVNX_TOKEN`, `EVNX_PASSWORD`, `EVNX_SERVER` and the rest of
+  `EVNX_*` are removed from the child's environment, so a CI job's API token does not
+  reach every command it runs.
+- **Names that make a program load other code** — `PATH`, `LD_*`, `DYLD_*`,
+  `NODE_OPTIONS`, `BASH_ENV` and similar — are refused, and nothing runs:
+
+```text
+Error: .env sets LD_PRELOAD, which make a program load or run other code.
+  Anyone who can edit .env could use them to run code here.
+  Nothing was run. Exclude them with --exclude, or pass
+  --allow-unsafe-names if you meant to set them.
+```
+
+Pass `--allow-unsafe-names` only when the file is meant to set them.
+
+---
+
+## Narrowing what the command gets
+
+A build step that needs only public configuration has no reason to hold your database
+password:
+
+```bash
+evnx run --include "NEXT_PUBLIC_*,PORT" -- npm run build
+```
+
+An excluded variable is never written into the child's environment. A filter that
+leaves nothing is an error, not a run with no variables:
+
+```text
+Error: --include/--exclude left nothing to inject — all 12 variable(s) were filtered out.
+```
+
+---
+
+## Exit codes
+
+`evnx run` exits with **the command's own code**, so a script branches on your command:
+
+```bash
+evnx run -- sh -c 'exit 7'; echo $?      # 7
+```
+
+A command killed by a signal has no code to pass through; that is reported and becomes
+`1`. Failures before the command starts — a missing `.env`, a refused name, a command
+that does not exist — are evnx's own errors, exit `2`, ending with
+`No verdict: evnx did not finish.`:
+
+```text
+Error: no such command: nope-cmd
+  `evnx run` runs the command after `--`, not through a shell; pipelines and builtins need one: evnx run -- sh -c 'a | b'
+```
+
+---
+
+## When to use it
+
+| You want | Use |
+|---|---|
+| A tool, a test run or an AI agent to use secrets without reading `.env` | `evnx run -- <cmd>` |
+| The same, with a vault instead of a local file | `evnx cloud run --vault <v> -- <cmd>` |
+| A config file with the values in it | [`evnx template`](/guides/commands/template) |
+| The values in another tool's format | [`evnx convert`](/guides/commands/convert) |
+
+See [Using evnx with AI coding agents](/guides/use-cases/ai-coding-agents) for running an
+agent's commands this way.
+
+## See also
+
+- [evnx cloud](/guides/commands/cloud) — `cloud run`, the same with a vault
+- [evnx doctor](/guides/commands/doctor) — whether an AI agent can read `.env`
+- [Environments](/guides/reference/environments) — `--env-name`
