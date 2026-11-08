@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx convert"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-08"
 excerpt: "Reference for evnx convert: turn a .env into the format one of 14 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["convert", "reference", "cli", "env", "formats"]
-commands: ["cloud run", "convert", "migrate", "template"]
-evnxVersion: "0.10.9"
+commands: ["cloud export", "cloud run", "convert", "migrate", "template"]
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -89,7 +89,7 @@ so a pipe carries the artefact alone.
 | `yaml` | `yml` | mapping, values that look like numbers or booleans quoted | — |
 | `shell` | `bash`, `export` | `export NAME='value'` script | — |
 | `aws-secrets` | `aws`, `aws-secrets-manager` | the flat JSON `create-secret --secret-string` takes | — |
-| `gcp-secrets` | `gcp`, `gcp-secret-manager` | script that creates each secret or adds a version | `--project` |
+| `gcp-secrets` | `gcp`, `gcp-secret-manager` | script that creates each secret or adds a version; names lowercased, `_` → `-` (`DB_URL` → `db-url`) | `--project` |
 | `azure-keyvault` | `azure`, `azure-key-vault` | `az keyvault secret set` script, `_` → `-` | `--vault-name` |
 | `github-actions` | `github`, `gh-actions` | text to paste into the GitHub web form | — |
 | `docker-compose` | `docker`, `compose` | `environment:` list, `$` written `$$` | — |
@@ -97,7 +97,7 @@ so a pipe carries the artefact alone.
 | `terraform` | `tf`, `tfvars` | `name = "value"`, names lowercased | — |
 | `doppler` | — | **experimental** | — |
 | `heroku` | — | `heroku config:set` script, one call per variable | `--heroku-app` |
-| `vercel` | — | **experimental** | — |
+| `vercel` | — | **experimental**: `{key, value, type, target}`-style map; secrets are `"sensitive"` (**v0.13.0+**) | — |
 | `railway` | — | **experimental**: the same JSON as `json` | — |
 
 [Convert reference](/guides/reference/convert-reference) shows each format's output.
@@ -109,6 +109,110 @@ so a pipe carries the artefact alone.
   <code>--to json</code> prints. Vercel's API takes <code>{"{key, value, type, target}"}</code>
   objects, which this map does not have. Railway documents no import that takes this JSON.
 </Callout>
+
+### Secrets for Vercel
+
+**v0.13.0+** — `--to vercel` writes `"type": "sensitive"` for a variable whose name or
+value looks secret (`DB_PASSWORD`, a token, a URL with a password). Before 0.13.0
+every variable was `"plain"`. Vercel's API rejects a Sensitive variable in
+`development`, so a sensitive variable gets `"target": ["production", "preview"]`
+only, and evnx says how many on stderr. Other variables stay `"plain"` for all three
+targets. The JSON is otherwise unchanged.
+
+```console
+$ evnx convert --to vercel
+! 2 variables written as type "sensitive" and not set for development: Vercel does not allow a Sensitive variable there.
+! vercel output is experimental: Vercel's API takes {key, value, type, target} objects, not this map.
+{
+  "DB_PASSWORD": {
+    "target": [
+      "production",
+      "preview"
+    ],
+    "type": "sensitive",
+    "value": "example-password"
+  },
+  "NEXT_PUBLIC_URL": {
+    "target": [
+      "production",
+      "preview",
+      "development"
+    ],
+    "type": "plain",
+    "value": "https://x.dev"
+  },
+  "API_TOKEN": {
+    "target": [
+      "production",
+      "preview"
+    ],
+    "type": "sensitive",
+    "value": "example-token"
+  }
+}
+```
+
+If you need such a variable in `development`, set it there by hand as a plain variable
+or leave it to your local `.env`. For the matching `evnx migrate` behaviour see
+[`--sensitive`](/guides/commands/migrate).
+
+### GCP secret names
+
+**v0.13.0+** — `--to gcp-secrets` names each secret from the variable by one rule:
+lowercase, with `_` written as `-`. `evnx migrate --to gcp-secret-manager` and
+`evnx cloud export --to gcp-secrets` use the same rule, so the three commands name a
+variable the same way (0.12 `migrate` kept the `.env` name; see the
+[migrate warning](/guides/commands/migrate)).
+
+```console
+$ evnx convert --to gcp-secrets --project my-project
+#!/bin/bash
+# Upload secrets to GCP Secret Manager
+# Project: my-project
+#
+# Creates each secret, or adds a new version when it already exists.
+
+upsert_secret() {
+  if gcloud secrets describe "$1" --project=my-project </dev/null >/dev/null 2>&1; then
+    gcloud secrets versions add "$1" --data-file=- --project=my-project
+  else
+    gcloud secrets create "$1" --data-file=- --project=my-project
+  fi
+}
+
+printf '%s' 'postgres://u:pw@h/db' | upsert_secret db-url
+printf '%s' '1' | upsert_secret my-key
+```
+
+### Names a target cannot hold
+
+**v0.13.0+** — `.env` keys may hold `.`, `-`, `[`, `]`, a leading digit and non-ASCII
+letters (see the [syntax reference](/guides/reference/env-file-syntax#keys)). A format
+that cannot hold such a name refuses it **by name** and writes nothing:
+
+```console
+$ evnx convert --env c.env --to shell
+Error: shell cannot hold these names: names there are letters, digits and _, not starting with a digit.
+  spring.datasource.url
+  my-key
+
+Nothing was written. Rename them in the env file, or leave them out with --exclude.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+Exit `2`. `--exclude 'spring.*,my-key'` leaves them out. What each format takes:
+
+| Format | Name rule |
+|--------|-----------|
+| `shell`, `github-actions`, `vercel`, `heroku`, `doppler`, `railway` | letters, digits and `_`, not starting with a digit |
+| `kubernetes` | ASCII letters, digits, `_`, `.` and `-` |
+| `terraform` | ASCII letters, digits, `_` and `-`, starting with a letter or `_` |
+| `gcp-secrets`, `azure-keyvault` | ASCII letters, digits, `_` and `-` (`-` replaces `_` in the output) |
+| `json`, `yaml`, `docker-compose`, `aws-secrets` | any name |
+
+Names evnx read before 0.13.0 still pass. `heroku` and the others also ask for their
+own flags (`--heroku-app`, `--name`, `--project`, `--vault-name`) before the name check.
 
 ### The names a target needs
 

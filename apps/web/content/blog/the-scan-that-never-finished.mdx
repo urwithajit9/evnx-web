@@ -1,14 +1,15 @@
 ---
 title: "The Scan That Never Finished: A Pipe Deadlock Between evnx and git"
-publishedAt: "2026-11-06"
+publishedAt: "2026-11-08"
 excerpt: "evnx scan printed its header on a real Next.js project and then did nothing, forever. No error, no output, almost no CPU. The cause was eleven lines that wrote to git before reading from it, and a 64 KiB pipe that small test projects never fill."
 author: "ajit"
 category: "deep-dive"
 tags: ["scan", "rust", "git", "debugging", "pipes", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "git-hooks-pre-commit-prek-evnx"
+  - "severity-vs-confidence-evnx-scan"
   - "why-i-built-evnx"
 ---
 
@@ -220,6 +221,33 @@ With the fix it passes in well under a second. On the real Next.js project, the 
 that never finished now completes in about 35 seconds, holding back the 1,100 ignored
 files it found, and exits 1 for the findings that are actually committed.
 
+## Checking it with the release
+
+I rebuilt the shape of the problem for the v0.13.0 binary: a git repository with a
+gitignored `.next/static/` folder holding 6,000 files, each with a (fake) live Stripe key
+in it, so that every file produces a finding for git to be asked about. On v0.12.0 that
+is the setup that hung. On v0.13.0:
+
+```text
+$ time evnx scan .
+
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env, ./.gitignore, ./.next/static/chunk-00000-a1b2c3d4e5f6a7b8c9d0e1f2.js and 5999 other files
+
+  ✓  No secrets in files git would commit
+
+  6002 files scanned
+  ·  git ignores ./.next/static/chunk-00000-a1b2c3d4e5f6a7b8c9d0e1f2.js, ./.next/static/chunk-00001-a1b2c3d4e5f6a7b8c9d0e1f2.js, ./.next/static/chunk-00002-a1b2c3d4e5f6a7b8c9d0e1f2.js and 5997 other files — 6000 findings there are not counted, because they are not committed (--include-ignored lists them)
+  Docs: https://docs.evnx.dev/cli/commands/scan
+
+real	0m0.183s
+```
+
+It exits 0, because nothing in it would be committed. This small synthetic repository
+finishes in a fraction of a second. The 35 seconds in the changelog is the real Next.js
+project, with 58,407 files to read.
+
 ## What I take from it
 
 **A process you pipe both ways is a protocol, not a function call.** The moment you give
@@ -239,6 +267,6 @@ when it was working normally, so a hung scan and a slow scan looked the same. Th
 a separate improvement I want to make: a progress line on long walks, so "still going"
 and "stuck" look different.
 
-The fix is [evnx#265](https://github.com/urwithajit9/evnx/pull/265) and ships in v0.13.0.
+The fix ships in v0.13.0 and is listed in the [changelog](/changelog).
 If you have run `evnx scan` on a project with a big ignored build folder and given up
 waiting, this was why.

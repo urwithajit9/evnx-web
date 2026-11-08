@@ -1,0 +1,168 @@
+---
+title: "When Two Providers Share a Prefix: Telling Clerk From Stripe by the Variable's Name"
+publishedAt: "2026-11-14"
+excerpt: "Clerk and UploadThing issue secret keys that start with sk_live_, exactly like Stripe. A scanner that matches values alone says 'Stripe' every time and points you at the wrong dashboard. evnx 0.13.0 lets a rule look at the variable's name too."
+author: "ajit"
+category: "deep-dive"
+tags: ["scan", "secrets", "regex", "clerk", "stripe", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "severity-vs-confidence-evnx-scan"
+  - "the-scan-that-never-finished"
+---
+
+{/* Editor: outputs re-checked with 0.13.0 on 2026-11-08 (released binary, throwaway repo).
+The 0.12 behaviour is described, not pasted. Fake keys are built from parts and masked.
+Unexplained, not in the post: a custom `names` rule did not take over from the Stripe
+rule on a YAML key named `secret_key`, while it did on a `.env` variable. Ask the
+author before publishing the YAML paragraph. */}
+
+A secret scanner earns trust in two ways: it finds the key, and it tells you the right
+thing to do about it. "Revoke at dashboard.stripe.com" is useless advice for a Clerk key.
+Until 0.13.0, that is the advice evnx gave.
+
+## The collision
+
+Stripe's secret keys start with `sk_live_`. So do Clerk's. So do UploadThing's older
+secrets. Stripe documented the prefix first; the others reused it. A rule that looks only
+at the value has no way to tell them apart:
+
+```text
+CLERK_SECRET_KEY=sk_live_…    → stripe-live-secret-key   ✗ wrong provider, wrong dashboard
+```
+
+Every scanner that works on values alone has this problem. You can make the Stripe regex
+stricter (Stripe keys have a fairly predictable length), but Clerk's keys fall inside the
+same range. The value alone doesn't settle it.
+
+## The context does
+
+A `.env` file holds more than values. The line says
+`CLERK_SECRET_KEY=sk_live_…`. A person reading it knows instantly whose key that is. So
+0.13.0 gives rules an optional `names` field: a list of patterns matched against the
+**variable or key name** the value belongs to.
+
+```toml
+[[rules]]
+id         = "clerk-secret-key"
+name       = "Clerk Secret Key (LIVE)"
+provider   = "Clerk"
+category   = "auth"
+regex      = 'sk_live_[0-9a-zA-Z]{24,}'
+names      = ['(?i)^(NEXT_)?CLERK_(SECRET_KEY|API_KEY)$']
+confidence = "high"
+severity   = "critical"
+url        = "https://dashboard.clerk.com"
+```
+
+That is the shape of the rule, not the exact text of the built-in one. Here is the same
+field in use.
+
+Two rules decide it:
+
+1. **A rule with `names` only fires on a named value.** On a bare line of text with no
+   key, it never fires.
+2. **When a named rule and an unnamed rule match the same value, the named one wins**, and
+   the other finding is dropped. You get one finding, not two.
+
+```text
+$ cat .env
+STRIPE_SECRET_KEY=sk_live_…
+CLERK_SECRET_KEY=sk_live_…
+UPLOADTHING_SECRET=sk_live_…
+FOO=sk_live_…
+$ evnx scan .
+  ✗  Stripe Secret Key (LIVE)                    critical
+     ./.env:1 (STRIPE_SECRET_KEY)  sk_l…p7dc
+     →  revoke at https://dashboard.stripe.com/apikeys
+
+  ✗  Clerk Secret Key (LIVE)                     critical
+     ./.env:2 (CLERK_SECRET_KEY)  sk_l…p7dc
+     →  revoke at https://dashboard.clerk.com
+
+  ✗  UploadThing Secret Key                      critical
+     ./.env:3 (UPLOADTHING_SECRET)  sk_l…p7dc
+     →  revoke at https://uploadthing.com/dashboard
+
+  ✗  Stripe Secret Key (LIVE)                    critical
+     ./.env:4 (FOO)  sk_l…p7dc
+     →  revoke at https://dashboard.stripe.com/apikeys
+```
+
+(Each finding also has a `!  matches a live key format, not a placeholder` line, left out
+here.) The same value on four lines, three different providers, each with the right link.
+Line 4 has no recognisable name, so it stays Stripe.
+
+## Where names come from
+
+"Name" means whatever the value is attached to:
+
+- in a `.env` file, the variable: `CLERK_SECRET_KEY`
+- in YAML, JSON or TOML, the leaf's key, so `{"CLERK_SECRET_KEY": "sk_live_…"}`,
+  `CLERK_SECRET_KEY: sk_live_…` and `CLERK_SECRET_KEY = "sk_live_…"` all report Clerk,
+  and so does a nested `clerk:` block holding a `CLERK_SECRET_KEY` key. A key that is not
+  named like the variable, such as `clerk: { secret_key: … }`, has no match and stays Stripe
+- in plain text with no key, there is no name, and Stripe keeps the label
+
+An unknown name also stays Stripe: `FOO=sk_live_…` is reported as
+`stripe-live-secret-key`. Absent other evidence, that's still the best guess, because
+Stripe is by far the most common source of that prefix.
+
+## Why not just guess from the name alone?
+
+evnx already flags variables *named* like secrets (`DB_PASSWORD`), with medium
+confidence. A name on its own is weak evidence: `CLERK_SECRET_KEY=changeme` isn't a Clerk
+key. Requiring **both** the documented value format and a matching name keeps confidence
+`high` and the label right.
+
+## ⚠️ What changes when you upgrade
+
+Findings on Clerk and UploadThing keys change rule id, from `stripe-live-secret-key` to
+`clerk-secret-key` or `uploadthing-secret-key`. If you have them in a baseline, or on an
+`evnx:allow stripe-live-secret-key` marker, update those once. They will show up as new
+findings until you do.
+
+## Your own rules can do it too
+
+`names` is just a field. A rule file in `.evnx/rules/` can use it for an internal service
+whose tokens look like someone else's:
+
+```toml
+version = 1
+
+[[rules]]
+id         = "acme-internal-token"
+name       = "Acme Internal Token"
+regex      = 'sk_live_[0-9a-zA-Z]{24,}'
+names      = ['(?i)^ACME_.*_TOKEN$']
+confidence = "high"
+severity   = "critical"
+positive   = ["sk_live_<24 letters or digits>"]  # write a real-looking fixture here
+near_miss  = ["sk_live_short"]
+```
+
+`evnx scan rules test` checks the value shape (it ignores `names`):
+
+```text
+$ evnx scan rules test
+✓ 1 rule(s), 2 fixture value(s): all pass
+```
+
+On `ACME_BILLING_TOKEN=sk_live_…` the scan reports `Acme Internal Token`. An invalid
+`names` pattern is a load error naming the file and the rule, so a typo can't silently
+disable it:
+
+```text
+$ evnx scan acme.env
+Error: .evnx/rules/acme-internal-token.toml: rule 'acme-internal-token' has a `names` expression '(unclosed' that does not compile
+
+regex parse error:
+    (unclosed
+    ^
+error: unclosed group
+
+No verdict: evnx did not scan anything. This is not a clean result.
+```
+
+It exits 2.

@@ -3,24 +3,24 @@ title: "How evnx scan works"
 section: reference
 order: 18
 publishedAt: "2026-11-06"
-updatedAt: "2026-11-06"
+updatedAt: "2026-11-08"
 excerpt: "The scanner from the inside: how files are chosen and decoded, how the detection engine decides what is a secret, how git decides what is reported, and where each part lives in the source. Written for anyone changing scan, or trying to understand a result it gave."
 difficulty: advanced
 timeToComplete: "15 minutes"
 tags: ["scan", "secrets", "architecture", "reference", "rust", "evnx"]
-commands: ["scan"]
+commands: ["scan", "scan hook install"]
 evnxVersion: "0.13.0"
 prerequisites:
   - commands/scan
-draft: true
+draft: false
 ---
 
-<Callout type="warning" title="Describes evnx v0.13.0, which is being built">
-The file layout on this page is the v0.13.0 one: the detection engine moved into
-`core/secretscan/engine.rs` and `utils/patterns.rs` is gone. What scan *does* is the
-same as v0.12.0, with one fix: v0.12.0 could hang on a project with thousands of
-gitignored files (see [Talking to git](#talking-to-git)). This page will be checked
-against the release before it is published.
+<Callout type="info" title="Describes evnx 0.13.0">
+The detection engine lives in `core/secretscan/engine.rs`; `utils/patterns.rs` is gone. New
+in 0.13.0: rules are data, severity is separate from confidence, names are read in YAML,
+JSON and TOML, allow markers and a baseline, `--staged` and `scan hook`, and rule files and
+packs. 0.13.0 also fixes a hang on projects with thousands of gitignored files (see
+[Talking to git](#talking-to-git)).
 </Callout>
 
 `evnx scan` answers one question: **is it safe to push this?** It walks your files,
@@ -65,11 +65,15 @@ staged diff or a parsed YAML file later.
 |---|---|
 | `exclude`, `patterns` | **added together**: the flag and the config both apply |
 | `ignore_placeholders` | the flag wins in either direction, else the config |
-| `severity`, `max_file_size`, `extensions` | the flag wins, else the config, else the default |
+| `severity`, `confidence`, `max_file_size`, `extensions` | the flag wins, else the config, else the default |
 
-Three settings can *weaken* a scan: `severity`, `exclude` and `disable`. The file they
+Four settings can *weaken* a scan: `severity`, `confidence`, `exclude` and `disable`. The file they
 live in is committed, so one commit could narrow scanning for everyone who clones the
 repository. Scan prints which of them are in force, and that line survives `-q`.
+
+Rule files, the baseline and `rules.lock` are not `[scan]` settings. `.evnx/rules/`,
+`.evnx/rules.lock` and `.evnx/baseline.json` are found beside the `.evnx.toml` in force, so a
+scan from a subfolder uses the project's.
 
 A `.evnx.toml` that does not parse is exit 2, not 1. For scan, 1 means "secrets found",
 and a broken config must not look like a finding.
@@ -140,10 +144,13 @@ sides move at once. The full story is in the blog post
 - **Undecodable files.** A walked image or archive is skipped, said in one line. A file
   you named, or one that should be text (`.env`, `.yml`), that cannot be decoded **fails
   the run**: it is listed as unreadable rather than treated as clean.
-- **Which detectors a file gets** is decided by its name alone. `.env`, `.env.*` and
-  `*.env` (Compose's `env_file:`) are read **as a `.env`**, unless the name says they
-  are structured (`.env.json`, `.env.yaml`). Everything else is read **as text**. Piped
-  input (`evnx scan -`) is read as a `.env` when it parses as one.
+- **Which detectors a file gets** is decided by its name. `.env`, `.env.*` and
+  `*.env` (Compose's `env_file:`) are read **as a `.env`**. A `.yml`, `.yaml`, `.json` or
+  `.toml` file is read **as structured data** (**v0.13.0+**). Everything else is read **as
+  text**. Piped input (`evnx scan -`) is read as a `.env` when it parses as one.
+- **A structured file that does not parse** (a Helm template with `{{- if }}`) falls back to
+  text, never an error. `-v` says so and the JSON `files[]` entry has `read_as: "text"` with
+  a note.
 
 `-v` and the JSON output list how each file was read, so a result can always be traced
 back to which detectors ran.
@@ -174,13 +181,25 @@ The engine never opens a file, never asks git and never prints.
 
 | Detector | Reads | What it reports |
 |---|---|---|
-| **Rules** | the value | provider formats from `core/secretscan/rules.rs` plus your `[[scan.patterns]]`: AWS, Stripe, GitHub, OpenAI, Anthropic, private keys, URLs with a password |
-| **Heuristics** | the value | from `core/secretscan/heuristic.rs`: an AWS secret key (40 characters, only when the name says AWS, high entropy) and a generic high-entropy fallback (32+ characters) |
-| **Config key** | the name only | a secret-sounding name (`*_TOKEN`, `*_SECRET`, `PASSWORD`) with a value that is not a placeholder, a path, a number or a plain address |
+| **Rules** | the value | the 63 built-in rules (data in `src/assets/rules.toml`, loaded by `core/secretscan/rules.rs`), then `.evnx/rules/*.toml`, personal rules, `--rules` files, and your `[[scan.patterns]]` |
+| **Heuristics** | the value | from `core/secretscan/heuristic.rs`: an AWS secret key (40 characters, only when the name says AWS, entropy above 4.3) and a generic high-entropy fallback (base64 or URL-safe values, entropy above 4.3, not npm integrity hashes, not hex) |
+| **Config key** | the name only | a secret-sounding name (`*_TOKEN`, `*_SECRET`, `PASSWORD`) with a value that is not a placeholder, a path, a number or a plain address. In YAML, JSON and TOML the name is the key path (`db.password`) |
 
-All the rules compile into one `RegexSet`, so most lines are rejected in a single pass,
-and the Rust regex engine runs in linear time: no rule, including one you write, can make
-a scan hang on a pathological line.
+All the rules compile once into a single set, so most lines are rejected in one pass, and
+the Rust regex engine runs in linear time: no rule, including one you write, can make a scan
+hang on a pathological line.
+
+**Prefilter.** A rule's `keywords` are matched first, with one Aho-Corasick automaton: the
+rule's regex is tried only on text containing one of its keywords. That is what lets a
+pack of hundreds of rules stay fast (the 221-rule `gitleaks` pack took 116 s on evnx-web
+against 105 s with no pack). A rule with `names` runs only where the variable or key has a
+name, and only when the name matches. A rule's `entropy` floor, `secret_group`, `allow` and
+`allow_line` are applied after the regex matches.
+
+**Layers.** Core, project, personal and `--rules` rules are merged add-only: a duplicate id
+is a load error naming both files. A pack is checked against `.evnx/rules.lock` before it is
+loaded, and a mismatch is exit 2. See
+[Scan rules](/guides/reference/scan-rules-and-packs).
 
 ### Two ways to read text
 
@@ -202,10 +221,15 @@ flowchart LR
   program would get. The second scans what that map hides: a commented-out
   `# STRIPE_KEY=sk_live_…`, a real value overwritten by a blank one further down, and a
   line the parser refuses. A secret in any of those was still committed.
+- **A structured file** (**v0.13.0+**) is parsed, and each string leaf is checked with its
+  key path, so `password:` in `config.yml` is judged by name (`./config.yml:2 (db.password)`).
+  The line rules still run over the text, comments included, and a value both paths find is
+  one finding. `${VAR}` references and non-strings are skipped, and a whole sentence or
+  script is not judged by entropy.
 - **Any other file** is read line by line: tokens longer than 20 characters go to the
   heuristics, and the whole line goes to the rules (an AWS access key is exactly 20
-  characters, so it arrives only that way). Name-based detection does not run on text
-  files yet; planned for v0.13.0 is reading names from YAML, JSON and TOML too.
+  characters, so it arrives only that way). Name-based detection does not run on plain
+  text files.
 
 ### One value, one finding
 
@@ -213,11 +237,14 @@ More than one detector can describe the same value: `STRIPE_SECRET_KEY=sk_live_�
 Stripe key *and* a secret-sounding name. Reporting both would count one key as two
 secrets. So detections about the same value are merged, and the winner is:
 
-1. the one that names a provider and links to where you revoke it;
-2. then the higher confidence;
-3. then the earlier detector.
+1. a rule with `names` that matches the variable or key name (`CLERK_SECRET_KEY=sk_live_…`
+   is `clerk-secret-key`, not `stripe-live-secret-key`, **v0.13.0+**);
+2. the one that names a provider and links to where you revoke it;
+3. then the higher confidence;
+4. then the earlier detector.
 
-The merged finding takes the **highest confidence any detector gave**. Two independent
+The merged finding takes the **highest confidence any detector gave**, and the severity of the
+winning rule. Two independent
 detectors agreeing is stronger evidence than either one, and without this a real AWS
 secret key could drop below a `--severity high` gate.
 
@@ -230,30 +257,53 @@ matched only the key.
 `scan/runner.rs`, `add_finding`, applies the report's policy, in this order:
 
 1. **`--ignore-placeholders`** drops values like `sk_test_xxxxxxxx` or `your-key-here`.
-2. **A public build prefix** (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_` and others) raises
-   confidence. That value is already compiled into every bundle you have shipped. This
-   runs *before* the severity filter, so a low-confidence secret behind `NEXT_PUBLIC_`
-   is raised rather than discarded.
-3. **`--severity`** drops what is below the threshold. It happens here, not at render
-   time, so the count, the JSON summary and the exit code describe the same set.
-4. **Masking.** A value is shown as its first and last few characters (`sk_l…3f9a`), and
+2. **A public build prefix** (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_` and others) adds a note
+   and `public_prefix` to the finding, and keeps a shape-only finding at least `medium`.
+   That value is already compiled into every bundle you have shipped. This runs *before* the
+   filters, so it cannot be filtered out by the gate it was added for.
+3. **`--severity` and `--confidence`** drop what is below either threshold (**v0.13.0+**:
+   severity is how bad, confidence is how sure; both must pass). This happens here, not at
+   render time, so the count, the JSON summary and the exit code describe the same set.
+4. **Allow markers and the baseline.** A finding with a matching `evnx:allow <rule-id>`
+   marker on its line or the line above is `allowed`. One whose fingerprint (BLAKE3 of the
+   rule id, the file, and the variable name or line text) is in `.evnx/baseline.json` is
+   `known`. Both are listed in the JSON's `allowed` and `known` arrays, counted in the
+   summary, and left out of `findings`, `summary.total` and the exit code.
+5. **Masking.** A value is shown as its first and last few characters (`sk_l…3f9a`), and
    a value under 8 characters as `<n chars>`. A PEM header is shown whole: it is a
-   label, not key material.
+   label, not key material. The baseline stores no value or preview at all.
 
 Then each file's findings are sorted by line and passed to `scan/output.rs`, which
 writes `pretty`, `json`, `sarif` or `github`, and the run exits:
 
 | Exit | Meaning |
 |---|---|
-| 0 | nothing at or above `--severity` |
+| 0 | nothing new at or above `--severity` and `--confidence`; also a run with nothing staged, and `--update-baseline` |
 | 1 | findings (0 with `--exit-zero`) |
-| 2 | no verdict: a bad path, an empty walk, a broken config, a rule that does not compile |
+| 2 | no verdict: a bad path, an empty walk, a broken config, a rule that does not compile, a pack that no longer matches `rules.lock`, `--staged` outside a repository |
+
+## Scanning what a commit records
+
+`evnx scan --staged` (**v0.13.0+**) goes through the same engine, with a different reader.
+Instead of walking the disk it asks git for the index and reads every staged blob with one
+`git cat-file --batch`:
+
+- It scans what the next commit records, not the working tree. A secret staged and then
+  edited out on disk is still found; an unstaged one is not.
+- Staged files are scanned whatever `.gitignore` says, and findings carry `"git": "staged"`.
+- Nothing staged is exit 0. Outside a repository it is exit 2.
+- The advice changes: `git restore --staged`, never `git filter-repo`.
+
+`evnx scan hook install` adds a managed block to the repository's `pre-commit` hook that
+runs `evnx scan --staged`. The block fails the commit on exit 1, on exit 2, and when
+`evnx` is not on `PATH`: a scan that did not run must not look like a pass.
 
 ## Where to change what
 
 | You want to… | Start in |
 |---|---|
-| add or fix a built-in provider format | `core/secretscan/rules.rs` (each rule needs a matching and a near-miss fixture, built from parts at test time) |
+| add or fix a built-in provider format | `src/assets/rules.toml` (each rule needs a provider, a category and fixtures in `tests/fixtures/rules/`; a test fails without them) |
+| change how rule files and packs load | `core/secretscan/rules.rs` (layers, caps), `packs.rs` (catalogue, lock, gitleaks import), `patternset.rs` (the compiled set) |
 | change entropy, placeholder or secret-name logic | `core/secretscan/heuristic.rs` |
 | change how detections are merged | `core/secretscan/engine.rs` (`best`, `one_finding_per_value`) |
 | scan a new kind of input (a diff, a structured file) | call `engine::scan_text` with your own `Context`; do not add a second reader |
@@ -262,15 +312,17 @@ writes `pretty`, `json`, `sarif` or `github`, and the run exits:
 | change what is reported, or how it is masked | `scan/runner.rs` (`add_finding`) |
 | change a format or the advice | `scan/output.rs` |
 
-Planned for v0.13.0, each plugging into the engine rather than beside it:
+Everything in the 0.13.0 list plugs into the engine rather than beside it:
 
 - **Rules as data** with stable ids, and severity (how bad) separate from confidence (how
-  sure). The JSON gains `schema_version: 2`.
+  sure). The JSON is `schema_version: 2`.
 - **Names in YAML, JSON and TOML**, so `password:` in `config.yml` is checked by name.
 - **Allow markers and a baseline**, for findings you have reviewed and accepted.
-- **Staged-only scans and a git hook installer**, scanning exactly what a commit adds.
+- **Staged-only scans and a git hook installer**.
 - **Rule files and packs**: your own rules in the repository, and optional packs pinned by
-  hash. The guide "Scan rules: the core, your own, and packs" is published with v0.13.0.
+  hash. See [Scan rules: the core, your own, and packs](/guides/reference/scan-rules-and-packs).
+
+Not in 0.13.0: scanning git history, decoding encoded values, and parallel scanning.
 
 ## Checking any of this yourself
 
@@ -282,5 +334,5 @@ evnx scan -v --format json . | jq '.files, .summary'
 git diff | evnx scan -
 ```
 
-The first shows how every file was read and what was found. The second runs the same
+The first shows how every file was read and what was found (`-v` also lists the allowed and known findings). The second runs the same
 engine over a diff.

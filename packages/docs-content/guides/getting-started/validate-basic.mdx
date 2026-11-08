@@ -3,13 +3,13 @@ title: "Validate your environment: A practical guide"
 section: guides
 order: 12
 publishedAt: "2026-03-09"
-updatedAt: "2026-10-18"
+updatedAt: "2026-11-08"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["validate", "tutorial", "best-practices", "ci-cd", "evnx"]
 commands: ["init", "validate"]
-evnxVersion: "0.10.8"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - commands/validate
@@ -535,6 +535,24 @@ Three things fail a run without an error line:
 # Check the exit code explicitly
 evnx validate; echo "Exit code: $?"
 ```
+
+### "validate says a line is a forward reference" (v0.13.0+)
+
+Values expand from the top down. A `${VAR}` that names a variable assigned further
+down is an error naming the line to move, and a bare `$VAR` there is the
+`forward_reference` warning:
+
+```text
+  !  $D on line 1 names D, which is assigned below it on line 2. evnx expands top to bottom, so it keeps the text $D; Docker Compose reads it as empty
+     ./.env:1
+     →  Move D above line 1, or write ${D} so a missing value is an error
+```
+
+Move the definition above the line that uses it. A key such as `my-key` or
+`spring.datasource.url` is read, but gets a `not_shell_name` warning because a shell
+cannot `export` it; ignore it with `--ignore not_shell_name` if only a process reads it.
+The old `expansion_order` warning is gone; `--ignore expansion_order` is accepted and
+does nothing. See [evnx validate](/guides/commands/validate#order-and-names).
 
 ### "Auto-fix didn't change my file"
 

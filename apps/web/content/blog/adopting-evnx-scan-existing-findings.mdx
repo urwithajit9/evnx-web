@@ -1,0 +1,180 @@
+---
+title: "Adopting evnx scan on a Repository That Already Has Findings"
+publishedAt: "2026-11-12"
+excerpt: "The first scan of a real repository rarely comes back clean. Turning the gate off until someone cleans up means it never gets turned on. evnx 0.13.0 has three tools for this: a baseline, allow markers, and a pre-commit hook that scans only what you stage."
+author: "ajit"
+category: "tutorial"
+tags: ["scan", "secrets", "pre-commit", "baseline", "ci-cd", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "severity-vs-confidence-evnx-scan"
+  - "git-hooks-pre-commit-prek-evnx"
+---
+
+{/* Editor: outputs re-checked with 0.13.0 on 2026-11-08 (released binary, throwaway repo).
+Fake keys are built from parts and masked by evnx. This replaces the planned "Adopting evnx scan on a repository that
+already has findings" post. */}
+
+You add `evnx scan` to CI. The first run reports twelve findings. Some are real, some
+are documentation examples, and one is a test fixture someone committed in 2023. The
+easy move is `--exit-zero` "for now". "For now" tends to last.
+
+The goal is a gate that fails on **new** findings from today, while the old ones are
+dealt with on their own schedule. evnx 0.13.0 gives you three tools, in this order.
+
+## 1. Accept what is there: the baseline
+
+```text
+$ evnx scan . --update-baseline
+
+  evnx scan  Checking for exposed secrets
+
+✓ wrote /tmp/adopt/.evnx/baseline.json with 5 finding(s); they are reported as known from now on
+```
+
+`.evnx/baseline.json` holds a fingerprint, a rule id, a file and a date per finding.
+**It never holds a value**, so it is safe to commit:
+
+```json
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "fingerprint": "7beeb5a9904d3a493589aa8b352cde2cdae19e393c784673ede33de127218f3a",
+      "rule": "clerk-secret-key",
+      "file": ".env",
+      "added": "2026-11-08"
+    }
+  ]
+}
+```
+
+(One of the five entries shown.) From now on those findings are reported as known and
+do not fail the run:
+
+```text
+$ evnx scan .
+
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env, ./.evnx/baseline.json
+
+  ✓  No new secrets
+
+  2 files scanned
+  ·  5 known (baseline) — not counted; -v lists them
+$ echo $?
+0
+```
+
+Add a new key and the gate fails as it should:
+
+```text
+$ evnx scan .
+
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env, ./.evnx/baseline.json
+
+  ✗  OpenAI API Key                              critical
+     ./.env:6 (OPENAI_API_KEY)  sk-p…DfGh
+     !  matches a live key format, not a placeholder
+     →  revoke at https://platform.openai.com/api-keys
+
+  1 finding  ·  1 critical
+  ·  5 known (baseline) — not counted; -v lists them
+$ echo $?
+1
+```
+
+(The "Next steps" block after the summary is left out of this and the later outputs.)
+
+Commit `.evnx/baseline.json`. The baseline is a to-do list, not an amnesty: `-v`
+lists every known finding, so the cleanup work stays visible.
+
+## 2. Mark the deliberate ones: allow markers
+
+Some findings are never going away, because they're meant to be there: a dummy key in
+documentation, a fixture that exercises the scanner itself. For those, an inline marker
+says so where the next reader will see it:
+
+```bash
+# Example config
+# evnx:allow stripe-live-secret-key - documented dummy, not a real account
+STRIPE_SECRET_KEY=sk_live_…
+```
+
+```text
+$ evnx scan docs
+
+  evnx scan  Checking for exposed secrets
+
+  scanning docs/example.env
+
+  ✓  No new secrets
+
+  1 file scanned
+  ·  1 allowed inline — not counted; -v lists them
+```
+
+A marker names **one rule id** and carries a reason. It goes on the finding's line or the
+line above. A marker without a rule id doesn't count, so a blanket "ignore this line"
+can't sneak in.
+
+**Baseline or marker?** Use the baseline for "we know, we'll fix it". Use a marker for
+"this is intentional". When you fix a baselined finding, it simply stops matching; run
+`--update-baseline` again to prune it.
+
+## 3. Stop new ones at the source: the pre-commit hook
+
+CI catches a secret after it is pushed, which is already too late to keep it out of
+history. The hook catches it before the commit exists:
+
+```text
+$ evnx scan hook install
+✓ /tmp/adopt/.git/hooks/pre-commit runs `evnx scan --staged` before every commit
+```
+
+`--staged` scans what the commit will record, read from the git index. It is not the
+working tree: a file staged and then edited is scanned as staged. The baseline and
+markers apply here too. A commit that stages a new key is stopped:
+
+```text
+$ git commit -m "add new service"
+  evnx scan  Checking what is staged for commit
+
+  scanning svc.env
+
+  ✗  AWS Secret Access Key                       critical
+     svc.env:1 (AWS_SECRET_ACCESS_KEY)  q7Wn…Qe6R
+     !  matches a live key format, not a placeholder
+     →  revoke at https://console.aws.amazon.com/iam
+
+  1 finding  ·  1 critical
+  …
+evnx scan: commit blocked, secrets are staged (see above).
+  To commit anyway: git commit --no-verify. To turn the hook off: git config hooks.evnx-scan false
+```
+
+The commit doesn't happen. Two details are deliberate:
+
+- **If evnx is not installed**, the hook blocks the commit and says so, rather than
+  letting it through unchecked. `git commit --no-verify` is the visible escape hatch.
+- **The hook is one block** inside your existing `pre-commit` file.
+  `evnx scan hook uninstall` removes that block and nothing else, and
+  `evnx scan hook status` tells you whether it is installed.
+
+If your team already uses pre-commit or prek, the `evnx-scan` hook in
+`.pre-commit-hooks.yaml` runs the same scan.
+
+## The order that works
+
+1. `evnx scan . --update-baseline` and commit `.evnx/baseline.json`.
+2. Turn the CI gate on, without `--exit-zero`: `evnx scan . --severity high`.
+3. `evnx scan hook install` on your machine, and suggest it to the team.
+4. Work down the baseline: revoke, rotate, delete, and re-run `--update-baseline`.
+   Mark the intentional ones instead.
+
+The gate is on from day one, and nothing new gets in while the old findings are cleaned
+up.

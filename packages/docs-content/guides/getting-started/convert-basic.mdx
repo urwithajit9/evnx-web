@@ -3,13 +3,13 @@ section: "guides"
 order: 10
 title: "Convert basics"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-19"
+updatedAt: "2026-11-08"
 excerpt: "Step-by-step examples for evnx convert — JSON, YAML, shell, filtering, renaming, a Kubernetes Secret, Terraform and cloud CLIs, every output from a real run."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["convert", "examples", "tutorial", "env", "kubernetes", "terraform"]
 commands: ["convert", "migrate"]
-evnxVersion: "0.10.9"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - commands/convert
@@ -385,7 +385,13 @@ bash upload.sh
 
 The script creates each secret, or adds a new version when it already exists, so you
 can run it again after changing a value. Names are lowercased with `-` for `_`
-(`DATABASE_URL` → `database-url`).
+(`DATABASE_URL` → `database-url`). **v0.13.0+** — `evnx migrate --to gcp-secret-manager`
+names them the same way (it used to keep `DATABASE_URL`).
+
+A `.env` key such as `spring.datasource.url` or `my-key` is read by evnx 0.13.0, but
+`shell`, `github-actions`, `vercel`, `heroku`, `doppler`, `railway` and the GCP and Azure
+formats cannot hold some of them: `convert` names the ones they refuse, writes nothing and exits `2`. Leave it out
+with `--exclude`. See [Convert reference](/guides/reference/convert-reference#names-a-format-cannot-hold).
 
 ### Heroku
 

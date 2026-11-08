@@ -1,7 +1,78 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
-  "latest": "0.12.0",
+  "latest": "0.13.0",
   "releases": [
+    {
+      "version": "0.13.0",
+      "date": "2026-11-08",
+      "summary": "**Read this first: what changes for scripts and CI.** Each item has its own entry below with the details and how to migrate.",
+      "highlights": [
+        {
+          "type": "improvement",
+          "text": "Three more built-in rules, 63 in all"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud run` and `evnx cloud pull` take `--vault` more than once"
+        },
+        {
+          "type": "feature",
+          "text": "Rule packs: `evnx scan rules add | update | remove`, and a lock file"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan --staged` and `evnx scan hook`"
+        },
+        {
+          "type": "feature",
+          "text": "Scan rule files you write, and `evnx scan rules`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx:allow` markers and a baseline for `evnx scan`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan` knows 23 more providers, and every rule is tested"
+        },
+        {
+          "type": "feature",
+          "text": "PKCS#12 keystores (`.p12`, `.pfx`) are reported"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan` checks names in YAML, JSON and TOML"
+        },
+        {
+          "type": "feature",
+          "text": "Rules as data"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx remove` (alias `rm`): take a variable out safely"
+        },
+        {
+          "type": "improvement",
+          "text": "Scanner internals (C1, RM-45), no change in output."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx cloud audit` says who was removed"
+        },
+        {
+          "type": "fix",
+          "text": "`cloud pull` checks the blob against the server's hash"
+        },
+        {
+          "type": "fix",
+          "text": "`init --from-source` reads the template with the parser"
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.12.0...v0.13.0"
+      }
+    },
     {
       "version": "0.12.0",
       "date": "2026-11-01",

@@ -3,13 +3,13 @@ title: "evnx org"
 section: commands
 order: 10
 publishedAt: "2026-10-04"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-08"
 excerpt: "Organisations hold a plan and a set of seats. A seat decides which plan's limits apply to its holder — and nothing else. An organisation cannot give anyone access to a vault."
 difficulty: intermediate
 timeToComplete: "8 minutes"
 tags: ["cloud", "organisation", "team", "seats", "billing", "invitations", "evnx"]
 commands: ["auth", "auth delete-account", "auth status", "org accept", "org assign", "org billing", "org create", "org delete", "org invite", "org invites", "org leave", "org list", "org members", "org release", "org remove", "org role", "org seats", "org uninvite", "vault", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/auth
 draft: false
@@ -322,7 +322,16 @@ terminal). Every seat holder drops back to their own plan. While seats are
 assigned, it needs `--force` as well.
 
 `-q` works for every `org` command (**v0.10.18+**): nothing on success, while
-tables, warnings and errors still print. Refusals exit 2.
+tables, warnings and errors still print. Refusals the CLI makes itself exit 2.
+
+**v0.13.0+** — A request the server refuses exits `10`–`15`: `10` not signed in, `11`
+forbidden (an `org` action your role does not allow), `12` plan limit reached, `13`
+server unreachable, `14` conflict or locked, `15` server error or rate limit (see the
+[table](/guides/commands/cloud#exit-codes-for-server-failures)). The limit on how many
+organisations you can own is now a plan limit: the server answers `403` with
+`PLAN_LIMIT` (it was `409 Conflict`), so `evnx org create` exits `12`. A taken slug is
+still a `409`, which is a conflict (`14`), so a script can tell "pick another name"
+(`14`) from "you own too many" (`12`).
 
 <Callout type="info">
 This is also the way out of a corner: **`evnx auth delete-account` refuses while you own an organisation**, because an organisation may be paying for other people's seats. Delete or transfer the organisation first, then the account can be closed.

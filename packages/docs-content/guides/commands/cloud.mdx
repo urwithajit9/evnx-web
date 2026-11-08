@@ -3,13 +3,13 @@ title: "evnx cloud"
 section: commands
 order: 9
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-01"
+updatedAt: "2026-11-08"
 excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "restore", "run", "spec init", "vault list"]
-evnxVersion: "0.10.18"
+commands: ["auth", "auth status", "auth token create", "cloud", "cloud audit", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "org", "restore", "run", "spec init", "vault", "vault list", "vault share"]
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/auth
   - commands/vault
@@ -177,10 +177,11 @@ rather than inventing a convention the project does not have. Name it explicitly
 one. The file written is always printed.
 
 <OptionTable>
-  <Option flag="--vault" type="string">Vault to pull from. Optional in a bound directory.</Option>
+  <Option flag="--vault" type="string">Vault to pull from. Optional in a bound directory. **v0.13.0+** — repeatable: see [Several vaults at once](#several-vaults-at-once).</Option>
+  <Option flag="--allow-override" type="flag">**v0.13.0+** — with several `--vault`, let the later vault win a key both hold.</Option>
   <Option flag="--file" type="path">Where to write the decrypted file. Derived as above; `-` writes to stdout and creates no file. Short form `-f`.</Option>
   <Option flag="--env-name" type="string">Write `.env.&lt;NAME&gt;` instead of the derived or default file.</Option>
-  <Option flag="--version" type="number" default="latest">Version to pull, **1 or more**.</Option>
+  <Option flag="--version" type="number" default="latest">Version to pull, **1 or more**. Refused with more than one `--vault` (**v0.13.0+**).</Option>
   <Option flag="--yes" type="flag">Overwrite the target without asking. Short form `-y`; `--force` is the same flag (**v0.12.0+**; before, only `--force`). The replaced file is still kept as `.bak` (**v0.11.0+**).</Option>
   <Option flag="--gitignore" type="flag">**v0.10.18+** — add the pulled file to `.gitignore` without asking.</Option>
   <Option flag="--no-gitignore" type="flag">**v0.10.18+** — skip the `.gitignore` check.</Option>
@@ -240,6 +241,30 @@ written. With no terminal it stops (exit `2`) and names `--yes`. Whichever way t
 rather than replacing it, and an existing file keeps its mode, with a warning if others
 can read it (**v0.11.0+**; it was forced to `0600`). To compare first without writing
 anything, use [`cloud diff --local`](#comparing-your-file-with-a-version).
+
+---
+
+## Several vaults at once
+
+**v0.13.0+** — `evnx cloud run` and `evnx cloud pull` take `--vault` more than once. One
+master-password unlock opens every vault, and they are merged left to right: the first
+vault's keys, then each later vault's new keys.
+
+```bash
+evnx cloud run --vault acme/shared --vault acme/prod -- ./deploy.sh
+evnx cloud pull --vault acme/shared --vault acme/prod
+```
+
+- **A key held by two or more of the vaults is an error** (exit `2`) before the command
+  runs or a file is written: `DATABASE_URL is in both acme/shared and acme/prod`.
+- `--allow-override` lets the later vault win instead. Each overlap is named on stderr
+  (the key and the winning vault, never a value).
+- `--version` selects a version of one vault, so it is refused with more than one
+  `--vault`.
+- `--include` / `--exclude` and `--file` / `--env-name` apply to the merged result. A
+  merged `pull` writes `.env` unless told otherwise.
+- One `--vault`, or none (a [bound directory](#binding-a-directory)), behaves exactly as
+  before.
 
 ---
 
@@ -377,16 +402,19 @@ evnx cloud run --vault x -- ./deploy.sh   # ./deploy.sh returns 2 → this retur
 ```
 
 A child killed by a signal has no code to pass through; that is reported and
-becomes `1`. Failures *before* the child starts — not signed in, no such vault,
-the wrong password — are evnx's own errors. They exit `2` and end with
+becomes `1`. Failures *before* the child starts are evnx's own errors, and end with
 `No verdict: evnx did not finish.`, so they cannot be mistaken for a child that
-returned 1:
+returned 1. **v0.13.0+** — a server failure before the child starts exits `10`–`15`
+(see [Exit codes for server failures](#exit-codes-for-server-failures)); any other
+failure, such as a vault name that does not exist, keeps exit `2`:
 
 ```text
 Error: no vault called "no-such-vault". Run `evnx vault list` to see what you have.
 
 No verdict: evnx did not finish. This is not a clean result.
 ```
+
+Once the child has started, `10`–`15` cannot come from evnx: the exit code is the child's.
 
 A wrong master password is refused straight after the prompt (**v0.10.18+**),
 before anything is downloaded or run.
@@ -607,6 +635,14 @@ Pushes, pulls, member changes, re-keys and token creation, newest first. Any mem
   2026-09-16 11:07:40  vault_rekey     (deleted account)     re-wrapped for 2 members
 </TerminalOutput>
 
+**v0.13.0+** — the DETAIL column names who was removed. A revoke is logged as a re-key,
+so it reads `removed ex@acme.dev; re-wrapped for 2 members`. When the server cannot resolve
+the member, it names the member's id instead (`removed a member (id 1a2b3c4d…)`). The reads
+a re-key makes to re-encrypt each version show as `read for rekey` (for example
+`version 4 · read for rekey`) rather than looking like someone pulling every version by
+hand; the server records this for an admin or the owner only. The WHO column grows to
+its longest address (up to 40 characters, then `…`).
+
 `--event` takes any of `push`, `pull`, `version_deleted`, `member_grant`, `member_role_change`, `member_revoke`, `vault_rekey` or `token_create`.
 
 <Callout type="warning">
@@ -661,7 +697,7 @@ rather than a promise. It is not the command for CI — that is `run`, above.
 
 ## Conflicts, and why a retry is not enough
 
-Every push carries the version it was based on. If someone else pushed in between, the server answers **409 Conflict**.
+Every push carries the version it was based on. If someone else pushed in between, the server answers **409 Conflict**. **v0.13.0+** — the command exits `14`.
 
 <Callout type="danger" title="A 409 requires re-encryption, not a retry">
 This is the single most important thing to understand about evnx cloud, and it is not how most sync tools behave.
@@ -718,6 +754,51 @@ exits `1` with *"No credentials for this server"* without ever pinging it. When
 you are scripting a reachability check, make sure the credential for that server
 already exists — otherwise you are testing your credential store, not the server.
 </Callout>
+
+---
+
+## Exit codes for server failures
+
+**v0.13.0+** — `evnx cloud`, `evnx auth`, `evnx vault` and `evnx org` exit with a code that
+says what failed, so a pipeline can tell "sign in again" from "the server is down" without
+reading the message. Before 0.13.0 these failures exited `1` or `2`.
+
+| Code | Meaning |
+|-----:|---------|
+| `10` | not signed in, or the session or API token was refused |
+| `11` | forbidden: your role does not allow it, or the email is not verified |
+| `12` | the plan's limit is reached |
+| `13` | the server could not be reached, or something that is not evnx (a proxy, firewall or captive portal) answered |
+| `14` | conflict (someone else pushed first) or the account is locked |
+| `15` | the server failed, or is rate limiting you |
+
+Other failures keep the command's usual code: bad arguments, local errors, a `404`, a
+rejected request body. `evnx cloud run` returns the command's own code once it has
+started. A script that tested for exactly `1` or `2` after a cloud command needs to
+accept these. For a retry loop built on them, see
+[API tokens in CI](/guides/integrations/ci-cd-cloud-tokens#retry-by-exit-code).
+
+### Why a request was refused
+
+A `403` now says why when the server sends a reason, with one line on what to do:
+
+| Reason | What the CLI adds | Exit |
+|--------|-------------------|-----:|
+| `ROLE_TOO_LOW` | "This needs the *role* role; ask the vault owner." (names the role the action needs) | `11` |
+| `NOT_A_MEMBER` | "You are not a member of this vault; ask the owner to share it with you using `evnx vault share`." | `11` |
+| `TOKEN_SCOPE` | "This API token is restricted to another vault; create one for this vault with `evnx auth token create --vault <vault>`." | `11` |
+| `TOKEN_READ_ONLY` | "This API token can only read; create one that can write with `evnx auth token create --scope read_write`." | `11` |
+| `PLAN_LIMIT` | the server's sentence about the limit (see [Plan limits](/guides/reference/plan-limits)) | `12` |
+
+Other differences in what you see:
+
+- A `Retry-After` from the server is shown as `Try again in N s.` on a rate limit (`15`)
+  and a server error (`15`).
+- An HTML error page from a proxy, firewall or captive portal is reported as a page
+  "that is not from evnx" with the HTTP status, and exits `13`, rather than being shown as
+  a server error.
+- All of this works against a server that does not send the new fields yet: you get the
+  server's sentence alone, and the same exit code.
 
 ---
 
