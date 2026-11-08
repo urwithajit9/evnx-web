@@ -1,20 +1,16 @@
 ---
 title: "From One Vault to Many: Composing Shared and Per-Environment Secrets in evnx cloud"
-publishedAt: "2026-11-19"
+publishedAt: "2026-11-08"
 excerpt: "Most teams end up with secrets every environment shares and secrets that differ per environment. evnx 0.13.0 lets cloud run and cloud pull read several vaults at once. When two vaults hold the same key, it refuses by default. Here is why that default is the right one."
 author: "ajit"
 category: "tutorial"
 tags: ["cloud", "secrets", "vaults", "ci-cd", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "zero-knowledge-cloud-sync-architecture-of-secure-env-storage"
   - "api-tokens-ci-what-they-unlock"
 ---
-
-{/* Editor: help text and messages are from evnx 0.13.0. Before publishing, replace the
-"what you'll see" blocks with a real run against api.evnx.dev using two test vaults
-(acme/shared, acme/prod). Never paste a value. GitHub issue #128 asked for this. */}
 
 A real project rarely fits in one vault. There's the set every environment shares (a
 Sentry DSN, a feature-flag key, the analytics token) and the set that differs (the
@@ -57,7 +53,7 @@ hides a real problem: you can't tell from the command line which value a process
 When you rotate the production database and the app still connects to the old one,
 "silently overridden by an older default" is the last thing you'll check.
 
-So evnx refuses by default:
+So evnx refuses by default. What you'll see (the message text comes from the evnx source, not a captured run):
 
 ```text
 1 variable(s) are in more than one of the given vaults:
@@ -77,6 +73,8 @@ it's the case #128 described. Say so explicitly:
 ```bash
 evnx cloud run --vault acme/shared --vault acme/prod --allow-override -- npm start
 ```
+
+What you'll see on stderr (again from the source):
 
 ```text
   · DATABASE_URL is in acme/shared, acme/prod; acme/prod wins

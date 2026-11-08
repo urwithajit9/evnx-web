@@ -1,20 +1,16 @@
 ---
 title: "Exit Codes Are an API: What evnx cloud's 10–15 Let a CI Script Do"
-publishedAt: "2026-11-21"
+publishedAt: "2026-11-08"
 excerpt: "A CLI that exits 1 for every failure forces scripts to grep error messages, and messages change. evnx 0.13.0 gives cloud commands one exit code per kind of failure, so a pipeline can retry what is worth retrying and stop on what isn't. Here is the table, and the one place it can't help."
 author: "ajit"
 category: "devops"
 tags: ["cli", "ci-cd", "exit-codes", "cloud", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "api-tokens-ci-what-they-unlock"
   - "one-vault-to-many-evnx-cloud"
 ---
-
-{/* Editor: the table and help text are from evnx 0.13.0 (`evnx cloud --help`). Add one
-real run per code if possible: 10 (logged out), 13 (EVNX_SERVER=https://127.0.0.1:9),
-11 (a viewer pushing). */}
 
 A deploy job runs `evnx cloud pull`, and it fails. What should the pipeline do?
 
@@ -27,6 +23,8 @@ only way for a script to tell them apart was to grep the message, and messages a
 written for people, so they change. Now each kind of failure has its own code.
 
 ## The table
+
+This is the exit-code section of `evnx cloud --help` in 0.13.0. The messages that go with each code are written from the source, not captured from live runs.
 
 ```text
 $ evnx cloud --help

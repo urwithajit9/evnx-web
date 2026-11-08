@@ -1,21 +1,16 @@
 ---
 title: "Where evnx scan Goes Next: Parallel Files, a Quality Gate, Decoding and Git History"
-publishedAt: "2026-11-24"
+publishedAt: "2026-11-08"
 excerpt: "0.13.0 made evnx scan trustworthy: 63 documented rules, severity and confidence, baselines, packs. The next steps are about speed and depth: scanning files in parallel with rayon, measuring precision before adding noise, decoding base64, scanning history, and publishing the engine as a crate."
 author: "ajit"
 category: "opinion"
 tags: ["scan", "rust", "rayon", "performance", "roadmap", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "importing-betterleaks-rules-into-evnx"
   - "the-scan-that-never-finished"
 ---
-
-{/* Editor: roadmap items are the merged v0.14.0 plan (ROADMAP-v0.13-to-v1.0.md, 2026-11-08):
-RM-74, RM-70, RM-71, RM-69, RM-72, RM-73. None is approved item by item yet, so keep the
-wording as intent, not promises. Re-measure the 116 s figure with the released binary
-and both packs before publishing. */}
 
 evnx 0.13.0 was the "scanner you can trust" release. Every built-in rule is written
 against the provider's documented format and has fixtures. Severity and confidence are
@@ -26,8 +21,8 @@ item.
 ## 1. Parallel scanning with rayon (RM-74)
 
 Today `evnx scan` reads and checks one file at a time. With the core rules that's fast
-enough not to matter. With a pack it isn't: the gitleaks pack took **116 seconds** on
-evnx-web, our own website's monorepo. A pre-commit hook that slow is one people disable.
+enough not to matter. With a pack it isn't: on 2026-11-06, the gitleaks pack took **116 seconds** on
+evnx-web, our own website's monorepo (one observation, not a benchmark). A pre-commit hook that slow is one people disable.
 
 The work is embarrassingly parallel: each file is independent. Rust's
 [`rayon`](https://docs.rs/rayon) turns a sequential iterator into a parallel one with
