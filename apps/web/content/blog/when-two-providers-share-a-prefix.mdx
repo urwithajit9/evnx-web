@@ -1,22 +1,16 @@
 ---
 title: "When Two Providers Share a Prefix: Telling Clerk From Stripe by the Variable's Name"
-publishedAt: "2026-11-14"
+publishedAt: "2026-11-08"
 excerpt: "Clerk and UploadThing issue secret keys that start with sk_live_, exactly like Stripe. A scanner that matches values alone says 'Stripe' every time and points you at the wrong dashboard. evnx 0.13.0 lets a rule look at the variable's name too."
 author: "ajit"
 category: "deep-dive"
 tags: ["scan", "secrets", "regex", "clerk", "stripe", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "severity-vs-confidence-evnx-scan"
   - "the-scan-that-never-finished"
 ---
-
-{/* Editor: outputs re-checked with 0.13.0 on 2026-11-08 (released binary, throwaway repo).
-The 0.12 behaviour is described, not pasted. Fake keys are built from parts and masked.
-Unexplained, not in the post: a custom `names` rule did not take over from the Stripe
-rule on a YAML key named `secret_key`, while it did on a `.env` variable. Ask the
-author before publishing the YAML paragraph. */}
 
 A secret scanner earns trust in two ways: it finds the key, and it tells you the right
 thing to do about it. "Revoke at dashboard.stripe.com" is useless advice for a Clerk key.

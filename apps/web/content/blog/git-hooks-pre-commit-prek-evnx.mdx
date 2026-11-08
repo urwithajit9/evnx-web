@@ -24,6 +24,14 @@ relatedSlugs:
   - "the-scan-that-never-finished"
 ---
 
+<Callout type="info" title="Updated for v0.13.0">
+`evnx scan hook install` now writes the git `pre-commit` hook for you. It runs
+`evnx scan --staged` (what the commit records, read from the index), blocks the commit
+when `evnx` is not on PATH, and `evnx scan hook status` / `uninstall` manage it. The
+`evnx-scan` hook in the pre-commit/prek framework is unchanged in use but now scans only
+the staged paths it is given, and a new `evnx-scan-installed` hook uses the `evnx` on PATH.
+</Callout>
+
 <Callout type="info" title="Updated for v0.10.18">
 The `rev:` pins below now name `v0.10.18`, and the descriptions of `evnx-diff` and
 `evnx-doctor` say what those hooks do today: both block, and both skip a fresh clone
@@ -341,6 +349,68 @@ repos:
 
 evnx is a Rust CLI built specifically for `.env` file management: validation, secret scanning, format conversion, drift detection, and encrypted backups. It ships a `.pre-commit-hooks.yaml` manifest, which means you can use it as a first-class pre-commit provider — **no manual `evnx` installation required**.
 
+### Without a Framework: `evnx scan hook install` (**v0.13.0+**)
+
+If you only want the secret scan and no hook framework, evnx installs the git hook itself.
+Run it once per clone, from inside the repository:
+
+```bash
+evnx scan hook install
+evnx scan hook status
+```
+
+Output from a throwaway repository:
+
+```text
+$ evnx scan hook install
+✓ /tmp/hk/.git/hooks/pre-commit runs `evnx scan --staged` before every commit
+$ evnx scan hook status
+installed: /tmp/hk/.git/hooks/pre-commit
+```
+
+The hook is a marked block, so it sits alongside anything already in `.git/hooks/pre-commit`.
+Running `install` twice changes nothing, and `evnx scan hook uninstall` removes the block and
+nothing else:
+
+```text
+$ evnx scan hook uninstall
+✓ removed the evnx block from /tmp/hk/.git/hooks/pre-commit
+$ evnx scan hook status
+not installed: /tmp/hk/.git/hooks/pre-commit (run `evnx scan hook install`)
+```
+
+What it does on each commit:
+
+- Runs `evnx scan --staged`, so it checks what the commit records, not the whole working
+  tree. A gitignored `.env` on your disk never blocks a commit.
+- Blocks the commit when `evnx` is not on PATH, and says so. It never passes unchecked.
+- Blocks on findings (exit 1) and when the scan cannot run (any other exit code).
+- To turn it off without removing it: `git config hooks.evnx-scan false`. To skip it once:
+  `git commit --no-verify`.
+
+A commit with a staged live key (built in the shell, shown masked):
+
+```text
+$ git commit -m x
+
+  evnx scan  Checking what is staged for commit
+
+  scanning .env
+
+  ✗  Stripe Secret Key (LIVE)                    critical
+     .env:1 (STRIPE)  sk_l…uvwx
+     !  matches a live key format, not a placeholder
+     →  revoke at https://dashboard.stripe.com/apikeys
+
+  1 finding  ·  1 critical
+
+evnx scan: commit blocked, secrets are staged (see above).
+  To commit anyway: git commit --no-verify. To turn the hook off: git config hooks.evnx-scan false
+```
+
+Use the framework config below when you want evnx next to ruff, eslint and the rest in one
+`.pre-commit-config.yaml`.
+
 ### How evnx Hooks Install Themselves
 
 Because evnx declares `language: rust` in its hook manifest, pre-commit and prek handle everything:
@@ -415,11 +485,18 @@ prek install
 ### The Five evnx Hooks — What Each One Catches
 
 <OptionTable>
-  <Option flag="evnx-scan" type="pre-commit" default="always_run">
+  <Option flag="evnx-scan" type="pre-commit" default="staged paths">
     Secret detection using pattern matching and entropy analysis. Catches AWS
     Access Keys (`AKIA…`), Stripe live keys (`sk_live_…`), GitHub PATs, OpenAI
     keys, Anthropic keys, RSA/EC/OpenSSH private keys, and high-entropy strings.
-    Commit is **blocked** on any finding.
+    Commit is **blocked** on any finding. Runs `evnx scan` on the staged paths
+    pre-commit passes it (no `files:` filter, so a key pasted into source is found
+    too). Add `args: [--severity, high]` to narrow it; since 0.13 `--severity` means risk.
+  </Option>
+  <Option flag="evnx-scan-installed" type="pre-commit" default="staged paths">
+    The same scan using the `evnx` already on PATH (`language: system`): no Rust
+    toolchain and no first-run build. A missing `evnx` fails the hook; it never
+    passes unchecked. Use `evnx-scan` instead to pin a version with `rev:`.
   </Option>
   <Option flag="evnx-validate" type="pre-commit" default="*.env*">
     Validates `.env` files for placeholder values (`YOUR_KEY_HERE`, `CHANGE_ME`),
@@ -439,7 +516,7 @@ prek install
     not tracked. Errors **block**, warnings do not, and a clone with no `.env` is
     skipped.
   </Option>
-  <Option flag="evnx-scan-push" type="pre-push" default="always_run">
+  <Option flag="evnx-scan-push" type="pre-push" default="staged paths">
     Same secret detection as `evnx-scan` but runs at push time with SARIF output
     format. Integrates with GitHub Security tab if you redirect output in CI.
     Push is **blocked** on any finding.

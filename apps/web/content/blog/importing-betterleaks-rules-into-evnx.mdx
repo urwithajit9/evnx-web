@@ -1,20 +1,16 @@
 ---
 title: "426 Rules From Betterleaks: What Converts Into a Scanner That Never Touches the Network"
-publishedAt: "2026-11-17"
+publishedAt: "2026-11-08"
 excerpt: "Betterleaks, the gitleaks fork, ships 474 secret-detection rules with CEL filters and live validation. evnx imports them into a pack you add with one command. Here is what carried over, what could not, and why online checks stayed behind."
 author: "ajit"
 category: "deep-dive"
 tags: ["scan", "secrets", "gitleaks", "betterleaks", "rust", "regex", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "teach-evnx-scan-your-own-secrets"
   - "the-scan-that-never-finished"
 ---
-
-{/* Editor: numbers are from converting Betterleaks at 44b3e1d (2026-11-07) with evnx
-0.13.0. The pack is evnx-rules packs/betterleaks.toml (PR #2). Re-check counts if the
-pack is re-pinned before publishing. */}
 
 `evnx scan` ships about sixty rules in the binary, each written against the provider's
 own documentation, each with fixtures. That core is small on purpose. For wider coverage

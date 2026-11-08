@@ -25,6 +25,8 @@ export const metadata: Metadata = {
   openGraph: { url: canonicalUrl("/") },
 };
 
+const IMPACT_SITE_VERIFICATION = "1ef22d8c-5f32-4305-803e-7421f7fb1168";
+
 export default async function HomePage() {
   // ⚠️ Asked BEFORE the shell is drawn. A section that renders nothing still
   // gets a band, a border and a screen of padding otherwise.
@@ -34,6 +36,11 @@ export default async function HomePage() {
 
   return (
     <>
+      {/* Impact (affiliate network) site verification. Their checker reads
+          the `value` attribute, not `content`, so this is written as a
+          literal tag rather than through `metadata`; React 19 hoists it into
+          <head>. Homepage only, which is where Impact looks. */}
+      <meta name="impact-site-verification" {...{ value: IMPACT_SITE_VERIFICATION }} />
       {activeSections.map((spec, i) => {
         if (!visible[i]) return null;
         const Section = SECTIONS[spec.id];

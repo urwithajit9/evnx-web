@@ -1,17 +1,16 @@
 ---
 title: "The Complete Landscape of .env Management: Every Tool, Library, and CLI Across Every Stack"
-publishedAt: "2026-03-07"
-updatedAt: ""
+publishedAt: "2026-11-08"
+updatedAt: "2026-11-08"
 excerpt: "From os.environ to dotenvy, from direnv to dotenvx — a developer-maintained map of every meaningful tool for loading, validating, auditing, and securing environment variables across Python, Node.js, Rust, Go, Java, and the shell."
-coverImage: "/blog/covers/env-management-landscape.png"
 author: "ajit"
 tags: ["cli", "devops", "secrets", "open-source", "productivity"]
 category: "deep-dive"
 readTime: 18
 featured: true
-draft: true
+draft: false
 canonical: ""
-relatedSlugs: ["getting-started-with-evnx", "scan-secrets-before-git-push", "ai-agent-skills-evnx"]
+relatedSlugs: ["getting-started-npm-evnx-cli-nextjs", "git-hooks-pre-commit-prek-evnx", "ai-agent-skills-evnx"]
 ---
 
 Every developer has a `.env` story. Mine ends with pushing AWS keys to a public GitHub repository at 2 AM during an Airflow refactor. Before I noticed, automated bots had already found them.
@@ -341,7 +340,7 @@ import "dotenv/config";
 const dbUrl = process.env.DATABASE_URL;
 ```
 
-Used in hundreds of millions of projects. The source of the `.env` convention in the Node.js ecosystem. Still widely used, though newer tools have addressed its limitations around type safety and multi-environment support.
+Very widely used. The source of the `.env` convention in the Node.js ecosystem. Still widely used, though newer tools have addressed its limitations around type safety and multi-environment support.
 
 ### @t3-oss/env — type-safe, schema-validated env for TypeScript
 
@@ -460,7 +459,7 @@ Like all stdlib approaches, this reads variables already in the process environm
 
 ### dotenvy — the recommended .env loader
 
-[dotenvy](https://crates.io/crates/dotenvy) is the actively maintained fork of the original `dotenv` crate, which was abandoned in 2020 with an unfixed security advisory (RUSTSEC-2021-0141). dotenvy is the suggested alternative for `dotenv` in security advisory RUSTSEC-2021-0141. The current stable release is 0.15.7.
+[dotenvy](https://crates.io/crates/dotenvy) is the actively maintained fork of the original `dotenv` crate, which was abandoned in 2020 with an unfixed security advisory (RUSTSEC-2021-0141). dotenvy is the suggested alternative for `dotenv` in security advisory RUSTSEC-2021-0141.
 
 ```rust
 use std::env;
@@ -685,7 +684,7 @@ dotenvx encrypt
 
 dotenvx encrypts your `.env` files — limiting their attack vector while retaining their benefits. It uses AES-256 with ephemeral keys, with the encryption keys themselves protected using Secp256k1 elliptic curve cryptography, the same as Bitcoin.
 
-dotenvx is installed more than two million times weekly. Paypal, NASA, Procore, Supabase, AWS, and Facebook have all adopted it. AWS recommends it with AWS Amplify, NASA uses it to help power Earthdata Search, and Supabase requires it to unlock their Branching feature.
+dotenvx is widely used; check its own site for current adoption and details.
 
 Beyond encryption, dotenvx supports multiple environments via `-f` flag composition and a `--convention=nextjs` flag for Next.js-style file cascading.
 
@@ -699,7 +698,7 @@ The name `envx` appears independently across several tools that are unrelated to
 
 - [@dotenvx/dotenvx](https://www.npmjs.com/package/@dotenvx/dotenvx) — the official dotenvx npm package
 - [@t3-oss/env](https://env.t3.gg) — TypeScript schema validation (not "envx" named, but often compared)
-- Various other packages on npm under `envx` or similar names are experimental or abandoned; check publish dates before using
+- Various other packages on npm under `envx` or similar names may be unmaintained or experimental; check publish dates before using
 
 ---
 
@@ -748,7 +747,7 @@ Looking across this entire landscape, a pattern emerges. The ecosystem has excel
 - **Encryption**: dotenvx
 - **Secret management**: Vault, Doppler, AWS Secrets Manager
 
-What doesn't exist is a **single CLI** that handles the operational side of `.env` management: validation, secret scanning, diffing environments, converting to CI/CD formats, and migrating to secret managers — across any stack, without being embedded in a language runtime.
+What I could not find was a **single CLI** that handles the operational side of `.env` management: validation, secret scanning, diffing environments, converting to CI/CD formats, and migrating to secret managers — across any stack, without being embedded in a language runtime.
 
 evnx fills that gap. It's a Rust binary with no runtime dependency. It doesn't care if your project is Python, Go, or TypeScript. It works on the files.
 
@@ -772,12 +771,6 @@ evnx convert --to kubernetes
 evnx migrate --to aws-secrets-manager
 ```
 
-<Callout type="warning">
-Corrected September 2026: these examples used `evnx convert --format` and
-`evnx migrate --to aws`. The flag is `--to` for both, and the AWS destination is named
-`aws-secrets-manager`. `k8s-secret` is spelled `kubernetes`.
-</Callout>
-
 ### The 14 conversion formats
 
 One of evnx's most practical features for teams bridging the `.env` world and CI/CD infrastructure:
@@ -786,23 +779,20 @@ One of evnx's most practical features for teams bridging the `.env` world and CI
 evnx convert --to [format]
 ```
 
-Available formats: `github-actions`, `gitlab-ci`, `k8s-secret`, `k8s-configmap`, `docker-compose`, `heroku`, `terraform`, `aws-ssm`, `aws-secrets-manager`, `doppler`, `vercel`, `json`, `yaml`, `shell`.
+Available formats in 0.13.0: `json`, `yaml`, `shell`, `aws-secrets`, `gcp-secrets`, `azure-keyvault`, `github-actions`, `docker-compose`, `kubernetes`, `terraform`, `doppler`, `heroku`, `vercel`, `railway`.
 
-No other single tool covers this breadth. Typically you'd write a custom script for each platform. evnx makes the conversion a one-liner.
+Without a tool like this you would write a custom script for each platform. With evnx the conversion is one command.
 
 ### The stack template system
 
-Most env management tools assume you already know what variables you need. evnx's `evnx init` generates a complete, stack-specific `.env` file with the right variables pre-populated for your project type:
+Most env management tools assume you already know what variables you need. `evnx init` writes the template, the `.env` and an `.evnx.toml` contract with the variables your stack needs:
 
 ```bash
 evnx init
-# Prompts for stack selection:
-# Django Secure, FastAPI + Redis, Next.js (T3 Turbo),
-# Node + Firebase, Go Cloud Native, Rust Speedstack,
-# Modern MERN, Laravel V-Stack, Supabase Starter, SEO Content Stack
+# Blank, Blueprint (a ready-made stack) or Architect (build your own)
 ```
 
-For a Next.js project, this generates `NEXT_PUBLIC_*` prefixed variables for client-side config, database connection variables, and authentication secret variables — all with the right naming conventions pre-applied.
+You can also name the pieces directly, for example `evnx init --with nextjs,postgresql,stripe`; `evnx init --list-components` prints every component it accepts.
 
 ### Install evnx
 
@@ -856,7 +846,7 @@ These posts go deeper on specific tools covered here:
 ---
 
 <AuthorNote>
-The incident that started evnx was real. The gap in this landscape is real. I spent several weeks mapping every tool listed here before writing a single line of evnx code, because understanding what already exists is the only way to know what's actually missing. The answer was: there's no language-agnostic CLI that treats .env files as first-class objects worthy of the same tooling we give source code. That's evnx.
+The incident that started evnx was real. The gap in this landscape is real. I spent several weeks mapping every tool listed here before writing a single line of evnx code, because understanding what already exists is the only way to know what's actually missing. The answer, as I saw it then, was: there was no language-agnostic CLI that treats .env files as first-class objects worthy of the same tooling we give source code. That's evnx.
 
 If you find a tool I missed — a language-specific library, a shell extension, an interesting project from any ecosystem — open an issue at [github.com/urwithajit9/evnx](https://github.com/urwithajit9/evnx). This post is meant to stay current.
 </AuthorNote>

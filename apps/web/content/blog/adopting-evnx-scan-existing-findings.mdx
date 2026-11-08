@@ -1,20 +1,16 @@
 ---
 title: "Adopting evnx scan on a Repository That Already Has Findings"
-publishedAt: "2026-11-12"
+publishedAt: "2026-11-08"
 excerpt: "The first scan of a real repository rarely comes back clean. Turning the gate off until someone cleans up means it never gets turned on. evnx 0.13.0 has three tools for this: a baseline, allow markers, and a pre-commit hook that scans only what you stage."
 author: "ajit"
 category: "tutorial"
 tags: ["scan", "secrets", "pre-commit", "baseline", "ci-cd", "evnx"]
 featured: false
-draft: true
+draft: false
 relatedSlugs:
   - "severity-vs-confidence-evnx-scan"
   - "git-hooks-pre-commit-prek-evnx"
 ---
-
-{/* Editor: outputs re-checked with 0.13.0 on 2026-11-08 (released binary, throwaway repo).
-Fake keys are built from parts and masked by evnx. This replaces the planned "Adopting evnx scan on a repository that
-already has findings" post. */}
 
 You add `evnx scan` to CI. The first run reports twelve findings. Some are real, some
 are documentation examples, and one is a test fixture someone committed in 2023. The

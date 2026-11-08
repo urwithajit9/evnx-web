@@ -1,17 +1,16 @@
 ---
 title: "Your AI Coding Agent Now Knows evnx"
-publishedAt: "2026-03-07"
-updatedAt: ""
+publishedAt: "2026-11-08"
+updatedAt: "2026-11-08"
 excerpt: "Install evnx knowledge directly into Claude Code, Cursor, GitHub Copilot, and 30+ other AI coding agents with one command. No more re-explaining flags or pasting docs."
-coverImage: "/blog/covers/ai-agent-skills-evnx.png"
 author: "ajit"
 tags: ["cli", "devops", "secrets", "productivity", "open-source"]
 category: "tutorial"
 readTime: 6
 featured: false
-draft: true
+draft: false
 canonical: ""
-relatedSlugs: ["getting-started-with-evnx", "scan-secrets-before-git-push"]
+relatedSlugs: ["getting-started-npm-evnx-cli-nextjs", "git-hooks-pre-commit-prek-evnx"]
 ---
 
 Every time you start a new project, you explain the same things to your AI agent: how to run `evnx scan`, what flags `evnx convert` takes, which CI/CD snippet to use. Today that stops.
@@ -67,7 +66,7 @@ npm install -g @evnx/cli
 <Tab label="pip">
 
 ```bash
-pip install evnx
+pipx install evnx
 ```
 
 </Tab>
@@ -81,7 +80,7 @@ evnx --version
 ```
 
 <TerminalOutput>
-evnx 0.2.1
+evnx 0.13.0
 </TerminalOutput>
 
 ## Step 2 — Install the skills
@@ -92,27 +91,7 @@ Run this from inside your project directory. The skills CLI auto-detects your ag
 npx skills add urwithajit9/agent-skills
 ```
 
-The first time you run this, `npx` prompts you to install the `skills` package:
-
-<TerminalOutput>
-███████╗██╗  ██╗██╗██╗     ██╗     ███████╗
-██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝
-███████╗█████╔╝ ██║██║     ██║     ███████╗
-╚════██║██╔═██╗ ██║██║     ██║     ╚════██║
-███████║██║  ██╗██║███████╗███████╗███████║
-╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝
-
-┌   skills 
-│
-◇  Source: https://github.com/urwithajit9/agent-skills.git
-│
-◇  Repository cloned
-│
-◇  Found 1 skill
-│
-●  Skill: dotenv-best-practices
-
-</TerminalOutput>
+The first time you run this, `npx` prompts you to install the `skills` package. It then clones the repository, lists the skills it found, and installs them into your agent's folder.
 
 To install one skill at a time:
 
@@ -173,7 +152,7 @@ Before the `evnx-cli` skill, asking your agent to set up secret scanning in a Gi
   run: evnx scan --format sarif > scan-results.sarif
 
 - name: Upload to GitHub Security tab
-  uses: github/codeql-action/upload-sarif@v2
+  uses: github/codeql-action/upload-sarif@v4
   if: always()
   with:
     sarif_file: scan-results.sarif
@@ -184,7 +163,7 @@ Correct flags. Correct SARIF integration. No edits needed.
 The `dotenv-best-practices` skill changes how your agent handles `.env` setup questions. Instead of generic advice, it applies the file hierarchy, the gitignore pattern, the startup validation pattern for your specific stack, and the boolean parsing fix for Python and TypeScript — without being prompted.
 
 <Callout type="info" title="Compatible agents">
-  Agent Skills work with Claude Code, Cursor, GitHub Copilot, OpenAI Codex, Gemini, Windsurf, Cline, Roo, Goose, Kiro, Trae, and any other agent that implements the Agent Skills standard.
+  Agent Skills work with Claude Code, Cursor, GitHub Copilot, OpenAI Codex, Windsurf, Cline, Roo, Goose, and other agents that implements the Agent Skills standard.
 </Callout>
 
 ## What's in the skills repo

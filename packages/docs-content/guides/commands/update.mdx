@@ -3,13 +3,13 @@ section: "commands"
 order: 18
 title: "evnx update"
 publishedAt: "2026-09-29"
-updatedAt: "2026-11-01"
+updatedAt: "2026-11-08"
 excerpt: "Find out whether a newer evnx exists, and get the upgrade command for the way you installed it."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["update", "upgrade", "install", "version", "cli"]
 commands: ["update"]
-evnxVersion: "0.10.7"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -282,7 +282,7 @@ $ evnx update --list
 
   ▶ 0.10.0     /home/you/.npm-global/bin/evnx  (npm)
       → /home/you/.npm-global/lib/node_modules/@evnx/cli/bin/evnx
-    0.12.0     /home/you/.cargo/bin/evnx  (cargo, this one)
+    0.13.0     /home/you/.cargo/bin/evnx  (cargo, this one)
 
   ▶ is the copy that runs when you type `evnx`.
   ! the copy that runs is older than /home/you/.cargo/bin/evnx.
@@ -330,7 +330,7 @@ $ evnx update --list --json
       "resolved": "/home/you/.cargo/bin/evnx",
       "runs": false,
       "this": true,
-      "version": "0.12.0",
+      "version": "0.13.0",
       "version_from": "self"
     }
   ],
