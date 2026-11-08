@@ -1,0 +1,196 @@
+---
+title: "Agent skills for evnx"
+section: integrations
+order: 5
+publishedAt: "2026-03-07"
+updatedAt: "2026-11-08"
+excerpt: "Install the evnx-cli and dotenv-best-practices agent skills so your AI coding agent knows how to use evnx, checks the installed version first, and follows .env best practices."
+difficulty: beginner
+timeToComplete: "10 minutes"
+tags: ["ai-agents", "agent-skills", "claude-code", "cursor", "productivity", "open-source"]
+commands: ["commands"]
+evnxVersion: "0.13.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+An **agent skill** is a folder with a `SKILL.md` file that an AI coding agent loads
+when a task matches the skill's description. evnx publishes two of them in
+[urwithajit9/agent-skills](https://github.com/urwithajit9/agent-skills). They work with
+agents that support the [Agent Skills](https://agentskills.io) standard.
+
+This page covers installing them, committing the lock file, when each one activates,
+how they cope with different evnx versions, and what to check when they do not.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+For keeping `.env` values out of an agent's context in the first place, read
+[Using evnx with AI coding agents](/guides/use-cases/ai-coding-agents). Skills teach an
+agent how to use evnx; they do not stop it from reading a file.
+
+## The two skills
+
+| Skill | Purpose | Needs evnx installed? |
+|---|---|---|
+| `evnx-cli` | How to use the evnx CLI: its commands, CI/CD recipes, conversion formats, migration workflows. | Yes |
+| `dotenv-best-practices` | `.env` file format, security patterns, and per-stack guidance (Django, FastAPI, Next.js, Vite, Rust, Docker). Not tied to any tool. | No |
+
+Each skill has a `SKILL.md` plus `references/` files that the agent reads only when it
+needs that depth.
+
+## Install
+
+From your project directory:
+
+```bash
+npx skills add urwithajit9/agent-skills
+```
+
+The first run asks to install the `skills` package from npm. The CLI detects your agent
+and puts the skills where that agent reads them.
+
+To install one skill only:
+
+```bash
+# .env best practices (works without evnx)
+npx skills add urwithajit9/agent-skills/tree/main/skills/dotenv-best-practices
+
+# evnx CLI workflows
+npx skills add urwithajit9/agent-skills/tree/main/skills/evnx-cli
+```
+
+To see what the repository offers without installing, add `--list`:
+
+```bash
+npx skills add urwithajit9/agent-skills --list
+```
+
+## Commit the lock file
+
+The skills CLI records what it installed in `skills-lock.json`. Commit that file so
+teammates get the same skills. The agent's own folders (`.claude/`, `.cursor/`,
+`.agents/` and similar) are per developer; check `git status` after installing and add
+any that appear to `.gitignore`.
+
+```bash
+git add skills-lock.json .gitignore
+git commit -m "chore: add evnx agent skills"
+```
+
+A teammate then runs `npx skills add urwithajit9/agent-skills` in the project.
+
+## How activation works
+
+You do not invoke a skill. The agent reads each skill's `description`, and loads the
+skill when your request matches it.
+
+- `dotenv-best-practices` matches requests about `.env` files, environment variables,
+  `.env.example`, a variable that is `undefined` at runtime, `NEXT_PUBLIC_` or `VITE_`
+  prefixes, or secrets in CI.
+- `evnx-cli` matches requests to validate, scan, diff, convert, sync or migrate env
+  files, to add evnx to CI, or anything that mentions `evnx`.
+
+If the agent does not pick a skill up, name the task in your prompt: "check my `.env`
+with evnx".
+
+## Version-specific behaviour
+
+evnx changes between releases: commands are added, flags are renamed, defaults move. A
+skill is text the agent read at install time, so it can be older than the evnx binary on
+your machine. The `evnx-cli` skill is written so the agent does not rely on that text
+alone. It tells the agent to:
+
+1. Run `evnx --version` before giving version-specific instructions.
+2. Trust `evnx <command> --help` and `evnx commands --json` over its memory.
+3. Consult the evnx [CHANGELOG](https://github.com/urwithajit9/evnx/blob/main/CHANGELOG.md)
+   for what changed between versions.
+
+You can run the same checks yourself.
+
+### Check the installed version
+
+```bash
+evnx --version
+```
+
+```text
+evnx 0.13.0
+```
+
+### Check what this build can do
+
+Some commands (`cloud`, `migrate`, `backup`) are optional features, so two builds of
+the same version can differ. `evnx commands` lists what your binary has:
+
+```bash
+evnx commands
+```
+
+```text
+  evnx 0.13.0
+  built with: net, migrate, backup, cloud
+```
+
+(That is the top of the output; the rest is the command list.) For tooling, `--json`
+gives the whole command tree with a `schema` field. The fields used below are
+`evnx_version`, `features`, and per command `path`, `name`, `about` and `args[].long`:
+
+```bash
+evnx commands --json | jq -c '{schema, evnx_version, features}'
+```
+
+```text
+{"schema":1,"evnx_version":"0.13.0","features":["net","migrate","backup","cloud"]}
+```
+
+Does this build have a flag?
+
+```bash
+evnx commands --json \
+  | jq -r '.commands[] | select(.path == ["scan"]) | [.args[] | select(.long != null) | "--" + .long] | join(" ")'
+```
+
+```text
+--exclude --max-file-size --extensions --pattern --ignore-placeholders --no-ignore-placeholders --severity --rules --baseline --update-baseline --confidence --format --exit-zero --include-ignored --staged --verbose --quiet --no-color
+```
+
+<Callout type="info" title="If the skill and the binary disagree">
+  The binary is right. Ask the agent to run `evnx <command> --help` and follow that.
+  Then update the skill (below) so it stops disagreeing.
+</Callout>
+
+### Keep the skill current
+
+```bash
+npx skills check
+```
+
+reports whether installed skills have updates. To pull the latest version of the
+skills, add them again:
+
+```bash
+npx skills add urwithajit9/agent-skills
+```
+
+Commit the changed `skills-lock.json`. Updating the evnx binary does not update the
+skill, and the reverse: after upgrading evnx, re-add the skill if its instructions look
+behind.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| Only one skill shows up | Run `npx skills add urwithajit9/agent-skills --list`. If a skill is missing, install it by its path (see Install) and report it in the skills repository. |
+| Skill installed, agent does not use it | Name the task in the prompt (`.env`, `evnx`, "validate"). Restart the agent session so it re-reads its skills. |
+| Agent suggests a flag or command evnx does not have | Run `evnx --version` and `evnx <command> --help`. The skill may be older than your binary; re-add it. |
+| `evnx: command not found` | The `evnx-cli` skill needs the binary. See [Installation](/guides/getting-started/installation). |
+| Agent config folders appear in `git status` | Add them to `.gitignore`; commit only `skills-lock.json`. |
+
+## Related
+
+- [Using evnx with AI coding agents](/guides/use-cases/ai-coding-agents) — keep `.env` out of the agent's context
+- [Installation](/guides/getting-started/installation)
+- [Agent skills repository](https://github.com/urwithajit9/agent-skills) — source and issues
