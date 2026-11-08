@@ -3,13 +3,13 @@ title: "evnx validate"
 section: commands
 order: 4
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-01"
+updatedAt: "2026-11-08"
 excerpt: "Reference for evnx validate: check .env against .env.example and the [vars] contract, catch missing, placeholder, weak and misformatted values, and fix what can be fixed."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
-commands: ["add custom", "doctor", "parse", "spec init", "validate"]
-evnxVersion: "0.10.8"
+commands: ["add custom", "convert", "doctor", "parse", "run", "spec init", "validate"]
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -130,7 +130,7 @@ see [Optional variables](#optional-variables).
 
 ```console
 $ evnx validate --ignore boolean_traps
-Error: unknown issue type 'boolean_traps' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked, reader_mismatch
+Error: unknown issue type 'boolean_traps' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked, reader_mismatch, lone_carriage_return, nul_byte, forward_reference, not_shell_name
 
 No verdict: evnx did not finish. This is not a clean result.
 ```
@@ -232,6 +232,50 @@ These are the issue types — the names `--ignore` takes and the `type` field in
 | `env_not_ignored` | warning | **v0.10.8+** — the env file is not covered by `.gitignore` | — |
 | `env_tracked` | error | **v0.10.8+** — the env file is already tracked by git | — |
 | `reader_mismatch` | warning | **v0.11.0+** — a line a program this project uses reads differently from evnx. See [below](#readers-that-disagree) | — never: it would choose a reader for you |
+| `forward_reference` | warning | **v0.13.0+** — a bare `$NAME` (no braces) names a variable assigned further down. See [Order and names](#order-and-names) | — |
+| `not_shell_name` | warning | **v0.13.0+** — a key a shell cannot `export` (it holds `.`, `-`, `[` or `]`, or starts with a digit). See [Order and names](#order-and-names) | — |
+
+`expansion_order`, the warning 0.12 gave for a line whose value changes under the
+0.13.0 expansion rules, is retired (**v0.13.0+**). `--ignore expansion_order` is still
+accepted and does nothing, so a CI job that names it keeps working.
+
+### Order and names
+
+**v0.13.0+** — Values expand from the top of the file down, as Docker Compose does, and
+keys may hold `.`, `-`, `[`, `]`, a leading digit and non-ASCII letters (see the
+[`.env` syntax reference](/guides/reference/env-file-syntax)). Two warnings follow.
+
+```console
+$ evnx validate
+  evnx validate  Check environment configuration
+
+  !  A shell cannot export spring.datasource.url (line 3): Docker Compose, `evnx run` and Kubernetes pass it to a process, but `source`, `export` and `evnx convert --to shell` cannot
+     ./.env:3
+     →  Keep it if only a process reads it. If a shell must, rename it with letters, digits and _, not starting with a digit
+
+  !  $D on line 1 names D, which is assigned below it on line 2. evnx expands top to bottom, so it keeps the text $D; Docker Compose reads it as empty
+     ./.env:1
+     →  Move D above line 1, or write ${D} so a missing value is an error
+
+  4 warnings
+  Docs: https://docs.evnx.dev/cli/commands/validate
+```
+
+(Two more `not_shell_name` warnings, for `my-key` and `1FOO`, are left out above.)
+`not_shell_name` only matters if a shell reads the file: `evnx run`, Docker Compose and
+Kubernetes pass the name through unchanged. `forward_reference` is a warning for a bare
+`$D` only. A forward `${D}` is not a warning but an error that stops the parse, which
+`validate` reports as exit `2`:
+
+```console
+$ evnx validate
+Error: Failed to parse ./.env: Undefined variable at line 1: ${B} is assigned below it, on line 2. evnx expands top to bottom, as Docker Compose does: move that line above line 1
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+The duplicate-key warning no longer advises removing an earlier assignment that a
+line in between reads.
 
 **v0.11.0+** — "Run with --fix to auto-correct common issues" appears under *Next
 steps* only when a finding shown is one `--fix` can repair. It used to appear for every

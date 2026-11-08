@@ -47,7 +47,7 @@
       "aliases": [
         "rm"
       ],
-      "guide": null,
+      "guide": "/guides/commands/remove",
       "guide_draft": false,
       "subcommands": []
     },
@@ -508,20 +508,9 @@
       "subcommands": []
     }
   ],
-  "undocumented": [
-    "remove"
-  ],
+  "undocumented": [],
   "unshown_subcommands": [
-    "remove",
-    "scan hook install",
-    "scan hook status",
-    "scan hook uninstall",
-    "scan rules add",
-    "scan rules list",
-    "scan rules new",
-    "scan rules remove",
-    "scan rules test",
-    "scan rules update"
+    "scan rules new"
   ],
   "orphan_guides": []
 }

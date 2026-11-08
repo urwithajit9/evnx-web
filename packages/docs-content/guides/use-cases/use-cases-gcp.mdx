@@ -3,13 +3,13 @@ section: "use-cases"
 order: 3
 title: "Migrate to GCP Secret Manager"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-20"
+updatedAt: "2026-11-08"
 excerpt: "Generate a gcloud script that stores each .env variable as its own secret in Google Cloud Secret Manager, creating it or adding a new version."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "gcp", "secret-manager", "gcloud"]
-commands: ["convert", "migrate", "validate"]
-evnxVersion: "0.10.10"
+commands: ["cloud export", "convert", "migrate", "validate"]
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -51,14 +51,14 @@ upsert_secret() {
   fi
 }
 
-printf '%s' 'postgres://user:pass@host:5432/db' | upsert_secret DATABASE_URL
-printf '%s' 'sk_test_example' | upsert_secret STRIPE_SECRET_KEY
-printf '%s' 'redis://localhost:6379/0' | upsert_secret REDIS_URL
+printf '%s' 'postgres://user:pass@host:5432/db' | upsert_secret database-url
+printf '%s' 'sk_test_example' | upsert_secret stripe-secret-key
+printf '%s' 'redis://localhost:6379/0' | upsert_secret redis-url
 ```
 
 - `upsert_secret` asks `gcloud secrets describe` whether the secret exists. If it does, it runs `gcloud secrets versions add`; if not, `gcloud secrets create`. Every `gcloud` call names the project.
 - Each value is written into the script in single quotes, exactly as it is in your `.env`, and reaches `gcloud` on stdin (`--data-file=-`). `printf` is a shell builtin, so the value is not in any process's argument list.
-- Names stay exactly as they are in the `.env`: `DATABASE_URL` is stored as `DATABASE_URL`.
+- **v0.13.0+** Names are lowercased with `-` for `_`, as `evnx convert --to gcp-secrets` and `evnx cloud export` write them: `DATABASE_URL` is stored as `database-url`.
 - There is no `--replication-policy` flag. `gcloud secrets create` uses an automatic replication policy when none is given — see [Replication policy](#replication-policy).
 
 <Callout type="warning">
@@ -69,8 +69,8 @@ printf '%s' 'redis://localhost:6379/0' | upsert_secret REDIS_URL
   <strong>Changed in 0.10.10.</strong> Earlier versions printed <code>{'echo -n "${DATABASE_URL}" | gcloud secrets create DATABASE_URL --data-file=- --replication-policy=automatic'}</code>. That took the value from a shell variable of the same name — usually unset, so the secret was created empty — failed on a second run because the secret already existed, and left out <code>--project</code>. If you kept a script made by an older version, generate it again.
 </Callout>
 
-<Callout type="info">
-  <strong>evnx convert prints the same script with different names.</strong> <code>evnx convert --to gcp-secrets --project my-gcp-project {">"} upload.sh</code> writes the same <code>upsert_secret</code> script, but names secrets in lowercase with <code>-</code> (<code>DATABASE_URL</code> becomes <code>database-url</code>), where <code>migrate</code> keeps the names as they are. Pick one, or the two will create differently named secrets.
+<Callout type="warning">
+  <strong>Changed in 0.13.0: secret names.</strong> Up to 0.12, <code>migrate</code> kept names as they were (<code>DATABASE_URL</code>) while <code>convert</code> lowercased them (<code>database-url</code>), so the two created differently named secrets. Both now use the lowercase form. If you migrated with 0.12, running the new script creates new secrets beside the old upper-case ones. Point your application at the new names, then delete the old secrets with <code>gcloud secrets delete DATABASE_URL --project=my-gcp-project</code>, one per name.
 </Callout>
 
 ---
@@ -190,7 +190,7 @@ Use `--print-only` whenever the output goes to a file or a shell. Without it, st
 Each secret must be granted to the service account your application runs as:
 
 ```bash
-gcloud secrets add-iam-policy-binding DATABASE_URL \
+gcloud secrets add-iam-policy-binding database-url \
   --project=my-gcp-project \
   --member="serviceAccount:myapp@my-gcp-project.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
@@ -236,7 +236,7 @@ GCP-native applications can use the Secret Manager client library:
 from google.cloud import secretmanager
 
 client = secretmanager.SecretManagerServiceClient()
-name = "projects/PROJECT_ID/secrets/DATABASE_URL/versions/latest"
+name = "projects/PROJECT_ID/secrets/database-url/versions/latest"
 response = client.access_secret_version(request={"name": name})
 DATABASE_URL = response.payload.data.decode("UTF-8")
 ```

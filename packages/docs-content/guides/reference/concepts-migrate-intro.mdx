@@ -3,13 +3,13 @@ section: "concepts"
 order: 1
 title: "How evnx migrate works"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-20"
+updatedAt: "2026-11-08"
 excerpt: "Understand the evnx migration pipeline: source loading, filtering, key transforms, and how each destination is handled."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["migrate", "concepts", "secrets", "pipeline"]
-commands: ["backup", "convert", "migrate", "validate"]
-evnxVersion: "0.10.10"
+commands: ["backup", "convert", "migrate", "scan", "validate"]
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -171,9 +171,9 @@ The specific command format per destination:
 | AWS Secrets Manager | `aws secretsmanager create-secret` and `update-secret`, each with every secret in one JSON payload; run the one that applies |
 | Doppler | One `doppler secrets set KEY='value'` per secret |
 | Infisical | One `infisical secrets set KEY='value'` per secret. Empty values, and values starting with `@`, are refused |
-| GCP Secret Manager | Needs `--project`. A script that creates each secret or adds a version when it exists: `printf '%s' 'VALUE' \| upsert_secret KEY` |
+| GCP Secret Manager | Needs `--project`. A script that creates each secret or adds a version when it exists: `printf '%s' 'VALUE' \| upsert_secret key-name` (**v0.13.0+** names are lowercased with `-` for `_`, as `convert` writes them) |
 | Azure Key Vault | One `az keyvault secret set` per secret (keys converted `_` → `-`) |
-| Vercel | One `printf '%s' 'VALUE' \| vercel env add KEY production --force --yes` per secret; `--project` when you pass `--vercel-project` |
+| Vercel | One `printf '%s' 'VALUE' \| vercel env add KEY production --force --yes` per secret; `--project` when you pass `--vercel-project`; **v0.13.0+** `--sensitive` on variables that look secret |
 | Heroku | Single bulk `heroku config:set --app APP KEY='v' KEY2='v2' …` (one dyno restart) |
 | Railway | Single `railway variable set KEY='v' KEY2='v2' …`; `--project` and `--environment` when you pass `--railway-project` and `--railway-environment` |
 
@@ -319,4 +319,8 @@ rm .env
 | AWS | Generates JSON or CLI snippets | Prints `aws secretsmanager` commands with full JSON |
 | Interaction | No prompts | In a terminal, asks for a missing flag; GitHub asks before uploading and about existing secrets |
 
-For GCP, `evnx convert --to gcp-secrets --project my-gcp-project > upload.sh` and `evnx migrate --to gcp --project my-gcp-project --print-only > upload.sh` print the same `upsert_secret` script (convert adds a header). The secret names differ: `convert` lowercases them with `-` for `_` (`database-url`), `migrate` keeps them as they are (`DATABASE_URL`).
+For GCP, `evnx convert --to gcp-secrets --project my-gcp-project > upload.sh` and `evnx migrate --to gcp --project my-gcp-project --print-only > upload.sh` print the same `upsert_secret` script (convert adds a header). **v0.13.0+** — the secret names now agree: both lowercase them with `-` for `_` (`database-url`), from one shared function.
+
+<Callout type="warning">
+⚠️ **Projects migrated with 0.12** got `DATABASE_URL` (the `.env` name). Running `migrate` with 0.13.0 creates `database-url` **beside** it; the old upper-case secret stays. Point the app at the new names, then delete the old ones (`gcloud secrets delete DATABASE_URL --project=my-gcp-project`).
+</Callout>

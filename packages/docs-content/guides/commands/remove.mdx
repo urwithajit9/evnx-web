@@ -1,0 +1,257 @@
+---
+section: "commands"
+order: 3
+title: "evnx remove"
+publishedAt: "2026-11-08"
+updatedAt: "2026-11-08"
+excerpt: "Reference for evnx remove: take a variable out of .env, and optionally the template and the contract, with a preview, a backup and a clear exit code."
+difficulty: "beginner"
+timeToComplete: "3 minutes"
+tags: ["remove", "reference", "cli", "environment-variables"]
+commands: ["add", "remove"]
+evnxVersion: "0.13.0"
+prerequisites:
+  - getting-started/installation
+  - commands/add
+draft: false
+---
+
+# evnx remove — Command Reference
+
+**v0.13.0+** — `evnx remove` (alias `rm`) takes a variable out of your project safely.
+Until now a variable could only be removed by hand, from up to four places, and a
+partial removal passed `validate` and `spec check` without a word.
+
+By default only the env file changes. The run then lists where the name is still
+present, with the flag that clears each place.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+  <Prerequisite href="/guides/commands/add">Add variables with evnx add</Prerequisite>
+</Prerequisites>
+
+---
+
+## Command signature
+
+```bash
+evnx remove <NAME>... [OPTIONS]
+evnx rm <NAME>... [OPTIONS]
+```
+
+`NAME` is an exact name or a quoted glob (`'TEST_*'`). Names are case-sensitive.
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--path`, `-p` | Project folder (default `.`) |
+| `--env-name <NAME>` | Remove from `.env.<NAME>` instead of `.env`. Defaults to `[defaults] env_name` |
+| `--template` | Also remove from the template (`.env.example`, or `[defaults] example`) |
+| `--contract` | Also remove the `[vars.NAME]` declaration from `.evnx.toml` |
+| `--all` | Every environment file, the template and the contract |
+| `--dry-run` | Show what would be removed; write nothing. Needs no terminal |
+| `--yes`, `-y` | Remove without asking |
+| `--ignore-missing` | A name found nowhere is not an error (for scripts that run twice) |
+| `--no-backup` | Keep no `.bak` copy of the env files. Needs `--yes`; refused for a file git tracks |
+| `--json` | Print the result as one JSON document. Needs `--yes` or `--dry-run` |
+| `--verbose`, `-v` | Enable verbose output |
+| `--quiet`, `-q` | Print nothing on success. Findings, warnings, errors and requested data still print |
+| `--no-color` | Plain output |
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | removed, or a dry run, or nothing to do with `--ignore-missing` |
+| `2` | could not run or refused: a name that is not there, a file it cannot read, a malformed file, or no terminal to ask on |
+| `4` | you answered no to the confirmation |
+
+`4` is the same code `restore`, `cloud pull` and (since 0.13.0) `evnx add` use for a
+declined confirmation.
+
+---
+
+## Examples
+
+The examples use a project whose `.env`, `.env.example` and `.evnx.toml` all name
+`OLD_TOKEN`.
+
+### Preview first
+
+```console
+$ evnx remove OLD_TOKEN --dry-run
+  config    .evnx.toml
+  file      /tmp/rm1/.env (default)
+Dry run: nothing was written.
+  ./.env             would remove OLD_TOKEN (line 3)
+  still present in:
+    ./.env.example     OLD_TOKEN        add --template
+    .evnx.toml [vars]  OLD_TOKEN        add --contract
+```
+
+The `file` line says which file was resolved and where the choice came from
+(`default`, `--env-name`, or `[defaults] env_name`). The last column of the
+"still present" list is the flag that clears that place.
+
+### Every place at once
+
+```console
+$ evnx remove OLD_TOKEN --all --dry-run
+  config    .evnx.toml
+  file      /tmp/rm1/.env (default)
+Dry run: nothing was written.
+  ./.env             would remove OLD_TOKEN (line 3)
+  ./.env.example     would remove OLD_TOKEN (line 3)
+  .evnx.toml         would remove [vars.OLD_TOKEN]
+```
+
+After `--all`, `validate`, `spec check`, `sync --check` and `diff` all agree.
+
+### Remove, with a backup
+
+```console
+$ evnx remove OLD_TOKEN --yes
+  config    .evnx.toml
+  file      /tmp/rm1/.env (default)
+✓ ./.env             removed OLD_TOKEN (line 3)   backup ./.env.bak
+  still present in:
+    ./.env.example     OLD_TOKEN        add --template
+    .evnx.toml [vars]  OLD_TOKEN        add --contract
+· The value still exists in git history, older vault versions and any .bak copy. Rotate it at the provider if it was ever real.
+```
+
+<Callout type="warning">
+**Removing is not rotating.** The value stays in git history, in older vault
+versions and in the `.bak` copy. If it was ever a real secret, revoke it at the
+provider. The `.bak` copy is a plain copy of the env file: delete it when you no
+longer need it, and keep it out of git.
+</Callout>
+
+### Answering no
+
+In a terminal, `remove` shows the plan and asks. Answering `n` (or pressing Esc)
+writes nothing and exits `4`:
+
+```console
+$ evnx remove OLD_TOKEN
+  file      /tmp/rm2/.env (default)
+  ./.env             would remove OLD_TOKEN (line 3)
+Remove OLD_TOKEN from 1 place? [y/N] n
+  Cancelled; nothing was changed.
+$ echo $?
+4
+```
+
+Without a terminal and without `--yes`, `remove` stops instead of guessing:
+
+```console
+$ evnx remove OLD_TOKEN </dev/null
+  config    .evnx.toml
+  file      /tmp/rm1/.env (default)
+  ./.env             would remove OLD_TOKEN (line 3)
+  still present in:
+    ./.env.example     OLD_TOKEN        add --template
+    .evnx.toml [vars]  OLD_TOKEN        add --contract
+Error: there is no terminal to confirm with.
+
+Add --yes (-y) to go ahead without being asked:
+  evnx remove OLD_TOKEN --yes
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+That exits `2`. In a script, pass `--yes`, or run `--dry-run` first.
+
+### A name that is not there
+
+```console
+$ evnx remove NOPE --yes
+  config    .evnx.toml
+Error: NOPE is not in ./.env.
+Pass --ignore-missing to treat a missing name as already removed.
+
+No verdict: evnx did not finish. This is not a clean result.
+```
+
+Exit `2`. With `--ignore-missing` the run prints `Nothing to remove.` and exits `0`,
+so a script can run twice.
+
+### A glob, and JSON
+
+```console
+$ evnx rm 'TEST_*' --yes --json
+{
+  "backups": [
+    "./.env.bak.2"
+  ],
+  "dry_run": false,
+  "missing": [],
+  "removed": [
+    {
+      "file": "./.env",
+      "lines": [
+        3
+      ],
+      "name": "TEST_A"
+    },
+    {
+      "file": "./.env",
+      "lines": [
+        4
+      ],
+      "name": "TEST_B"
+    }
+  ],
+  "resolved": {
+    "env_file": "/tmp/rm1/.env",
+    "source": "default"
+  },
+  "schema_version": 1,
+  "still_present": [
+    {
+      "flag": "--template",
+      "name": "TEST_A",
+      "where": "./.env.example"
+    },
+    {
+      "flag": "--template",
+      "name": "TEST_B",
+      "where": "./.env.example"
+    }
+  ]
+}
+```
+
+Quote the glob so your shell does not expand it. A glob that matches every
+variable in a file needs `--yes`, and an argument that is the name of an existing
+file is refused as a shell-expanded glob. A second backup in the same folder is
+named `.env.bak.2`.
+
+No value is printed in any mode, including `--json`.
+
+---
+
+## What `remove` does to the file
+
+- Entries are found with evnx's own parser, so multiline values, `export`, CRLF,
+  a BOM and a missing final newline are handled. Every byte that is not part of a
+  removed entry stays as it was.
+- A name assigned more than once loses every assignment, each line reported.
+- The one-line description that `add` and `init` write above a variable goes with
+  it. Group headers and longer comment blocks stay.
+- Every file is planned and checked before any is written. A file that changed
+  while the command ran is not overwritten, and a failure part-way puts back the
+  files already changed and names them.
+- The env files are backed up as `.bak` first. `--no-backup` is refused for a file
+  git tracks.
+
+---
+
+## See also
+
+- [evnx add](/guides/commands/add) — the other direction
+- [evnx sync](/guides/commands/sync) — `sync` only adds; its hint now names `evnx remove NAME --template`
+- [evnx spec](/guides/commands/spec) — the `[vars]` contract that `--contract` edits

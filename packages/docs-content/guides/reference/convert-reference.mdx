@@ -3,13 +3,13 @@ section: "reference"
 order: 1
 title: "Convert reference"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-08"
 excerpt: "Deep reference for evnx convert — the processing pipeline, every format's output from a real run, what each target accepts, and troubleshooting."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["convert", "reference", "formats", "troubleshooting", "env"]
 commands: ["convert", "init", "migrate"]
-evnxVersion: "0.10.9"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - commands/convert
@@ -47,6 +47,9 @@ Parse                              (order of the file is kept)
 --prefix, then --transform         (rename every key)
     │
     ▼
+the format's name check            (v0.13.0+: a name the format cannot hold is refused, exit 2)
+    │
+    ▼
 the format's own naming            (gcp: lowercase, _ → -; azure: _ → -; terraform: lowercase)
     │
     ▼
@@ -67,6 +70,10 @@ the format's layout                → stdout, or --output FILE
   `--transform camelCase` becomes `appPort`.
 - The collision check sees the final names, including the format's own renaming, and
   for Azure Key Vault and GitHub it ignores case as they do.
+- **v0.13.0+** — The name check sees the names after `--prefix` and `--transform`
+  and before the format renames them. A name the format cannot hold stops the run by
+  name, with nothing written; `--exclude` leaves it out. See
+  [Names a format cannot hold](#names-a-format-cannot-hold).
 - If nothing is left after the filters, evnx stops with exit `2` unless `--allow-empty`.
 
 ---
@@ -192,6 +199,11 @@ printf '%s' 'false' | upsert_secret app-debug
 One secret per variable. Each value reaches `gcloud` on stdin (`--data-file=-`), byte
 for byte — `printf '%s'` adds no newline. Names are lowercased with `-` for `_`; GCP
 also allows uppercase and `_`, but these are the names every earlier script created.
+
+**v0.13.0+** — `evnx migrate --to gcp-secret-manager` and `evnx cloud export --to
+gcp-secrets` take the name from the same function, so all three commands name
+`DATABASE_URL` as `database-url`. `A_B` and `a_b` (both `a-b`) are refused by name
+unless you pass `--allow-collisions`.
 
 ---
 
@@ -433,10 +445,9 @@ evnx convert --to vercel
   "DATABASE_URL": {
     "target": [
       "production",
-      "preview",
-      "development"
+      "preview"
     ],
-    "type": "plain",
+    "type": "sensitive",
     "value": "postgres://user:pass@localhost:5432/mydb"
   },
   "APP_PORT": {
@@ -463,10 +474,16 @@ evnx convert --to vercel
 stderr says:
 
 ```text
+! 1 variable written as type "sensitive" and not set for development: Vercel does not allow a Sensitive variable there.
 ! vercel output is experimental: Vercel's API takes {key, value, type, target} objects, not this map.
 ```
 
----
+**v0.13.0+** — a variable whose name or value looks secret (`DB_PASSWORD`, a token,
+a URL with a password such as `DATABASE_URL` above) is written `"type": "sensitive"`
+with `"target": ["production", "preview"]`. Vercel's API rejects a Sensitive variable
+in `development`, so it is not set there, and the first stderr line says how many.
+Other variables stay `"plain"` for all three targets. Before 0.13.0 every variable was
+`"plain"`.
 
 ### `railway` — experimental
 
@@ -489,6 +506,35 @@ The same bytes as `json`. stderr says:
 ```
 
 ---
+
+## Names a format cannot hold
+
+**v0.13.0+** — a `.env` key may hold `.`, `-`, `[`, `]`, a leading digit and non-ASCII
+letters. A format that cannot hold the name refuses it, names it, and writes nothing
+(exit `2`):
+
+```text
+Error: shell cannot hold these names: names there are letters, digits and _, not starting with a digit.
+  spring.datasource.url
+  my-key
+
+Nothing was written. Rename them in the env file, or leave them out with --exclude.
+```
+
+```text
+Error: terraform cannot hold this name: names there are ASCII letters, digits, _ and -, starting with a letter or _.
+  spring.datasource.url
+```
+
+| Format | Accepts |
+|--------|---------|
+| `shell`, `github-actions`, `vercel`, `heroku`, `doppler`, `railway` | letters, digits and `_`, not starting with a digit |
+| `kubernetes` | ASCII letters, digits, `_`, `.` and `-` |
+| `terraform` | ASCII letters, digits, `_` and `-`, starting with a letter or `_` |
+| `gcp-secrets`, `azure-keyvault` | ASCII letters, digits, `_` and `-` |
+| `json`, `yaml`, `docker-compose`, `aws-secrets` | any name the parser reads |
+
+Every name evnx read before 0.13.0 still passes.
 
 ## Environment variables
 

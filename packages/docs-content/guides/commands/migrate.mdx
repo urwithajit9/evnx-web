@@ -3,13 +3,13 @@ section: "commands"
 order: 6
 title: "evnx migrate"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-08"
 excerpt: "Generate the commands that move your .env into a cloud secret manager. evnx writes them out; you run them. GitHub Actions is the one destination it uploads to directly."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["migrate", "reference", "cli", "secrets", "cloud"]
 commands: ["cloud run", "convert", "migrate", "scan", "validate"]
-evnxVersion: "0.10.10"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -146,6 +146,23 @@ doppler, infisical and railway refused to print without it.)
 The examples below use `--print-only`, which writes the commands and nothing
 else; without it the same commands appear between status lines and a summary.
 
+### Names a destination cannot hold
+
+**v0.13.0+** — `.env` keys may hold `.`, `-`, `[`, `]`, a leading digit and non-ASCII
+letters. A destination that cannot hold a name refuses it by name before anything is
+printed or sent (exit `2`); `--exclude` leaves it out:
+
+```text
+Error: Vercel cannot hold this name: names there are letters, digits and _, not starting with a digit.
+  my-key
+
+Nothing was printed or sent. Rename it in the env file, or leave it out with --exclude.
+```
+
+`github-actions`, `vercel`, `heroku`, `doppler`, `railway` and `infisical` take letters,
+digits and `_`; GCP and Azure also take `-`. AWS Secrets Manager takes any name evnx
+reads. The rules match [`convert`](/guides/commands/convert#names-a-target-cannot-hold).
+
 ### `aws-secrets-manager`
 
 All variables go into **one** secret as a JSON document — the Secrets Manager
@@ -196,13 +213,29 @@ upsert_secret() {
   fi
 }
 
-printf '%s' 'postgres://user:pw@db/app' | upsert_secret DATABASE_URL
-printf '%s' 'sk_live_abc123' | upsert_secret API_KEY
+printf '%s' 'postgres://user:pw@db/app' | upsert_secret database-url
+printf '%s' '3000' | upsert_secret app-port
+printf '%s' 'example-token' | upsert_secret api-token
 ```
 
-Each value reaches `gcloud` on stdin, exactly as written. Names stay as they are
-in your `.env`; [`evnx convert --to gcp-secrets`](/guides/commands/convert) prints
-the same script but lowercases names and turns `_` into `-`.
+Each value reaches `gcloud` on stdin, exactly as written. **v0.13.0+** — names are
+lowercased with `_` written as `-` (`DATABASE_URL` → `database-url`), the same rule
+[`evnx convert --to gcp-secrets`](/guides/commands/convert) and `evnx cloud export --to
+gcp-secrets` use. `A_B` and `a_b` becoming one `a-b` is refused by name, as in
+`convert`; `--allow-collisions` keeps the last value.
+
+<Callout type="warning">
+⚠️ **Changed in 0.13.0: GCP secrets are named `db-url`, where 0.12 created `DB_URL`.**
+`migrate` used to keep the `.env` name while `convert` lowercased it, so the two
+commands named the same variable differently. A project migrated with 0.12 therefore
+gets **new** secrets beside the old ones: `DB_URL` stays, `db-url` is added. To clean up:
+
+1. Point the app at the new lower-case names.
+2. Delete the old upper-case secrets once nothing reads them:
+   `gcloud secrets delete DB_URL --project=my-project`
+
+evnx does not delete anything for you.
+</Callout>
 
 <Callout type="info">
 **Changed in 0.10.10.** This destination printed `echo -n "${DATABASE_URL}" | gcloud
@@ -250,6 +283,15 @@ not an argument:
 ```text
 printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --force --yes
 printf '%s' 'sk_live_abc123' | vercel env add API_KEY production --project my-app --force --yes
+```
+
+**v0.13.0+** — a variable whose name or value looks secret gets `--sensitive`, so Vercel
+stores it as a Sensitive variable (the same test `convert --to vercel` uses):
+
+```text
+printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --sensitive --force --yes
+printf '%s' '3000' | vercel env add APP_PORT production --project my-app --force --yes
+printf '%s' 'example-token' | vercel env add API_TOKEN production --project my-app --sensitive --force --yes
 ```
 
 `--vercel-project` becomes `--project`; without it Vercel uses the linked project

@@ -3,13 +3,13 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-08"
 excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
 tags: ["add", "reference", "cli", "environment-variables"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "spec init"]
-evnxVersion: "0.10.7"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - commands/init
@@ -71,8 +71,31 @@ to pick from. `evnx add --list` prints every id.
 
 | Code | Meaning |
 |------|---------|
-| `0` | variables added, or nothing to do: they were already there, it was a `--dry-run`, or you answered `n` |
+| `0` | variables added, or nothing to do: they were already there, or it was a `--dry-run` |
+| `4` | **v0.13.0+** — you answered `n` to the final question (or pressed Esc there): nothing was written |
 | `2` | stopped: an unknown id or language, a bad argument, no terminal to ask (add `--yes`), or a write error (for example a read-only `.env`, or `--path` pointing at a folder that does not exist) |
+
+<Callout type="warning">
+⚠️ **Changed in 0.13.0: a declined confirmation exits `4`, not `0`.** Saying no to
+"Append these variables to …?" wrote nothing and exited `0`, the same code as a
+write, so a script could not tell the two apart. It now exits `4`, the code `restore`,
+`cloud pull` and [`remove`](/guides/commands/remove) use for a declined confirmation.
+Esc at an earlier question (picking an id, or `add custom`'s questions) still exits `0`.
+A wrapper that treats any non-zero exit from an interactive `add` as a failure should
+accept `4` as "cancelled".
+</Callout>
+
+```console
+$ evnx add service redis
+Preview:
+5 variables
+  • service ×5
+  Categories: Cache
+Add these 5 variables to .env.example? [Y/n] n
+Aborted. Nothing was written.
+$ echo $?
+4
+```
 
 <Callout type="info">
 Earlier versions of this page said `1` for an unknown service and `2+` for runtime errors. Every one of
@@ -346,4 +369,5 @@ stderr pointing at `evnx spec init`, never an error. An inline
 
 - [Add Basics](/guides/getting-started/add-basic) — Walkthrough for common workflows
 - [Adding Production Variables](/guides/use-cases/use-cases-add-production) — Environment-specific values
+- [evnx remove](/guides/commands/remove) — **v0.13.0+** — take a variable back out of the env file, the template and the contract
 - [evnx init](/guides/commands/init) — `--list-components` prints the same catalogue `add --list` does

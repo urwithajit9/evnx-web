@@ -3,13 +3,13 @@ section: "reference"
 order: 1
 title: ".env Syntax Reference"
 publishedAt: "2026-09-29"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-08"
 excerpt: "Exactly what evnx accepts in a .env file: the four quoting forms, which escapes resolve where, multiline values, variable expansion, and what does not work."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["reference", "syntax", "quoting", "multiline", "escaping", "parser"]
-commands: ["doctor", "validate"]
-evnxVersion: "0.7.0"
+commands: ["cloud run", "doctor", "parse", "run", "validate"]
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/quick-start
 draft: false
@@ -191,7 +191,113 @@ Even though `HOME` is set in every shell. Expansion resolves **only** against th
 `.env` file itself, which keeps the file self-contained — the same file produces the
 same values on every machine.
 
-Order does not matter. A variable may reference one defined further down.
+### Expansion runs top to bottom
+
+**v0.13.0+** — A reference reads the value assigned **above** it, as Docker Compose
+does (checked against Compose v5.7.0). Until 0.12 evnx read each variable's last value
+in the file, so order did not matter. It does now.
+
+```bash
+B=1
+A=${B}
+B=2              # A is 1 (it was 2 before 0.13.0)
+```
+
+```console
+$ evnx parse --values
+   1  B    1
+   2  A    1
+   3  B    2
+```
+
+A `${VAR}` that names a variable assigned **below** it is an error that names the line
+to move:
+
+```bash
+A=${B}
+B=1
+```
+
+```console
+$ evnx parse
+   1  A
+   2  B
+✗ Line 1: Undefined variable: ${B} is assigned below it, on line 2. evnx expands top to bottom, as Docker Compose does: move that line above line 1
+```
+
+`evnx validate` prints the same message and exits `2`. The fix is to move the
+definition above the line that uses it.
+
+- A bare `$B` (no braces) that points forward keeps the text `$B`, as any undefined
+  bare reference does. `evnx validate` reports it as the `forward_reference` warning
+  (Compose reads it as empty).
+- `A=1` followed by `A=${A}3` gives `13`. It used to be a circular-expansion error.
+  Circular and too-deep expansion can no longer happen: every reference reads a value
+  already settled.
+- `--ignore expansion_order`, the 0.12 warning for lines that change, is accepted and
+  does nothing.
+
+<Callout type="warning" title="Upgrading from 0.12">
+Run `evnx validate` on each env file **before** upgrading. 0.12 lists every line whose
+value changes as `expansion_order`. Move each definition above the lines that use it.
+</Callout>
+
+---
+
+## Keys
+
+**v0.13.0+** — A key may hold letters, digits, `_`, `.`, `-`, `[` and `]`, may start with
+a digit, and may contain non-ASCII letters. These are the names Docker Compose reads.
+A file holding `spring.datasource.url`, `my-key`, `1FOO` or `a[0]` was refused outright
+before.
+
+```console
+$ evnx parse
+   1  é
+   2  9X
+   3  a[0]
+```
+
+`/`, `@`, `+`, `$`, spaces, quotes and braces are still refused, and the message says
+what a key may hold:
+
+```console
+$ evnx parse --env bad.env
+✗ Line 1: Invalid key: 'a/b': a key holds letters, digits, _, ., -, [ and ], as Docker Compose accepts
+```
+
+What happens to such a name downstream:
+
+- `evnx validate` warns `not_shell_name`: a shell cannot `export` it. See
+  [evnx validate](/guides/commands/validate#order-and-names).
+- `evnx run` and `evnx cloud run` pass it to the process unchanged.
+- Each `convert` format and `migrate` destination that cannot hold a name refuses it
+  **by name** and writes or sends nothing; `--exclude` leaves it out. See
+  [Names a format cannot hold](/guides/reference/convert-reference#names-a-format-cannot-hold).
+- In `.evnx.toml`, quote a dotted name: `[vars."spring.datasource.url"]`. Unquoted,
+  TOML reads nested tables, and `validate` says so.
+- `strict` mode still requires uppercase: `MY.KEY` passes, `my.key` does not.
+
+In references, `${my.key}` resolves (Compose itself refuses that template). A bare
+`$my.key` stops at the `.`, as in Compose, and `${my-key}` is `${my}` with the default
+`key`, as in Compose and the shell:
+
+```bash
+my=M
+my.key=x
+S=$my.key        # → M.key
+R=${my.key}      # → x
+T=${my-key}      # → M
+```
+
+```console
+$ evnx parse --values
+   1  my        M
+   2  my.key    x
+   3  S         M.key
+   4  R         x
+   5  T         M
+```
 
 ---
 

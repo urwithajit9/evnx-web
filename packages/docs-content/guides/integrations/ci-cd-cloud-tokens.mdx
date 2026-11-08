@@ -3,13 +3,13 @@ title: "API Tokens in CI/CD"
 section: integrations
 order: 4
 publishedAt: "2026-09-16"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-08"
 excerpt: "Pull encrypted secrets into a pipeline with a scoped API token — and understand exactly what a runner can and cannot do with it."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["ci-cd", "cloud", "tokens", "github-actions", "security", "evnx"]
 commands: ["auth token create", "auth token list", "auth token revoke", "cloud history", "cloud pull", "cloud run", "vault list", "vault members"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/auth
   - commands/cloud
@@ -221,8 +221,9 @@ working directory.
 
 Nothing is written to disk, nothing enters shell history, and nothing appears in `ps` —
 the values travel in the child's environment block, never in its argument vector. The
-child's exit code is returned unchanged, so it gates the job exactly as the script would
-on its own.
+child's exit code is returned unchanged (**v0.13.0+**: `10`–`15` can only come from a
+failure before the child starts), so it gates the job exactly as the script would on its
+own.
 
 `--include` and `--exclude` narrow what the child sees, and a filter matching nothing is
 an error rather than a silent run with no secrets.
@@ -243,6 +244,48 @@ strictly less exposure for the same result.
 
 ---
 
+## Retry by exit code
+
+**v0.13.0+** — A cloud command that fails because of the server exits with a code that
+says which kind of failure it was, so a job can retry the ones worth retrying and stop
+on the rest, without reading the message:
+
+| Code | Meaning | In a pipeline |
+|-----:|---------|---------------|
+| `10` | not signed in, or the token was refused | stop: the token is wrong, expired or revoked |
+| `11` | forbidden: role too low, not a member, token scope, or email not verified | stop: fix the token's vault or scope |
+| `12` | plan limit reached | stop: a human has to change the plan or delete something |
+| `13` | server unreachable, or a proxy or firewall answered instead | retry |
+| `14` | conflict, or the account is locked | stop: pull and reconcile; a retry of the same push cannot succeed |
+| `15` | server error, or rate limited | retry, after the `Try again in N s.` the message gives |
+
+```bash
+for attempt in 1 2 3; do
+  printf '%s' "$EVNX_PASSWORD" \
+    | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+  code=$?
+  case "$code" in
+    0)        break ;;
+    13|15)    sleep $((attempt * 10)) ;;   # transient: wait, then try again
+    *)        exit "$code" ;;              # 10, 11, 12, 14 and everything else: do not retry
+  esac
+done
+[ "$code" -eq 0 ] || exit "$code"
+```
+
+`evnx cloud run` is different. Once the command has started, `run` returns **the
+command's own exit code**, so a `13` or `15` from `run` means the child chose it. The
+codes above can only come from a failure before it started (for example, the token was
+refused). Do not wrap `run` in a retry loop that treats `13` and `15` as "try again" if the
+command may already have done part of its work; fetch with `pull` and retry that, or make
+the command safe to run twice.
+
+A script that tested for exactly `1` or `2` after a cloud command needs to accept these
+codes. The full table, and what the `403` reasons say, are in
+[evnx cloud](/guides/commands/cloud#exit-codes-for-server-failures).
+
+---
+
 ## Reducing what you expose
 
 **Prefer a job that needs no password at all.** `evnx cloud history` is read-only in the strongest sense: no password prompt, no decryption, no blob download. Drift checks and audit steps can run with a read-only token and nothing else.
@@ -259,7 +302,8 @@ evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
 **Use `-q` in jobs.** **v0.10.18+** every cloud command prints nothing on success under
 `-q`, while warnings and errors still reach the log. A step that read a `✓ pulled …`
 line from stdout gets nothing under `-q`; check the exit code instead (`0` done, `2`
-refused or failed).
+refused or failed locally, and **v0.13.0+** `10`–`15` when the server refused or failed;
+see [Retry by exit code](#retry-by-exit-code)).
 
 **Never `cat` the file.** A `.env` echoed into a build log is a `.env` in your CI provider's log retention, readable by everyone with repository access.
 

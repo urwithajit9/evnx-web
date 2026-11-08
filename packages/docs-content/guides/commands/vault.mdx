@@ -3,13 +3,13 @@ title: "evnx vault"
 section: commands
 order: 8
 publishedAt: "2026-09-16"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-08"
 excerpt: "Create, share and revoke encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "vault", "encryption", "key-management", "sharing", "rbac", "evnx"]
-commands: ["cloud history", "cloud link", "cloud pull", "cloud push", "org", "vault", "vault create", "vault delete", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.10.18"
+commands: ["auth token create", "cloud history", "cloud link", "cloud pull", "cloud push", "org", "vault", "vault create", "vault delete", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/auth
 draft: false
@@ -585,8 +585,25 @@ So deleting a vault does not merely hide the blobs. It destroys the wrapped key 
   it works. Tables you asked for (`vault list`, `vault members`), warnings and
   errors still print.
 - **Exit codes:** `0` when the command did what was asked, or found nothing to
-  change (`already admin … nothing changed`). `2` for every refusal and error. Each
-  refusal ends with `No verdict: evnx did not finish. This is not a clean result.`
+  change (`already admin … nothing changed`). `2` for a refusal the CLI makes itself
+  (the table above) and for bad arguments. Each refusal ends with
+  `No verdict: evnx did not finish. This is not a clean result.`
+- **v0.13.0+ — a request the server refuses exits `10`–`15`.** `10` not signed in or
+  token refused, `11` forbidden (your role is too low, you are not a member, or the API
+  token's scope), `12` plan limit reached (for example, a fourth vault on the Free
+  plan), `13` server unreachable or not evnx, `14` conflict or locked, `15` server error
+  or rate limit. The full table is in
+  [evnx cloud](/guides/commands/cloud#exit-codes-for-server-failures). A script that
+  tested for exactly `1` or `2` after a `vault` command needs to accept these.
+
+### When the server says no, and why
+
+**v0.13.0+** — A `403` explains itself when the server gives a reason. For a role that
+is too low, the line names the role the action needs (`This needs the admin role; ask
+the vault owner.`), and a token restricted to another vault, or a read-only token,
+says which `evnx auth token create` command makes one that works. See
+[Why a request was refused](/guides/commands/cloud#why-a-request-was-refused). A
+vault past your plan's limit is exit `12`, with the server's sentence about the limit.
 
 ---
 

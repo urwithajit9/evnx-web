@@ -3,13 +3,13 @@ title: "evnx commands"
 section: commands
 order: 13
 publishedAt: "2026-10-05"
-updatedAt: "2026-10-18"
+updatedAt: "2026-11-08"
 excerpt: "What your build can actually do. Lists every command this binary has and which optional features it was compiled with — because two installs of the same version can differ."
 difficulty: beginner
 timeToComplete: "3 minutes"
 tags: ["cli", "commands", "features", "troubleshooting", "evnx"]
 commands: ["commands", "update", "vault"]
-evnxVersion: "0.10.7"
+evnxVersion: "0.13.0"
 ---
 
 ```bash
@@ -27,15 +27,17 @@ Lists every command **this** binary has, grouped, with the optional features it 
 ## What it prints
 
 ```text
-  evnx 0.10.7
+
+  evnx 0.13.0
   built with: net, migrate, backup, cloud
 
   On this machine
-    init         Interactive project setup — generates .env.example
+    init         Interactive project setup — the template, .env and the .evnx.toml contract
     add          Add environment variables to existing .env files
+    remove       Remove variables from the env file, and the template and contract too
     validate     Check .env against .env.example, find issues
     scan         Detect secrets that look real (AWS keys, tokens, etc.)
-    diff         Compare .env vs .env.example — show missing/extra vars
+    diff         Compare two env files: keys missing or extra, and values between environments
     convert      Transform `.env` files into multiple output formats
     migrate      Move a .env into a secret manager: print the commands, or upload to GitHub
     sync         Keep .env and .env.example in sync
@@ -44,6 +46,8 @@ Lists every command **this** binary has, grouped, with the optional features it 
     restore      Restore from encrypted backup
     doctor       Check .env files, Git config, project structure, and security
     spec         Declare what each variable is: required, format, secret
+    parse        List what evnx reads from a `.env`: line, key and flags, never a value
+    run          Run a command with a `.env`'s variables in its environment
     commands     Every command this build has, and which features it was compiled with
     completions  Generate shell completions
     update       Show how to upgrade, and optionally whether a newer release exists
@@ -52,14 +56,15 @@ Lists every command **this** binary has, grouped, with the optional features it 
     auth         Manage your evnx cloud account
     org          Manage organisations — billing and a directory
     vault        Manage encrypted vaults
-    cloud        Sync encrypted .env files with evnx cloud
+    cloud        Sync encrypted .env files with evnx cloud.
 
-  20 commands (83 with sub-commands). `evnx <command> --help` for any of them.
+  23 commands (99 with sub-commands). `evnx <command> --help` for any of them.
   `evnx commands --json` emits the whole tree, for tooling.
 
   Guides: https://docs.evnx.dev/cli
 ```
 
+`remove` is new in 0.13.0 (**v0.13.0+**; see [evnx remove](/guides/commands/remove)).
 The closing line counts the commands listed above it and, in brackets, every
 command including sub-commands such as `vault share` (**v0.10.7+**; it used to say
 `83 commands` under a list of 20).
@@ -151,4 +156,5 @@ The payload carries a `schema` number (currently `1`). Check it: the shape may c
 ## Related guides
 
 - [Installation](/guides/getting-started/installation) — every channel, and what each one includes
+- [evnx remove](/guides/commands/remove) — take a variable out of the env file, template and contract
 - [evnx update](/guides/commands/update) — how to upgrade, by the channel you installed from
