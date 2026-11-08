@@ -1,0 +1,171 @@
+---
+title: "How Bad vs How Sure: Why evnx scan Now Reports Severity and Confidence Separately"
+publishedAt: "2026-11-08"
+excerpt: "Until 0.13.0 every evnx scan finding carried one level that answered two questions at once. A test Stripe key and a database password got the same treatment, and so did a CI gate built on that level. Here is the split, and how to write a gate that blocks the right things."
+author: "ajit"
+category: "guides"
+tags: ["scan", "secrets", "ci-cd", "severity", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "git-hooks-pre-commit-prek-evnx"
+  - "the-scan-that-never-finished"
+---
+
+Before 0.13.0, `evnx scan` gave each finding one level: high, medium or low. That one
+word had to answer two different questions:
+
+- **How bad is it if this is real?** A live Stripe secret key is a disaster. A Stripe
+  *test* key is not.
+- **How sure is evnx that it is real?** A value that matches Stripe's documented
+  `sk_live_` format is almost certainly a Stripe key. A variable called `DB_PASSWORD`
+  holding an unrecognisable string *might* be a password, or might be `changeme`.
+
+Mixing the two meant a CI gate set to "high" could block on a test key it was very sure
+about, and let through a database password it was unsure about. In 0.13.0 they are two
+fields, and two flags.
+
+## One file, five findings
+
+Here is a small `.env` with five things worth a look:
+
+```bash
+STRIPE_SECRET_KEY=sk_live_…        # a live key
+NEXT_PUBLIC_STRIPE_KEY=pk_live_…   # a publishable key, inlined into the browser bundle
+STRIPE_TEST_KEY=sk_test_…          # a test key
+CLERK_SECRET_KEY=sk_live_…         # Clerk uses Stripe's prefix
+DB_PASSWORD=Tr0ub4dor-and-3        # a password evnx can't recognise by shape
+```
+
+```text
+$ evnx scan .
+
+  evnx scan  Checking for exposed secrets
+
+  scanning ./.env
+
+  ✗  Stripe Secret Key (LIVE)                    critical
+     ./.env:1 (STRIPE_SECRET_KEY)  sk_l…p7dc
+     !  matches a live key format, not a placeholder
+     →  revoke at https://dashboard.stripe.com/apikeys
+
+  ✗  Sensitive config key: NEXT_PUBLIC_STRIPE_KEY  high
+     ./.env:2 (NEXT_PUBLIC_STRIPE_KEY)  pk_l…p7dc
+     ·  flagged by variable name — the value was not checked
+     !  NEXT_PUBLIC_ is inlined into the client bundle by Next.js — anyone who loads your site can read this
+     →  if this is not meant to be public, rename it to STRIPE_KEY and read it server-side
+
+  ·  Stripe Secret Key (test)                    low
+     ./.env:3 (STRIPE_TEST_KEY)  sk_t…p7dc
+     !  matches a live key format, not a placeholder
+     →  revoke at https://dashboard.stripe.com/apikeys
+
+  ✗  Clerk Secret Key (LIVE)                     critical
+     ./.env:4 (CLERK_SECRET_KEY)  sk_l…p7dc
+     !  matches a live key format, not a placeholder
+     →  revoke at https://dashboard.clerk.com
+
+  ✗  Sensitive config key: DB_PASSWORD           high, medium confidence
+     ./.env:5 (DB_PASSWORD)  Tr0…d-3
+     ·  flagged by variable name — the value was not checked
+
+  5 findings  ·  2 critical  ·  2 high  ·  1 low
+```
+
+(The "Next steps" block that follows the summary is left out here and below.)
+
+The level printed on the right is now **severity**. Confidence only appears when it is
+not high, as on the last line: evnx thinks a leaked database password would be bad
+(`high`), but it found it by the variable's name, not by the value's shape, so it is
+only `medium` sure.
+
+## What each level means
+
+**Severity: how bad, if real.**
+
+| Severity | Examples |
+|---|---|
+| `critical` | cloud, payment and AI keys; private keys |
+| `high` | account tokens, database passwords, variables named like a secret |
+| `medium` | tokens with limited scope or short lives (a GitLab CI job token, for example) |
+| `low` | test keys, keys meant to ship in a web page |
+
+**Confidence: how sure evnx is that it is that kind of credential.**
+
+| Confidence | Comes from |
+|---|---|
+| `high` | the value matches the provider's documented format |
+| `medium` | a looser format, or a variable named like a secret holding a short value |
+| `low` | weak signals only, such as a random-looking value with nothing else to go on |
+
+## Writing the gate
+
+`--severity` decides what is reported, counted and exited on. `--confidence` adds a
+second filter. A finding must pass both.
+
+```text
+$ evnx scan . --severity high
+  …
+  4 findings  ·  2 critical  ·  2 high
+```
+
+The test key drops out. Add `--confidence high` and the password that was found only
+by its name drops out too:
+
+```text
+$ evnx scan . --severity high --confidence high
+  …
+  3 findings  ·  2 critical  ·  1 high
+```
+
+Both commands exit 1, because findings remain. (Each output is trimmed to its summary
+line; the findings above it are the same as in the full listing, minus the ones filtered
+out.)
+
+For most CI pipelines, `--severity high` is the right blocking gate: it ignores test
+keys and anything designed to be public, and it still blocks a password found only by
+name. Add `--confidence high` when false positives cost more than misses, for example on
+a monorepo full of fixtures. Put the choice in `.evnx.toml` so every run agrees:
+
+```toml
+[scan]
+severity = "high"
+confidence = "medium"
+```
+
+## ⚠️ If you upgrade from 0.12
+
+- **`--severity` changed meaning.** In 0.12 it filtered on what is now confidence. A
+  script that ran `--severity high` to mean "only sure findings" should now say
+  `--confidence high`.
+- **The JSON is `schema_version: 2`.** Each finding has both fields:
+
+  ```json
+  {
+    "rule_id": "sensitive-config-key",
+    "status": "new",
+    "fingerprint": "e15660465d012be7b26ca4b818743c61bea8b5c0c61e42f0c464e83fbef85097",
+    "pattern": "Sensitive config key: DB_PASSWORD",
+    "confidence": "medium",
+    "severity": "high",
+    "value_preview": "Tr0…d-3",
+    "location": "./.env:5 (DB_PASSWORD)",
+    "variable": "DB_PASSWORD",
+    "action_url": null,
+    "matched_by": "name",
+    "git": "unignored"
+  }
+  ```
+
+- **SARIF's `ruleId` is now the stable rule id**, so GitHub code scanning shows existing
+  alerts as new rules once.
+
+## Why not one score?
+
+A single number from 1 to 10 would sort findings, but it would hide *why* a finding
+ranked where it did. Two words you can read are easier to reason about in a review, and
+easier to write a policy against: "block anything critical we're sure about, warn on the
+rest" is one line of config, not a threshold you tune by hand.
+
+Next in this series: adopting `evnx scan` on a repository that already has findings,
+without turning the gate off.

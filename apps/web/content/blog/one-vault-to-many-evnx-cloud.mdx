@@ -1,0 +1,116 @@
+---
+title: "From One Vault to Many: Composing Shared and Per-Environment Secrets in evnx cloud"
+publishedAt: "2026-11-19"
+excerpt: "Most teams end up with secrets every environment shares and secrets that differ per environment. evnx 0.13.0 lets cloud run and cloud pull read several vaults at once. When two vaults hold the same key, it refuses by default. Here is why that default is the right one."
+author: "ajit"
+category: "tutorial"
+tags: ["cloud", "secrets", "vaults", "ci-cd", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "zero-knowledge-cloud-sync-architecture-of-secure-env-storage"
+  - "api-tokens-ci-what-they-unlock"
+---
+
+{/* Editor: help text and messages are from evnx 0.13.0. Before publishing, replace the
+"what you'll see" blocks with a real run against api.evnx.dev using two test vaults
+(acme/shared, acme/prod). Never paste a value. GitHub issue #128 asked for this. */}
+
+A real project rarely fits in one vault. There's the set every environment shares (a
+Sentry DSN, a feature-flag key, the analytics token) and the set that differs (the
+production database, the staging Stripe key). Copying the shared keys into every vault
+works until someone rotates one and updates two vaults out of three.
+
+[GitHub issue #128](https://github.com/urwithajit9/evnx/issues/128) asked for the obvious
+fix: read more than one vault at once. As of 0.13.0, `--vault` is repeatable on
+`evnx cloud run` and `evnx cloud pull`.
+
+## The basic case
+
+```bash
+evnx cloud run --vault acme/shared --vault acme/prod -- npm start
+```
+
+What happens:
+
+1. Both vaults' latest versions are fetched.
+2. You're asked for the master password **once**, and one unlock opens both. Every vault
+   key is wrapped under the same identity, so there's no second prompt.
+3. Each vault is decrypted **on this machine** and the variables are merged **left to
+   right**: first `acme/shared`'s keys in their order, then `acme/prod`'s new ones.
+4. `npm start` runs with the merged set in its environment. `--include` and `--exclude`
+   apply to the merged result.
+
+`cloud pull` does the same and writes the merged `.env`:
+
+```bash
+evnx cloud pull --vault acme/shared --vault acme/prod --file .env
+```
+
+## The interesting decision: a key in both vaults
+
+Suppose `DATABASE_URL` is in both `acme/shared` (a default someone added months ago) and
+`acme/prod`. What should happen?
+
+The common answer in other tools is "the later one wins". That's convenient, and it
+hides a real problem: you can't tell from the command line which value a process got.
+When you rotate the production database and the app still connects to the old one,
+"silently overridden by an older default" is the last thing you'll check.
+
+So evnx refuses by default:
+
+```text
+1 variable(s) are in more than one of the given vaults:
+  DATABASE_URL is in both acme/shared and acme/prod
+  Nothing was run or written. Pass --allow-override to let the later vault win,
+  or drop the key from one of them.
+```
+
+Nothing ran and nothing was written. The message names the key and both vaults. It
+never names a value: error messages end up in CI logs.
+
+## When overriding is what you want
+
+Sometimes it is. "Shared defaults, overridden per environment" is a real pattern, and
+it's the case #128 described. Say so explicitly:
+
+```bash
+evnx cloud run --vault acme/shared --vault acme/prod --allow-override -- npm start
+```
+
+```text
+  · DATABASE_URL is in acme/shared, acme/prod; acme/prod wins
+```
+
+Each override is named on stderr, so it's visible in the log of every run. `-q` hides the
+line if you've decided you don't need it.
+
+The cost of this default is real, and we accepted it: if your setup relies on overrides,
+you pass `--allow-override` on every run. In return, an override never happens by
+accident.
+
+## Details worth knowing
+
+- **One vault behaves exactly as before.** Same output, same files.
+- **`--version` is refused with several vaults.** A version number belongs to one vault,
+  and "version 7 of both" means nothing.
+- **A merged pull writes `.env`** unless you pass `--file`. It doesn't use the
+  directory's `cloud link` binding, which names a single vault, and comments from the
+  source vaults aren't carried into the merged file.
+- **`--allow-override` with one vault** prints a warning that it has no effect, rather
+  than being silently accepted.
+
+## In CI
+
+A pipeline usually wants exactly one of these:
+
+```yaml
+# strict: fail the job if the vaults ever overlap
+- run: evnx cloud run --vault acme/shared --vault acme/prod -- ./deploy.sh
+
+# defaults + overrides, logged
+- run: evnx cloud run --vault acme/shared --vault acme/prod --allow-override -- ./deploy.sh
+```
+
+The strict form is a cheap invariant check, and it's worth having even if you never
+intended overlaps.

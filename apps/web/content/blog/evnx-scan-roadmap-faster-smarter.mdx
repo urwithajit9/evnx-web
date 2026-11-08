@@ -1,0 +1,112 @@
+---
+title: "Where evnx scan Goes Next: Parallel Files, a Quality Gate, Decoding and Git History"
+publishedAt: "2026-11-24"
+excerpt: "0.13.0 made evnx scan trustworthy: 63 documented rules, severity and confidence, baselines, packs. The next steps are about speed and depth: scanning files in parallel with rayon, measuring precision before adding noise, decoding base64, scanning history, and publishing the engine as a crate."
+author: "ajit"
+category: "opinion"
+tags: ["scan", "rust", "rayon", "performance", "roadmap", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "importing-betterleaks-rules-into-evnx"
+  - "the-scan-that-never-finished"
+---
+
+{/* Editor: roadmap items are the merged v0.14.0 plan (ROADMAP-v0.13-to-v1.0.md, 2026-11-08):
+RM-74, RM-70, RM-71, RM-69, RM-72, RM-73. None is approved item by item yet, so keep the
+wording as intent, not promises. Re-measure the 116 s figure with the released binary
+and both packs before publishing. */}
+
+evnx 0.13.0 was the "scanner you can trust" release. Every built-in rule is written
+against the provider's documented format and has fixtures. Severity and confidence are
+separate, existing findings can be baselined, and wider coverage comes as pinned packs.
+This post covers what's planned next, roughly in order, and the trade-offs behind each
+item.
+
+## 1. Parallel scanning with rayon (RM-74)
+
+Today `evnx scan` reads and checks one file at a time. With the core rules that's fast
+enough not to matter. With a pack it isn't: the gitleaks pack took **116 seconds** on
+evnx-web, our own website's monorepo. A pre-commit hook that slow is one people disable.
+
+The work is embarrassingly parallel: each file is independent. Rust's
+[`rayon`](https://docs.rs/rayon) turns a sequential iterator into a parallel one with
+roughly one changed line:
+
+```rust
+// today
+let findings: Vec<_> = files.iter().flat_map(|f| scan_file(f, &rules)).collect();
+// with rayon
+let findings: Vec<_> = files.par_iter().flat_map(|f| scan_file(f, &rules)).collect();
+```
+
+The interesting part is everything around that line:
+
+- **Output order must not change.** A scan that lists findings in a different order on
+  each run breaks diffs, golden tests and code-review comments. Each result has to carry
+  its file's index and be merged back into path order before printing. Determinism is a
+  feature.
+- **The rule set is shared, not copied.** The compiled regex set and the Aho-Corasick
+  keyword prefilter are read-only, so threads share them behind an `Arc`.
+- **Memory stays bounded.** Reading every file into memory at once is a bad idea in a repo
+  with a 200 MB fixture. Work has to stay chunked.
+- **rayon is already in our dependency tree**, pulled in by another crate, so the binary
+  barely grows.
+
+Expected effect: close to linear in cores for pack scans. We'll publish before/after
+numbers rather than guesses.
+
+## 2. A quality gate before more rules (RM-70)
+
+Adding rules is easy. Knowing whether they help is not. Before evnx adds decoding,
+history or more packs, each of which finds more and risks more noise, we want a
+**labelled corpus** and a CI job that measures precision and recall on every change. A
+change that drops recall fails the build, and a precision drop gets flagged.
+
+This is the unglamorous item that makes the others safe. It also gives packs like
+Betterleaks a measured noise rate instead of "may report more than upstream".
+
+## 3. Decoding (RM-71)
+
+Secrets hide in base64 more often than you'd think: Kubernetes `Secret` manifests, JSON
+blobs in an env var, a `.npmrc` auth line. The plan is **one level** of decoding (base64,
+hex, URL-encoding), with a size cap, then the normal rules run on the result. It's
+limited to one level because nested decoding gets expensive fast and mostly finds noise.
+It comes after the quality gate, so we can measure that noise.
+
+## 4. Scanning git history (RM-69)
+
+`--staged` stops new secrets. But a key committed and "deleted" two years ago is still
+in history, and still valid if nobody rotated it. `evnx scan --history [range]` will scan
+the added lines in a commit range.
+
+One subtlety: a diff is text. A line added to `.env` arrives as `+STRIPE_SECRET_KEY=…`,
+so the name-aware rules from 0.13.0 (Clerk vs Stripe) need the key name recovered from the
+diff line. Without that, history scanning would give worse labels than a working-tree
+scan.
+
+## 5. The engine as a crate (RM-72)
+
+The scanner already lives in its own module with a narrow surface: text plus context in,
+findings out. Publishing it as **`evnx-secretscan`** on crates.io (as we did with
+`evnx-crypto`) would let other Rust tools embed the same rules and the same severity
+model. It waits until the rule fields settle after the 0.13.0 changes, because a
+published API is a promise.
+
+## 6. Live verification, maybe (RM-73)
+
+Betterleaks can ask a provider "is this key live?". It's useful, and it means sending the
+secret somewhere. If evnx does it, it'll be opt-in per run (`--verify`), it'll say exactly
+what is sent where, and it won't run in a pre-commit hook by default. There is a privacy
+decision to make before any code is written.
+
+## What won't change
+
+- **A scan never touches the network.** Packs are fetched by an explicit command and
+  pinned by hash.
+- **The core stays small and documented.** Breadth comes from packs you choose.
+- **Nothing reduces what is found silently.** Turning a rule off happens in one visible
+  place.
+
+If one of these matters to you, or you have a corpus of real-world false positives we
+could learn from, open an issue. That's the fastest way to move something up the list.

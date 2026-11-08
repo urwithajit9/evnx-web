@@ -1,0 +1,102 @@
+---
+title: "Exit Codes Are an API: What evnx cloud's 10–15 Let a CI Script Do"
+publishedAt: "2026-11-21"
+excerpt: "A CLI that exits 1 for every failure forces scripts to grep error messages, and messages change. evnx 0.13.0 gives cloud commands one exit code per kind of failure, so a pipeline can retry what is worth retrying and stop on what isn't. Here is the table, and the one place it can't help."
+author: "ajit"
+category: "devops"
+tags: ["cli", "ci-cd", "exit-codes", "cloud", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "api-tokens-ci-what-they-unlock"
+  - "one-vault-to-many-evnx-cloud"
+---
+
+{/* Editor: the table and help text are from evnx 0.13.0 (`evnx cloud --help`). Add one
+real run per code if possible: 10 (logged out), 13 (EVNX_SERVER=https://127.0.0.1:9),
+11 (a viewer pushing). */}
+
+A deploy job runs `evnx cloud pull`, and it fails. What should the pipeline do?
+
+It depends entirely on *why*. If the network blipped, retry. If the API token was
+revoked, retrying a hundred times just burns minutes, and a human needs to mint a new
+token. If the plan's limit is reached, nobody on the CI side can fix it at all.
+
+Until 0.13.0, evnx's cloud commands answered all of these with exit code 1 or 2. The
+only way for a script to tell them apart was to grep the message, and messages are
+written for people, so they change. Now each kind of failure has its own code.
+
+## The table
+
+```text
+$ evnx cloud --help
+EXIT CODES when a request to the server fails (the same for `evnx auth`,
+`evnx vault` and `evnx org`):
+
+  10  not signed in, or the session or API token was refused
+  11  forbidden: your role does not allow it, or the email is not verified
+  12  the plan's limit is reached
+  13  the server could not be reached, or something that is not evnx
+      (a proxy, firewall or captive portal) answered
+  14  conflict (someone else pushed first) or the account is locked
+  15  the server failed, or is rate limiting you
+
+Other failures keep the command's usual code.
+```
+
+Why 10 and up? Codes 0 to 5 already mean something across evnx: 1 means findings or
+failure, 2 means it could not run, and 4 means you declined a confirmation. A new range
+keeps every existing meaning intact.
+
+## What a script can do with it
+
+```bash
+evnx cloud pull --vault acme/prod --file .env
+case $? in
+  0)  ;;
+  13|15) sleep 10; evnx cloud pull --vault acme/prod --file .env || exit $? ;;   # transient
+  14) echo "someone pushed first; re-read and retry"; exit 14 ;;
+  10) echo "::error::EVNX token refused: rotate the CI token"; exit 10 ;;
+  11) echo "::error::this token's role cannot do that"; exit 11 ;;
+  12) echo "::error::plan limit reached"; exit 12 ;;
+  *)  exit 1 ;;
+esac
+```
+
+The messages got better too, where the server can say more:
+
+- **A 403 says why.** The server now sends a `reason` with each refusal. "This needs
+  the developer role; ask the vault owner" is something a person can act on. So is "this
+  API token is restricted to another vault", or "this API token can only read".
+- **A proxy is named as a proxy.** If the reply isn't evnx's JSON (a corporate
+  firewall's HTML page, a captive portal), you get exit 13 and a message saying that
+  something other than evnx answered. A bare HTTP 502 tells you nothing.
+- **`Retry-After` is shown.** When the server rate-limits you, the message says how long
+  to wait.
+
+## The one place it can't help: `cloud run`
+
+`evnx cloud run --vault acme/prod -- ./deploy.sh` runs *your* command. Once
+`./deploy.sh` has started, `cloud run` exits with **its** exit code, as `run` always has.
+A wrapper that changed it would break every script that checks what the deploy returned.
+
+That means the 10–15 table applies only **before** the child starts: fetching,
+unlocking, decrypting. If `./deploy.sh` itself exits 12, a script can't tell it apart
+from evnx's "plan limit" 12. If that matters, split the steps:
+
+```bash
+evnx cloud pull --vault acme/prod --file .env.deploy || exit $?   # evnx's codes
+./deploy.sh                                                        # your codes
+```
+
+## ⚠️ Upgrading
+
+Any script that checked for exit 1 or 2 after a cloud failure needs updating. A check
+like `if [ $? -ne 0 ]` still works unchanged, since every new code is non-zero.
+
+## Why this is a contract
+
+Exit codes are the one part of a CLI's output that every shell, CI system and Makefile
+understands without parsing. Once scripts rely on them, changing them breaks people
+silently. The table is documented in `--help` and the CHANGELOG, and it stays fixed
+through 1.0, when evnx's exit codes become a formal, versioned contract (RM-77).
