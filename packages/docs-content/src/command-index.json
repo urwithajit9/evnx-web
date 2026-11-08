@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.12.0",
+  "evnx_version": "0.13.0",
   "features": [
     "net",
     "migrate",
@@ -42,6 +42,16 @@
       ]
     },
     {
+      "name": "remove",
+      "about": "Remove variables from the env file, and the template and contract too",
+      "aliases": [
+        "rm"
+      ],
+      "guide": null,
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
       "name": "validate",
       "about": "Check .env against .env.example, find issues",
       "aliases": [],
@@ -55,7 +65,52 @@
       "aliases": [],
       "guide": "/guides/commands/scan",
       "guide_draft": false,
-      "subcommands": []
+      "subcommands": [
+        {
+          "path": "scan rules",
+          "about": "Your own scan rules: list, create and test them"
+        },
+        {
+          "path": "scan rules list",
+          "about": "Every rule a scan here would use: evnx's own, `.evnx/rules/`, your personal rules and `[[scan.patterns]]`, with id, source, severity and confidence, grouped by category with each rule's provider"
+        },
+        {
+          "path": "scan rules new",
+          "about": "Write a rule file to fill in: `.evnx/rules/<ID>.toml`, committed so the team shares it"
+        },
+        {
+          "path": "scan rules test",
+          "about": "Check each rule against its own `positive` and `near_miss` values, and report every failure. Exit 1 if any fails"
+        },
+        {
+          "path": "scan rules add",
+          "about": "Add a rule pack: a catalogue name, an https URL, or a path"
+        },
+        {
+          "path": "scan rules update",
+          "about": "Fetch added packs again, show the rules added and removed, and ask before replacing each"
+        },
+        {
+          "path": "scan rules remove",
+          "about": "Remove an added pack and its lock entry"
+        },
+        {
+          "path": "scan hook",
+          "about": "A git `pre-commit` hook that runs `evnx scan --staged`"
+        },
+        {
+          "path": "scan hook install",
+          "about": "Add the evnx block to this repository's `pre-commit` hook"
+        },
+        {
+          "path": "scan hook uninstall",
+          "about": "Remove the evnx block, and nothing else, from the `pre-commit` hook"
+        },
+        {
+          "path": "scan hook status",
+          "about": "Whether the hook is installed here, and whether it is turned off"
+        }
+      ]
     },
     {
       "name": "diff",
@@ -330,7 +385,7 @@
     },
     {
       "name": "cloud",
-      "about": "Sync encrypted .env files with evnx cloud",
+      "about": "Sync encrypted .env files with evnx cloud.",
       "aliases": [],
       "guide": "/guides/commands/cloud",
       "guide_draft": false,
@@ -453,7 +508,20 @@
       "subcommands": []
     }
   ],
-  "undocumented": [],
-  "unshown_subcommands": [],
+  "undocumented": [
+    "remove"
+  ],
+  "unshown_subcommands": [
+    "remove",
+    "scan hook install",
+    "scan hook status",
+    "scan hook uninstall",
+    "scan rules add",
+    "scan rules list",
+    "scan rules new",
+    "scan rules remove",
+    "scan rules test",
+    "scan rules update"
+  ],
   "orphan_guides": []
 }
