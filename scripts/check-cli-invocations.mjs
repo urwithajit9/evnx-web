@@ -195,7 +195,7 @@ function checkInvocation({ text, file, where }) {
   const dashdash = toks.indexOf("--");
   if (dashdash !== -1) toks.length = dashdash;
 
-  const { paths, aliasPaths, canonicalOf, subsOf, flagsOf, roots } = SURF;
+  const { paths, aliasPaths, canonicalOf, subsOf, flagsOf, roots, takesArgs } = SURF;
 
   const rest = toks.slice(1).filter((t) => !t.startsWith("-"));
   if (rest.length === 0) return; // bare `evnx`, or only flags
@@ -228,6 +228,9 @@ function checkInvocation({ text, file, where }) {
     if (!subs || subs.size === 0) break; // the rest are arguments
     const next = rest[i];
     if (isPlaceholder(next)) break;
+    // `evnx scan .env`, `evnx scan --format json .`: a command that takes its
+    // own arguments reads an unknown word as one of them (see takesArgs).
+    if (!subs.has(next) && takesArgs?.has(path)) break;
     if (!subs.has(next)) {
       fail({
         file,

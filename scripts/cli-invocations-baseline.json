@@ -2,13 +2,13 @@
   "_comment": [
     "Invocations that check-cli-invocations.mjs is allowed to find.",
     "",
-    "\u26a0\ufe0f EVERY ENTRY IS A DELIBERATE MENTION OF SOMETHING THAT DOES NOT EXIST.",
-    "The guides name a removed command or flag in order to say it is gone \u2014",
+    "⚠️ EVERY ENTRY IS A DELIBERATE MENTION OF SOMETHING THAT DOES NOT EXIST.",
+    "The guides name a removed command or flag in order to say it is gone —",
     "the output of the per-command review (task 15). A check that failed on",
     "those would teach people to delete the retraction, which is worse than the",
     "error it corrects.",
     "",
-    "\u26a0\ufe0f Adding an entry here is a claim that the prose around it tells the",
+    "⚠️ Adding an entry here is a claim that the prose around it tells the",
     "reader the thing does not exist. Read the surrounding paragraph before",
     "adding one; if it reads as an instruction, fix the guide instead.",
     "",
@@ -17,19 +17,9 @@
   ],
   "accepted": [
     {
-      "file": "packages/docs-content/guides/commands/scan.mdx",
-      "invocation": "evnx scan --exit-code --severity high",
-      "why": "Listed among flags that 'have appeared on this page in the past. None of them exist.'"
-    },
-    {
-      "file": "packages/docs-content/guides/commands/scan.mdx",
-      "invocation": "evnx validate --pattern",
-      "why": "A callout titled 'Not to be confused with evnx validate --pattern', explaining it was removed."
-    },
-    {
       "file": "packages/docs-content/guides/commands/update.mdx",
       "invocation": "evnx update --apply",
-      "why": "'There is no evnx update --apply and there will not be one.' \u2014 a deliberate limitation."
+      "why": "'There is no evnx update --apply and there will not be one.' — a deliberate limitation."
     },
     {
       "file": "packages/docs-content/guides/getting-started/installation.mdx",

@@ -161,5 +161,16 @@ export function index(surface) {
     flagsOf.set(c.path.join(" "), set);
   }
 
-  return { visible, roots, paths, aliasPaths, canonicalOf, subsOf, flagsOf };
+  // ⚠️ A command can have subcommands AND take arguments of its own:
+  // `evnx scan [PATH]...` gained `scan rules` and `scan hook` in 0.13.0, so
+  // `evnx scan .env` names a path, not a missing subcommand. Callers walking
+  // the tree stop at such a command when the next word is not a subcommand.
+  const takesArgs = new Set();
+  for (const c of visible) {
+    if ((c.args ?? []).some((a) => a.positional) && !c.subcommand_required) {
+      takesArgs.add(c.path.join(" "));
+    }
+  }
+
+  return { visible, roots, paths, aliasPaths, canonicalOf, subsOf, flagsOf, takesArgs };
 }
