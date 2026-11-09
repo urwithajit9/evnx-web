@@ -8,7 +8,7 @@ difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
 commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth login", "auth logout", "auth register", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status", "vault list"]
-evnxVersion: "0.10.17"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -256,6 +256,12 @@ evnx account
 
 Before 0.10.17 both said "your session has expired. Run `evnx auth login`" —
 the wrong cause, and a fix a CI job cannot run. The exit codes did not change.
+
+**v0.13.0+** — the exit code now says which failure it was: a refused or missing credential
+is `10`, a forbidden request or an unverified email `11`, a plan limit `12`, an unreachable
+server `13`, a conflict or locked account `14`, a server error or rate limit `15`. The
+full table, for `auth`, `vault`, `org` and `cloud` alike, is in
+[Exit codes for server failures](/guides/commands/cloud#exit-codes-for-server-failures).
 
 ---
 
