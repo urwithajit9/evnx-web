@@ -51,7 +51,7 @@ evnx org leave
 evnx org delete
 </CommandSignature>
 
-Every command takes `--org <slug>`. You can leave it out when you belong to exactly one organisation; with several, leaving it out is an error that lists them rather than guessing.
+Every command that acts on an existing organisation takes `--org <slug>` (not `create`, `list` or `accept`). You can leave it out when you belong to exactly one organisation; with several, leaving it out is an error that lists them rather than guessing.
 
 <Callout type="info">
 Organisation commands need a real sign-in. An `evnx_tok_` API token is refused — inviting people and assigning seats changes what the account is billed, so it takes a login rather than a CI credential.
