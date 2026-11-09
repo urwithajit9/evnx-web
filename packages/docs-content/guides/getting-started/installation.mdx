@@ -194,6 +194,7 @@ evnx --help
 # Commands:
 #   init         Interactive project setup — the template, .env and the .evnx.toml contract
 #   add          Add environment variables to existing .env files
+#   remove       Remove variables from the env file, and the template and contract too [aliases: rm]
 #   validate     Check .env against .env.example, find issues
 #   scan         Detect secrets that look real (AWS keys, tokens, etc.)
 #   diff         Compare two env files: keys missing or extra, and values between environments
@@ -206,16 +207,18 @@ evnx --help
 #   auth         Manage your evnx cloud account
 #   org          Manage organisations — billing and a directory
 #   vault        Manage encrypted vaults
-#   cloud        Sync encrypted .env files with evnx cloud
+#   cloud        Sync encrypted .env files with evnx cloud.
 #   doctor       Check .env files, Git config, project structure, and security
 #   spec         Declare what each variable is: required, format, secret
+#   parse        List what evnx reads from a `.env`: line, key and flags, never a value
 #   run          Run a command with a `.env`'s variables in its environment
 #   commands     Every command this build has, and which features it was compiled with [aliases: surface]
 #   completions  Generate shell completions
 #   update       Show how to upgrade, and optionally whether a newer release exists
+#   help         Print this message or the help of the given subcommand(s)
 ```
 
-That is the 0.11.0 listing. `evnx commands` prints every subcommand as well, and which
+That is the 0.13.0 listing. `evnx commands` prints every subcommand as well, and which
 features your build was compiled with.
 
 
@@ -253,12 +256,13 @@ cd your-project
 evnx doctor
 ```
 
-`doctor` runs five checks on the folder you are in and prints one line for each:
+`doctor` runs six checks on the folder you are in and prints one line for each:
 
 - `.env` exists, is in `.gitignore`, and parses
 - `.env.example` exists and is tracked by git
 - the project type (Node, Python, Rust and others) and its dependencies
 - Docker configuration files
+- whether an AI coding agent configured in the project can read `.env`
 - file permissions on `.env` (`600` recommended)
 
 It exits `1` when a check fails. `evnx doctor --fix` repairs what it can: it adds the

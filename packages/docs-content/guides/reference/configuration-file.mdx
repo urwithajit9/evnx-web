@@ -3,13 +3,13 @@ title: ".evnx.toml Configuration"
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-09"
 excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["configuration", "toml", "reference", "scan", "validate"]
-commands: ["backup", "cloud link", "convert", "diff", "scan", "spec init", "sync", "validate"]
-evnxVersion: "0.5.2"
+commands: ["backup", "cloud link", "convert", "diff", "scan", "scan rules list", "spec init", "sync", "validate"]
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/scan
   - commands/validate
@@ -136,10 +136,11 @@ example  = ".env.template"     # the template path, if not .env.example
 
 # ─── evnx scan ───────────────────────────────────────────────────────────────
 [scan]
-severity            = "high"        # "high" | "medium" | "low"
+severity            = "high"        # "critical" | "high" | "medium" | "low" (how bad)
+confidence          = "medium"      # "high" | "medium" | "low" (how sure); both must pass
 exclude             = ["fixtures"]  # paths this project never scans
 ignore_placeholders = true          # skip values that look like filler
-disable             = ["Stripe Secret Key (test)"]   # switch off a built-in rule
+disable             = ["Stripe Secret Key (test)"]   # switch off a built-in rule, by name or id
 builtins            = true          # false = only this project's rules
 
 # Secret formats this project recognises beyond the built-in ones.
@@ -148,6 +149,7 @@ builtins            = true          # false = only this project's rules
 name       = "Acme API key"
 regex      = "ACME-[A-Z0-9]{32}"
 confidence = "high"                 # optional; "high" | "medium" | "low"
+severity   = "high"                 # optional; "critical" | "high" | "medium" | "low"
 url        = "https://acme.example/settings/keys"   # optional
 
 # ─── evnx validate ───────────────────────────────────────────────────────────
@@ -200,7 +202,8 @@ overridden by `--env-name`, and by an explicit `--env` path.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `severity` | `"high"` \| `"medium"` \| `"low"` | `"low"` | Lowest confidence worth reporting. Filters the report, the counts and the exit code together. `"high"` keeps provider formats, this project's own rules, passwords in connection strings and long values under secret-like names |
+| `severity` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` | `"low"` | Lowest severity (how bad a finding is if real) worth reporting. Filters the report, the counts and the exit code together. **v0.13.0+**: until 0.12 this filtered on confidence; that is now `confidence`. `"high"` is the usual gate |
+| `confidence` | `"high"` \| `"medium"` \| `"low"` | `"low"` | **v0.13.0+** — lowest confidence (how sure evnx is) worth reporting. A finding must pass both `severity` and `confidence` |
 | `exclude` | list of strings | `[]` | Paths this project never scans in a folder walk. See below |
 | `ignore_placeholders` | bool | `false` | Skip values that look like filler |
 | `patterns` | list of tables | `[]` | **v0.5.0+** — secret formats this project recognises beyond the built-in ones. See below |
@@ -229,9 +232,12 @@ An **array of tables** — repeat the `[[scan.patterns]]` header once per rule.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `name` | string | *required* | What the finding is called in every output format. Becomes the SARIF rule id: `secret/acme-api-key` |
+| `name` | string | *required* | What the finding is called in every output format. Becomes the rule id when `id` is not set (`acme-api-key`), which is the SARIF `ruleId` |
 | `regex` | string | *required* | The expression. Anchor it yourself if you want it anchored |
-| `confidence` | `"high"` \| `"medium"` \| `"low"` | `"high"` | Feeds `severity`, the counts and the exit code together |
+| `id` | string | from `name` | **v0.13.0+** — the stable id used in JSON, SARIF, baselines and `evnx:allow` markers. Unset: `name` lowercased with `-` for spaces (`acme-api-key`) |
+| `confidence` | `"high"` \| `"medium"` \| `"low"` | `"high"` | How sure a match is. Counts against `[scan] confidence` |
+| `severity` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` | `"medium"` | **v0.13.0+** — how bad a match is. Counts against `[scan] severity`: a rule left at `medium` falls out of a `severity = "high"` gate, so set it |
+| `entropy` | number | none | **v0.13.0+** — drop matches whose Shannon entropy is below this |
 | `url` | string | none | Where to go and revoke a match |
 
 ```toml
@@ -247,7 +253,7 @@ confidence = "medium"
 ```
 
 These combine with `--pattern` rather than being replaced by it, the same way `exclude`
-does. The default confidence is `high` on the grounds that you wrote the rule deliberately.
+does. The default confidence is `high` on the grounds that you wrote the rule deliberately; the default severity is `medium`.
 
 <Callout type="warning">
 ⚠️ **`name` and `regex` are required, and a missing one fails the whole file** — every
@@ -271,11 +277,12 @@ alone, with exit `2`, and leaves other commands working. Full behaviour in
 disable = ["Stripe Secret Key (test)"]
 ```
 
-Names are the ones that appear in scan output, matched case-insensitively. The thirteen
-rules: `AWS Access Key`, `AWS Temporary Access Key (STS)`, `GitHub Token`,
-`GitHub Fine-grained PAT`, `Slack Token`, `Google API Key`, `JSON Web Token`,
-`Stripe Secret Key (LIVE)`, `Stripe Secret Key (test)`, `OpenAI API Key`,
-`Anthropic API Key`, `Private Key`, `Credentials in a connection string`. `disable` also
+Names are the ones that appear in scan output, matched case-insensitively; since v0.13.0 a
+rule's stable id (`stripe-test-secret-key`) works too. evnx ships 63 built-in rules
+(13 before 0.13.0): `AWS Access Key`, `AWS Temporary Access Key (STS)`, `GitHub Token`,
+`Stripe Secret Key (test)`, `Private Key`, `Credentials in a connection string` and the
+rest. `evnx scan --help` prints the full list, and `evnx scan rules list` shows each with
+its id, provider and category. `disable` also
 takes the heuristics' names — `Sensitive config key`, `High-entropy string`,
 `AWS Secret Access Key` — and disabling a rule also silences the name-based finding for the
 values it would have matched. `evnx scan --help` prints the same list.
@@ -328,10 +335,12 @@ off by name in `disable`, or filtered with `severity`.
 | `ignore` | list of strings | `[]` | Issue types to suppress. Added to by `--ignore` |
 | `fail_on` | `"error"` \| `"warning"` | `"error"` | **v0.10.8+** — what makes `validate` exit 1. `"warning"` fails on warnings too; `--exit-zero` still wins |
 
-Valid `ignore` entries, all fifteen: `missing_variable`, `extra_variable`,
+Valid `ignore` entries, all twenty: `missing_variable`, `extra_variable`,
 `placeholder_value`, `boolean_trap`, `weak_secret`, `localhost_in_docker`, `duplicate_key`,
 `invalid_url`, `invalid_port`, `invalid_email`, `format_mismatch`, `unknown_spec_key`,
-`unknown_environment`, `env_not_ignored`, `env_tracked`. An unknown entry is an error that
+`unknown_environment`, `env_not_ignored`, `env_tracked`, `reader_mismatch`,
+`lone_carriage_return`, `nul_byte`, `forward_reference` and `not_shell_name`
+(the last two are **v0.13.0+**). An unknown entry is an error that
 lists them.
 
 ### `[sync]`
@@ -380,6 +389,9 @@ command behaves. Read by `validate`, `scan` and `sync`.
 | `format` | string | none | `url`, `int`, `port`, `bool`, `email`, or `regex:<pattern>` (**v0.11.0+**: an unknown name is an error, not a regex) |
 | `description` | string | none | Shown in `evnx validate`'s suggestion when the variable is missing. `evnx sync` does not read it |
 | `environments` | list of strings | all | Which environments the variable is required in |
+
+**v0.13.0+** — quote a variable name that holds a `.`: `[vars."spring.datasource.url"]`.
+Unquoted, TOML reads nested tables, and `validate` says so.
 
 ```toml
 [vars]
@@ -517,8 +529,9 @@ evnx scan .
 evnx validate
 ```
 
-Reporting only high-confidence detections is the usual choice for a gate that blocks a
-merge. Both exclusions are substring patterns, so they cover those directories at any depth.
+Reporting only high-severity findings is the usual choice for a gate that blocks a
+merge. Both exclusions match a whole path component, so they cover those directories at
+any depth.
 
 ### A monorepo with one strict package
 
@@ -547,7 +560,7 @@ repeat anything you still want.
 <Callout type="warning">
 **There is no `EVNX_<SECTION>_<KEY>` environment-variable mechanism.** The variables evnx
 reads are `EVNX_AUTO_FIX`, `EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`,
-`EVNX_SERVER` and `EVNX_TOKEN` — nothing else. Pass flags directly instead:
+`EVNX_MASTER_PASSWORD`, `EVNX_SERVER`, `EVNX_TOKEN` and `EVNX_RULES_CATALOGUE` — nothing else. Pass flags directly instead:
 
 ```bash
 evnx scan --severity high
@@ -561,8 +574,8 @@ settings, and those are deliberately separate: a policy file in your home direct
 apply to every project on the machine without being visible in any of them.
 
 Entropy thresholds and per-command output defaults are **not configurable**. They were
-described on this page for a long time and were never implemented — 4.8 for the generic
-check and 4.5 for the gate on AWS secret keys are compiled in, and `--format` is a flag.
+described on this page for a long time and were never implemented — 4.3 for the generic
+check and for the gate on AWS secret keys is compiled in (**v0.13.0+**; it was 4.8 and 4.5), and `--format` is a flag.
 
 ⚠️ Two things this paragraph used to list have since shipped, in v0.5.0: **custom secret
 patterns** are `[[scan.patterns]]`, and **required-variable lists** are `[vars]`.

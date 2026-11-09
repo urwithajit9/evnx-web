@@ -228,6 +228,12 @@ own.
 `--include` and `--exclude` narrow what the child sees, and a filter matching nothing is
 an error rather than a silent run with no secrets.
 
+**v0.13.0+** — `--vault` can be repeated: `evnx cloud run --vault "$SHARED_ID" --vault "$APP_ID" -- ./deploy.sh`
+opens every vault with one password unlock and merges them left to right. A key held by
+two of them stops the run with exit `2` before the command starts, unless you add
+`--allow-override` (the later vault wins). `--version` is refused with more than one
+vault, and `cloud pull` takes repeated `--vault` the same way.
+
 <Callout type="warning">
   ⚠️ **This removes the plaintext *file*, not the master password.** The vault key is
   wrapped under your master key, so decryption still needs it wherever this runs — feed it

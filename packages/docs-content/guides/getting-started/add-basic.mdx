@@ -224,6 +224,9 @@ Add --yes to write without asking:
 No verdict: evnx did not finish. This is not a clean result.
 ```
 
+At a terminal, answering no to "Add these variables to …?" writes nothing and exits
+**4** (**v0.13.0+**; it exited 0 before), so a wrapper can tell "declined" from "written".
+
 ---
 
 ## Common pitfalls to avoid

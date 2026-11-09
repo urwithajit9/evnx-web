@@ -3,13 +3,13 @@ title: "Managing your evnx install"
 section: reference
 order: 11
 publishedAt: "2026-10-23"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-09"
 excerpt: "Every install channel with its upgrade and uninstall command, how to find out which evnx you are actually running, and fixes for the problems people really hit: an old version after upgrading, pip refusing to install, pipx not linking, missing cloud commands."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["install", "upgrade", "uninstall", "troubleshooting", "path", "pipx", "npm", "homebrew", "winget"]
 commands: ["cloud run", "commands", "update"]
-evnxVersion: "0.10.16"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -37,7 +37,7 @@ uninstalling, and fixing the problems people actually run into.
 
 ## Which evnx am I running?
 
-Answer this first, before changing anything. Three commands answer it.
+Answer this first, before changing anything. These commands answer it.
 
 **1. The version that runs when you type `evnx`:**
 
@@ -64,7 +64,18 @@ evnx update
 
 It reads the channel from where the running binary lives and prints that channel's
 command. It contacts nothing. `evnx update --check` also asks GitHub whether a newer
-release exists. See [`evnx update`](/guides/commands/update) for the details.
+release exists.
+
+**v0.12.0+** — `evnx update --list` does the first two steps for you: it lists every copy
+of evnx on this machine, in `PATH` order and then in the folders installers use (cargo,
+npm, pipx, Homebrew, `~/.local/bin`), marks the one that runs, gives each copy's version
+and the command that removes it, and says when the copy that runs is older than another.
+It contacts nothing and exits `0` however many copies it finds; `--json` gives `count` and
+`copies` for a script.
+
+```bash
+evnx update --list
+``` See [`evnx update`](/guides/commands/update) for the details.
 
 **4. Optionally, which features this build has** (0.10.0 and later):
 
@@ -73,7 +84,7 @@ evnx commands
 ```
 
 ```text
-  evnx 0.10.18
+  evnx 0.13.0
   built with: net, migrate, backup, cloud
 ```
 

@@ -84,6 +84,8 @@ Error: AWS secret name (e.g. prod/myapp/config) is required. Pass `--secret-name
   evnx would normally ask, but stdin is not a terminal.
 ```
 
+`--dry-run` never asks: without `--secret-name` it stops the same way (exit 2), because the preview would otherwise show a placeholder where the name should be.
+
 The output on this page comes from a `.env` with 12 variables, four of them local-only (`*_LOCAL`, `*_TEST`, `*_DEV`).
 
 ---
@@ -111,7 +113,7 @@ evnx migrate \
 
 · AWS Secrets Manager migration
 
-Dry-run — would upload to AWS Secrets Manager:
+Dry-run — would print commands for AWS Secrets Manager:
   Secret name : prod/myapp/config
   Secrets     : 12
 

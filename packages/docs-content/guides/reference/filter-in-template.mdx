@@ -3,13 +3,13 @@ title: "Writing Templates and Using Filters"
 section: guides
 order: 3
 publishedAt: "2026-03-11"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-09"
 excerpt: "Learn to write template files and use every evnx filter correctly — with precise input/output behavior, config-format guidance, and the pitfalls that cause silent misconfiguration."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["template", "filters", "tutorial", "config", "yaml", "toml", "json"]
 commands: ["template"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - commands/template
@@ -35,13 +35,9 @@ This tutorial covers every filter with exact input-to-output behavior, the three
 
 ## How the engine processes your template
 
-Before writing templates it helps to understand what the engine does in what order. It runs in two passes:
+**v0.12.0+** — the engine reads the template **once, left to right**. Each `{{VAR|filter}}`, `${VAR}`, `{{VAR}}` and `$VAR` reference is looked up in your `.env`, the filters are applied, and the reference is replaced with the result. A value is never read again as a template: with `A={{B|upper}}` in the `.env`, `{{A|json}}` gives `"{{B|upper}}"`, not the uppercased `B`. (Before 0.12.0 the engine ran two passes, filtered references first, and the result could depend on the order of the keys.)
 
-**Pass 1 — Filters.** Every `{{VAR|filter}}` reference is resolved first. The variable value is looked up in your `.env`, the filter transformation is applied, and the token is replaced with the result.
-
-**Pass 2 — Plain substitution.** After all filtered references are resolved, the engine replaces the remaining `${VAR}`, `{{VAR}}`, and `$VAR` tokens with their raw values.
-
-This ordering matters for one specific reason: you can use both `{{APP_ENV|upper}}` and `{{APP_ENV}}` in the same template and get different values from the same variable, without one interfering with the other.
+One consequence: you can use both `{{APP_ENV|upper}}` and `{{APP_ENV}}` in the same template and get different values from the same variable, without one interfering with the other.
 
 ```text
 # Template:
@@ -56,7 +52,7 @@ env_label: PRODUCTION
 env_slug: production
 ```
 
-The filter pass resolves `{{APP_ENV|upper}}` to `PRODUCTION` first, then the plain pass resolves the remaining `{{APP_ENV}}` to `production`. No conflict.
+Each reference is resolved on its own: `{{APP_ENV|upper}}` becomes `PRODUCTION` and `{{APP_ENV}}` becomes `production`. No conflict.
 
 ---
 
@@ -88,7 +84,11 @@ Familiar from Jinja2 and similar templating systems. Functionally identical to `
 host: $DB_HOST
 ```
 
-The shortest form. The engine matches `$VARNAME` followed by a word boundary, which means `$PORT` in `$PORT_NUMBER` is not a match — the `_` counts as a word character and there is no boundary between `T` and `_`. This style is convenient for brief templates but requires care: a variable named `DB` would match inside `$DB_HOST` if your `.env` contains `DB=something`. Prefer `${VAR}` or `{{VAR}}` in templates with multiple related variable names.
+The shortest form. The engine matches `$VARNAME` followed by a word boundary, which means `$PORT` in `$PORT_NUMBER` is not a match — the `_` counts as a word character and there is no boundary between `T` and `_`. `$VAR` is replaced only when `VAR` is defined, and an undefined one is left as written and never reported, so a `$` in shell snippets or prices is safe. This style is convenient for brief templates but requires care. Prefer `${VAR}` or `{{VAR}}` in templates with multiple related variable names.
+
+### Writing a reference literally
+
+**v0.12.0+** — a backslash in front of a reference makes it literal: `\${NAME}`, `\{{NAME}}` and `\$NAME` are written as `${NAME}`, `{{NAME}}` and `$NAME`, without the backslash, and `\\` before a reference is one backslash followed by the substituted value. Any other backslash is text, so `"C:\dir"` and `\n` in a JSON or YAML template stay as written. `${NAME:-x}` and the other shell expansions are written through as they are, with a warning naming the line: evnx's fallback is `{{NAME|default:value}}`.
 
 ### Mixing styles
 
@@ -111,8 +111,8 @@ debug: $DEBUG
 
 Filters transform a variable's value at substitution time. They are written inside double braces, separated from the variable name by a pipe: `{{VAR|filter}}`.
 
-<Callout type="danger">
-  <strong>Filters are not chainable.</strong> <code>{"{{PORT|int|default:8080}}"}</code> and <code>{"{{PORT|default:8080|int}}"}</code> are errors (<strong>v0.10.5+</strong>): the run names the line and writes nothing. They used to be written through or, for a filter after a default, rendered as <code>8080|int</code>. If you need a default and a type assertion, handle the value in your <code>.env</code> file (e.g. <code>PORT=8080</code>) rather than in the template. Chaining is still not supported in 0.11.0; it comes with the template engine planned for 0.12.0.
+<Callout type="info">
+  <strong>Filters chain left to right</strong> (<strong>v0.12.0+</strong>). <code>{"{{PORT|default:8080|int}}"}</code> gives <code>8080</code> when <code>PORT</code> is empty or unset, and <code>{"{{NAME|upper|json}}"}</code> uppercases and then quotes. Each <code>default:</code> takes its own text, up to the next <code>|</code>. In 0.10.5 to 0.11.x a chain was an error and nothing was written.
 </Callout>
 
 <Callout type="warning">
@@ -284,7 +284,7 @@ max_connections: 25
 | *(empty)* | not a valid integer |
 
 <Callout type="danger">
-  <strong>Empty values fail with <code>|int</code>.</strong> If a variable is defined but empty in your <code>.env</code> (e.g. <code>PORT=</code>), the <code>|int</code> filter will fail. If the variable might legitimately be unset, use <code>|default:8080</code> on a separate reference instead.
+  <strong>Empty values fail with <code>|int</code>.</strong> If a variable is defined but empty in your <code>.env</code> (e.g. <code>PORT=</code>), the <code>|int</code> filter will fail. If the variable might legitimately be empty or unset, put a default in front: <code>{"{{PORT|default:8080|int}}"}</code>.
 </Callout>
 
 **When to use it:** TOML integer fields, Nginx `worker_processes`, Kubernetes replica counts, connection pool sizes — anywhere the config format expects a bare number and passing a quoted string would cause a parse error at runtime.
@@ -325,10 +325,24 @@ AUTHOR=Jane Smith
 | *(empty)* | `""` |
 
 <Callout type="danger">
-  <strong>Do not use <code>|json</code> in YAML or TOML templates.</strong> Because the output includes surrounding double quotes, placing <code>{"{{VALUE|json}}"}</code> in a YAML file produces <code>key: "hello \"world\""</code> — the literal backslash-quote sequences become part of the YAML string value, which is not what you want. In YAML and TOML, use plain <code>{"${VALUE}"}</code> or <code>{"{{VALUE}}"}</code> instead, and ensure your values don't contain characters that break the target format.
+  <strong>Do not wrap <code>|json</code> in quotes.</strong> Because the output includes surrounding double quotes, <code>"{"{{VALUE|json}}"}"</code> produces doubled quotes and a broken value. Write <code>key: {"{{VALUE|json}}"}</code>. In YAML and TOML you can use <code>|yaml</code> and <code>|toml</code>, which write the same quoted string; plain <code>{"${VALUE}"}</code> or <code>{"{{VALUE}}"}</code> is fine for values with no quote or backslash in them.
 </Callout>
 
-**When to use it:** Embedding string values inside `.json` template files only. The filter exists precisely for JSON — it handles quotes, backslashes, and control characters correctly.
+**When to use it:** Embedding string values inside `.json` template files. The filter exists precisely for JSON — it handles quotes, backslashes, and control characters correctly. For YAML, TOML and shell, use the filters below.
+
+---
+
+### `|yaml`, `|toml`, `|sh` — Quote a value for another syntax
+
+**v0.12.0+.** Each writes the value as one correctly escaped string for its syntax, so you never hand-quote it:
+
+| Filter | Writes | For `hello "world" & <test>` |
+|--------|--------|------------------------------|
+| `\|yaml` | a double-quoted YAML scalar | `"hello \"world\" & <test>"` |
+| `\|toml` | a TOML basic string | `"hello \"world\" & <test>"` |
+| `\|sh` | one single-quoted shell word | `'hello "world" & <test>'` |
+
+Like `|json`, the output includes the surrounding quotes, so leave them out of the template: `name: {{NAME|yaml}}`, not `name: "{{NAME|yaml}}"`.
 
 ---
 
@@ -483,7 +497,7 @@ sentry:
   enabled: {{SENTRY_ENABLED|default:false}}
 ```
 
-If `SENTRY_DSN` is not set, the output is `dsn: ""`. Your app can check for an empty string to disable the Sentry integration. If you omit `|default:` and `SENTRY_DSN` is undefined, evnx warns and the output contains the literal text `{{SENTRY_DSN}}` — which is almost certainly not valid in your config format.
+If `SENTRY_DSN` is not set, the output is `dsn: ""`. Your app can check for an empty string to disable the Sentry integration. If you omit `|default:` and `SENTRY_DSN` is undefined, evnx stops with exit `2` (**v0.11.0+**), lists every unresolved name and writes nothing; `--allow-unresolved` writes the literal text `{{SENTRY_DSN}}` through instead, which is almost certainly not valid in your config format.
 
 ### Using the same variable with and without a filter
 
@@ -505,14 +519,14 @@ Each reference is resolved independently. The four tokens produce four different
 
 ### Pitfall 1: Expecting `|int` to be forgiving
 
-`|int` is the only filter that causes a hard failure. An empty value, a decimal, trailing whitespace, or a hex literal all fail with an error — the output file is not written. If your variable might be empty or absent, do not use `|int` directly. Set a concrete integer value in your `.env`, or use `|default:8080` on a plain reference.
+`|int` (like `|bool`) fails hard. An empty value, a decimal, trailing whitespace, or a hex literal all fail with an error — the output file is not written. If your variable might be empty or absent, put a default in front of `|int`.
 
 ```text
 # ❌ Will fail if PORT is empty or missing
 port = {{PORT|int}}
 
-# ✅ Use a concrete default in .env, OR use |default for the raw value
-port = {{PORT|default:8080}}
+# ✅ Fall back to 8080, then check it is an integer
+port = {{PORT|default:8080|int}}
 ```
 
 ### Pitfall 2: Hand-quoting a string in YAML or TOML
@@ -528,16 +542,16 @@ DESCRIPTION=hello "world"
 a: {{DESCRIPTION|json}}
 b: "{{DESCRIPTION}}"
 
-# Output (evnx 0.10.18)
+# Output (evnx 0.13.0)
 a: "hello \"world\""
 b: "hello "world""
 ```
 
 `a` parses as the string `hello "world"`. `b` is not valid YAML: a YAML parser stops
-with a parse error. `|json` writes a JSON string, with its quotes and escapes, and a JSON
-string is also a valid YAML and TOML string — so **`|json` is the safe way to write a
-string value in YAML, TOML and JSON**. A hand-quoted `"{{X}}"` is safe only for values
-that contain no `"` and no `\`.
+with a parse error. `|json`, `|yaml` and `|toml` write a quoted, escaped string, and a JSON
+string is also a valid YAML and TOML string — so **`|yaml` and `|toml` (or `|json`) are the
+safe way to write a string value** in those files. A hand-quoted `"{{X}}"` is safe only for
+values that contain no `"` and no `\`.
 
 ### Pitfall 3: `$VAR` matching a prefix of another variable name
 
@@ -684,9 +698,7 @@ evnx template \
 
 ✓ Loaded 9 variables from .env.dev
 ✓ Read template from config.toml.template
-⚠️  Variable 'DB_SSL_MODE' referenced in template but not defined in .env.dev
 ✓ Generated config at config.toml
-ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
 ```
 
 **Generated `config.toml` (dev):**
@@ -713,7 +725,7 @@ enable_metrics = false
 service_label  = "My Service"
 ```
 
-Every field is correctly typed for TOML: integers are unquoted, booleans are `true`/`false`, strings are quoted. `DB_SSL_MODE` was undefined in `.env.dev` — the `|default:require` filter covered it, and the warning in verbose output confirms that was the path taken.
+Every field is correctly typed for TOML: integers are unquoted, booleans are `true`/`false`, strings are quoted. `DB_SSL_MODE` was undefined in `.env.dev` — the `|default:require` filter covered it. Without that filter the run would have stopped with exit `2` and written nothing.
 
 ---
 
@@ -727,8 +739,11 @@ Every field is correctly typed for TOML: integers are unquoted, booleans are `tr
 | `\|capitalize` | `{{VAR\|capitalize}}` | No | No | YAML, TOML, any (first char only, v0.10.5+) |
 | `\|bool` | `{{VAR\|bool}}` | **Yes** (v0.10.5+) | No | YAML, TOML (produces `true`/`false`) |
 | `\|int` | `{{VAR\|int}}` | **Yes** | No | YAML, TOML (produces unquoted integer) |
-| `\|json` | `{{VAR\|json}}` | No | **Yes** | JSON only |
-| `\|default:val` | `{{VAR\|default:val}}` | No | No | Any format, any filter context |
+| `\|json` | `{{VAR\|json}}` | No | **Yes** | JSON, and YAML or TOML string values |
+| `\|yaml` | `{{VAR\|yaml}}` | No | **Yes** | YAML (v0.12.0+) |
+| `\|toml` | `{{VAR\|toml}}` | No | **Yes** | TOML (v0.12.0+) |
+| `\|sh` | `{{VAR\|sh}}` | No | **Yes** (single) | Shell scripts (v0.12.0+) |
+| `\|default:val` | `{{VAR\|default:val}}` | No | No | Any format; chains with other filters (`default:8080\|int`) |
 
 ---
 

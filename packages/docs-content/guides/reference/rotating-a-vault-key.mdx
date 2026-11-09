@@ -38,14 +38,14 @@ leaving the team.**
 | Situation | Why rotation helps |
 |---|---|
 | A laptop with a signed-in CLI is lost or stolen | the credential file was readable at `~/.config/evnx/`, mode 0600 or not |
-| A CI runner is compromised, and it held `EVNX_PASSWORD` | that secret derives the master key, which unwraps the vault key |
+| A CI runner is compromised, and it held your master password (`EVNX_MASTER_PASSWORD`, or the secret piped to `--password-stdin`) | that secret derives the master key, which unwraps the vault key |
 | A member's account is breached but they stay on the team | their wrapped copy may have been opened |
 | Someone left the company months ago and you are not sure the key was rotated then | rotating now costs minutes and settles it |
 
 If somebody should **lose access**, that is
 [`evnx vault revoke`](/guides/commands/vault) instead — it rotates the key *and*
 removes them, in one server transaction, so there is no moment where they are
-still a member of a vault whose key has already moved.
+still a member of a vault whose key has already moved. (`--no-rekey` removes a member without rotating, and that member keeps every key they had; use it only when you rekey separately.)
 
 ## Rotating
 

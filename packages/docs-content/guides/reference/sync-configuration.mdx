@@ -3,13 +3,13 @@ section: "reference"
 order: 5
 title: "Sync Configuration Reference"
 publishedAt: "2026-03-06"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-09"
 excerpt: "Configuring evnx sync: the placeholder JSON file (patterns, default, allow_actual), naming policy, environment variables and exit codes."
 difficulty: "advanced"
 timeToComplete: "25 minutes"
 tags: ["sync", "reference", "configuration", "json-schema", "advanced"]
 commands: ["scan", "sync"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/sync
   - getting-started/sync-basic
@@ -223,12 +223,12 @@ Error: `allow_actual` would copy a real credential into .env.example, which is a
 No verdict: evnx did not finish. This is not a clean result.
 ```
 
-<Callout type="warning" title="No audit line for allow_actual in 0.10.12">
-The interactive "actual values" choice prints
-`[AUDIT] actual values written to .env.example for: …` to stderr. Values written through
-`allow_actual` print no such line, the run still says it used placeholder values, and
-the `--dry-run` preview marks them `·` like placeholders. The credential check above
-still runs; only the record is missing. Read the template to see what it wrote.
+<Callout type="info" title="Real values are audited (v0.11.0+)">
+Values written through `allow_actual` print the same
+`[AUDIT] actual values written to .env.example for: APP_NAME, LOG_LEVEL` line to stderr
+as the interactive "actual values" choice, the run says "and real values for N keys in
+allow_actual", and the `--dry-run` preview marks them `!` rather than `·`. In 0.10.12
+there was no such line.
 </Callout>
 
 On v0.6.0 and earlier, `allow_actual` was parsed and never read: listed keys got

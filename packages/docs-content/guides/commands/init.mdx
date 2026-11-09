@@ -3,13 +3,13 @@ section: "commands"
 order: 1
 title: "evnx init"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-09"
 excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["init", "reference", "cli", "setup"]
 commands: ["add", "add blueprint", "add service", "doctor", "init"]
-evnxVersion: "0.10.1"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -19,7 +19,7 @@ draft: false
 
 Initialize `.env.example` and `.env` files using Blank, Blueprint, or Architect modes with schema-driven variable generation.
 
-Run with no flags in a terminal, `init` shows a menu with **Blank** pre-selected (it was Blueprint before 0.10.1). Yes/no questions take their answer on Enter (since 0.10.1): type `y` or `n` and press Enter, or just Enter for the default. Esc or `q` cancels without writing anything (exit 0): at once in a list, and followed by Enter at a yes/no question. If the output is piped into a command that stops reading early (`| head`), init exits 141, quietly, like other command-line tools — but ⚠️ in 0.10.18 it can stop before it writes `.evnx.toml` (a known bug; `.env`, `.env.example` and `.gitignore` are written). Do not pipe `init` into `head`. Without a terminal (CI, a pipe, an AI agent) the menu cannot be shown, so `init` stops with exit 2 and lists the flags to use instead; `--with` and `--blueprint` without `--yes` likewise stop and say to add `--yes`. With **`CI` set** (any value except `0` and `false`, **v0.10.16+**), init does not ask even at a terminal:
+Run with no flags in a terminal, `init` shows a menu with **Blank** pre-selected (it was Blueprint before 0.10.1). Yes/no questions take their answer on Enter (since 0.10.1): type `y` or `n` and press Enter, or just Enter for the default. Esc or `q` cancels without writing anything (exit 0): at once in a list, and followed by Enter at a yes/no question. If the output is piped into a command that stops reading early (`| head`), init exits 141, quietly, like other command-line tools. `.evnx.toml` is written before anything is printed (**v0.11.0+**; in 0.10.18 it could be missing after `| head`). Without a terminal (CI, a pipe, an AI agent) the menu cannot be shown, so `init` stops with exit 2 and lists the flags to use instead; `--with` and `--blueprint` without `--yes` likewise stop and say to add `--yes`. With **`CI` set** (any value except `0` and `false`, **v0.10.16+**), init does not ask even at a terminal:
 
 ```text
 Error: CI is set, so init does not ask.
@@ -27,6 +27,7 @@ Name what you want instead:
   evnx init --yes                     blank files
   evnx init --yes --blueprint <id>    a named stack
   evnx init --yes --with <a,b,c>      components (evnx init --list-components)
+  evnx init --detect                  what the project's manifests declare
 ```
 
 <Prerequisites>

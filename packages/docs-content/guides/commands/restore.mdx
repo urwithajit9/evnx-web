@@ -3,13 +3,13 @@ title: "evnx restore"
 section: commands
 order: 4
 publishedAt: "2026-03-10"
-updatedAt: "2026-11-01"
+updatedAt: "2026-11-09"
 excerpt: "Decrypt a backup made by evnx backup back into a .env file. Never replaces a file silently, keeps the one it replaces, says why a backup will not open, and has exit codes a script can branch on."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["restore", "backup", "encryption", "disaster-recovery", "evnx"]
 commands: ["backup", "cloud export", "cloud pull", "restore"]
-evnxVersion: "0.10.11"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
   - commands/backup
@@ -119,7 +119,7 @@ confirmation: a mistyped passphrase only fails to decrypt.
 evnx restore .env.backup --output .env.staging
 ```
 
-A new file is created `0600`.
+A new file is created `0600`. `--output -` (standard output) is refused since 0.13.0, as for `backup`: a restored `.env` is never printed. Name a file.
 
 ---
 
@@ -260,7 +260,7 @@ runs.
 
 The decrypted content is checked with the parser every evnx command reads `.env`
 files with. `export KEY=value` lines and multi-line quoted values (PEM keys, JSON)
-pass. Content the parser cannot read — prose, or a key such as `my-key`, which it
+pass. Content the parser cannot read — prose, or a key such as `a/b`, which it
 rejects — is written to **`<output>.restored`** instead, so it cannot replace a
 working file, and the run exits `5`:
 

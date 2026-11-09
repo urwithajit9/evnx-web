@@ -3,13 +3,13 @@ section: "reference"
 order: 4
 title: "Init Configuration Reference"
 publishedAt: "2026-03-06"
-updatedAt: "2026-10-25"
-excerpt: "What shapes evnx init: the compiled-in component catalogue, the flags, CI, and the four files it writes. Checked against evnx 0.10.18."
+updatedAt: "2026-11-09"
+excerpt: "What shapes evnx init: the compiled-in component catalogue, the flags, CI, and the four files it writes. Checked against evnx 0.13.0."
 difficulty: "intermediate"
 timeToComplete: "12 minutes"
 tags: ["init", "reference", "configuration", "schema", "setup"]
 commands: ["add", "init", "sync", "validate"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.13.0"
 prerequisites:
   - commands/init
   - getting-started/init-basic
@@ -39,7 +39,7 @@ runtime override. To see what your installed version knows:
 evnx init --list-components
 ```
 
-0.10.18 knows **56 components** and **ten blueprints**.
+0.13.0 knows **56 components** and **ten blueprints**.
 
 ### Its shape
 
@@ -137,6 +137,7 @@ scanner.
 | `--detect` | Accept what the project declares, without asking |
 | `--from-source` | Build the template from the variables the code reads. Only appends; not valid with `--force` |
 | `--force` | Replace an existing `.env.example`. Without it, `--with` / `--blueprint` over a template exits 2. `.env` is never replaced |
+| `--env-name <NAME>` | **v0.11.0+** — write `.env.<NAME>` instead of `.env`, filled from the template. Default: `[defaults] env_name` from `.evnx.toml` |
 | `--dry-run` | **v0.10.16+** — show what would be written, write nothing |
 | `--json` | **v0.10.16+** — one JSON document on stdout, with the same fields as `evnx add --json`. Needs `--yes` or `--dry-run` |
 | `--verbose`, `-v` | More detail |
@@ -168,6 +169,7 @@ Name what you want instead:
   evnx init --yes                     blank files
   evnx init --yes --blueprint <id>    a named stack
   evnx init --yes --with <a,b,c>      components (evnx init --list-components)
+  evnx init --detect                  what the project's manifests declare
 ```
 
 Without `CI`, a run with no terminal stops the same way. Before 0.10.16 init did not read

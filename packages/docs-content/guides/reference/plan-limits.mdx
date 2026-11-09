@@ -91,6 +91,10 @@ delete a vault, push, or issue or revoke a token.
 Each limit refuses the action that would cross it, and names the remedy. Nothing
 is deleted and nothing is silently dropped.
 
+**v0.13.0+** — a refusal for a plan limit makes the command exit `12`, so a script can tell
+"the plan is full" from "not signed in" (`10`), "not allowed" (`11`) and "the server is
+unreachable" (`13`).
+
 | Limit reached | What is refused | What to do |
 |---|---|---|
 | Vaults | Creating another | Delete one you no longer need — the slot frees immediately |

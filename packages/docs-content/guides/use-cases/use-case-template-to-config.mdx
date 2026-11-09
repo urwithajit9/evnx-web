@@ -257,12 +257,14 @@ evnx template \
   --env .env.production \
   --verbose
 
-Running template in verbose mode
+⋯ Running template in verbose mode
+
+  Generate config from template
+
 ✓ Loaded 6 variables from .env.production
 ✓ Read template from k8s/configmap.yaml.template
-⚠️  Variable 'ANALYTICS_ENDPOINT' referenced in template but not defined in .env.production
 ✓ Generated config at k8s/configmap.yaml
-ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+! 'k8s/configmap.yaml' may contain secrets and is not in .gitignore
 ```
 
 **Generated `k8s/configmap.yaml`:**
@@ -288,10 +290,10 @@ data:
 - ✅ `{{DB_POOL_SIZE|int}}` catches `"twenty-five"` before the pod starts, not after
 - ✅ `{{ENABLE_CACHING|bool}}` normalizes `yes`/`1`/`on`/`true`/`True` → `true` consistently; a value it does not recognise stops the run instead of becoming `false` (**v0.10.5+**)
 - ✅ `{{SUPPORT_EMAIL|default:support@example.com}}` prevents empty required-ish fields
-- ✅ `--verbose` surfaces the `ANALYTICS_ENDPOINT` warning so you can decide if it matters
+- ✅ `{{ANALYTICS_ENDPOINT|default:}}` has an empty fallback, so the unset variable is intentional and the run does not stop
 
 <Callout type="warning">
-  <strong>Watch the undefined variable warning.</strong> When <code>--verbose</code> reports a variable referenced but not defined, evnx substitutes nothing and leaves the value empty. For optional fields this is intentional — for required fields, it means a misconfiguration you want to catch before <code>kubectl apply</code>.
+  <strong>A placeholder with no value and no fallback is an error.</strong> Since v0.11.0, if the template names a variable that <code>.env.production</code> does not define and the placeholder has no <code>|default:</code>, evnx lists every such name, writes nothing and exits <code>2</code>. Give optional fields a fallback, as <code>ANALYTICS_ENDPOINT</code> has here; for required ones the failure is the misconfiguration caught before <code>kubectl apply</code>. <code>--allow-unresolved</code> writes the placeholder through as it is.
 </Callout>
 
 ---
@@ -383,13 +385,13 @@ APP_NAME=my api
 # Staging
 evnx template --input config.toml.template --output config.toml --env .env.staging
 
-✓ Loaded 10 variables from .env.staging
+✓ Loaded 9 variables from .env.staging
 ✓ Generated config at config.toml
 
 # Production
 evnx template --input config.toml.template --output config.toml --env .env.production
 
-✓ Loaded 10 variables from .env.production
+✓ Loaded 9 variables from .env.production
 ✓ Generated config at config.toml
 ```
 
@@ -527,8 +529,14 @@ evnx template \
   --env .env.api.production \
   --verbose
 
+⋯ Running template in verbose mode
+
+  Generate config from template
+
 ✓ Loaded 8 variables from .env.api.production
+✓ Read template from nginx/service.conf.template
 ✓ Generated config at nginx/api.conf
+! 'nginx/api.conf' may contain secrets and is not in .gitignore
 
 # Dev API (LOG_LEVEL not in .env.api.dev)
 evnx template \
@@ -538,10 +546,12 @@ evnx template \
   --verbose
 
 ✓ Loaded 7 variables from .env.api.dev
-⚠️  Variable 'LOG_LEVEL' referenced in template but not defined in .env.api.dev
+✓ Read template from nginx/service.conf.template
 ✓ Generated config at nginx/api.dev.conf
-ℹ️  Tip: Define 1 undefined variable to avoid runtime issues
+! 'nginx/api.dev.conf' may contain secrets and is not in .gitignore
 ```
+
+(Each run also prints the `⋯ Running template in verbose mode` header and `Generate config from template`; trimmed here.)
 
 **Generated `nginx/api.dev.conf`:**
 
@@ -578,10 +588,10 @@ http {
 - ✅ `{{WORKER_PROCESSES|int}}` and `{{UPSTREAM_PORT|int}}` catch non-integer values before `nginx -t`
 - ✅ `{{LOG_LEVEL|default:warn}}` produces a valid directive even when `LOG_LEVEL` is unset — no blank `error_log` line
 - ✅ One template for all services and environments — structural changes (log format, proxy headers) touch one file
-- ✅ The `--verbose` warning on `LOG_LEVEL` signals the fallback is active, so it's visible in CI logs
+- ✅ `LOG_LEVEL` is absent from `.env.api.dev` and the run still succeeds, because the placeholder carries a fallback; without `|default:warn` the run would stop with exit `2`
 
 <Callout type="info">
-  <strong>The undefined variable warning is useful here.</strong> When <code>LOG_LEVEL</code> is not set in <code>.env.api.dev</code>, evnx warns you and the <code>\|default:warn</code> filter takes over. This is intentional — the warning tells you the fallback is active, without failing the generation.
+  <strong>The fallback is what keeps this run green.</strong> When <code>LOG_LEVEL</code> is not set in <code>.env.api.dev</code>, the <code>\|default:warn</code> filter takes over. A variable like <code>SERVER_NAME</code> that has no fallback and is missing from the env file fails the generation instead (exit <code>2</code>, nothing written).
 </Callout>
 
 ---
@@ -667,7 +677,6 @@ upload_config deploy/config.production.yaml production
 Running template in verbose mode
 ✓ Loaded 8 variables from .env.staging
 ✓ Read template from config.yaml.template
-⚠️  Variable 'SENTRY_DSN' referenced in template but not defined in .env.staging
 ✓ Generated config at deploy/config.staging.yaml
 ✓ Added 'deploy/config.staging.yaml' to .gitignore
 --- Done: staging ---
@@ -708,13 +717,13 @@ sentry:
 **Benefits:**
 - ✅ `{{DEBUG|bool}}` and `{{SENTRY_ENABLED|bool}}` normalize all truthy variants — CI `.env` files can use `yes`, `1`, or `true` interchangeably
 - ✅ `{{APP_PORT|int}}` fails the CI job immediately if the port value is invalid — before the config reaches the environment
-- ✅ `{{SENTRY_DSN|default:}}` uses an empty default so staging (which has no DSN) produces a valid YAML string rather than an undefined variable warning leaving a bare template token in the output
-- ✅ `--verbose` ensures each generation step is logged in CI output — warnings about undefined variables appear inline
+- ✅ `{{SENTRY_DSN|default:}}` uses an empty default so staging (which has no DSN) produces a valid YAML string instead of stopping with an unresolved-placeholder error
+- ✅ `--verbose` ensures each generation step is logged in CI output, so a failure names the variables that had no value
 - ✅ `--gitignore` adds each generated `deploy/config.*.yaml` to `.gitignore` automatically — idempotent on repeated runs, so re-running the pipeline never creates duplicates
 - ✅ Adding a new config key means updating the template only — the CI script and the loop don't change
 
 <Callout type="tip">
-  <strong>Use <code>|default:</code> (empty default) for optional secrets.</strong> If a variable like <code>SENTRY_DSN</code> is legitimately absent in some environments, <code>{"{{SENTRY_DSN|default:}}"}</code> substitutes an empty string rather than leaving a template token in the generated file. Your app can then check for an empty string to disable the integration.
+  <strong>Use <code>|default:</code> (empty default) for optional secrets.</strong> If a variable like <code>SENTRY_DSN</code> is legitimately absent in some environments, <code>{"{{SENTRY_DSN|default:}}"}</code> substitutes an empty string rather than stopping the run with an unresolved-placeholder error. Your app can then check for an empty string to disable the integration.
 </Callout>
 
 ---

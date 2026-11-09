@@ -178,7 +178,7 @@ Read-only in the strongest sense: no password prompt, no decryption, no blob dow
 
 ## When two people push
 
-Every push carries the version it was based on. If someone else pushed first, you get **409 Conflict**.
+Every push carries the version it was based on. If someone else pushed first, you get **409 Conflict**, and `evnx` exits **14** (**v0.13.0+**; cloud commands now exit 10–15 by failure class, see [evnx cloud](/guides/commands/cloud)).
 
 <Callout type="warning" title="Pull, reconcile, push — do not just retry">
 Version numbers are authenticated into the ciphertext. A blob sealed as version 8 is cryptographically bound to being version 8, so it cannot be re-sent as version 9 — that is what stops a compromised server replaying an old version as current.

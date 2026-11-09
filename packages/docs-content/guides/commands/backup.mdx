@@ -3,13 +3,13 @@ title: "evnx backup"
 section: commands
 order: 3
 publishedAt: "2026-03-10"
-updatedAt: "2026-10-20"
+updatedAt: "2026-11-09"
 excerpt: "Encrypt a .env file into one portable backup file — AES-256-GCM, a key from Argon2id over a passphrase you choose — and keep the last few versions beside it. No account, no network."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["backup", "encryption", "security", "disaster-recovery", "evnx"]
 commands: ["backup", "restore"]
-evnxVersion: "0.10.11"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -55,7 +55,7 @@ evnx backup [ENV] [OPTIONS]
 |-----------------|---------|-------------|
 | `[ENV]` | `.env` | The file to back up — `evnx backup .env.production` |
 | `--env-name <NAME>` | — | Back up `.env.<NAME>` instead; a name with no file is an error listing the environments there are |
-| `--output <PATH>` | `<env>.backup` | Where to write the backup. Not the source file, not a directory |
+| `--output <PATH>` | `<env>.backup` | Where to write the backup. Not the source file, not a directory, and not `-`: standard output is refused since 0.13.0 (a file literally named `-` is `./-`) |
 | `--key-file <PATH>` | — | Use a file's contents as the passphrase. Also accepted as `--password-file`, the spelling [`restore`](/guides/commands/restore) uses |
 | `--keep <N>` | `3`, or `[backup] keep` | Previous backups to keep beside the new one; `0` overwrites |
 | `--verify` | off | Decrypt the backup again after writing it and compare, byte for byte |

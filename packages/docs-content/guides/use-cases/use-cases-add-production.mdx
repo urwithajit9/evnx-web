@@ -83,12 +83,16 @@ REDIS_DB=0
 
 ```console
 $ evnx add service redis
+  config    .evnx.toml
+
+  Add Service  Adding variables for 'redis'
 
 Preview:
 5 variables
   • service ×5
   Categories: Cache
-Add these 5 variables to .env.example? yes
+Add these 5 variables to .env.example and .env? yes
+  ✓ added 5 variable(s) to [vars] in .evnx.toml
 ✓ Added 5 variables for Redis
 ```
 
@@ -215,12 +219,16 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 
 ```console
 $ evnx add service stripe
+  config    .evnx.toml
+
+  Add Service  Adding variables for 'stripe'
 
 Preview:
 3 variables
   • service ×3
   Categories: Payments
-Add these 3 variables to .env.example? yes
+Add these 3 variables to .env.example and .env? yes
+  ✓ added 3 variable(s) to [vars] in .evnx.toml
 ✓ Added 3 variables for Stripe
 ```
 
@@ -280,6 +288,8 @@ echo "FEATURE_NEW_CHECKOUT=true" >> .env.example
 
 ```console
 $ evnx add custom FEATURE_NEW_CHECKOUT=true --desc "Enable new checkout flow for A/B test" --category application --yes
+  config    .evnx.toml
+  ✓ added 1 variable(s) to [vars] in .evnx.toml
 ✓ Added 1 custom variable
 ```
 

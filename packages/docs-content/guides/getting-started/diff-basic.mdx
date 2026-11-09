@@ -26,7 +26,7 @@ draft: false
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
 </Prerequisites>
 
-Every output on this page is from evnx 0.10.18.
+Every output on this page is from evnx 0.13.0.
 
 ---
 
@@ -68,15 +68,15 @@ evnx diff
 ```
 
 ```text
-  evnx diff  .env ↔ .env.example
+  evnx diff  ./.env ↔ ./.env.example
 
-Missing from .env (present in .env.example):
+Missing from ./.env (present in ./.env.example):
   + REDIS_URL
 
-Extra in .env (not in .env.example):
+Extra in ./.env (not in ./.env.example):
   - LOCAL_DEBUG_MODE
 
-  1 missing from .env  ·  1 not in .env.example
+  1 missing from ./.env  ·  1 not in ./.env.example
   values not compared against a template (--values to compare them)
 ```
 
@@ -94,12 +94,12 @@ evnx diff
 ```
 
 ```text
-  evnx diff  .env ↔ .env.example
+  evnx diff  ./.env ↔ ./.env.example
 
-Extra in .env (not in .env.example):
+Extra in ./.env (not in ./.env.example):
   - LOCAL_DEBUG_MODE
 
-  1 not in .env.example
+  1 not in ./.env.example
   values not compared against a template (--values to compare them)
 ```
 
@@ -107,7 +107,7 @@ Still exit `1`: the extra key counts too. When both files have exactly the same 
 get:
 
 ```text
-✓ .env and .env.example have the same keys
+✓ ./.env and ./.env.example have the same keys
 ```
 
 and exit `0`.
@@ -133,7 +133,8 @@ evnx diff --ignore-keys LOCAL_DEBUG_MODE
 ```
 
 ```text
-✓ .env and .env.example have the same keys (1 key ignored)
+✓ ./.env and ./.env.example have the same keys (1 key ignored)
+  values not compared against a template (--values to compare them)
 ```
 
 ## 4. Compare two environments
@@ -145,9 +146,9 @@ evnx diff --env-name production --against staging
 ```
 
 ```text
-  evnx diff  .env.production ↔ .env.staging
+  evnx diff  ./.env.production ↔ ./.env.staging
 
-Extra in .env.production (not in .env.staging):
+Extra in ./.env.production (not in ./.env.staging):
   - SENTRY_DSN
 
 Different values:
@@ -155,7 +156,7 @@ Different values:
   ~ STRIPE_SECRET_KEY
   ~ NODE_ENV
 
-  1 not in .env.staging  ·  3 different values
+  1 not in ./.env.staging  ·  3 different values
 ```
 
 `~` is a key whose values differ. Add `--show-values` to see them. Secrets stay masked, by
@@ -164,14 +165,14 @@ name and by value:
 ```text
 Different values:
   ~ DATABASE_URL
-    .env.staging: postgres://admin:***@db.stg:5432/app
-    .env.production: postgres://admin:***@db.prod:5432/app
+    ./.env.staging: postgres://admin:***@db.stg:5432/app
+    ./.env.production: postgres://admin:***@db.prod:5432/app
   ~ STRIPE_SECRET_KEY
-    .env.staging: ***
-    .env.production: ***
+    ./.env.staging: ***
+    ./.env.production: ***
   ~ NODE_ENV
-    .env.staging: staging
-    .env.production: production
+    ./.env.staging: staging
+    ./.env.production: production
 ```
 
 A key is masked when its name contains `PASSWORD`, `SECRET`, `TOKEN`, `API_KEY`, `AUTH`
@@ -202,7 +203,7 @@ evnx diff --format json | jq '.summary'
 ```
 
 Exit codes: `0` nothing `--fail-on` counts, `1` differences, `2` could not run — a
-missing file, a bad flag, or `.env does not exist`.
+missing file, a bad flag, or `./.env does not exist`.
 
 ## 6. As a pre-commit hook
 
@@ -223,24 +224,28 @@ has no `.env` yet.
 
 ## Other formats
 
-`--format patch` lists the lines to add and remove, with values withheld:
+`--format patch` prints a unified diff of the left file that `patch -p1` applies. On the
+files from step 1:
 
 ```text
-# Add these to .env:
-+ REDIS_URL=<withheld>
-
-# Remove these from .env:
-- LOCAL_DEBUG_MODE=<withheld>
+# LOCAL_DEBUG_MODE is only in ./.env; this patch keeps it
+--- a/.env
++++ b/.env
+@@ -5,0 +6,1 @@
++REDIS_URL=redis://localhost:6379
 ```
 
-It is a list for a human, **not** input for `patch(1)`. `--interactive` (`-i`) asks about
-each line, with `--format patch` only, and writes nothing.
+It adds the names `.env` lacks, with the template's values, and keeps keys only `.env`
+has, naming them in a comment. When values are compared (`--against`, `--values`,
+`--reverse`) it also replaces the different ones, and then needs `--show-values`
+because the patch carries real values. `--interactive` (`-i`) asks about each change
+(`--format patch` only), writes the ones you accept and keeps the old file as `.bak`.
 
 ---
 
 ## Troubleshooting
 
-**`Error: .env does not exist`** — you are in a fresh clone. Create it from the template
+**`Error: ./.env does not exist`** — you are in a fresh clone. Create it from the template
 with `evnx sync --direction reverse`, then fill in the values.
 
 **Every value shows as different** — you passed `--values` against the template. Values
