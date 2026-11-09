@@ -353,6 +353,8 @@ A missing command says so, and says this.
 | `--include <GLOB>` | Inject only names matching these globs, comma-separated |
 | `--exclude <GLOB>` | Skip names matching these. Applied after `--include` |
 | `--password-stdin` | Read the master password from stdin |
+| `--allow-override` | **v0.13.0+** — with several `--vault`, let the later vault win a key both hold |
+| `--allow-unsafe-names` | Inject names that make a program load other code (`PATH`, `LD_*`, `NODE_OPTIONS`, …), refused by default |
 | `--mask` / `--no-mask` | **v0.11.0+** — mask secret values in the command's output as `***`. On by default when output is not a terminal; see below |
 
 A build step that needs only public configuration has no reason to hold your
@@ -740,19 +742,17 @@ evnx cloud
   reachable yes (server ok v0.1.0)
 ```
 
-The command exits non-zero when the server cannot be reached, which is what makes
-it usable as a health check in a script:
+The command exits `13` when the server cannot be reached (**v0.13.0+**; before, `1` or `2`), which is
+what makes it usable as a health check in a script:
 
 ```bash
 evnx cloud status --ping || echo "evnx cloud is unreachable"
 ```
 
-<Callout type="warning">
-**A non-zero exit does not always mean "unreachable".** `status` checks your
-credentials first, so pointing `--server` at somewhere you have never signed in
-exits `1` with *"No credentials for this server"* without ever pinging it. When
-you are scripting a reachability check, make sure the credential for that server
-already exists — otherwise you are testing your credential store, not the server.
+<Callout type="info">
+`--ping` checks the server whether or not you are signed in to it: with no credentials
+the report says `not signed in` and still ends with `reachable yes` or `reachable no`.
+The exit code answers the reachability question, not the sign-in one.
 </Callout>
 
 ---
