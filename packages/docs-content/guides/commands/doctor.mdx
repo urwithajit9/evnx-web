@@ -3,13 +3,13 @@ title: "evnx doctor"
 section: commands
 order: 4
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-01"
+updatedAt: "2026-11-09"
 excerpt: "Check the setup around your env files: ignored and untracked by git, valid dotenv, private permissions, a committed template, and the project around them. Repairs .gitignore and file modes with --fix; JSON for CI."
 difficulty: beginner
 timeToComplete: "8 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
 commands: ["backup", "diff", "doctor", "init", "parse", "scan", "sync", "validate"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -23,7 +23,7 @@ repairs the two things that can be repaired safely: `.gitignore` and file modes.
 
 It does not look for secrets (that is [`evnx scan`](/guides/commands/scan)) and it
 does not compare keys (that is [`evnx diff`](/guides/commands/diff) or
-`evnx sync --check`). Every output on this page is from evnx 0.10.18.
+`evnx sync --check`). Every output on this page was checked against evnx 0.13.0.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -341,10 +341,10 @@ evnx doctor --format json
     }
   ],
   "summary": {
-    "total": 5,
+    "total": 6,
     "errors": 0,
     "warnings": 0,
-    "passed": 5,
+    "passed": 6,
     "info": 0,
     "fixable": 0
   },
