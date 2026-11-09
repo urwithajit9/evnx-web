@@ -401,6 +401,13 @@ A command that asks first (`revoke`, `leave`, `delete`, a production push of `.e
 ran with no terminal, in a script or CI. Nothing was sent. The message ends with the
 same command plus `--yes`; add it if that is what you meant.
 
+**What the exit code says** (**v0.13.0+**). These commands exit `10` when you are not signed
+in or the session was refused, `11` when your role is too low or you are not a member, `12`
+at a plan limit, `13` when the server cannot be reached, `14` on a conflict or a locked
+account, and `15` on a server error or rate limit. Bad arguments and local errors keep
+their old codes. A script can retry `13` and `15` and stop on the rest; see
+[API tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens#retry-by-exit-code).
+
 **A vault you can see in the dashboard is `not found` from the CLI.**
 
 Check the target. `my-app` and `my-app/production` are different vaults; `vault list`

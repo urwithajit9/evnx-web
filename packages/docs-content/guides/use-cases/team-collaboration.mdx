@@ -176,11 +176,11 @@ evnx validate
 
 ```text
   ✗  STRIPE_SECRET_KEY looks like a placeholder
-     .env
+     ./.env
      →  Get from Stripe Dashboard
 
   ✗  STRIPE_WEBHOOK_SECRET looks like a placeholder
-     .env
+     ./.env
      →  Get from Stripe Dashboard
 
   2 errors
@@ -317,7 +317,7 @@ Preview (`evnx sync --direction forward --dry-run`):
 | Change | Notify team? | How |
 |--------|-------------|-----|
 | New required variable | Yes | Slack/PR description |
-| Removed variable | Yes | Deprecation notice in PR |
+| Removed variable (`evnx remove NAME --all`, **v0.13.0+**; sync only adds) | Yes | Deprecation notice in PR |
 | Changed placeholder pattern | Maybe | Update `.evnx/placeholders.json` + docs |
 | Security-related variable | Yes | Direct message + PR |
 
