@@ -141,8 +141,8 @@ password>` in `config.yml` scanned clean. Now each string value in a `.yml`, `.j
 path:
 
 ```text
-  ✗  Sensitive config key: password              high
-     ./config.yml:2 (db.password)  Hunt…2xyz
+  ✗  Sensitive config key: password              high, medium confidence
+     ./config.yml:2 (db.password)  Hun…Z9q
      ·  flagged by variable name — the value was not checked
 ```
 
@@ -276,11 +276,10 @@ $ evnx scan --severity high --confidence high -q
   ✗  GitHub Token                                high
   ✗  Credentials in a connection string          high
   ✗  Clerk Secret Key (LIVE)                     critical
-  ✗  Sensitive config key: password              high
-  6 findings  ·  3 critical  ·  3 high
+  5 findings  ·  3 critical  ·  2 high
 ```
 
-(The `Sensitive config key: API_TOKEN` finding in the same folder is gone.)
+(The `Sensitive config key: API_TOKEN` and `Sensitive config key: password` findings in the same folder are gone: a name match is medium confidence.)
 
 ---
 
@@ -352,8 +351,6 @@ evnx scan --format json
       "git": "tracked"
     }
   ],
-  "allowed": [],
-  "known": [],
   "high_confidence": 6,
   "medium_confidence": 2,
   "low_confidence": 0,
@@ -380,7 +377,7 @@ evnx scan --format json
 | `status` | `new`, `known` (in the baseline) or `allowed` (inline marker) |
 | `fingerprint` | The baseline's identity for the finding. No value goes into it |
 | `matched_by` | `value` or `name`, so CI can tell a key match from a name heuristic |
-| `allowed`, `known` | The findings that do not count. `findings` and `summary.total` are exactly what fails the run |
+| `allowed`, `known` | The findings that do not count. Each array is present only when it has entries. `findings` and `summary.total` are exactly what fails the run |
 | `git` | `tracked`, or `staged` under `--staged`. In a repository the document also carries `ignored_by_git` |
 | `files[].read_as` | `dotenv`, `structured` or `text` |
 
