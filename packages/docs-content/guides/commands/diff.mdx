@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx diff"
 publishedAt: "2026-03-11"
-updatedAt: "2026-11-01"
+updatedAt: "2026-11-09"
 excerpt: "Compare .env with its template by key name, or two environments by key and value. Values stay hidden unless asked for; --fail-on picks what fails the run, so the exit code is a CI gate."
 difficulty: "beginner"
 timeToComplete: "6 minutes"
 tags: ["diff", "reference", "cli", "env", "security", "ci-cd"]
 commands: ["diff", "init", "spec", "sync"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -24,7 +24,7 @@ draft: false
   does one lack, and which **values** differ?
 
 Values are never printed unless you pass `--show-values`, and even then secrets stay
-masked. Every output on this page is from evnx 0.10.18.
+masked. Every output on this page was checked against evnx 0.13.0.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
