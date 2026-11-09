@@ -61,6 +61,7 @@ to pick from. `evnx add --list` prints every id.
 | `--list` | List every id `add` takes |
 | `--language`, `-l` | `framework` only: check that the framework belongs to this language |
 | `--desc`, `--category`, `--required` | `custom` only: applied to every name given |
+| `--optional` | `custom` only: declare the names optional (`required = false`) in `[vars]` of `.evnx.toml`, and mark them `(optional)` in the template. Without a contract it says how to make them optional |
 | `--verbose`, `-v` | Say which files were appended to |
 | `--quiet`, `-q` | Print only warnings, conflicts and errors |
 | `--no-color` | Plain output (as `NO_COLOR` does) |
@@ -125,7 +126,7 @@ $ evnx add framework nextjs --yes
 
 $ evnx add infra vercel --yes
 · vercel is an infra component; adding it.
-✓ Added 4 variables for Vercel
+✓ Added 3 variables for Vercel
 
 $ evnx add framework --language python nextjs --yes
 Error: Unknown framework 'nextjs' for language 'python'.
