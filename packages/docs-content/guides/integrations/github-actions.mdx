@@ -87,6 +87,15 @@ jobs:
 The `security-events: write` permission is required to upload SARIF files. Without it the upload step will fail with a 403 error.
 </Callout>
 
+<Callout type="info" title="Upgrading to 0.13.0">
+`--severity high` now filters on how bad a finding is (`critical`, `high`, `medium`,
+`low`); the old meaning, how sure evnx is, is `--confidence`. With 63 built-in rules
+instead of 13, a `--severity high` gate can start failing on findings it never saw.
+Adopt them with `evnx scan --update-baseline`, or `evnx:allow` markers (see below).
+The SARIF `ruleId` is now the rule's stable id (`aws-access-key`, was
+`secret/aws-access-key`), so GitHub code scanning shows existing alerts as new rules once.
+</Callout>
+
 ---
 
 ## Validate workflow
@@ -131,7 +140,7 @@ If you run evnx across many workflows, cache the binary to avoid re-downloading:
   id: cache-evnx
   with:
     path: ~/.local/bin/evnx
-    key: evnx-${{ runner.os }}-0.2.0
+    key: evnx-${{ runner.os }}-0.13.0
 
 - name: Install evnx (if not cached)
   if: steps.cache-evnx.outputs.cache-hit != 'true'
@@ -182,8 +191,8 @@ Outputs:
 
 ```
 ::error file=./.env.local,line=1,title=Secret detected (high)::DATABASE_URL matches Credentials in a connection string. Rotate this credential at its source
-::error file=./.env.production,line=2,title=Secret detected (high)::AWS_ACCESS_KEY_ID matches AWS Access Key. Rotate it at https://console.aws.amazon.com/iam
-::error file=./.env.production,line=3,title=Secret detected (high)::STRIPE_SECRET_KEY matches Stripe Secret Key (LIVE). Rotate it at https://dashboard.stripe.com/apikeys
+::error file=./.env.production,line=2,title=Secret detected (critical)::AWS_ACCESS_KEY_ID matches AWS Access Key. Rotate it at https://console.aws.amazon.com/iam
+::error file=./.env.production,line=3,title=Secret detected (critical)::STRIPE_SECRET_KEY matches Stripe Secret Key (LIVE). Rotate it at https://dashboard.stripe.com/apikeys
 ```
 
 The value is never included — only the variable name and the matched pattern. Annotations
@@ -226,7 +235,7 @@ jobs:
         id: cache-evnx
         with:
           path: ~/.local/bin/evnx
-          key: evnx-${{ runner.os }}-0.2.0
+          key: evnx-${{ runner.os }}-0.13.0
 
       - name: Install evnx
         if: steps.cache-evnx.outputs.cache-hit != 'true'
@@ -255,26 +264,30 @@ jobs:
 
 ## Ignoring known false positives
 
-If your repo contains `.env.example` or test fixtures that look like secrets, tell evnx to ignore them in `.evnx.toml`:
+If your repo contains test fixtures that look like secrets, say so where evnx can read it.
+Keep a whole path out of the folder walk with `exclude` in `.evnx.toml`:
 
 ```toml
 # .evnx.toml
 [scan]
-ignore_files = [
-  ".env.example",
-  ".env.test",
-  "fixtures/**/.env",
-]
-
-ignore_keys = [
-  "EXAMPLE_API_KEY",
-  "TEST_*",
+exclude = [
+  "fixtures",         # a name with no glob characters matches a whole path component
+  "*.sample.env",     # a glob
 ]
 ```
 
-Commit `.evnx.toml` to your repo so CI picks it up automatically.
+To silence one finding, put `evnx:allow` with the rule id on its line or the line above,
+in any comment style:
 
----
+```env
+# evnx:allow connection-string-credentials — local fixture, not a real database
+DATABASE_URL=postgres://admin:fixture-pass@db.internal:5432/app
+```
+
+To adopt a repository that already has findings, **v0.13.0+** `evnx scan --update-baseline`
+records them in `.evnx/baseline.json` (it holds no values, so it is safe to commit); from
+then on they are reported as `known` and do not fail the run. Commit `.evnx.toml` and
+`.evnx/` so CI picks them up. The `.env.example` family is skipped without any setting.
 
 ## Related
 
