@@ -75,15 +75,15 @@ $ evnx validate
   evnx validate  Check environment configuration
 
   ✗  SECRET_KEY looks like a placeholder
-     .env
+     ./.env
      →  Run: openssl rand -hex 32
      ·  fixable with --fix
 
   ✗  API_KEY looks like a placeholder
-     .env
+     ./.env
 
   !  DEBUG is set to "True" (string, not boolean)
-     .env
+     ./.env
      →  Use true or 1 for proper boolean handling
      ·  fixable with --fix
 
@@ -108,28 +108,27 @@ Would fix (2):
   • SECRET_KEY: "changeme" → (a new random secret)
   • DEBUG: "True" → true
 
-  Dry run — nothing was written: .env is unchanged and no backup was made
+  Dry run — nothing was written: ./.env is unchanged and no backup was made
 ...
 
 $ evnx validate --fix
 
   evnx validate  Check environment configuration
 
-✓ Saved fixes to .env — original kept at .env.bak
+✓ Saved fixes to ./.env — original kept at ./.env.bak
 
 Fixed (2):
   • SECRET_KEY: "changeme" → <64 hex chars>
   • DEBUG: "True" → true
 
   ✗  API_KEY looks like a placeholder
-     .env
+     ./.env
 
   1 error  ·  2 fixed
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -194,22 +193,21 @@ $ evnx validate --fix
 
   evnx validate  Check environment configuration
 
-✓ Saved fixes to .env — original kept at .env.bak
+✓ Saved fixes to ./.env — original kept at ./.env.bak
 
 Fixed (2):
   • SECRET_KEY: "" → <64 hex chars>
   • DB_PASSWORD: "" → <64 hex chars>
 
   ✗  STRIPE_SECRET_KEY looks like a placeholder
-     .env
+     ./.env
      →  Get from Stripe Dashboard
 
   1 error  ·  2 fixed
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -239,7 +237,7 @@ with no `.env` and it stops with exit `2`, which means it could not check:
 
 ```console
 $ evnx validate --format github-actions --fail-on warning
-Error: .env does not exist
+Error: ./.env does not exist
 
 Create it with `evnx init`, or point at another file with --env.
 
@@ -417,7 +415,7 @@ A misspelt type is an error (**v0.10.8+**), so a typo cannot silently suppress n
 
 ```console
 $ evnx validate --ignore localhost-in-docker
-Error: unknown issue type 'localhost-in-docker' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked
+Error: unknown issue type 'localhost-in-docker' — expected one of: missing_variable, extra_variable, placeholder_value, boolean_trap, weak_secret, localhost_in_docker, invalid_url, invalid_port, invalid_email, format_mismatch, duplicate_key, unknown_spec_key, unknown_environment, env_not_ignored, env_tracked, reader_mismatch, lone_carriage_return, nul_byte, forward_reference, not_shell_name
 
 No verdict: evnx did not finish. This is not a clean result.
 ```
@@ -492,7 +490,7 @@ commit that matters most, a `.env` that has been staged:
 $ git add -f .env
 $ git commit -m "add env"
   ✗  .env is tracked by git: its values are in the repository history
-     .env
+     ./.env
      →  git rm --cached .env, commit, then rotate every secret it held (`evnx scan .` lists them)
 
   1 error

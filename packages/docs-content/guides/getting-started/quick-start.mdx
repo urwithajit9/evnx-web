@@ -17,7 +17,7 @@ draft: false
 
 By the end of this guide you'll have run a health check, scanned for secrets, made a
 `.env.example`, caught validation problems, and converted your `.env` to a Kubernetes
-Secret — all in under five minutes. Every output below is from evnx 0.10.18.
+Secret — all in under five minutes. Every output below is from evnx 0.13.0.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx first</Prerequisite>
@@ -84,10 +84,12 @@ evnx doctor
   ·  Check for Docker configuration files
      No Docker configuration detected
 
+  ✓  Check that AI coding agents cannot read .env
+
   !  Check file permissions for sensitive files
      .env: permissions 664 (recommended: 600)
 
-  1 error  ·  2 warnings
+  1 error  ·  2 warnings  ·  1 check passed
 
   →  2 issues evnx doctor --fix can repair:
      ·  Validate .env file existence, security, and syntax
@@ -107,7 +109,7 @@ evnx doctor --fix
 ✓ Fixed: .env mode 664 → 600
   ✓  Check file permissions for sensitive files
 
-  1 warning  ·  2 checks passed
+  1 warning  ·  3 checks passed
 ```
 
 `--fix` writes the same four lines `evnx init` does — `.env*` plus `!.env.example`,
@@ -230,22 +232,22 @@ evnx validate
   evnx validate  Check environment configuration
 
   ✗  AWS_ACCESS_KEY_ID looks like a placeholder
-     .env
+     ./.env
      →  Get from AWS Console
 
   ✗  AWS_SECRET_ACCESS_KEY looks like a placeholder
-     .env
+     ./.env
      →  Get from AWS Console
 
   ✗  SENDGRID_API_KEY looks like a placeholder
-     .env
+     ./.env
 
   ✗  STRIPE_SECRET_KEY is too weak or predictable
-     .env
+     ./.env
      →  Rotate STRIPE_SECRET_KEY where it is issued, then replace it here
 
   ✗  JWT_SECRET is too weak or predictable
-     .env
+     ./.env
      →  Rotate JWT_SECRET where it is issued, then replace it here. `--fix` will not: it cannot tell a real credential from an unfilled placeholder. Pass --fix --rotate-weak-secrets if nothing else holds this value
 
   5 errors
@@ -321,13 +323,13 @@ evnx diff
 ```
 
 ```text
-  evnx diff  .env ↔ .env.example
+  evnx diff  ./.env ↔ ./.env.example
 
-Extra in .env (not in .env.example):
+Extra in ./.env (not in ./.env.example):
   - REDIS_URL
   - NEW_FEATURE_FLAG
 
-  2 not in .env.example
+  2 not in ./.env.example
   values not compared against a template (--values to compare them)
 ```
 
