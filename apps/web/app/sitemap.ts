@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
-import { DOCS_MODE, TESTIMONIALS_ENABLED, canonicalUrl } from "@evnx/config";
-import { getAllBlogPosts, getAllGuides } from "@/lib/content";
+import { TESTIMONIALS_ENABLED, canonicalUrl } from "@evnx/config";
+import { getAllBlogPosts } from "@/lib/content";
 
 /**
  * The sitemap, generated from the content that exists.
@@ -23,7 +23,6 @@ type Entry = MetadataRoute.Sitemap[number];
 const STATIC_PAGES: { path: string; priority: number; changeFrequency: Entry["changeFrequency"] }[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly" },
   { path: "/pricing", priority: 0.9, changeFrequency: "monthly" },
-  { path: "/guides", priority: 0.9, changeFrequency: "weekly" },
   { path: "/blog", priority: 0.8, changeFrequency: "weekly" },
   { path: "/install", priority: 0.8, changeFrequency: "monthly" },
   { path: "/changelog", priority: 0.7, changeFrequency: "weekly" },
@@ -44,21 +43,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const dated = (iso: string | undefined, fallback: string) =>
     new Date(iso ?? fallback);
 
-  // ⚠️ Once the split is on, every /guides/* URL is a 301 — and a sitemap
-  // should list destinations, never redirects. Telling Google to crawl
-  // eighty-two URLs that all bounce is the opposite of what the redirects are
-  // for. docs.evnx.dev publishes its own sitemap for the real locations.
-  const guides: Entry[] = DOCS_MODE === "split" ? [] : getAllGuides()
-    // ⚠️ Filtered here, not relied on upstream. `getAllGuides` only drops
-    // drafts when `isProd()`, so a non-production build would otherwise
-    // publish a sitemap advertising pages that do not exist in production.
-    .filter((g) => !g.draft)
-    .map((g) => ({
-      url: canonicalUrl(`/guides/${g.slug}`),
-      lastModified: dated(g.updatedAt, g.publishedAt),
-      changeFrequency: "monthly",
-      priority: 0.7,
-    }));
+  // /guides/* is a 301 to docs.evnx.dev, which publishes its own sitemap.
 
   const posts: Entry[] = getAllBlogPosts()
     .filter((p) => !p.draft)
@@ -78,7 +63,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       ? [{ path: "/testimonials", priority: 0.4, changeFrequency: "monthly" as const }]
       : []),
   ]
-    .filter((p) => !(DOCS_MODE === "split" && p.path.startsWith("/guides")))
     .map((p) => ({
     url: canonicalUrl(p.path),
     // No real modification date for a generated page; "now" is the honest
@@ -88,5 +72,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: p.priority,
   }));
 
-  return [...statics, ...guides, ...posts];
+  return [...statics, ...posts];
 }

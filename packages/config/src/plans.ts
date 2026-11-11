@@ -143,7 +143,7 @@ export const PLANS: readonly Plan[] = [
     highlighted: false,
     capabilities: {
       teamSharing: true,
-      sso: true,
+      sso: false, // on request only: there is no SSO build, so it is not a plan capability
       prioritySupport: true,
       invoiceBilling: true,
     },

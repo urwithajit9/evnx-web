@@ -84,15 +84,16 @@ export const pricing: SectionHeading & {
       ctaLabel: "Talk to us",
       features: [
         "Everything in Team",
-        "SAML single sign-on",
+        "SSO on request (contact us)",
         "Unlimited audit retention",
         "Invoiced annually",
         "Self-hosting support",
       ],
-      // ⚠️ SSO and unlimited retention are NOT built yet (see CLAUDE.md P4 /
-      // P6). This footnote is what keeps the tier from being a false promise.
-      // Remove it only when both ship.
-      footnote: "SSO and extended retention are on the roadmap — talk to us about timing before you buy.",
+      // ⚠️ There is no SSO build: it is arranged on request, not included.
+      // Unlimited retention is NOT built yet either (CLAUDE.md P6). This
+      // footnote keeps the tier from being a false promise.
+      footnote:
+        "SSO is on request — contact us to discuss it. Extended retention is on the roadmap; talk to us about timing before you buy.",
     },
   ],
 
