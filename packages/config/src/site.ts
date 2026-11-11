@@ -26,8 +26,9 @@ export type HostKey = keyof typeof HOSTS;
 /**
  * ⚠️ THE SPLIT SWITCH.
  *
- * `"inline"`  — docs are served from evnx.dev/guides/* (today).
- * `"split"`   — docs are served from docs.evnx.dev/cli/* (after P2/P3).
+ * `"split"`   — docs are served from docs.evnx.dev/cli/* (the default; the
+ *               /guides/* routes were removed from apps/web and now 301).
+ * `"inline"`  — legacy; no longer has routes behind it.
  *
  * Flipping this repoints every documentation link in both apps. Flip it only
  * once `docs.evnx.dev` answers for every URL in `docs/migration/url-inventory.csv`
@@ -38,7 +39,7 @@ export type HostKey = keyof typeof HOSTS;
  * still runs `inline`.
  */
 export const DOCS_MODE: "inline" | "split" =
-  (process.env.NEXT_PUBLIC_DOCS_MODE as "inline" | "split") ?? "inline";
+  (process.env.NEXT_PUBLIC_DOCS_MODE as "inline" | "split") ?? "split";
 
 /** Path prefix docs live under, per mode. `/guides` today, `/cli` after. */
 const DOCS_PREFIX = { inline: "/guides", split: "/cli" } as const;

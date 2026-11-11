@@ -27,13 +27,13 @@ Live at [evnx.dev](https://evnx.dev) · pnpm + Turborepo monorepo · Next.js 16,
 
 | Host | What | Source |
 |---|---|---|
-| `evnx.dev` | Marketing site, blog, guides (for now), changelog, pricing | `apps/web` (this repo) |
+| `evnx.dev` | Marketing site, blog, changelog, pricing (`/guides/*` 301s to docs) | `apps/web` (this repo) |
 | `docs.evnx.dev` | CLI documentation at `/cli/*` — **migration in progress** | `apps/docs` (this repo) |
 | `pay.evnx.dev` | One static page that loads Paddle.js for checkout | `pay/` (this repo, Cloudflare) |
 | `app.evnx.dev` | Cloud web app (vaults, orgs, billing) | separate `evnx-app` repo |
 | `api.evnx.dev` | evnx cloud API | separate `evnx-server` repo |
 
-⚠️ The guides are served by `apps/web` at `/guides/*` today. `NEXT_PUBLIC_DOCS_MODE=split` repoints every docs link to `docs.evnx.dev/cli/*`; flip it only once docs.evnx.dev answers for every URL in [`docs/migration/url-inventory.csv`](docs/migration/README.md).
+⚠️ The guides live at `docs.evnx.dev/cli/*`. `apps/web` has no `/guides` routes; `next.config.js` 301s `/guides/*` and `/docs/*` there. Verify with `pnpm verify:redirects`.
 
 ⚠️ Origin boundaries are deliberate (ADR-1): marketing analytics run on `evnx.dev` only, never on `app.evnx.dev` (master keys live there in a Web Worker), and `pay.evnx.dev` holds no session, cookie or analytics. Read [`pay/README.md`](pay/README.md) before adding anything to either.
 
@@ -126,7 +126,7 @@ The site builds and runs with **no** environment variables set. `apps/web/.env.e
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` | Testimonials, waitlist and votes are disabled |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only, bypasses RLS. **Never** give it a `NEXT_PUBLIC_` prefix |
-| `NEXT_PUBLIC_DOCS_MODE` | `inline` — guides served from `evnx.dev/guides/*` |
+| `NEXT_PUBLIC_DOCS_MODE` | `split` — docs links point at `docs.evnx.dev/cli/*` |
 | `NEXT_PUBLIC_BILLING_LIVE` | Paid plans go through "talk to us" rather than checkout |
 | `NEXT_PUBLIC_TESTIMONIALS_ENABLED` | Testimonials aren't promoted in nav/footer/sitemap (page still reachable) |
 | `NEXT_PUBLIC_UMAMI_WEBSITE_ID` | Analytics off |
