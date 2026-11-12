@@ -21,6 +21,7 @@ const NAV_LINKS = [
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/security", label: "Security" },
   // { href: "/login", label: "Login"},
   ...(TESTIMONIALS_ENABLED
     ? [{ href: "/testimonials", label: "Testimonials" }]
