@@ -236,7 +236,8 @@ asks. Answering no leaves the file alone and **exits `4`**, as `restore` does:
 
 Before 0.12.0 a declined pull exited `0`, so a script could not tell that nothing was
 written. With no terminal it stops (exit `2`) and names `--yes`. Whichever way the yes comes, **the replaced file is kept as `.env.bak`**
-(then `.bak.2`, …), protected by `.gitignore` like the file itself, and the pull says so:
+(**v0.14.0+**: one copy, replaced on each pull, and old `.bak.N` copies of that file are
+removed), protected by `.gitignore` like the file itself (one `*.bak` line), and the pull says so:
 `✓ kept the previous ./.env as ./.env.bak`. The write is atomic, goes through a symlink
 rather than replacing it, and an existing file keeps its mode, with a warning if others
 can read it (**v0.11.0+**; it was forced to `0600`). To compare first without writing

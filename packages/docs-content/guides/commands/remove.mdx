@@ -3,7 +3,7 @@ section: "commands"
 order: 3
 title: "evnx remove"
 publishedAt: "2026-11-08"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-12"
 excerpt: "Reference for evnx remove: take a variable out of .env, and optionally the template and the contract, with a preview, a backup and a clear exit code."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
@@ -52,7 +52,8 @@ evnx rm <NAME>... [OPTIONS]
 | `--yes`, `-y` | Remove without asking |
 | `--ignore-missing` | A name found nowhere is not an error (for scripts that run twice) |
 | `--no-backup` | Keep no `.bak` copy of the env files. Needs `--yes`; refused for a file git tracks |
-| `--json` | Print the result as one JSON document. Needs `--yes` or `--dry-run` |
+| `--check` | **v0.14.0+** — read-only: exit `0` if the names are gone from every file, `1` if not. See [below](#is-it-gone-everywhere---check) |
+| `--json` | Print the result as one JSON document. Needs `--yes` or `--dry-run`, or `--check` |
 | `--verbose`, `-v` | Enable verbose output |
 | `--quiet`, `-q` | Print nothing on success. Findings, warnings, errors and requested data still print |
 | `--no-color` | Plain output |
@@ -64,6 +65,7 @@ evnx rm <NAME>... [OPTIONS]
 | Code | Meaning |
 |------|---------|
 | `0` | removed, or a dry run, or nothing to do with `--ignore-missing` |
+| `1` | **`--check` only**: a named variable is still in a file |
 | `2` | could not run or refused: a name that is not there, a file it cannot read, a malformed file, or no terminal to ask on |
 | `4` | you answered no to the confirmation |
 
@@ -183,7 +185,7 @@ so a script can run twice.
 $ evnx rm 'TEST_*' --yes --json
 {
   "backups": [
-    "./.env.bak.2"
+    "./.env.bak"
   ],
   "dry_run": false,
   "missing": [],
@@ -225,10 +227,63 @@ $ evnx rm 'TEST_*' --yes --json
 
 Quote the glob so your shell does not expand it. A glob that matches every
 variable in a file needs `--yes`, and an argument that is the name of an existing
-file is refused as a shell-expanded glob. A second backup in the same folder is
-named `.env.bak.2`.
+file is refused as a shell-expanded glob. A second run
+replaces `.env.bak` (see [Backups](/guides/commands/sync#backups-one-bak-per-file)).
 
 No value is printed in any mode, including `--json`.
+
+---
+
+## Is it gone everywhere? `--check`
+
+**v0.14.0+** — `evnx remove --check NAME...` is read-only and made for CI after a removal
+merges. It always looks everywhere: every environment file, the template and the `[vars]`
+contract.
+
+```bash
+evnx remove --check OLD_TOKEN
+```
+
+```text
+  still present:
+    OLD_TOKEN            ./.env.example (line 3)
+    OLD_TOKEN            .evnx.toml [vars.OLD_TOKEN]
+✗ Not removed everywhere. Clear it with: evnx remove OLD_TOKEN --all
+```
+
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | No named variable (or quoted glob) is in any environment file, the template or the contract |
+| `1` | At least one still is. Each file, and line, is listed |
+| `2` | No verdict: a file could not be read whole |
+
+Because it always looks everywhere, `--check` takes none of the scope flags (`--template`,
+`--contract`, `--all`, `--env-name`), nor `--dry-run`, `--yes`, `--ignore-missing` or
+`--no-backup`.
+
+`--json` prints one document with `schema_version`, `check`, `clean`, `names`, `checked`
+and `present`. Each `present` entry has `name`, `file`, `kind` (`env`, `template` or `contract`)
+and either `lines` or `table`. **No value appears.**
+
+```bash
+evnx remove --check OLD_TOKEN --json
+```
+
+```json
+{
+  "check": true,
+  "checked": ["./.env", "./.env.example", ".evnx.toml [vars]"],
+  "clean": false,
+  "names": ["OLD_TOKEN"],
+  "present": [
+    { "file": "./.env.example", "kind": "template", "lines": [3], "name": "OLD_TOKEN" },
+    { "file": ".evnx.toml", "kind": "contract", "name": "OLD_TOKEN", "table": "vars.OLD_TOKEN" }
+  ],
+  "schema_version": 1
+}
+```
+
+(Shown compact; the command prints it pretty-printed, one value to a line.)
 
 ---
 
@@ -243,13 +298,22 @@ No value is printed in any mode, including `--json`.
 - Every file is planned and checked before any is written. A file that changed
   while the command ran is not overwritten, and a failure part-way puts back the
   files already changed and names them.
-- The env files are backed up as `.bak` first. `--no-backup` is refused for a file
-  git tracks.
+- The env files are backed up as `.bak` first, one copy per file. **v0.14.0+** — the copy
+  is replaced on each run instead of becoming `.bak.2`, and old numbered copies of that file
+  are removed with one line saying how many. `--no-backup` is refused for a file git tracks.
+- **Two runs on the same file cannot undo each other** (**v0.14.0+**). A run takes a lock
+  file beside each file it writes (`.evnx-<name>.lock`, holding its process id) before it
+  checks the file is unchanged and writes. A second run stops at once with exit `2`,
+  `another evnx (process N) is changing .env`, and changes nothing. A lock left by a
+  crashed run is taken over.
+- Two environment files whose names differ only in case (`.env.Staging`, `.env.staging`)
+  are reported as such. They are separate files except on a case-insensitive filesystem,
+  and are never merged.
 
 ---
 
 ## See also
 
 - [evnx add](/guides/commands/add) — the other direction
-- [evnx sync](/guides/commands/sync) — `sync` only adds; its hint now names `evnx remove NAME --template`
+- [evnx sync](/guides/commands/sync) — `sync` adds names; `sync --prune` removes the ones no environment has from the template
 - [evnx spec](/guides/commands/spec) — the `[vars]` contract that `--contract` edits
