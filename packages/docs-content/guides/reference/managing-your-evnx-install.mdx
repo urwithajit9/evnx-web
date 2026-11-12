@@ -176,8 +176,18 @@ npm install -g @evnx/cli
 
 `@evnx/cli` is a small wrapper. The binary itself comes in one of five
 platform packages that npm installs automatically: Linux x64 and arm64, macOS x64
-and arm64, and Windows x64. A setup step that runs at install time connects the two.
-This matters for two of the failures below.
+and arm64, and Windows x64. **v0.14.0+** — nothing runs at install time: the `evnx`
+command is a Node launcher that finds the platform package, runs the binary next to it with
+your terminal attached, and passes on its exit code and any signal. So it works with **pnpm**
+(10 and later) and **bun**, which skip install scripts, as well as npm:
+
+```bash
+pnpm add -g @evnx/cli
+bun add -g @evnx/cli
+```
+
+Before 0.14.0 a `postinstall` step connected the two, and where scripts did not run the
+placeholder `evnx` exited `1`. A missing platform package is the one failure left; see below.
 
 `npx @evnx/cli` (0.10.6 and later) runs it without installing anything, and a
 project can pin its own version with `npm install --save-dev @evnx/cli`. A
@@ -491,32 +501,43 @@ Error: `--check` needs network support, and this build has none.
 A build with no optional features contains no HTTP code at all, on purpose. The
 fixes above apply.
 
-### npm: `evnx: run npm install to complete setup`
+### npm: `evnx: run npm install to complete setup` (before 0.14.0)
 
 ```text
 evnx: run npm install to complete setup
 ```
 
-The setup step that runs at install time was skipped, usually because of
-`--ignore-scripts` or `ignore-scripts=true` in an `.npmrc`. Reinstall with scripts
-allowed:
+Versions before 0.14.0 ran a setup step at install time, and it was skipped by
+`--ignore-scripts`, `ignore-scripts=true` in an `.npmrc`, and by pnpm 10+ and bun by
+default. **Upgrade to 0.14.0 or later**, which has no install step:
 
 ```bash
-npm install -g @evnx/cli --ignore-scripts=false
+npm install -g @evnx/cli@latest
 ```
 
-### npm: `Binary package @evnx/evnx-… not installed`
+### npm: `evnx: the binary package @evnx/evnx-… is not installed`
 
-The platform package was not installed. Either optional dependencies were turned off
-(`--omit=optional`, `--no-optional`, or `omit=optional` in an `.npmrc`), or your
-platform is not one of the five supported (Linux x64 and arm64, macOS x64 and
-arm64, Windows x64). For the first:
+**v0.14.0+** — the platform package was not installed:
+
+```text
+evnx: the binary package @evnx/evnx-linux-x64 is not installed.
+It is an optional dependency of @evnx/cli; it is missing when the install ran with
+--omit=optional / --no-optional, or copied node_modules between platforms.
+Reinstall with optional dependencies enabled, or run: npm install @evnx/evnx-linux-x64
+Or install a release binary: https://github.com/urwithajit9/evnx/releases
+```
+
+Either optional dependencies were turned off (`--omit=optional`, `--no-optional`, or
+`omit=optional` in an `.npmrc`), or `node_modules` was copied from another platform. For the
+first:
 
 ```bash
 npm install -g @evnx/cli --include=optional
 ```
 
-For an unsupported platform, use a release binary or `cargo install`.
+On a platform that is not one of the five supported (Linux x64 and arm64, macOS x64 and
+arm64, Windows x64), the launcher says `unsupported platform`, lists the supported ones and
+points at the release binaries; use one of those or `cargo install`.
 
 ### The install script asks for `sudo`
 
@@ -562,6 +583,14 @@ brew link --overwrite evnx
 ```
 
 From then on, upgrade with `brew upgrade evnx` only.
+
+### Windows: `VCRUNTIME140.dll was not found`
+
+**v0.14.0+** — the Windows binary has the C runtime built in, so it starts on a PC that has
+no Visual C++ Redistributable installed, and nothing needs installing first. Releases before
+0.14.0 needed the redistributable; with one of those, install the current
+[Microsoft Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)
+or upgrade evnx.
 
 ### Windows: Defender or SmartScreen blocks evnx
 
