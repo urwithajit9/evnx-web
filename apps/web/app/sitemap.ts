@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { TESTIMONIALS_ENABLED, canonicalUrl } from "@evnx/config";
+import { getPublishedSecurityNotices } from "@evnx/content";
 import { getAllBlogPosts } from "@/lib/content";
 
 /**
@@ -54,6 +55,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
     }));
 
+  // Published notices only — unpublished ones appear nowhere.
+  const notices: Entry[] = getPublishedSecurityNotices().map((n) => ({
+    url: canonicalUrl(`/security/${n.slug}`),
+    lastModified: dated(n.date, n.date),
+    changeFrequency: "yearly",
+    priority: 0.5,
+  }));
+
   // ⚠️ /testimonials is absent while the flag is off. A thin page that is
   // linked and indexed is a quality signal about the whole site, and the page
   // has nothing on it until there are approved rows.
@@ -72,5 +81,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: p.priority,
   }));
 
-  return [...statics, ...posts];
+  return [...statics, ...notices, ...posts];
 }
