@@ -9,7 +9,7 @@ difficulty: "beginner"
 timeToComplete: "6 minutes"
 tags: ["diff", "reference", "cli", "env", "security", "ci-cd"]
 commands: ["diff", "init", "spec", "sync"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -455,7 +455,7 @@ Exit 2. In a fresh clone that is expected: create `.env` from the template with
 ### `Failed to parse`
 
 ```text
-Error: Failed to parse bad.env: Invalid format at line 2: missing '=' separator
+Error: Failed to parse ./bad.env: Invalid format at line 2: missing '=' separator
 ```
 
 Exit 2. Fix the named line. Comments (`#`), blank lines and an `export` prefix are allowed.

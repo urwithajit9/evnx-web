@@ -9,7 +9,7 @@ difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["convert", "reference", "formats", "troubleshooting", "env"]
 commands: ["convert", "init", "migrate", "platform"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
   - commands/convert
@@ -522,7 +522,8 @@ evnx convert --to railway
 The same bytes as `json`. stderr says:
 
 ```text
-! railway output is experimental: it is the JSON --to json prints, and Railway documents no import that takes it.
+! railway output is experimental: Railway's docs say the Raw Editor takes a JSON-formatted file but give no schema; this flat object of strings is the shape its error messages describe.
+  Docs: https://docs.evnx.dev/cli/commands/convert
 ```
 
 ---

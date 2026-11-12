@@ -9,7 +9,7 @@ difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["migrate", "reference", "cli", "secrets", "cloud"]
 commands: ["cloud run", "convert", "migrate", "scan", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -172,21 +172,39 @@ evnx migrate --to aws --secret-name prod/myapp/config --print-only
 
 ```text
 # Create a new secret:
+(
+umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+head -c 80 > "$f" <<'EVNX_VALUE'
+{
+  "DATABASE_URL": "postgres://user:pw@db/app",
+  "API_KEY": "sk_live_abc123"
+}
+EVNX_VALUE
 aws secretsmanager create-secret \
   --name prod/myapp/config \
-  --secret-string '{
-  "DATABASE_URL": "postgres://user:pw@db/app",
-  "API_KEY": "sk_live_abc123"
-}'
+  --secret-string file://"$f"
+)
 
 # Or update an existing secret:
-aws secretsmanager update-secret \
-  --secret-id prod/myapp/config \
-  --secret-string '{
+(
+umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+head -c 80 > "$f" <<'EVNX_VALUE'
+{
   "DATABASE_URL": "postgres://user:pw@db/app",
   "API_KEY": "sk_live_abc123"
-}'
+}
+EVNX_VALUE
+aws secretsmanager update-secret \
+  --secret-id prod/myapp/config \
+  --secret-string file://"$f"
+)
 ```
+
+**v0.14.0+** — the JSON goes through a private (`umask 077`) temporary file, written from a
+quoted heredoc and passed as `--secret-string file://"$f"`, then removed. The values no
+longer show in `ps` or in your shell history, and the stored secret is exactly the JSON.
+(Azure's commands already worked this way.) Before 0.14.0 the JSON was inline in
+`--secret-string '…'`.
 
 Both are printed because evnx cannot know whether the secret exists — it never
 talks to AWS. Run the one that applies. `--aws-profile` adds `--profile` to both.
@@ -412,8 +430,8 @@ cannot be combined with `--dry-run`.
 <Callout type="danger">
 **Every destination but `github-actions` prints secret values in plaintext**,
 because that is what the command needs to contain. Anything you copy into a
-terminal lands in your shell history, and a `--secret-string '{…}'` line carries
-every variable at once.
+terminal lands in your shell history. (From v0.14.0 the AWS and Azure commands read the
+values from a temporary file, so they do not show in `ps` or history; the others below do.)
 
 Mitigations, in order of preference:
 
@@ -425,6 +443,21 @@ Mitigations, in order of preference:
 
 `--dry-run` is not a mitigation. It still previews values.
 </Callout>
+
+### Values on the command line (`heroku`, `doppler`, `infisical`, `railway`)
+
+**v0.14.0+** — `aws-secrets-manager` and `azure-keyvault` keep values off the command line
+(a temporary file, above). `heroku`, `doppler`, `infisical` and `railway` take values only as command-line
+arguments, so evnx cannot keep them off the command line. It says so on stderr, under the
+commands:
+
+```text
+! These commands pass the values as command-line arguments, which can show in `ps` and in your shell history: run them on a trusted machine.
+```
+
+`-q` does not hide it, and `> run.sh` does not capture it (it is on stderr). Run those
+commands on a machine you trust.
+
 
 ---
 
