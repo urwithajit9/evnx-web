@@ -3,7 +3,7 @@ title: "evnx vault"
 section: commands
 order: 8
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-12"
 excerpt: "Create, share and revoke encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
 difficulty: intermediate
 timeToComplete: "10 minutes"
@@ -217,7 +217,9 @@ evnx vault share my-api/production --with alice@example.com
 The role defaults to `developer`. Pass `--role viewer` for read-only access, or
 `--role admin` to let them manage members too. **From v0.6.0** `--user` is
 accepted as an alias for `--with`, so the flag is the same one `revoke` and
-`role` take; on earlier versions `share` takes only `--with`.
+`role` take; on earlier versions `share` takes only `--with`. **v0.14.0+** — the other
+way round too: `vault role` and `vault revoke` take `--with` as well as `--user`, so the
+member's email works under whichever name you learned first. Neither is deprecated.
 
 <Callout type="info" title="Or from the dashboard">
 **[app.evnx.dev](https://app.evnx.dev) → a vault → Members → Share with.** The
@@ -332,7 +334,7 @@ evnx vault role my-api/production --user alice@example.com --role admin
 
 | Flag | Description |
 |---|---|
-| `--user <EMAIL>` | **Required.** The member whose role is changing |
+| `--user <EMAIL>` | **Required.** The member whose role is changing. `--with` is an alias (**v0.14.0+**) |
 | `--role <ROLE>` | **Required.** `viewer`, `developer` or `admin` |
 
 You can only set a role below your own, and only for someone you already outrank.
@@ -420,7 +422,7 @@ Add --yes (-y) to go ahead without being asked:
 
 | Flag | Description |
 |---|---|
-| `--user <EMAIL>` | **Required.** The member to remove |
+| `--user <EMAIL>` | **Required.** The member to remove. `--with` is an alias (**v0.14.0+**) |
 | `--yes`, `-y` | Skip the confirmation prompt |
 | `--no-rekey` | Remove them **without** rotating the key — see below |
 | `--password-stdin` | Read the master password from stdin instead of prompting |
