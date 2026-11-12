@@ -82,6 +82,15 @@ jobs:
       - name: Every guide's `commands:` matches what it demonstrates
         run: node scripts/sync-guide-commands.mjs --check
 
+      # RM-W3(a). The layout renders the frontmatter title as the page <h1>; a
+      # body that also opens with `# Title` ships two. Fixed once in RM-W2.
+      - name: No guide starts with an in-content `# Title`
+        run: node scripts/check-guide-h1.mjs
+
+      # RM-W3(c). Needs EVNX_BIN, set above; the script refuses to run without.
+      - name: Guide invocations match the binary's command tree
+        run: node scripts/check-cli-invocations.mjs
+
   # ⚠️ D-175. `content-links` reads the MDX as written, where a guide links
   # `/guides/…`; the docs app serves the same pages at `/cli/…`. It rendered
   # those links unchanged — 352 hrefs on 63 of 72 pages, every one a 404 on
@@ -115,8 +124,10 @@ jobs:
       # reports a warning — a check that goes red when crates.io is slow is a
       # check people learn to ignore. Download counts never fail it; they move
       # every day and a stale one is cosmetic. Versions and plan limits do.
+      # --live-api is explicit: without it --check makes no call to the
+      # production API and skips the plan-limits comparison (RM-W3(d)).
       - name: Generated config matches the registries and the API
-        run: node scripts/sync-config.mjs --check
+        run: node scripts/sync-config.mjs --check --live-api
 
       # ⚠️ /changelog stopped at v0.4.0 for 26 releases because it was a
       # hand-kept array. It is now generated from the CLI's CHANGELOG.md on

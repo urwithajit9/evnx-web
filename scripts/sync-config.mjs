@@ -2,7 +2,8 @@
 // ─── Refresh the generated halves of @evnx/config ─────────────────────────────
 //
 //   node scripts/sync-config.mjs          rewrite versions.json + plan-limits.json
-//   node scripts/sync-config.mjs --check  exit 1 if either is stale (for CI)
+//   node scripts/sync-config.mjs --check  exit 1 if either is stale (for CI);
+//                                         plan limits are only checked with --live-api
 //
 // ⚠️ THE RULE THIS SCRIPT ENFORCES: a failed fetch never overwrites good data.
 //
@@ -29,6 +30,11 @@ const TIMEOUT_MS = 10_000;
 
 const checkOnly = process.argv.includes("--check");
 const problems = [];
+
+// RM-W3(d): --check must not call the production API unless asked. An explicit
+// EVNX_API_URL (a staging or local server) counts as asking; so does --live-api.
+const callApi =
+  !checkOnly || process.argv.includes("--live-api") || Boolean(process.env.EVNX_API_URL);
 
 async function getJson(url, label) {
   const ctl = new AbortController();
@@ -108,6 +114,14 @@ async function syncVersions() {
 async function syncLimits() {
   const current = JSON.parse(readFileSync(LIMITS_PATH, "utf8"));
   const next = structuredClone(current);
+
+  if (!callApi) {
+    console.log(
+      "· plan limits not checked: --check makes no call to the production API. " +
+        "Pass --live-api (or set EVNX_API_URL) to check them.",
+    );
+    return { current, next };
+  }
 
   const res = await getJson(`${API_BASE}/api/v1/plans`, "GET /api/v1/plans");
   if (!res?.plans) {
