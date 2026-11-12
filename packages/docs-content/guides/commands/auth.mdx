@@ -42,6 +42,8 @@ evnx auth download-data --output my-data.json
 | `register` | Create an account |
 | `login` | Sign in (SRP-6a, plus TOTP when enabled) |
 | `logout` | Sign out and delete the local session |
+| `resend-verification` | **v0.14.0+** — send the email-verification link again. See [below](#lost-the-verification-email) |
+| `key-bundle` | **v0.14.0+** — print the sealed key material CI reads as `EVNX_KEY_BUNDLE`. See [API tokens for CI](#api-tokens-for-ci) |
 | `status` | Show your account as the **server** sees it |
 | `token` | Mint, list and revoke API tokens for CI |
 | `totp` | Enable, disable and re-issue recovery codes for 2FA |
@@ -92,9 +94,42 @@ once and retries, and the refreshed session carries the verified address.
 Before 0.10.17 vault commands kept refusing while `evnx auth status` already said
 `verified  yes`.
 
-<Callout type="tip" title="Lost the verification email?">
-`POST /api/v1/auth/resend-verification` will issue a new one and expire the old. Every previous link stops working the moment a new one is sent.
-</Callout>
+### Lost the verification email?
+
+**v0.14.0+** — send it again:
+
+```bash
+evnx auth resend-verification
+```
+
+For the signed-in account whose email is not verified yet: the first message was lost,
+filtered, or its link expired (they last 24 hours). The command asks the server who you are
+first, so you are never asked for an address.
+
+```text
+✓ verification email sent to you@example.com.
+  Open the link in it within 24 hours; earlier links no longer work.
+  Nothing there? Check spam, then run this again in a few minutes.
+```
+
+**Sending a new one makes the earlier links stop working.** If the account is already
+verified, nothing is sent and the command says so:
+
+```text
+✓ you@example.com is already verified; nothing was sent.
+```
+
+The server allows **3 per hour per address**. Past that, the command exits `15` and says how
+long to wait. Signed out is exit `10`. An API token cannot do this (it has no mailbox of its
+own to verify): unset `EVNX_TOKEN` and sign in with `evnx auth login`. The "email not
+verified" error and `evnx auth status` both point at this command.
+
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | Sent, or already verified |
+| `10` | Not signed in |
+| `13` | The server could not be reached |
+| `15` | Rate limited (3 per hour), or the server failed |
 
 ---
 
@@ -204,12 +239,27 @@ The name is a **positional** argument. `--scope` takes `read` or `read_write`, `
 restricts the token to one vault, and `--expires-in-days` sets an expiry — omit it and the
 token never expires.
 
+**v0.14.0+** — `create` also prints a **CI key bundle** (`evnxkb1_…`) after the token, to store
+as `EVNX_KEY_BUNDLE`. It is your sealed key material, with no plaintext secret in it: a
+pipeline needs `EVNX_TOKEN`, `EVNX_MASTER_PASSWORD` and `EVNX_KEY_BUNDLE`, and
+[API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens#the-recommended-setup-three-secrets)
+shows them together. `--no-key-bundle` leaves it out.
+
 With `-q` (**v0.10.18+**) `create` prints the new token alone on stdout and nothing else,
 so a script can capture it:
 
 ```bash
 evnx auth token create ci-deploy --scope read --vault my-api/production -q
 ```
+
+To print the bundle again, on a machine where you are signed in (a token cannot):
+
+```bash
+evnx auth key-bundle
+```
+
+Run it after a master-password change too, and replace the CI secret: a bundle made under the
+old password no longer opens. `-q` prints the bundle alone.
 
 <Callout type="tip" title="Or mint it in the dashboard">
 The same tokens are listed and created at **[app.evnx.dev](https://app.evnx.dev)** →
@@ -248,6 +298,7 @@ failing:
 ```text
 evnx account
   server    https://api.evnx.dev
+  client    evnx 0.14.0
   using     API token (from EVNX_TOKEN)
   status    API token refused
   It has been revoked, has expired, or is mistyped. Create a new one
@@ -333,6 +384,7 @@ This asks the **server**, so it answers "is this credential actually still good?
 ```text
 evnx account
   server    https://api.evnx.dev
+  client    evnx 0.14.0
   using     signed in on this machine
   email     you@example.com
   verified  yes
@@ -344,7 +396,8 @@ plan (free)
   versions    5 per vault
 ```
 
-`using` says which credential answered — this machine's sign-in, or an API token
+`client` is the version of the evnx you are running (**v0.14.0+**), so a pasted `status` shows
+it. `using` says which credential answered — this machine's sign-in, or an API token
 from `EVNX_TOKEN`. The **plan and usage** block shows vaults you own, active API
 tokens, the per-vault version limit, and a warning naming any vault at or near
 its cap. See [Plan limits](/guides/reference/plan-limits) for what each number
