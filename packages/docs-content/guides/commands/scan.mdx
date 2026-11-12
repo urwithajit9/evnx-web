@@ -3,7 +3,7 @@ title: "evnx scan"
 section: commands
 order: 5
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-12"
 excerpt: "Scan a project for secrets: 63 built-in provider rules, names checked in .env, YAML, JSON and TOML, severity separate from confidence, allow markers, a baseline for existing findings, and a pre-commit hook. JSON, SARIF and GitHub annotation output."
 difficulty: beginner
 timeToComplete: "15 minutes"
@@ -15,11 +15,32 @@ prerequisites:
 draft: false
 ---
 
-`evnx scan` finds values that look like real secrets — provider keys, tokens, private keys, passwords in connection strings — before they leave your machine. A folder scan reads every file, not only `.env`, and in a git repository it counts what git would commit. It is built for pre-commit hooks and CI, and it never touches the network. Every output on this page is from evnx 0.13.0.
+`evnx scan` finds values that look like real secrets — provider keys, tokens, private keys, passwords in connection strings — before they leave your machine. A folder scan reads every file, not only `.env`, and in a git repository it counts what git would commit. It is built for pre-commit hooks and CI, and it never touches the network. Every output on this page is from evnx 0.14.0.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
 </Prerequisites>
+
+---
+
+## Upgrading from 0.13
+
+<Callout type="info" title="What changed in 0.14.0">
+Run `evnx scan` once on a branch before you rely on it in CI: a project can see **new
+findings** (names are now checked in more files, notebooks are read, `ghs_` tokens are
+matched) and **fewer false ones**.
+
+| What changed | What to do |
+|---|---|
+| **Jupyter notebooks are read cell by cell**, so a key in a cell or an output is found, located by cell | A notebook that scanned clean may not. See [Jupyter notebooks](#jupyter-notebooks) |
+| **Names are checked in Dockerfiles, Containerfiles, shell scripts and Python modules** | `ENV DB_PASSWORD=<random>` is now a `sensitive-config-key` finding. See [Names in Dockerfiles, shell and Python](#names-in-dockerfiles-shell-scripts-and-python) |
+| **A secret behind a public prefix is one severity level higher** (`low` stays `low`) | A `--severity high` gate can start failing on a `NEXT_PUBLIC_` or `VITE_` finding. See [Variables your build publishes to the browser](#variables-your-build-publishes-to-the-browser) |
+| **`github-token` matches stateless `ghs_` tokens** (GitHub's Actions `GITHUB_TOKEN` and app installation tokens, since 2026-10-02) | A `ghs_<appid>_<JWT>` token of about 520 characters is reported once, as `github-token` |
+| **Fewer false positives**: PEM bodies, public keys, `pk_` keys, Helm and Kubernetes references | A baseline entry for one of these is no longer needed. See [What is not reported](#what-is-not-reported) |
+| **Files are scanned in parallel** | Same output at any thread count. `RAYON_NUM_THREADS=N` caps it. See [Scanning a whole project](#scanning-a-whole-project) |
+| **`[scan] exclude` patterns with a `/` are read from the folder holding `.evnx.toml`** | See [Configuring scan in `.evnx.toml`](#configuring-scan-in-evnxtoml) |
+| The baseline fingerprint of a notebook finding now includes its cell path | Regenerate a baseline that holds notebook findings |
+</Callout>
 
 ---
 
@@ -123,6 +144,13 @@ Three more checks are **not** rules, because none can be expressed as one:
 | `AWS Secret Access Key` | 40 base64-ish characters **and** a variable name containing `AWS` **and** entropy above 4.3. The shape alone matches any 40-character token, so the name is part of the test |
 | `High-entropy string` | The last resort: a long random-looking value with no other explanation |
 
+**GitHub's stateless tokens** (**v0.14.0+**). Since GitHub finished its rollout on
+2026-10-02, a `ghs_` token (the Actions `GITHUB_TOKEN` among them) is
+`ghs_<appid>_<JWT>`, about 520 characters, and the classic 36 to 40 character shape missed
+it. The `github-token` rule keeps the classic branch and has a second for this form. It is
+reported once, as `github-token`, not also as `jwt` or `high-entropy-string`, and a trailing
+`.`, `,` or `)` is not part of the match.
+
 **Stand-ins are never findings** (**v0.10.14+**). AWS's documented example keys
 (`AKIAIOSFODNN7EXAMPLE`) and placeholder-shaped values are recognised and skipped, and a
 name-only match on a value that is an address (a URL, a host) is dropped.
@@ -151,6 +179,50 @@ References (`${VAR}`) and non-string values are skipped, as in a `.env`. A file 
 not parse (a Helm template with `{{- if }}`) is read as text, never an error: `-v` says so,
 and the JSON `files[]` entry reads `"read_as": "text"` with a `note`. Files that parsed
 report `"read_as": "structured"`.
+
+### Names in Dockerfiles, shell scripts and Python
+
+**v0.14.0+.** A file read as text used to be judged by value alone, so
+`ENV DB_PASSWORD=<random>` in a Dockerfile scanned clean. These now get the **name check**,
+with the placeholder, empty-value and reference filters a `.env` line gets, and are reported
+as `sensitive-config-key` on the right line:
+
+| File | Assignments checked |
+|---|---|
+| `Dockerfile`, `Containerfile` | `ENV KEY=value`, `ENV KEY value`, `ARG KEY=value`, and continuation lines |
+| `.sh`, `.bash`, `.zsh` or a `#!` script | `export KEY="value"` and `KEY=value` |
+| `.py` | `KEY = "value"` |
+
+Never flagged: `ARG X` with no value, `$VAR`, `${VAR}`, `$(cmd)`, backticks,
+`os.environ[...]`, `os.getenv(...)`, `settings.X`, f-strings, empty strings and placeholders.
+A commented-out assignment is left to the value rules. `evnx scan -v` says which reading a
+file got:
+
+```text
+⋯ Scanning: ./Dockerfile (read as text: value patterns, and names in assignments)
+⋯ Scanning: ./analysis.ipynb (read as structured data: names and values checked)
+```
+
+Other text files keep `read as text: value patterns only, names not checked`. In JSON,
+`read_as` stays `text`.
+
+### Jupyter notebooks
+
+**v0.14.0+.** A notebook is JSON, so a key in a cell or an output sat behind string escapes
+and was missed. Each cell's `source` (code and markdown) and each output's `text`,
+`data["text/plain"]` and `traceback` are now read unescaped, and a finding is located **by
+cell**: the line is within that cell or output, and the path in brackets says which.
+
+```text
+  ✗  Stripe Secret Key (LIVE)                    critical
+     ./analysis.ipynb:2 (cells[2].outputs[0].text)  sk_l…LRkB
+     !  matches a live key format, not a placeholder
+     →  revoke at https://dashboard.stripe.com/apikeys
+```
+
+Image output is not read. A notebook that does not parse is scanned as text, as before. The
+[baseline](#a-baseline-for-findings-you-already-have) fingerprint of a notebook finding
+includes its cell path.
 
 ### Providers that share a prefix: name-aware rules
 
@@ -216,11 +288,17 @@ evnx recognises nine: `NEXT_PUBLIC_` (Next.js), `NUXT_PUBLIC_` (Nuxt), `EXPO_PUB
 ```
 
 The finding gains a note, the JSON gains `"public_prefix": "NEXT_PUBLIC_"`, and the remedy
-says to rename. The prefix does not lower a severity: a Stripe key behind `VITE_` stays
-`critical`. A value recognised **by shape alone** (the entropy check, an unrecognised token)
+says to rename. **v0.14.0+** — the prefix also **raises the severity one level**: a GitHub
+token that is `high` in `GH_TOKEN` is `critical` in `NEXT_PUBLIC_GH_TOKEN`. `low` stays `low`,
+because a Maps browser key or a Sentry DSN is meant to ship. (Before 0.14.0 the prefix did
+not change a severity.) A Stripe key is already `critical`, so behind `VITE_` it stays so. A value recognised **by shape alone** (the entropy check, an unrecognised token)
 is reported at least `medium`, not higher, because plenty of keys behind these prefixes are
 meant to be public — a PostHog key, a Sentry DSN, a Supabase anon key. The remedy for those
 asks you to check whether they are meant to be public before rotating anything.
+
+[`evnx validate`](/guides/commands/validate#public_secret-a-secret-in-the-client-bundle)
+reports the same mistake as an error, `public_secret`, before the value reaches a scan.
+`--ignore public_secret` skips it there.
 
 <Callout type="warning" title="Renaming is the fix; rotating alone is not">
 While the name carries the prefix, **every build republishes the value.** Revoking and
@@ -733,6 +811,36 @@ Inline `# evnx-ignore` comments do **not** exist, and there is no `[scan] ignore
 The marker is `# evnx:allow <rule-id> — reason`.
 </Callout>
 
+### What is not reported
+
+**v0.14.0+** — a corpus of 60 labelled files (37 whose secrets must be found, 23 look-alikes
+that must not be) runs against `evnx scan` in evnx's own test suite, and it found these false
+positives, now fixed:
+
+- **A PEM or OpenSSH private key is one `private-key` finding.** Its base64 body lines are no
+  longer also `high-entropy-string`.
+- **Public material is not a secret.** The body of a `PUBLIC KEY`, `RSA PUBLIC KEY` or
+  `CERTIFICATE` block, and the blob of an `ssh-rsa` or `ssh-ed25519` public key line, are not
+  reported.
+- **Digests used as identifiers.** `CACHE_KEY`, `ETAG_KEY` and `IDEMPOTENCY_KEY` holding a
+  32, 40 or 64 digit hex digest are not credentials. Any other word in the name
+  (`CACHE_API_KEY`, `API_KEY`, `HASH_KEY`) or any other value keeps the check.
+- **A Stripe publishable key** (`pk_live_`, `pk_test_`) is public by design and is not
+  reported by name or by entropy. A *secret* key under `NEXT_PUBLIC_` still is.
+- **References are not values** in YAML, JSON and TOML: a whole-value template
+  (`{{ .Values.apiToken }}`, `${{ secrets.TOKEN }}`), anything under a Kubernetes
+  `secretKeyRef` or `secretRef`, and a lowercase secret name in a `secrets:` list
+  (`- db_password`).
+- **Password names ending in `_PASS`** (`RABBITMQ_DEFAULT_PASS`, `DB_PASS`) are checked, for
+  `scan` and for masking. `BYPASS_CACHE` and `COMPASS` are not.
+- **The Neon sample URL** that `evnx init --with neon` writes is no longer a finding. A host
+  with an `example` label is a placeholder host, as `localhost` and `example.com` already
+  were; a real host with `user:password`, or a real password on an example host, is still one.
+
+A rule's `names` also beats a built-in rule in YAML and JSON now, as it does in `.env`. They
+stay case-sensitive regexes in every format: write `(?i)` or both spellings to cover
+`SECRET_KEY` and `secret_key`.
+
 ---
 
 ## Scanning a whole project
@@ -746,6 +854,22 @@ evnx scan                          # this directory and everything under it
 evnx scan config/.env.production   # one file
 evnx scan .env config/ src/        # several paths
 ```
+
+### Parallel scanning
+
+**v0.14.0+** — files are scanned on all cores and reported **in path order**, so text, JSON,
+SARIF and GitHub output, the exit code and the notes on stderr are the same as before, and
+the same at any thread count. `RAYON_NUM_THREADS=N` caps the threads; `1` is the old
+one-at-a-time behaviour:
+
+```bash
+RAYON_NUM_THREADS=2 evnx scan .
+```
+
+On a 4,500-file, 51 MB tree on two cores the scan went from 9.4 s to 4.9 s with the
+built-in rules, and from 10.9 s to 6.2 s with the gitleaks pack. One difference: `-v` lines
+and `evnx:allow` warnings are printed together after the scan, rather than as each file is
+read.
 
 ### Scanning stdin — `evnx scan -`
 
@@ -917,6 +1041,29 @@ regex = "ACME-[A-Z0-9]{32}"
 | `exclude`, `patterns` | Added together |
 | `ignore_placeholders` | The flag wins in either direction |
 | `severity`, `confidence`, `max_file_size`, `extensions` | The flag wins, else the config |
+
+### Monorepos: paths are read from the folder that holds `.evnx.toml`
+
+**v0.14.0+** — a relative path in `.evnx.toml` means "from the folder holding this file",
+wherever evnx runs below it. That was already so for `[defaults] example` and
+`[cloud] file`; `[scan] exclude` patterns with a `/` now are too. With this `.evnx.toml` at
+the repository root:
+
+```toml
+[scan]
+exclude = ["apps/web/fixtures/**"]
+```
+
+`evnx scan` run inside `apps/web` skips `apps/web/fixtures/`:
+
+```text
+  config    ../../.evnx.toml (scan.exclude=1 patterns)
+  scanning ./.env
+  ✓  No secrets detected
+```
+
+A pattern as you wrote it still matches too (the two are a union), and a pattern with no `/`
+matches anywhere, as before. **Flags** (`--exclude`) are relative to where you run.
 
 `severity`, `confidence`, `exclude` and `disable` can weaken a scan, and the file is
 committed, so evnx prints which are in force:
