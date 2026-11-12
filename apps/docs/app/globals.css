@@ -122,11 +122,17 @@
 }
 
 /* ─── Layout Utilities ───────────────────────────────────────────────────────── */
-@layer utilities {
+/* container-base lives in `components`, not `utilities`: Tailwind emits the
+   components layer first, so a `max-w-*` utility on the same element (e.g.
+   `container-base max-w-4xl`) wins. In `utilities` it came last and silently
+   forced every page to 80rem. */
+@layer components {
   .container-base {
     @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
   }
+}
 
+@layer utilities {
   .section-padding {
     @apply py-16 md:py-24;
   }

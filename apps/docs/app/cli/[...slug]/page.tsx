@@ -100,7 +100,7 @@ export default async function DocsPage({ params }: Props) {
     const meta = GUIDE_SECTIONS.find((s) => s.key === section);
     const guides = bySection[section] ?? [];
     return (
-      <div className="container-base section-padding max-w-3xl">
+      <div className="container-base section-padding max-w-4xl">
         <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted mb-6">
           <Link href="/cli" className="hover:text-text-primary">CLI</Link>
           <span aria-hidden> / </span>
@@ -133,7 +133,7 @@ export default async function DocsPage({ params }: Props) {
   const commands = resolveCommands(guide.commands);
 
   return (
-    <article className="container-base section-padding max-w-3xl">
+    <article className="container-base section-padding max-w-4xl">
       <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted mb-6">
         <Link href="/cli" className="hover:text-text-primary">CLI</Link>
         <span aria-hidden> / </span>
