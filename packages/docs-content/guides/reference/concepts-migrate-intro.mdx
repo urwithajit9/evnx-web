@@ -3,7 +3,7 @@ section: "concepts"
 order: 1
 title: "How evnx migrate works"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-12"
 excerpt: "Understand the evnx migration pipeline: source loading, filtering, key transforms, and how each destination is handled."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
@@ -171,7 +171,7 @@ The specific command format per destination:
 | Infisical | One `infisical secrets set KEY='value'` per secret. Empty values, and values starting with `@`, are refused |
 | GCP Secret Manager | Needs `--project`. A script that creates each secret or adds a version when it exists: `printf '%s' 'VALUE' \| upsert_secret key-name` (**v0.13.0+** names are lowercased with `-` for `_`, as `convert` writes them) |
 | Azure Key Vault | One `az keyvault secret set` per secret (keys converted `_` → `-`) |
-| Vercel | One `printf '%s' 'VALUE' \| vercel env add KEY production --force --yes` per secret; `--project` when you pass `--vercel-project`; **v0.13.0+** `--sensitive` on variables that look secret |
+| Vercel | One `printf '%s' 'VALUE' \| vercel env add KEY production --force --yes` per secret (**v0.14.0+**: `development` or `preview` when the file read is `.env.development` or `.env.preview`); `--project` when you pass `--vercel-project`; **v0.13.0+** `--sensitive` on variables that look secret, in every environment since 0.14.0 |
 | Heroku | Single bulk `heroku config:set --app APP KEY='v' KEY2='v2' …` (one dyno restart) |
 | Railway | Single `railway variable set KEY='v' KEY2='v2' …`; `--project` and `--environment` when you pass `--railway-project` and `--railway-environment` |
 
