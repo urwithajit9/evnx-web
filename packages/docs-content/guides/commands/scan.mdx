@@ -8,7 +8,7 @@ excerpt: "Scan a project for secrets: 63 built-in provider rules, names checked 
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions", "baseline", "pre-commit", "evnx"]
-commands: ["backup", "scan", "scan hook", "scan hook install", "scan rules", "scan rules list"]
+commands: ["backup", "init", "scan", "scan hook", "scan hook install", "scan rules", "scan rules list", "scan rules new", "scan rules test", "validate"]
 evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
@@ -676,6 +676,20 @@ $ evnx scan rules list --category ai
 
   7 rules
 ```
+
+`scan rules new` writes a file with the fields to fill in, then you check it with `scan rules test`:
+
+```bash
+evnx scan rules new acme-api-key
+```
+
+```text
+✓ wrote /path/to/project/.evnx/rules/acme-api-key.toml: set its regex and fixtures, then `evnx scan rules test`
+```
+
+The file starts with `regex = 'REPLACE-ME-[A-Z0-9]{32}'`, `confidence = "high"`, `severity = "high"`
+and empty `positive` and `near_miss` lists. `--personal` writes it to your personal rules instead,
+which are never committed.
 
 Rules only **add**: an id that evnx or another file already uses is an error naming both,
 never an override. Personal rules (`~/.config/evnx/rules/`) always show in the scan's

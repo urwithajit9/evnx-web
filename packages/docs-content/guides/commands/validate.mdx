@@ -8,7 +8,7 @@ excerpt: "Reference for evnx validate: check .env against .env.example and the [
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
-commands: ["add custom", "convert", "doctor", "parse", "run", "spec init", "validate"]
+commands: ["add custom", "convert", "doctor", "parse", "platform", "remove", "run", "scan", "spec init", "validate"]
 evnxVersion: "0.13.0"
 prerequisites:
   - getting-started/installation
@@ -254,8 +254,8 @@ behind them. A secret-shaped value under one is an **error**:
 ```
 
 `--ignore public_secret` skips it. The prefix list is one list, shared with `scan` and with
-`evnx platform … --to vercel`; it matches in any case and includes `STORYBOOK_`.
-[`evnx scan`](/guides/commands/scan#a-secret-under-a-public-prefix) raises the severity of
+`evnx platform` (with `--to vercel`); it matches in any case and includes `STORYBOOK_`.
+[`evnx scan`](/guides/commands/scan#variables-your-build-publishes-to-the-browser) raises the severity of
 the same finding.
 
 ### `partial_presence`: a name only some environments have
@@ -817,11 +817,16 @@ $ evnx validate --env-name staging --strict
      ./.env.staging
      →  Declare it as [vars.EXTRA] in .evnx.toml, or remove it from ./.env.staging
 
-  2 warnings
+  !  EXTRA is in .env.staging but not in .env.production
+     ./.env.staging:2
+     →  Add EXTRA to .env.production, or remove it everywhere with `evnx remove EXTRA --all`
+
+  3 warnings
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
-Both are `extra_variable` warnings. `--strict` adds findings. It does not make warnings
+The first two are `extra_variable` warnings. The third is [`partial_presence`](#partial_presence-a-name-only-some-environments-have)
+(**v0.14.0+**): the project also has a `.env.production`, which lacks `EXTRA`. `--strict` adds findings. It does not make warnings
 fail the run; [`--fail-on warning`](#failing-on-warnings) does.
 
 ---
