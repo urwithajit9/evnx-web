@@ -188,6 +188,14 @@
           "about": "Sign out of evnx cloud"
         },
         {
+          "path": "auth resend-verification",
+          "about": "Send the email-verification link again"
+        },
+        {
+          "path": "auth key-bundle",
+          "about": "Print the CI key bundle: your sealed key material, for EVNX_KEY_BUNDLE"
+        },
+        {
           "path": "auth token",
           "about": "Manage API tokens for CI/CD"
         },
@@ -441,6 +449,27 @@
       ]
     },
     {
+      "name": "platform",
+      "about": "Compare or sync .env with a hosting platform's variables (Vercel).",
+      "aliases": [],
+      "guide": "/guides/commands/platform",
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "platform diff",
+          "about": "Show what differs between a local .env and a Vercel environment"
+        },
+        {
+          "path": "platform pull",
+          "about": "Write Vercel's readable values into the local file"
+        },
+        {
+          "path": "platform push",
+          "about": "Create and update Vercel variables from the local file"
+        }
+      ]
+    },
+    {
       "name": "doctor",
       "about": "Check .env files, Git config, project structure, and security",
       "aliases": [],
@@ -509,8 +538,6 @@
     }
   ],
   "undocumented": [],
-  "unshown_subcommands": [
-    "scan rules new"
-  ],
+  "unshown_subcommands": [],
   "orphan_guides": []
 }
