@@ -3,7 +3,7 @@ title: "Installing evnx"
 section: getting-started
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-12"
 excerpt: "Get evnx running on macOS, Linux, or Windows in under two minutes. Includes pre-commit hook setup."
 difficulty: beginner
 timeToComplete: "2 minutes"
@@ -67,6 +67,15 @@ brew install urwithajit9/evnx/evnx
 npm install -g @evnx/cli
 ```
 
+**v0.14.0+** — it works with **pnpm** and **bun** too. Nothing runs at install time, so a
+package manager that skips install scripts (pnpm 10+ and bun do by default) no longer leaves
+you with a broken `evnx`:
+
+```bash
+pnpm add -g @evnx/cli
+bun add -g @evnx/cli
+```
+
 Without a global install (**v0.10.6+**; up to 0.10.5 only `-g` gave an `evnx`
 command, and these two forms reported `evnx: not found`):
 
@@ -84,6 +93,9 @@ pipx install evnx
 ---
 
 ## Windows
+
+**v0.14.0+** — evnx needs no Visual C++ Redistributable: the Windows binary has the C runtime
+built in. Earlier releases failed to start on a PC without it.
 
 ### winget
 
@@ -246,6 +258,23 @@ The archive holds one file named after its target (`evnx-x86_64-unknown-linux-mu
 on Windows a `.zip` with `evnx-x86_64-pc-windows-msvc.exe`). `gh attestation verify`
 needs `gh auth login`. A tampered file, another repository or another tag fails it.
 Releases before v0.11.0 carry no attestation; the install script checks both for you.
+
+### The SBOM
+
+**v0.14.0+** — each release also carries a **software bill of materials**,
+`evnx-<version>.cdx.json`: a CycloneDX document listing every crate in `Cargo.lock`, built
+with all features on. It has its own `.sha256` and the same kind of signed build provenance
+attestation as the archives.
+
+```bash
+curl -fsSLO https://github.com/urwithajit9/evnx/releases/download/v0.14.0/evnx-0.14.0.cdx.json
+curl -fsSLO https://github.com/urwithajit9/evnx/releases/download/v0.14.0/evnx-0.14.0.cdx.json.sha256
+sha256sum -c evnx-0.14.0.cdx.json.sha256        # macOS: shasum -a 256 -c
+gh attestation verify evnx-0.14.0.cdx.json -R urwithajit9/evnx
+```
+
+Feed the file to any CycloneDX-aware tool to check the dependencies against an advisory
+database.
 
 ## Run Your First Check
 

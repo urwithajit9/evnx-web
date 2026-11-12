@@ -3,12 +3,12 @@ title: "API Tokens in CI/CD"
 section: integrations
 order: 4
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-12"
 excerpt: "Pull encrypted secrets into a pipeline with a scoped API token — and understand exactly what a runner can and cannot do with it."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["ci-cd", "cloud", "tokens", "github-actions", "security", "evnx"]
-commands: ["auth token create", "auth token list", "auth token revoke", "cloud history", "cloud pull", "cloud run", "vault list", "vault members"]
+commands: ["auth key-bundle", "auth login", "auth status", "auth token create", "auth token list", "auth token revoke", "cloud history", "cloud pull", "cloud run", "vault list", "vault members"]
 evnxVersion: "0.13.0"
 prerequisites:
   - commands/auth
@@ -46,6 +46,105 @@ Treat the master password in CI as a decision with a blast radius, not a config 
 
 ---
 
+## The recommended setup: three secrets
+
+**v0.14.0+** — A pipeline that decrypts needs three things, and each is a CI secret:
+
+| CI secret | What it is | Made with |
+|-----------|-----------|-----------|
+| `EVNX_TOKEN` | The API token. Authenticates, scoped to a vault | `evnx auth token create` |
+| `EVNX_MASTER_PASSWORD` | Your master password. Unlocks the vault key | You already have it |
+| `EVNX_KEY_BUNDLE` | Your sealed key material (`evnxkb1_…`) | `evnx auth token create` prints it, or `evnx auth key-bundle` |
+
+With all three set, `evnx cloud pull`, `cloud run` and the rest need no prompt and no
+`--password-stdin`:
+
+```bash
+export EVNX_TOKEN=evnx_tok_…
+export EVNX_MASTER_PASSWORD=…
+export EVNX_KEY_BUNDLE=evnxkb1_…
+evnx cloud run --vault "$EVNX_VAULT_ID" -- ./deploy.sh
+```
+
+**The key bundle** is your sealed keypair and the Argon2 salt, and it contains **no
+plaintext secret**: the master password still opens it, and the bundle alone opens nothing.
+Store it like the token (a CI secret, not a committed file, not a log line). It is the same
+sealed material your account holds, exported once from a signed-in machine so that a token
+does not need to fetch it.
+
+Create it when you create the token. `evnx auth token create` prints both, once:
+
+```bash
+evnx auth token create ci-deploy --scope read --vault my-api/production
+```
+
+and `--no-key-bundle` skips the bundle. With `-q`, only the token is printed, so a script can
+capture it. For the bundle on its own, on a machine where you are signed in:
+
+```bash
+evnx auth key-bundle
+evnx auth key-bundle -q       # the bundle alone, nothing else
+```
+
+`key-bundle` needs a real login, not a token. It prints the bundle and a short reminder to
+store it as `EVNX_KEY_BUNDLE`. Run it again to rotate CI, or after a master-password change.
+
+### From a file
+
+Where a secret is easier to mount as a file than to set as a variable, name the file instead.
+`EVNX_KEY_BUNDLE_FILE` holds the path; the **first line** of the file is the bundle. The
+variable `EVNX_KEY_BUNDLE` is read first.
+
+```bash
+export EVNX_KEY_BUNDLE_FILE=/run/secrets/evnx-key-bundle
+```
+
+The master password has the same two spellings. `EVNX_MASTER_PASSWORD_FILE` names a file whose
+first line is the password; it is read before `EVNX_MASTER_PASSWORD`, and `--password-stdin`
+beats both. evnx says on stderr that it is using the variable or file, without the value.
+
+### After you change your master password
+
+A bundle made before a master-password change no longer opens. The run stops with:
+
+```text
+Error: that master password did not open the key bundle in EVNX_KEY_BUNDLE.
+  If the master password was changed after the bundle was made, the old bundle no longer unlocks: regenerate the key bundle with `evnx auth key-bundle` on a signed-in machine and replace the CI secret. Otherwise check the password.
+```
+
+Run `evnx auth key-bundle`, replace `EVNX_KEY_BUNDLE`, and update `EVNX_MASTER_PASSWORD` in the
+same step.
+
+### Without a bundle
+
+A token with no `EVNX_KEY_BUNDLE` (or `EVNX_KEY_BUNDLE_FILE`) has no key material to unlock
+with. evnx asks the server for it once; when the server will not give it to a token, the run
+exits `11`:
+
+```text
+Error: this server no longer gives key material to API tokens: create a key bundle with `evnx auth key-bundle` on a signed-in machine and store it as EVNX_KEY_BUNDLE
+```
+
+That is the signal to add the third secret. A value that is not a bundle gets one of three
+messages instead: it does not start with `evnxkb1_` (or was cut short when pasted), its body
+is damaged, or it is a version this evnx does not read. In every case, create a new one with
+`evnx auth key-bundle`.
+
+`evnx auth status` under a token shows whether the bundle is there:
+
+```text
+evnx account
+  server    https://api.evnx.dev
+  client    evnx 0.14.0
+  using     API token (from EVNX_TOKEN)
+  key bundle  set (EVNX_KEY_BUNDLE)
+  account   details need a signed-in session (`evnx auth login`)
+```
+
+(`not set` and `from file (EVNX_KEY_BUNDLE_FILE)` are the other two readings.)
+
+---
+
 ## Minting a token
 
 <CodeTabs defaultTab="CLI">
@@ -57,9 +156,11 @@ evnx auth token revoke ci-deploy
 ```
 
 The name is **positional**. `--scope` is `read` or `read_write`; omitting `--expires-in-days`
-mints a token that never expires. With `-q` (**v0.10.18+**) the new token is the only
-thing printed, alone on stdout, so it can go straight into your CI provider's secret
-store:
+mints a token that never expires. **v0.14.0+** — `create` also prints the
+[key bundle](#the-recommended-setup-three-secrets) to store as `EVNX_KEY_BUNDLE`; both are
+shown once, and `--no-key-bundle` leaves the bundle out. With `-q` (**v0.10.18+**) the new
+token is the only thing printed, alone on stdout, so it can go straight into your CI
+provider's secret store:
 
 ```bash
 evnx auth token create ci-deploy --scope read --vault my-api/production -q
@@ -79,7 +180,7 @@ retired pipeline.
 </CodeTabs>
 
 <Callout type="warning" title="Shown once">
-`create` prints the token exactly once. The server stores only a BLAKE3 hash, so there is no command that shows it again. Lose it and you revoke and re-mint.
+`create` prints the token exactly once. The server stores only a BLAKE3 hash, so there is no command that shows it again. Lose it and you revoke and re-mint. (The key bundle is different: `evnx auth key-bundle` prints it again.)
 </Callout>
 
 **Minting requires a real login.** Token creation sits behind a session-only guard, so a leaked CI token cannot quietly mint itself a longer-lived, wider-scoped replacement and survive revocation of the original. If you rotate a compromised token, it stays rotated.
@@ -157,12 +258,11 @@ jobs:
 
       - name: Fetch secrets
         env:
-          EVNX_TOKEN:    ${{ secrets.EVNX_TOKEN }}
-          EVNX_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
-          EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
-        run: |
-          printf '%s' "$EVNX_PASSWORD" \
-            | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+          EVNX_TOKEN:           ${{ secrets.EVNX_TOKEN }}
+          EVNX_MASTER_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+          EVNX_KEY_BUNDLE:      ${{ secrets.EVNX_KEY_BUNDLE }}
+          EVNX_VAULT_ID:        ${{ vars.EVNX_VAULT_ID }}
+        run: evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
 
       - name: Deploy
         run: ./deploy.sh
@@ -184,18 +284,22 @@ jobs:
 deploy:
   script:
     - curl -fsSL https://dotenv.space/install.sh | bash
-    - printf '%s' "$EVNX_PASSWORD" |
-        evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+    - evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
   variables:
     EVNX_TOKEN: $EVNX_TOKEN
-    EVNX_PASSWORD: $EVNX_MASTER_PASSWORD
+    EVNX_MASTER_PASSWORD: $EVNX_MASTER_PASSWORD
+    EVNX_KEY_BUNDLE: $EVNX_KEY_BUNDLE
     EVNX_VAULT_ID: $EVNX_VAULT_ID
 ```
   </Tab>
 </CodeTabs>
 
-<Callout type="tip" title="printf, not echo">
-`printf '%s'` writes the password with no trailing newline and no interpretation of backslashes. `echo` varies between shells on both counts, and a passphrase containing a backslash will silently become a different password under some of them.
+<Callout type="tip" title="Reading the password from a pipe instead">
+`EVNX_MASTER_PASSWORD` is the simplest way to hand evnx the password, and evnx says on stderr that it used it. If you would rather keep it out of the environment, `--password-stdin` still works and beats the variable. Use `printf '%s'`, not `echo`: `printf` writes the password with no trailing newline and no interpretation of backslashes, and a passphrase containing a backslash can silently become a different password under `echo`.
+
+```bash
+printf '%s' "$MASTER_PASSWORD" | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+```
 </Callout>
 
 ---
@@ -213,14 +317,16 @@ working directory.
 - name: Deploy
   env:
     EVNX_TOKEN: ${{ secrets.EVNX_TOKEN }}
+    EVNX_MASTER_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
+    EVNX_KEY_BUNDLE: ${{ secrets.EVNX_KEY_BUNDLE }}
     EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
-  run: |
-    printf '%s' "${{ secrets.EVNX_MASTER_PASSWORD }}" \
-      | evnx cloud run --vault "$EVNX_VAULT_ID" --password-stdin -- ./deploy.sh
+  run: evnx cloud run --vault "$EVNX_VAULT_ID" -- ./deploy.sh
 ```
 
 Nothing is written to disk, nothing enters shell history, and nothing appears in `ps` —
-the values travel in the child's environment block, never in its argument vector. The
+the values travel in the child's environment block, never in its argument vector. evnx's own
+variables (`EVNX_TOKEN`, `EVNX_MASTER_PASSWORD`, `EVNX_KEY_BUNDLE` and the `_FILE` forms) are
+not passed on to the child. The
 child's exit code is returned unchanged (**v0.13.0+**: `10`–`15` can only come from a
 failure before the child starts), so it gates the job exactly as the script would on its
 own.
@@ -237,7 +343,7 @@ vault, and `cloud pull` takes repeated `--vault` the same way.
 <Callout type="warning">
   ⚠️ **This removes the plaintext *file*, not the master password.** The vault key is
   wrapped under your master key, so decryption still needs it wherever this runs — feed it
-  with `--password-stdin` exactly as `pull` does. The token scopes what can be read; the
+  with `EVNX_MASTER_PASSWORD` (or `--password-stdin`) exactly as `pull` does. The token scopes what can be read; the
   password is what decrypts it.
 </Callout>
 
@@ -267,8 +373,7 @@ on the rest, without reading the message:
 
 ```bash
 for attempt in 1 2 3; do
-  printf '%s' "$EVNX_PASSWORD" \
-    | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+  evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
   code=$?
   case "$code" in
     0)        break ;;
@@ -302,7 +407,7 @@ codes. The full table, and what the `403` reasons say, are in
 
 ```bash
 trap 'rm -f .env' EXIT
-evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
 ```
 
 **Use `-q` in jobs.** **v0.10.18+** every cloud command prints nothing on success under
@@ -337,7 +442,7 @@ In order:
 </Step>
 
 <Step number={2} title="Decide whether the master password leaked too">
-If the runner had `EVNX_PASSWORD`, assume it did. A token is scoped; the master password is not — it opens every vault you own.
+If the runner had `EVNX_MASTER_PASSWORD`, assume it did. (The key bundle alone opens nothing, but replace it too after a leak: `evnx auth key-bundle`.) A token is scoped; the master password is not — it opens every vault you own.
 </Step>
 
 <Step number={3} title="Rotate the secrets themselves">
@@ -347,7 +452,7 @@ This is the step people skip. Revoking evnx credentials stops future reads; it d
 <Callout type="info" title="Changing your master password — what it does to this pipeline">
 It rotates the key that wraps every vault key, so every wrapped copy has to be re-wrapped atomically. Available in the CLI since **0.7.0**, and on the dashboard.
 
-⚠️ **Note what it does to this pipeline.** Your API tokens keep working — a token authenticates, it does not decrypt — but every runner holding `EVNX_PASSWORD` starts failing on the next run, because that secret no longer derives the right key. Changing the master password means updating that secret everywhere it is set, and evnx cannot tell you where those places are.
+⚠️ **Note what it does to this pipeline.** Your API tokens keep working — a token authenticates, it does not decrypt — but every runner holding `EVNX_MASTER_PASSWORD` starts failing on the next run, because that secret no longer derives the right key. **v0.14.0+** — and so does a stored `EVNX_KEY_BUNDLE`, which was made under the old password: run `evnx auth key-bundle` and replace it along with the password. Changing the master password means updating those secrets everywhere they are set, and evnx cannot tell you where those places are.
 
 It is also not a substitute for step 3. Re-wrapping your vault keys does nothing about the database password a runner already pulled.
 </Callout>
@@ -359,6 +464,6 @@ It is also not a substitute for step 3. Re-wrapping your vault keys does nothing
 - [evnx auth](/guides/commands/auth) — tokens, 2FA, sessions
 - [evnx cloud](/guides/commands/cloud) — push, pull, history
 - [Cloud Architecture](/guides/reference/cloud-architecture) — why a token cannot decrypt
-- [Rotating a vault key](/guides/reference/rotating-a-vault-key) — what to do when a runner that held `EVNX_PASSWORD` is compromised
+- [Rotating a vault key](/guides/reference/rotating-a-vault-key) — what to do when a runner that held `EVNX_MASTER_PASSWORD` is compromised
 - [GitHub Actions](/guides/integrations/github-actions) — scanning and validation in CI
 - [API Tokens for CI](/blog/api-tokens-ci-what-they-unlock) — the same ground as a walkthrough, with the trade-off stated plainly

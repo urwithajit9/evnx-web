@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx convert"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-12"
 excerpt: "Reference for evnx convert: turn a .env into the format one of 14 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["convert", "reference", "cli", "env", "formats"]
-commands: ["cloud export", "cloud run", "convert", "migrate", "template"]
-evnxVersion: "0.13.0"
+commands: ["cloud export", "cloud run", "convert", "migrate", "platform", "template"]
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -67,6 +67,7 @@ Without `--to`, evnx opens a format menu when there is a terminal, and exits `2`
 | `--prefix <PREFIX>` | — | Prepend to every name. Letters, digits and `_`, not starting with a digit |
 | `--transform <MODE>` | — | `uppercase`, `lowercase`, `camelCase` or `snake_case` (any case) |
 | `--base64` | off | Base64-encode every value. For `kubernetes`, writes `data:` instead of `stringData:` |
+| `--terraform-declarations` | off | **v0.14.0+** — with `--to terraform`, write `variable` blocks instead of `.tfvars` values |
 | `--project <PROJECT>` | — | Google Cloud project. Required by `gcp-secrets` |
 | `--vault-name <NAME>` | — | Azure Key Vault. Required by `azure-keyvault` |
 | `--heroku-app <APP>` | — | Heroku app. Required by `heroku` |
@@ -92,67 +93,116 @@ so a pipe carries the artefact alone.
 | `github-actions` | `github`, `gh-actions` | text to paste into the GitHub web form | — |
 | `docker-compose` | `docker`, `compose` | `environment:` list, `$` written `$$` | — |
 | `kubernetes` | `k8s`, `kubectl` | `v1` Secret, `stringData:` (or `data:` with `--base64`) | `--name` |
-| `terraform` | `tf`, `tfvars` | `name = "value"`, names lowercased | — |
-| `doppler` | — | **experimental** | — |
-| `heroku` | — | `heroku config:set` script, one call per variable | `--heroku-app` |
-| `vercel` | — | **experimental**: `{key, value, type, target}`-style map; secrets are `"sensitive"` (**v0.13.0+**) | — |
-| `railway` | — | **experimental**: the same JSON as `json` | — |
+| `terraform` | `tf`, `tfvars` | `NAME = "value"`, names as written; `--terraform-declarations` writes `variable` blocks instead (**v0.14.0+**) | — |
+| `doppler` | — | flat JSON object, what `doppler secrets upload` reads (**v0.14.0+**) | — |
+| `heroku` | — | one `heroku config:set A=… B=…` call, so the app restarts once (**v0.14.0+**) | `--heroku-app` |
+| `vercel` | — | array of `{key, value, type, target}`; secrets are `"sensitive"` in every environment (**v0.14.0+**) | — |
+| `railway` | — | **experimental**: the flat JSON object `json` prints | — |
 
 [Convert reference](/guides/reference/convert-reference) shows each format's output.
 
-<Callout type="warning" title="Experimental formats">
-  The <code>doppler</code>, <code>vercel</code> and <code>railway</code> shapes have not been
-  checked against those services' importers, and evnx says so on stderr when you choose
-  one. Doppler documents flat JSON for <code>doppler secrets upload</code>, which is what
-  <code>--to json</code> prints. Vercel's API takes <code>{"{key, value, type, target}"}</code>
-  objects, which this map does not have. Railway documents no import that takes this JSON.
+<Callout type="warning" title="Experimental format: railway">
+  <strong>v0.14.0+</strong> — <code>doppler</code> and <code>vercel</code> are no longer
+  experimental: their output is checked against what Doppler and Vercel document they read.
+  <code>railway</code> still is. Railway's docs say the Raw Editor takes a JSON-formatted file
+  but give no schema, so evnx prints the flat object of strings its error messages describe,
+  and says so on stderr when you choose it.
 </Callout>
+
+### Output shapes — what changed in v0.14.0
+
+**v0.14.0+** — each format's output was checked against what the tool documents it reads:
+
+- **`vercel`** prints the array of `{key, value, type, target}` objects that Vercel's
+  create-environment-variables API takes (before, a map keyed by name). `type` is
+  `"sensitive"` for a secret-looking name or value, the same classifier `evnx platform` uses,
+  and `"plain"` otherwise.
+- **`doppler`** prints the flat JSON object `doppler secrets upload` reads, the same as
+  `--to json` (before, `{value, computed}` per name).
+- **`heroku`** sets every variable in **one** shell-quoted `heroku config:set A=… B=…`
+  call, so the app restarts once (before, one call per variable).
+- **`terraform`** keeps the **case** of each name (it lowercased them) and `--transform`
+  changes it, so `A_B` and `a_b` no longer collide.
+- `doppler` and `vercel` are **no longer experimental**; `railway` still is.
 
 ### Secrets for Vercel
 
-**v0.13.0+** — `--to vercel` writes `"type": "sensitive"` for a variable whose name or
-value looks secret (`DB_PASSWORD`, a token, a URL with a password). Before 0.13.0
-every variable was `"plain"`. Vercel's API rejects a Sensitive variable in
-`development`, so a sensitive variable gets `"target": ["production", "preview"]`
-only, and evnx says how many on stderr. Other variables stay `"plain"` for all three
-targets. The JSON is otherwise unchanged.
+`--to vercel` writes `"type": "sensitive"` for a variable whose name or value looks secret
+(`DB_PASSWORD`, a token, a URL with a password) and `"plain"` for the rest (**v0.13.0+**;
+before, every variable was `"plain"`). **v0.14.0+** — a sensitive variable gets all three
+targets, `production`, `preview` and `development`:
 
 ```console
 $ evnx convert --to vercel
-! 2 variables written as type "sensitive" and not set for development: Vercel does not allow a Sensitive variable there.
-! vercel output is experimental: Vercel's API takes {key, value, type, target} objects, not this map.
-{
-  "DB_PASSWORD": {
+[
+  {
+    "key": "DB_PASSWORD",
     "target": [
       "production",
-      "preview"
+      "preview",
+      "development"
     ],
     "type": "sensitive",
     "value": "example-password"
   },
-  "NEXT_PUBLIC_URL": {
+  {
+    "key": "NEXT_PUBLIC_URL",
     "target": [
       "production",
       "preview",
       "development"
     ],
     "type": "plain",
-    "value": "https://x.dev"
-  },
-  "API_TOKEN": {
-    "target": [
-      "production",
-      "preview"
-    ],
-    "type": "sensitive",
-    "value": "example-token"
+    "value": "https://shop.test"
   }
+]
+```
+
+0.13.0 kept a sensitive variable out of `development`, because Vercel rejected one there, and
+printed `not set for development` on stderr. Vercel reversed that rule on 2026-08-24
+("Secrets are allowed in Development"), so a Secret is now a Secret in **every**
+environment and the warning is gone. For the matching `evnx migrate` behaviour see
+[`--sensitive`](/guides/commands/migrate); to read and write the same variables through
+Vercel's API, use [`evnx platform`](/guides/commands/platform).
+
+### Terraform: `.tfvars` or declarations
+
+`--to terraform` writes a `.tfvars` file with each name as written. **`--terraform-declarations`**
+(**v0.14.0+**) writes a `.tf` of `variable` blocks instead. A secret-looking variable gets
+`sensitive = true` and **no default**, so no secret lands in a file people commit; the others
+keep their value as the default:
+
+```bash
+evnx convert --to terraform --terraform-declarations
+```
+
+```hcl
+variable "APP_NAME" {
+  type = string
+  default = "shop"
+}
+
+variable "DB_PASSWORD" {
+  type = string
+  sensitive = true
 }
 ```
 
-If you need such a variable in `development`, set it there by hand as a plain variable
-or leave it to your local `.env`. For the matching `evnx migrate` behaviour see
-[`--sensitive`](/guides/commands/migrate).
+Supply a secret's value from the `.tfvars` output or from `TF_VAR_<name>`. The flag is for
+`--to terraform` only; with another format it is refused (exit `2`).
+
+### `--exclude` on a public target
+
+`--exclude` is a denylist, so a variable you did not think of is copied. **v0.14.0+** — when you
+use it without `--include` for `--to json` or `--to vercel`, the two formats that usually end up
+in an app build or a web bundle, evnx warns on stderr:
+
+```text
+! --exclude only removes the names you list, and the json output usually ends up somewhere public (an app build, a web bundle): a variable you did not think of is copied too. List what may go there with --include instead.
+```
+
+The output is unchanged and the exit code stays `0`. (`ANDROID_KEYSTORE_PASSWORD` does not
+match `*_SECRET*`, for example.)
 
 ### GCP secret names
 
@@ -325,7 +375,7 @@ STRIPE_KEY=sk_live_51H8xQ2eZvKYlo2CpR4mN7bV9
 
 Two names can become one name in the output: `Api` and `API` under
 `--transform uppercase`, or `A_B` and `a_b` for a format that renames or a target
-that ignores case — gcp-secrets lowercases and writes `_` as `-`, terraform lowercases,
+that ignores case — gcp-secrets lowercases and writes `_` as `-`,
 and Azure Key Vault and GitHub treat names that differ only in case as one. evnx refuses
 rather than lose a value:
 
@@ -381,11 +431,11 @@ Select output format:
   github-actions - GitHub Actions secrets (text to paste into the web form)
   docker-compose - Docker Compose YAML environment
   kubernetes - Kubernetes Secret YAML (stringData, or data with --base64; needs --name)
-  terraform - Terraform .tfvars file
-  doppler - Doppler secrets JSON (experimental)
+  terraform - Terraform .tfvars file (--terraform-declarations: variable blocks)
+  doppler - Doppler secrets JSON (for doppler secrets upload)
   heroku - Heroku config vars script (heroku; needs --heroku-app)
-  vercel - Vercel environment variables JSON (experimental)
-  railway - Railway variables JSON (experimental)
+  vercel - Vercel environment variables (JSON body for the env API)
+  railway - Railway variables JSON (for the Raw Editor) (experimental)
 ```
 
 Choosing a format that needs a name still needs its flag on the command line. In a

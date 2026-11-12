@@ -9,7 +9,7 @@ difficulty: beginner
 timeToComplete: "8 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
 commands: ["backup", "diff", "doctor", "init", "parse", "scan", "sync", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -218,7 +218,7 @@ On Windows the check is skipped and says so: it needs a Unix-like system.
 | Does `.env` have every key the template declares? | `evnx diff`, `evnx sync --check` |
 | Is there a real-looking secret anywhere? | `evnx scan` |
 | Are the values placeholders, weak, or malformed? | `evnx validate` |
-| What about the other folders in this repository? | one `evnx doctor <dir>` per folder — it does not recurse |
+| What about the other folders in this repository? | one `evnx doctor <dir>` per folder — it does not recurse, but it [lists](#more-than-one-folder) the `.env` files it sees in subfolders (**v0.14.0+**) |
 
 ---
 
@@ -503,8 +503,20 @@ Since v0.10.15 a template without a `.env` is an error. A local hook that runs p
 
 ## More than one folder
 
-doctor checks one folder. For a repository with several services, run it once per
-folder:
+doctor checks one folder. **v0.14.0+** — in a monorepo it tells you about the others: env
+files in subfolders (`apps/web/.env`, up to five, then "and N more") are listed as info, with
+the command that checks one:
+
+```text
+  ✗  Validate .env file existence, security, and syntax
+     .env is NOT in .gitignore (security risk)
+     · also in subfolders, not checked here: apps/a/.env, apps/b/.env, apps/c/.env, apps/d/.env, apps/e/.env and 2 more
+     → check one with: evnx doctor apps/a
+```
+
+`node_modules`, `target`, `.git` and other dependency, build and hidden folders are skipped,
+as `evnx init` skips them. Only the folder you gave is checked; the listing is a pointer, not
+a verdict. For a repository with several services, run it once per folder:
 
 ```bash
 for dir in services/*/; do

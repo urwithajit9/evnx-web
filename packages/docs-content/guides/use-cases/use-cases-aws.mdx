@@ -3,13 +3,13 @@ section: "use-cases"
 order: 2
 title: "Migrate to AWS Secrets Manager"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-20"
+updatedAt: "2026-11-12"
 excerpt: "Generate ready-to-run AWS CLI commands to store your .env secrets in AWS Secrets Manager as a single JSON secret."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "aws", "secrets-manager", "cli"]
 commands: ["convert", "migrate", "validate"]
-evnxVersion: "0.10.10"
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -31,25 +31,35 @@ evnx packs all filtered secrets into a single JSON object and prints two `aws se
 
 ```bash
 # Create a new secret:
+(
+umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+head -c <N> > "$f" <<'EVNX_VALUE'
+{
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000",
+  …
+}
+EVNX_VALUE
 aws secretsmanager create-secret \
   --name prod/myapp/config \
-  --secret-string '{
-  "DATABASE_URL": "postgres://user:pass@host:5432/db",
-  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000",
-  …
-}'
+  --secret-string file://"$f"
+)
 
 # Or update an existing secret:
+(
+umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+head -c <N> > "$f" <<'EVNX_VALUE'
+{
+  …
+}
+EVNX_VALUE
 aws secretsmanager update-secret \
   --secret-id prod/myapp/config \
-  --secret-string '{
-  "DATABASE_URL": "postgres://user:pass@host:5432/db",
-  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000",
-  …
-}'
+  --secret-string file://"$f"
+)
 ```
 
-The JSON is inside single quotes, with a `'` in a value written as `'\''`, so `$`, `#` and quotes reach AWS as written instead of being interpreted by your shell.
+(`<N>` is the JSON's length in bytes, which evnx fills in.) **v0.14.0+** — the JSON is written to a private (`umask 077`) temporary file through a quoted heredoc, so `$`, `#` and quotes reach AWS as written and the values never appear in `ps` or your shell history. The file is removed when the subshell exits. Before 0.14.0 the JSON was inline in `--secret-string '…'`.
 
 <Callout type="info">
   Storing all secrets as one JSON object is the AWS-recommended pattern for application configs. Your application reads the JSON and parses individual keys at runtime.
@@ -210,20 +220,32 @@ evnx migrate \
 The commands it prints — here with `--include "DATABASE_URL,STRIPE_SECRET_KEY"` to keep them short:
 ```bash
 # Create a new secret:
+(
+umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+head -c 117 > "$f" <<'EVNX_VALUE'
+{
+  "DATABASE_URL": "postgres://user:pass@host:5432/db",
+  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000"
+}
+EVNX_VALUE
 aws secretsmanager create-secret \
   --profile production --name prod/myapp/config \
-  --secret-string '{
-  "DATABASE_URL": "postgres://user:pass@host:5432/db",
-  "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000"
-}'
+  --secret-string file://"$f"
+)
 
 # Or update an existing secret:
-aws secretsmanager update-secret \
-  --profile production --secret-id prod/myapp/config \
-  --secret-string '{
+(
+umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT
+head -c 117 > "$f" <<'EVNX_VALUE'
+{
   "DATABASE_URL": "postgres://user:pass@host:5432/db",
   "STRIPE_SECRET_KEY": "sk_live_51Hx2EXAMPLEkey0000000000"
-}'
+}
+EVNX_VALUE
+aws secretsmanager update-secret \
+  --profile production --secret-id prod/myapp/config \
+  --secret-string file://"$f"
+)
 ```
 
 The commands carry no `--region`: the AWS CLI takes it from the profile or from `AWS_REGION`.

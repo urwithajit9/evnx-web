@@ -1,0 +1,474 @@
+---
+section: "commands"
+order: 21
+title: "evnx platform"
+publishedAt: "2026-11-12"
+updatedAt: "2026-11-12"
+excerpt: "Reference for evnx platform: compare a local .env with a Vercel project's environment variables, pull Vercel's readable values down, and push your changes up, without ever printing a value."
+difficulty: "intermediate"
+timeToComplete: "12 minutes"
+tags: ["platform", "vercel", "reference", "cli", "environment-variables", "secrets"]
+commands: ["convert", "migrate", "platform", "platform diff", "platform pull", "platform push"]
+evnxVersion: "0.14.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+**v0.14.0+** — `evnx platform` keeps a local env file and a Vercel project's environment
+variables in step, in both directions:
+
+| Subcommand | What it does |
+|------------|--------------|
+| `evnx platform diff --to vercel` | Print a plan of what differs. Changes nothing, on either side |
+| `evnx platform pull --to vercel` | Write Vercel's readable values into the local file |
+| `evnx platform push --to vercel` | Create and update Vercel variables from the local file; with `--prune`, delete the ones only Vercel has |
+
+Vercel is the only platform so far, and `--to vercel` is required. The command is behind
+the `net` feature: the prebuilt binaries have it, and a `cargo install` build without it
+lists `platform` in the missing-features table.
+
+**Values are never printed**, by any subcommand, in any format. Plans name keys, types and
+actions. Vercel's answers to a create, update or delete, which echo ciphertext, are never
+printed either.
+
+<Callout type="info" title="This is not evnx migrate">
+`evnx migrate --to vercel` and `evnx convert --to vercel` write out commands or a file for
+you to run. `evnx platform` talks to the Vercel API itself, and so it needs a token. Use
+`migrate` for a first, one-way load; use `platform` to keep working with a project that
+already has variables.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## Set up
+
+### The token
+
+Create a token at [vercel.com/account/tokens](https://vercel.com/account/tokens) and give it
+to evnx one of two ways:
+
+```bash
+export VERCEL_TOKEN="$(cat ~/.vercel-token)"
+evnx platform diff --to vercel
+
+# or, without an environment variable
+evnx platform diff --to vercel --token-file ~/.vercel-token
+```
+
+`--token-file` reads a file that holds only the token, one line. **There is no `--token`
+flag**, on purpose: a value on the command line lands in shell history. With neither, the
+command stops with exit `2`:
+
+```text
+Error: no Vercel token.
+  Set VERCEL_TOKEN, or pass --token-file <path> (a file holding only the token).
+  There is no --token flag on purpose: a value on the command line lands in shell history.
+  Create a token at https://vercel.com/account/tokens
+```
+
+A token needs access to the project, and to its team when the project belongs to one.
+
+### The project
+
+evnx looks for the project in this order, and the first hit wins:
+
+1. `--project <id-or-name>` and `--team <id-or-slug>`
+2. `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID`
+3. `.vercel/project.json`, which `vercel link` writes (`projectId` and `orgId`)
+
+For a project that belongs to a team, give the team as well. Without any of the three, the
+command stops with exit `2` and lists the three ways. Every run prints the project it
+resolved, and the file it chose, on the first line or two of its output.
+
+### The local file
+
+`--env-name` picks the Vercel environment and the file together:
+
+| `--env-name` | Local file used |
+|--------------|-----------------|
+| `development` (the default) | `.env.development` if it exists, otherwise `.env` |
+| `production` | `.env.production` if it exists, otherwise `.env` |
+| `preview` | `.env.preview` if it exists, otherwise `.env` |
+| a custom environment's slug | `.env.<slug>` if it exists, otherwise `.env` |
+
+`--file <path>` overrides the choice. The file used is always printed.
+
+---
+
+## Options
+
+These are the options all three subcommands share. `--to` is required.
+
+| Flag | Description |
+|------|-------------|
+| `--to vercel` | The platform. Only `vercel` for now |
+| `--project <ID>` | Vercel project id (`prj_…`) or name |
+| `--team <ID>` | Vercel team id (`team_…`) or slug |
+| `--token-file <PATH>` | Read the token from this file (otherwise `VERCEL_TOKEN`) |
+| `--env-name <ENV>` | `production`, `preview`, `development` (the default), or a [custom environment](#custom-environments)'s slug |
+| `--git-branch <BRANCH>` | Work on one [preview branch](#preview-branches). Only with `--env-name preview` |
+| `--file`, `-f <PATH>` | The local file, instead of `.env.<environment>` or `.env` |
+
+Per subcommand:
+
+| Flag | `diff` | `pull` | `push` | Description |
+|------|:------:|:------:|:------:|-------------|
+| `--format pretty\|json` | yes | | yes | Output format. `json` prints one document |
+| `--strict` | yes | | | Count a Secret present on both sides as a difference |
+| `--dry-run` | | yes | yes | Show the plan and change nothing |
+| `--yes`, `-y` | | yes | yes | Go ahead without asking |
+| `--only-new` | | | yes | Leave existing Secrets alone |
+| `--prune` | | | yes | Delete the variables only Vercel has |
+| `--type config\|secret` | | | yes | The type of a key that does not exist on Vercel yet |
+| `--gitignore` | | yes | yes | Add `.evnx/platform/` to `.gitignore` without asking |
+| `--no-gitignore` | | yes | yes | Skip the `.gitignore` check |
+
+---
+
+## Config and Secret
+
+Vercel has two kinds of variable, and the whole command is shaped by the difference.
+
+| | Config | Secret |
+|---|--------|--------|
+| Can Vercel return the value? | yes | **never** (write-only) |
+| `diff` | compares the values | says it exists |
+| `pull` | writes the value | keeps your local value; writes `KEY=` if you have none |
+| `push` | updates it when the value differs | counts it as an update, because it cannot tell |
+
+A Secret is Vercel's `sensitive` type. Vercel reversed its old rule on 2026-08-24, so a
+Secret is allowed in **every** environment, `development` included, and evnx treats it that
+way: see [Vercel development secrets](#vercel-development-secrets-are-secrets-too).
+
+---
+
+## `diff`
+
+```bash
+evnx platform diff --to vercel
+evnx platform diff --to vercel --env-name production
+```
+
+```text
+Vercel  prj_demo  development        local  .env.development
+  = API_URL      config  unchanged
+  ~ LOG_LEVEL    config  update  (value differs)
+  + NEW_KEY      secret  add
+  = DB_PASSWORD  secret  present  (write-only, not compared)
+  ! OLD_FLAG     config  remote only  (not in the local file)
+1 add · 1 update · 1 unchanged · 1 present (not compared) · 1 remote only · values never shown
+```
+
+| Mark | Meaning |
+|------|---------|
+| `+ add` | In the local file only |
+| `~ update` | On both sides, and the values differ |
+| `= unchanged` | On both sides, and the same |
+| `= present` | A Secret on both sides: write-only, so not compared, and **not a difference** |
+| `! remote only` | Vercel has it, the file does not |
+| `! type differs` | The type is not the one evnx would choose. Not changed by any subcommand |
+
+### Exit codes
+
+| Code | Meaning |
+|-----:|---------|
+| `0` | No differences |
+| `1` | There are differences |
+| `2` | Could not run: a bad flag, no token, no project, an unreadable file |
+| `10` | Vercel refused the token |
+| `11` | The token may not read that project |
+| `13` | Vercel could not be reached |
+| `15` | Vercel failed, or the rate limit did not clear |
+
+With no `.env.<env>` and no `.env`, `diff` compares against an empty local side: every
+Vercel variable is "remote only", and a note says so. A `--file` that does not exist is an
+error.
+
+### Using `diff` in CI
+
+Because a Secret that exists on both sides is not a difference, `diff` can gate a pipeline
+without exiting `1` forever on a variable it cannot read. `--strict` brings the old
+reading back: such a Secret becomes an `update (value cannot be compared: write-only)` and
+the exit code is `1`.
+
+```bash
+evnx platform diff --to vercel --env-name production --strict --format json
+```
+
+In `--format json` the Secret is `"action": "unchanged"` with `"compare": "write_only"`,
+the summary has a `present` count, and the document has a `strict` field. Each entry has
+`key`, `action`, `compare`, `type` and `vercel_type`; none has a value.
+
+---
+
+## `pull`
+
+```bash
+evnx platform pull --to vercel --dry-run
+evnx platform pull --to vercel
+```
+
+```text
+  Vercel    prj_demo (--project)  development
+  file      .env.development (matched the environment)
+  = API_URL      config  unchanged
+  ~ LOG_LEVEL    config  update (local value replaced)
+  = DB_PASSWORD  secret  kept (secret: write-only on Vercel, local value stays)
+  + OLD_FLAG     config  add
+1 add · 1 update · 1 unchanged · 1 secret kept · 1 local only (untouched) · values never shown
+  Dry run: nothing was written.
+```
+
+What `pull` writes:
+
+- **Config values** go into the file. A line that already exists keeps its place, its
+  comments and its formatting; a new key goes at the end.
+- **A Secret** cannot be fetched. A key that already has a local value keeps it. A key the
+  file lacks is written as `KEY=` and listed:
+
+  ```text
+    ! SIGNING_SECRET  secret  written empty (secret: write-only on Vercel)
+    Written empty (write-only on Vercel, so evnx cannot fetch the value): SIGNING_SECRET
+  ```
+
+- **Keys only the local file has** are kept.
+
+`pull` shows the plan and asks first. In CI pass `--yes`: without a terminal and without
+it, the pull stops (exit `2`), and answering no exits `4`. `--dry-run` writes nothing, not
+the file and not the state. The replaced file is kept as a single `<file>.bak`; see
+[Backups](/guides/commands/sync#backups-one-bak-per-file).
+
+When Vercel has nothing for the environment and the local file does not exist, `pull` says
+`nothing to pull; <file> not created` and exits `0`. An existing file with nothing to change
+says `<file> is already up to date`.
+
+<Callout type="warning" title="Pull, then push, cannot blank a Secret">
+A Secret you pulled as `KEY=` has an empty value, and **`push` never sends an empty
+value**. The two commands together therefore cannot overwrite a Secret with nothing. Fill
+the value in before you push it.
+</Callout>
+
+---
+
+## `push`
+
+```bash
+evnx platform push --to vercel --dry-run
+evnx platform push --to vercel --env-name production --yes
+```
+
+```text
+Vercel  prj_demo  development        local  .env.development
+  = API_URL      config  unchanged
+  = LOG_LEVEL    config  unchanged
+  + NEW_KEY      secret  create
+  ~ DB_PASSWORD  secret  update  (write-only: cannot tell whether it changed; --only-new skips)
+  = OLD_FLAG     config  unchanged
+1 create · 1 update · 3 unchanged · values never shown
+  ✓ created 1 variable
+  ✓ updated 1 variable
+  ✓ recorded .evnx/platform/vercel.json (ids only, no values)
+```
+
+`push` prints the plan and asks first. It has the same `--yes`, `--dry-run` and exit `2` /
+exit `4` rules as `pull`; `--dry-run` sends no request that carries a value.
+
+| Plan row | What `push` does |
+|----------|------------------|
+| `+ create` | A key Vercel lacks is created, all new keys in one bulk request that never replaces an existing variable |
+| `~ update` (Config) | A Config whose value differs is changed by id |
+| `~ update` (Secret) | A Secret on both sides cannot be compared, so it is sent again. `--only-new` skips it |
+| `- skipped` | An empty value is never pushed |
+| `! type differs` | Reported, not changed. An existing variable keeps its type |
+| `! remote only` | Kept, unless you pass `--prune` |
+
+### The type of a new key
+
+A new key is created as a Secret or a Config by the same rule `evnx migrate --to vercel`
+uses, which looks at the name and the value. A key under a public prefix (`NEXT_PUBLIC_`,
+`VITE_`, and the others `scan` knows) is **always Config**: it is inlined into the client
+bundle anyway. `--type config|secret` overrides the rule for new keys only:
+
+```bash
+evnx platform push --to vercel --dry-run --only-new --type secret
+```
+
+```text
+  = NEW_KEY           secret  skipped  (secret: --only-new leaves existing secrets alone)
+  + NEXT_PUBLIC_SITE  config  create  (public prefix: stays config despite --type secret)
+  + STRIPE_API_KEY    secret  create
+  - EMPTY_ONE         config  skipped  (empty value; nothing to create)
+```
+
+### Variables shared with other environments
+
+A Vercel variable can apply to several environments at once. `push` never touches the
+others. To change one environment, it takes this environment out of the shared entry and
+gives it an entry of its own, and the plan says so:
+
+```text
+  ~ LOG_LEVEL  config  update  (split: Preview keeps its own entry; value differs)
+2 update · 1 split (shared entry left) · ...
+```
+
+In `--format json` the entry has `split` and `keeps_shared_entry`, and the summary has
+`split`.
+
+### `--prune`
+
+Without it, variables only Vercel has are kept. With `--prune` they are listed in the plan
+as deletions and deleted by id after you confirm:
+
+```bash
+evnx platform push --to vercel --prune --dry-run
+```
+
+```text
+  x DB_PASSWORD  secret  delete  (not in the local file; deleted by id)
+  x OLD_FLAG     config  delete  (not in the local file; deleted by id)
+```
+
+- Without a terminal, `--prune` needs `--yes`, and that is checked before anything is sent.
+- A remote-only variable shared with other environments is **not deleted**: this
+  environment is taken out of its targets instead, shown as `detach`.
+- A key that is in the local file with an empty value (`KEY=`) is not remote-only, and is
+  never pruned.
+
+### Changed on Vercel since your last pull
+
+`push` compares each variable it is about to change with `.evnx/platform/vercel.json`. If
+Vercel changed it after your last `pull` or `push`, nothing is written and the exit code is
+`14`:
+
+```text
+Error: this variable changed on Vercel since the last pull or push: LOG_LEVEL.
+  Nothing was written. See what differs with `evnx platform diff --to vercel`, then `evnx platform pull --to vercel` to take Vercel's state, and push again.
+```
+
+With no state file, `push` warns and goes ahead.
+
+### Vercel refusing some variables
+
+A create can succeed as a whole and still list variables Vercel refused. evnx reads that
+list: any entry makes the exit code `1`, naming the keys and Vercel's error code. The rest
+stays applied.
+
+### Exit codes
+
+| Code | Meaning |
+|-----:|---------|
+| `0` | Done, or a dry run |
+| `1` | Vercel refused some variables (the rest stays applied) |
+| `2` | Could not run: a bad flag, no token, no project, no terminal and no `--yes` |
+| `4` | You answered no to the question |
+| `10` | Vercel refused the token |
+| `11` | The token may not do that |
+| `13` | Vercel could not be reached |
+| `14` | Changed on Vercel since your last pull or push |
+| `15` | Vercel failed, or the rate limit did not clear after three tries |
+
+`pull` uses `0`, `2`, `4`, `10`, `11`, `13` and `15`. A `403` whose body says the token
+itself is invalid exits `10` with "the token is invalid or expired"; any other `403` exits
+`11`. A rate limit (`429`) makes evnx wait for the reset and try again, three requests at
+most, before exit `15`.
+
+---
+
+## Custom environments
+
+**New in v0.14.0.** `--env-name` also takes the slug of one of the project's custom environments
+(such as `staging`), as well as `production`, `preview` and `development`.
+
+```bash
+evnx platform diff --to vercel --env-name staging
+evnx platform push --to vercel --env-name staging --yes
+```
+
+```text
+Vercel  prj_demo  staging (custom)        local  .env.staging
+  = STAGE_ONLY  config  unchanged
+  + NEW_STAGE   config  create
+```
+
+evnx looks the slug up in the project; its variables are the entries that name that
+environment. A slug the project does not have stops the run with exit `2` and lists the ones
+it does:
+
+```text
+Error: prj_demo has no custom environment 'nonesuch'. Its custom environments: staging.
+```
+
+The local file is `.env.<slug>` if it exists, otherwise `.env`.
+
+---
+
+## Preview branches
+
+**New in v0.14.0.** `--git-branch <branch>` limits a run to one branch's preview variables.
+It works only with `--env-name preview`; with anything else the command exits `2`.
+
+```bash
+evnx platform diff --to vercel --env-name preview --git-branch feature/login
+evnx platform push --to vercel --env-name preview --git-branch feature/login --yes
+```
+
+- A key with an entry for the branch uses it.
+- A key without one falls back to its all-branches preview entry. That entry is read-only:
+  the plan labels it, and the run never changes or deletes it. If a push must change the
+  value, it creates a branch entry beside it.
+- New variables are created for the branch.
+- Without `--git-branch`, branch-scoped preview variables are skipped, with a warning.
+
+---
+
+## The state file
+
+After a `pull` or a `push` that wrote anything, evnx records `.evnx/platform/vercel.json`.
+It holds, for each variable, its Vercel id, targets, type and `updatedAt`. **It holds no
+values and no hashes.** It exists so `push` can notice that someone changed a variable on
+Vercel.
+
+The file keeps **one record per project, team and environment**. A push checks only its own
+record, so pulling production does not hide a change to development. A branch run has its
+own record (`preview@<branch>`), and so does each custom environment. A file written by an
+earlier single-record version is still read, and upgraded by the next `pull` or `push`.
+
+It is per-machine state. Keep it out of git:
+
+```text
+hint: .evnx/platform/vercel.json is per-machine state; add `.evnx/platform/` to .gitignore to keep it out of commits.
+```
+
+On a terminal, `pull` and `push` ask whether to add `.evnx/platform/` to `.gitignore`, the
+same question the env files get. `--gitignore` adds it without asking, `--no-gitignore`
+skips the check, and without a terminal you get the hint above.
+
+---
+
+## Vercel development secrets are Secrets too
+
+Until Vercel's change on 2026-08-24, a Sensitive variable was not allowed in the
+`development` environment. It is now ("Secrets are allowed in Development"), so a
+secret-looking variable is a Secret in **every** environment, and evnx follows:
+
+- `evnx convert --to vercel` gives a secret-looking variable all three targets
+  (`production`, `preview`, `development`) with type `sensitive`.
+- `evnx migrate --to vercel` adds `--sensitive` for `development`, as for the others.
+- `evnx platform push` creates a new secret-looking key as a Secret in whichever
+  environment you push to.
+
+`--sensitive` is the older spelling of the Secret type and still works.
+
+---
+
+## See also
+
+- [evnx convert](/guides/commands/convert) — write the same variables as a file for Vercel's API
+- [evnx migrate](/guides/commands/migrate) — print the commands for a first load
+- [evnx scan](/guides/commands/scan) — the public-prefix rule behind `NEXT_PUBLIC_`
+- [Migrate to platform secret stores](/guides/use-cases/use-cases-platform-secrets)

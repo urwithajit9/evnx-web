@@ -8,8 +8,8 @@ excerpt: "Reference for evnx sync: keep .env and .env.example in step by name, g
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["sync", "reference", "cli", "env", "security"]
-commands: ["add custom", "diff", "init", "scan", "spec init", "sync"]
-evnxVersion: "0.13.0"
+commands: ["add custom", "diff", "init", "remove", "scan", "spec init", "sync"]
+evnxVersion: "0.14.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -18,7 +18,9 @@ draft: false
 `evnx sync` keeps `.env` and `.env.example` aligned by variable **name**. Forward (the
 default) adds the names `.env` has to the template, with placeholder values; reverse adds
 the template's names to `.env`. It only ever adds: it never removes a variable and never
-changes a value that is already there. Comparing values is [`evnx diff`](/guides/commands/diff).
+changes a value that is already there. The one exception is [`--prune`](#--prune-remove-stale-names-from-the-template)
+(**v0.14.0+**), a mode of its own that removes names from the template. Comparing values is
+[`evnx diff`](/guides/commands/diff).
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -68,6 +70,8 @@ evnx sync [OPTIONS]
 | `--skip-without-env` | off | Forward only: with no `.env` and no spec to compare, skip (exit `0`) and say so. For pre-commit hooks, not CI |
 | `--template-config <PATH>` | — | A JSON file of placeholder rules: `patterns`, `default`, `allow_actual`. See [Sync configuration](/guides/reference/sync-configuration) |
 | `--naming-policy <P>` | `warn` | `warn`, `error` or `ignore` for names that are not `UPPER_SNAKE_CASE`; defaults to `[sync] naming_policy` in `.evnx.toml` |
+| `--prune` | off | **v0.14.0+** — remove from the template the names no environment file has. A mode of its own: see [`--prune`](#--prune-remove-stale-names-from-the-template) |
+| `-y`, `--yes` | off | **v0.14.0+** — with `--prune` only: remove without asking |
 | `--placeholder` | off | **Deprecated**: does what `--force` does, with a notice |
 | `-v`, `--verbose` | off | More detail |
 | `-q`, `--quiet` | off | Print nothing on success; findings, warnings and errors still print |
@@ -122,6 +126,9 @@ instead):
 ```text
 No verdict: evnx did not finish. This is not a clean result.
 ```
+
+`--prune` (**v0.14.0+**) adds one more: `4` when you answer no to its question. Its other
+refusals are exit `2`; see [below](#--prune-remove-stale-names-from-the-template).
 
 Answering "No, skip" at a prompt is exit `0`: nothing went wrong, you chose to add
 nothing. A plain `evnx sync` with an empty `.env` beside a populated template warns and
@@ -473,6 +480,53 @@ An optional variable being absent is permitted by the contract, so it is not add
 
 ---
 
+## `--prune`: remove stale names from the template
+
+**v0.14.0+** — `sync` only ever added. A name that every environment had dropped stayed in
+`.env.example` until someone edited it by hand. `--prune` finds those names and removes
+them:
+
+```bash
+evnx sync --prune --dry-run
+evnx sync --prune
+```
+
+```text
+  config    .evnx.toml
+  compared  ./.env.example against ./.env, ./.env.production
+  ./.env.example     would remove GONE (line 4), OLD_SERVICE_URL (line 6, with 1 attached comment line)
+  kept KEEP_ME: declared in .evnx.toml [vars]; `evnx remove KEEP_ME --template --contract` drops both
+Dry run: nothing was written.
+```
+
+It compares the template (`--example`, else `[defaults] example`, else `.env.example`) with
+`.env` and every `.env.<NAME>`, lists the names **none of them has**, and removes them after
+asking. It writes with the same editor as [`evnx remove`](/guides/commands/remove), so
+comments, line endings and everything else in the template stay byte for byte, and the
+one-line comment above a removed name goes with it.
+
+- **A name declared in `.evnx.toml [vars]` is never pruned.** It is listed as `kept`, with
+  the `evnx remove NAME --template --contract` that drops both.
+- `--dry-run` previews and writes nothing. `--yes` (`-y`) skips the question. With no
+  terminal and no `--yes`, `--prune` stops with exit `2`; answering no exits `4`.
+- Only the template is written, and **no `.bak` is kept for it**: the template is committed,
+  so git holds its history, as with `remove --template`.
+- **Refused, with nothing changed (exit `2`):** there is no environment file, every
+  environment file is empty, or one has a line evnx cannot read (a name could hide behind
+  it).
+- **Run twice at once:** two `remove` or `sync --prune` runs on the same file cannot undo
+  each other. A run takes a lock file beside each file it writes (`.evnx-<name>.lock`); the
+  second stops at once with exit `2`, `another evnx (process N) is changing .env`, and changes
+  nothing. A lock left by a crashed run is taken over.
+- It is a mode of its own, and clap refuses `--prune` together with `--check`, `--format`,
+  `--env`, `--env-name`, `--direction`, `--force`, `--placeholder`, `--skip-without-env`,
+  `--template-config` and `--naming-policy`.
+
+The mirror of this check, for a CI job after a removal merges, is
+[`evnx remove --check`](/guides/commands/remove#is-it-gone-everywhere---check).
+
+---
+
 ## Preview: `--dry-run`
 
 ```bash
@@ -602,6 +656,32 @@ first; only the record was missing.
 - A symlink is written through to its target, and the link stays:
   `· wrote through .env.example -> real/tmpl`. The `--dry-run` preview names the target
   too (`Target: .env.example -> real/tmpl`).
+
+---
+
+## Backups: one `.bak` per file
+
+**v0.14.0+** — Every command that keeps the file it replaces as `<file>.bak` keeps exactly
+one: `platform pull`, `cloud pull`, `restore`, `diff --interactive`, `validate --fix` and
+`remove`. The copy is **replaced on each write**; it no longer becomes `.bak.2`, `.bak.3`
+and so on.
+
+```text
+  removed 2 old backups of .env (only .env.bak is kept)
+✓ ./.env             removed T1 (line 4)   backup ./.env.bak
+```
+
+- **Legacy copies are cleaned up.** On the next write, numbered copies of that same file
+  (`<file>.bak.<digits>`, and nothing else) are removed, with one line saying how many.
+  `.env.bak.old` and `notes.bak.txt` are never touched.
+- **One `.gitignore` line.** Where a command offers to protect the file in `.gitignore`
+  (`cloud pull`, `restore`, `platform pull`), it adds a single `*.bak` line, once, instead
+  of a question per copy, under the same `--gitignore` / `--no-gitignore` / `--yes` rules as
+  for the file itself. Nothing is staged or committed.
+- **The backup is the previous state, not the original.** Because it is replaced, a second
+  edit in a row leaves a copy of the first edit's result.
+
+`sync` writes the template without a `.bak` of its own, and `--prune` keeps none: the template is committed.
 
 ---
 

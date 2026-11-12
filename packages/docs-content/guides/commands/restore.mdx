@@ -182,9 +182,11 @@ evnx restore .env.backup --password-file backup.key --yes
 ```
 
 **The kept copy.** Whichever way the yes came, the file being replaced is copied to
-`<output>.bak` first, with its mode. An earlier copy is never overwritten: the next
-one is `.env.bak.2`, then `.env.bak.3`. `.bak` files are not offered as environments
-by `--env-name`.
+`<output>.bak` first, with its mode. **v0.14.0+** — there is one copy per file: the next
+restore replaces `.env.bak` (it used to write `.env.bak.2`, then `.env.bak.3`), and old
+numbered copies of that file are removed with one line saying how many. A single `*.bak`
+line goes into `.gitignore` under the usual `--gitignore` / `--no-gitignore` rules. `.bak`
+files are not offered as environments by `--env-name`.
 
 The file is replaced atomically — written beside it, then renamed — so an
 interrupted restore leaves the old file or the new one, never half of either. A

@@ -3,12 +3,12 @@ title: ".evnx.toml Configuration"
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-12"
 excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["configuration", "toml", "reference", "scan", "validate"]
-commands: ["backup", "cloud link", "convert", "diff", "scan", "scan rules list", "spec init", "sync", "validate"]
+commands: ["backup", "cloud link", "convert", "diff", "platform", "scan", "scan rules list", "spec init", "sync", "validate"]
 evnxVersion: "0.13.0"
 prerequisites:
   - commands/scan
@@ -391,7 +391,13 @@ command behaves. Read by `validate`, `scan` and `sync`.
 | `environments` | list of strings | all | Which environments the variable is required in |
 
 **v0.13.0+** — quote a variable name that holds a `.`: `[vars."spring.datasource.url"]`.
-Unquoted, TOML reads nested tables, and `validate` says so.
+Unquoted, TOML reads nested tables, and `validate` says so. **v0.14.0+** — evnx quotes such
+names itself, wherever it writes or prints a `[vars.NAME]` table (`spec init`, `add`, the
+`remove --contract` messages and the `validate` hints): any name that is not a TOML bare key
+(anything but `A-Za-z0-9_-`) is quoted, and bare names such as `my-var` and `9LIVES` stay
+unquoted. Before 0.14.0 `spec init` wrote `[vars.spring.datasource.url]`, so `validate` then
+reported `Missing required variable: spring`. A `.evnx.toml` written that way must be edited
+by hand: quote the name.
 
 ```toml
 [vars]
@@ -560,7 +566,7 @@ repeat anything you still want.
 <Callout type="warning">
 **There is no `EVNX_<SECTION>_<KEY>` environment-variable mechanism.** The variables evnx
 reads are `EVNX_AUTO_FIX`, `EVNX_OUTPUT_JSON`, `EVNX_CONFIG_DIR`, `EVNX_PASSWORD`,
-`EVNX_MASTER_PASSWORD`, `EVNX_SERVER`, `EVNX_TOKEN` and `EVNX_RULES_CATALOGUE` — nothing else. Pass flags directly instead:
+`EVNX_MASTER_PASSWORD`, `EVNX_MASTER_PASSWORD_FILE`, `EVNX_KEY_BUNDLE`, `EVNX_KEY_BUNDLE_FILE`, `EVNX_SERVER`, `EVNX_TOKEN` and `EVNX_RULES_CATALOGUE` — plus, for `evnx platform`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID` — nothing else. Pass flags directly instead:
 
 ```bash
 evnx scan --severity high
