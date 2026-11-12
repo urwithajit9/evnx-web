@@ -227,6 +227,29 @@ Every word on the landing page lives in `packages/content/src/en/*.ts`; section 
 
 ---
 
+## Install channels
+
+`/install` (`apps/web/components/marketing/InstallPageClient.tsx`) must list every channel the
+CLI ships through, with the exact command. Names and commands come from the evnx repo's
+`release.yml`, `README.md` and `docs/RELEASING.md`; change them here when those change.
+
+| Channel | Command |
+|---|---|
+| Shell installer | `curl -fsSL https://raw.githubusercontent.com/urwithajit9/evnx/main/scripts/install.sh \| bash` |
+| Homebrew | `brew install urwithajit9/evnx/evnx` |
+| Scoop | `scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx` then `scoop install evnx` |
+| winget | `winget install urwithajit9.evnx` |
+| npm | `npm install -g @evnx/cli` (pnpm and bun, `pnpm add -g` / `bun add -g`, work without a postinstall from 0.14.0) |
+| PyPI | `pipx install evnx` |
+| cargo | `cargo install evnx --all-features` |
+| Docker | `docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:X.Y.Z scan` |
+| GitHub Releases | `https://github.com/urwithajit9/evnx/releases/download/vX.Y.Z/evnx-<target>.tar.gz`, checked with the `.sha256` beside it (`sha256sum -c`) |
+| Provenance | `gh attestation verify evnx-<target>.tar.gz -R urwithajit9/evnx` |
+| SBOM (from v0.14.0) | `evnx-<version>.cdx.json` among the release assets |
+| GitHub Action | `uses: urwithajit9/evnx-action@v1` |
+
+---
+
 ## Releasing a new evnx version
 
 CI fails on every PR after a CLI release until steps 1–3 land, because it checks

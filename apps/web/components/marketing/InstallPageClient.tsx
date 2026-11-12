@@ -21,14 +21,15 @@ type MethodId =
   | "gh"
   | "scoop"
   | "winget"
-  | "docker";
+  | "docker"
+  | "action";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
 const OS_METHODS: Record<OS, MethodId[]> = {
-  mac:   ["curl", "homebrew", "cargo", "npm", "pip", "docker", "source", "gh"],
-  linux: ["curl", "cargo", "pip", "npm", "homebrew", "docker", "source", "gh"],
-  win:   ["cargo", "npm", "pip", "scoop", "winget", "docker", "gh"],
+  mac:   ["curl", "homebrew", "cargo", "npm", "pip", "docker", "source", "gh", "action"],
+  linux: ["curl", "cargo", "pip", "npm", "homebrew", "docker", "source", "gh", "action"],
+  win:   ["cargo", "npm", "pip", "scoop", "winget", "docker", "gh", "action"],
 };
 
 const METHOD_LABELS: Record<MethodId, { label: string; recommended?: boolean }> = {
@@ -42,6 +43,7 @@ const METHOD_LABELS: Record<MethodId, { label: string; recommended?: boolean }> 
   scoop:    { label: "Scoop" },
   winget:   { label: "winget" },
   docker:   { label: "Docker" },
+  action:   { label: "GitHub Action" },
 };
 
 const CHANNELS: { label: string; className: string }[] = [
@@ -64,6 +66,18 @@ const CHANNELS: { label: string; className: string }[] = [
     label: "Homebrew",
     className:
       "bg-teal-50 dark:bg-teal-950/20 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-700",
+  },
+  {
+    label: "Scoop",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
+  },
+  {
+    label: "winget",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
+  },
+  {
+    label: "Docker (ghcr.io)",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
   },
   {
     label: "shell script",
@@ -465,6 +479,8 @@ function NpmPanel() {
   return (
     <>
       <CmdLine label="Global install (recommended)" code="npm install -g @evnx/cli" />
+      <CmdLine label="pnpm" code="pnpm add -g @evnx/cli" />
+      <CmdLine label="bun" code="bun add -g @evnx/cli" />
       <CmdLine label="Or run without installing" code="npx @evnx/cli --version" />
       <p className="text-sm text-text-secondary mb-4 leading-relaxed">
         Package:{" "}
@@ -478,6 +494,10 @@ function NpmPanel() {
         </a>
         . Requires Node.js 18+. All features included &mdash; no flags needed.
       </p>
+      <InfoBox variant="success">
+        pnpm and bun work from evnx 0.14.0: the package no longer needs a postinstall script,
+        which both of them skip by default. On earlier versions, use npm.
+      </InfoBox>
       <InfoBox variant="info">
         After a global install, run <IC>evnx --version</IC> to confirm the binary is on your
         PATH. If not found, see PATH troubleshooting below.
@@ -675,12 +695,59 @@ function GHPanel() {
         />
       </div>
 
-      <InfoBox variant="info">
+      <CmdLine
+        label={`Pinned download with checksum — v${EVNX_VERSION}, Linux x86_64`}
+        code={
+          `BASE=https://github.com/urwithajit9/evnx/releases/download/v${EVNX_VERSION}\n` +
+          `curl -fsSLO $BASE/evnx-x86_64-unknown-linux-musl.tar.gz\n` +
+          `curl -fsSLO $BASE/evnx-x86_64-unknown-linux-musl.tar.gz.sha256\n` +
+          `sha256sum -c evnx-x86_64-unknown-linux-musl.tar.gz.sha256`
+        }
+      />
+
+      <h3 className="text-base font-semibold mt-6 mb-2">Verify provenance</h3>
+      <p className="text-sm text-text-secondary mb-3 leading-relaxed">
         The checksum proves the download is intact. From v0.11.0 every archive also carries a
-        signed build provenance attestation, which proves where it was built: verify it with
-        the GitHub CLI, signed in (<IC>gh auth login</IC>):{" "}
-        <IC>{"gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx"}</IC>
-      </InfoBox>
+        signed build provenance attestation, which proves where it was built. Verify it with
+        the GitHub CLI, signed in (<IC>gh auth login</IC>):
+      </p>
+      <CmdLine code="gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx" />
+      <p className="text-sm text-text-secondary mb-3 leading-relaxed">
+        To also require the release workflow, the tag and a GitHub-hosted runner:
+      </p>
+      <CmdLine
+        code={
+          `gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \\\n` +
+          `  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml \\\n` +
+          `  --source-ref refs/tags/v${EVNX_VERSION} --deny-self-hosted-runners`
+        }
+      />
+
+      <h3 className="text-base font-semibold mt-6 mb-2">SBOM</h3>
+      <p className="text-sm text-text-secondary mb-3 leading-relaxed">
+        From v0.14.0 each release also carries a CycloneDX software bill of materials,{" "}
+        <IC>evnx-&lt;version&gt;.cdx.json</IC>, among its assets on the Releases page.
+      </p>
+    </>
+  );
+}
+
+function ActionPanel() {
+  return (
+    <>
+      <p className="text-sm text-text-secondary mb-4 leading-relaxed">
+        In GitHub Actions, use the{" "}
+        <a
+          href="https://github.com/urwithajit9/evnx-action"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-brand-500 hover:text-brand-400"
+        >
+          evnx GitHub Action
+        </a>
+        . It installs evnx for the job at run time.
+      </p>
+      <CmdLine label="In a workflow step" code="- uses: urwithajit9/evnx-action@v1" />
     </>
   );
 }
@@ -899,6 +966,7 @@ export function InstallPageClient() {
             {activeTab === "scoop"    && <ScoopPanel />}
             {activeTab === "winget"   && <WingetPanel />}
             {activeTab === "docker"   && <DockerPanel />}
+            {activeTab === "action"   && <ActionPanel />}
           </div>
 
           {/* ── Verify installation ────────────────────────────────────────── */}
