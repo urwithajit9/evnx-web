@@ -55,7 +55,7 @@ function H4({ children }: { children?: React.ReactNode }) {
 }
 function P({ children }: { children?: React.ReactNode }) {
   return (
-    <p className="text-text-secondary leading-relaxed mb-4 max-w-prose">
+    <p className="text-text-secondary leading-relaxed mb-4">
       {children}
     </p>
   );

@@ -21,7 +21,7 @@ export default function CliIndex() {
   const total = getAllGuides().length;
 
   return (
-    <div className="container-base section-padding max-w-3xl">
+    <div className="container-base section-padding max-w-4xl">
       <h1 className="font-serif text-4xl font-bold mb-3">CLI reference</h1>
       <p className="text-lg text-text-secondary mb-10">
         {total} guides across {GUIDE_SECTIONS.length} sections.
