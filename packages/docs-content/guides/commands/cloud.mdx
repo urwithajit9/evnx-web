@@ -790,6 +790,10 @@ evnx cloud
   reachable yes (server ok v0.1.0)
 ```
 
+**Behind a TLS-inspecting proxy** (**v0.14.0+**), `--ping` fails with an unknown-issuer error until
+`SSL_CERT_FILE` (a PEM bundle) or `SSL_CERT_DIR` names your organisation's CA. See
+[TLS errors behind a corporate proxy](/guides/reference/managing-your-evnx-install#tls-errors-behind-a-corporate-proxy).
+
 The command exits `13` when the server cannot be reached (**v0.13.0+**; before, `1` or `2`), which is
 what makes it usable as a health check in a script:
 

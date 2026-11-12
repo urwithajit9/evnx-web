@@ -3,7 +3,7 @@ title: "Managing your evnx install"
 section: reference
 order: 11
 publishedAt: "2026-10-23"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-12"
 excerpt: "Every install channel with its upgrade and uninstall command, how to find out which evnx you are actually running, and fixes for the problems people really hit: an old version after upgrading, pip refusing to install, pipx not linking, missing cloud commands."
 difficulty: beginner
 timeToComplete: "10 minutes"
@@ -586,6 +586,47 @@ a file you have verified against its `.sha256`:
 ```bash
 xattr -d com.apple.quarantine ./evnx
 ```
+
+### TLS errors behind a corporate proxy
+
+A proxy that inspects TLS re-signs every connection with your organisation's own certificate
+authority. evnx trusts a bundled set of public roots, so it refuses that certificate, and a
+command that reaches the network (`evnx cloud`, `evnx update --check`,
+`evnx migrate --to github-actions`, `evnx scan packs`, `evnx platform`) fails with an
+unknown-issuer error. **v0.14.0+** — the error says what to do, and `evnx cloud` exits `13`:
+
+```text
+Error: could not reach https://api.evnx.dev: invalid peer certificate: UnknownIssuer (the server's certificate is not signed by a trusted authority; set SSL_CERT_FILE to your organisation's CA bundle (PEM))
+```
+
+**v0.14.0+** — two standard variables **add** trusted roots; the bundled ones stay:
+
+| Variable | What it names |
+|----------|---------------|
+| `SSL_CERT_FILE` | A PEM bundle, one file |
+| `SSL_CERT_DIR` | A directory (or a path-separator list of them) of `*.pem`, `*.crt` and hashed (`a1b2c3d4.0`) files |
+
+```bash
+export SSL_CERT_FILE=/etc/ssl/corp-ca.pem
+evnx cloud status --ping
+```
+
+```text
+  reachable yes (server ok v…)
+```
+
+The same works with a directory: `export SSL_CERT_DIR=/etc/ssl/corp-certs`.
+
+A path that does not exist, or a file with no certificate in it, is an error that names the
+variable and the path, and `evnx cloud` exits `13`:
+
+```text
+Error: building the HTTP client: SSL_CERT_FILE is set to /nonexistent.pem, but that file does not exist
+```
+
+A file inside `SSL_CERT_DIR` that cannot be read is only a warning
+(`warning: ignoring …/x.pem (from SSL_CERT_DIR): it contains no certificate (expected PEM)`),
+and the run goes on.
 
 ### `evnx update --check` says GitHub is rate-limiting
 
