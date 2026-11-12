@@ -4,7 +4,7 @@ import { canonicalUrl } from "@evnx/config";
 export const metadata = {
   title: "Install evnx",
   description:
-    "Install evnx in one command. Available on npm, crates.io, PyPI, Homebrew, GitHub Releases, and more.",
+    "Install evnx in one command. Available as a shell installer, Homebrew, Scoop, winget, npm, PyPI, cargo, Docker, GitHub Releases and a GitHub Action.",
   alternates: { canonical: canonicalUrl("/install") },
 };
 

@@ -227,6 +227,29 @@ Every word on the landing page lives in `packages/content/src/en/*.ts`; section 
 
 ---
 
+## Install channels
+
+`/install` (`apps/web/components/marketing/InstallPageClient.tsx`) must list every channel the
+CLI ships through, with the exact command. Names and commands come from the evnx repo's
+`release.yml`, `README.md` and `docs/RELEASING.md`; change them here when those change.
+
+| Channel | Command |
+|---|---|
+| Shell installer | `curl -fsSL https://raw.githubusercontent.com/urwithajit9/evnx/main/scripts/install.sh \| bash` |
+| Homebrew | `brew install urwithajit9/evnx/evnx` |
+| Scoop | `scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx` then `scoop install evnx` |
+| winget | `winget install urwithajit9.evnx` |
+| npm | `npm install -g @evnx/cli` (pnpm and bun, `pnpm add -g` / `bun add -g`, work without a postinstall from 0.14.0) |
+| PyPI | `pipx install evnx` |
+| cargo | `cargo install evnx --all-features` |
+| Docker | `docker run --rm -v "$PWD:/work" ghcr.io/urwithajit9/evnx:X.Y.Z scan` |
+| GitHub Releases | `https://github.com/urwithajit9/evnx/releases/download/vX.Y.Z/evnx-<target>.tar.gz`, checked with the `.sha256` beside it (`sha256sum -c`) |
+| Provenance | `gh attestation verify evnx-<target>.tar.gz -R urwithajit9/evnx` |
+| SBOM (from v0.14.0) | `evnx-<version>.cdx.json` among the release assets |
+| GitHub Action | `uses: urwithajit9/evnx-action@v1` |
+
+---
+
 ## Releasing a new evnx version
 
 CI fails on every PR after a CLI release until steps 1–3 land, because it checks
@@ -235,15 +258,17 @@ CI fails on every PR after a CLI release until steps 1–3 land, because it chec
 1. Get the **release** binary, not a local build: download the release archive and its
    `.sha256`, run `sha256sum -c`, and point `EVNX_BIN` at it. A stale `evnx` earlier on
    `PATH` is common; check `type -a evnx`.
-2. `EVNX_API_URL=http://127.0.0.1:9 pnpm config:sync` — picks up the new version from the
-   registries (`versions.json`). The URL keeps it from calling the production API.
-3. `pnpm changelog:sync`, `pnpm cli:index` and `pnpm guide:commands`, then commit the
-   generated files on their own: `chore: evnx X.Y.Z — versions.json and command index`.
+2. `EVNX_BIN=/path/to/release/evnx pnpm release:post` — one script for the chore: it runs
+   `config:sync` (picks up the new version from the registries into `versions.json`,
+   without calling the production API) and `cli:index` (`command-index.json`), then
+   re-runs both `--check` modes. It refuses to run without `EVNX_BIN`.
+3. `pnpm changelog:sync` and `pnpm guide:commands`, then commit the generated files on
+   their own: `chore: evnx X.Y.Z — versions.json and command index`.
 4. `pnpm cli:diff vX.Y.Z` — what the release changed and which guides it touches. Update
    those guides from **real runs** of the release binary (cloud commands against a local
    evnx-server, never `api.evnx.dev`), and raise `evnxVersion` only on a page whose examples
    you re-ran on that release.
-5. `pnpm cli:check`, `pnpm guide:commands:check` and `pnpm check:links`, all with
+5. `pnpm cli:check`, `pnpm guide:commands:check`, `pnpm check:guide-h1` and `pnpm check:links`, all with
    `EVNX_BIN` set, then commit and push.
 
 `/changelog` shows each release's summary and highlights. Releases up to v0.4.0 use hand-written highlights (`CURATED` in `apps/web/app/(marketing)/changelog/page.tsx`); never add later releases there.
@@ -258,14 +283,16 @@ pnpm lint
 pnpm build
 pnpm check:links                 # links in the MDX as written
 pnpm check:links:built           # links in the built docs app
-pnpm config:check
-pnpm cli:index:check
+pnpm config:check                # no production API call; add --live-api to check plan limits
+pnpm check:guide-h1              # no guide starts with an in-content `# Title`
+pnpm cli:index:check             # needs EVNX_BIN
+pnpm cli:check                   # needs EVNX_BIN
 pnpm guide:commands:check
 pnpm changelog:check
 pnpm verify:redirects            # docs-split redirects
 ```
 
-`.github/workflows/ci.yml` runs typecheck, content links, the command-index and guide-commands checks against the latest released CLI, a built-links check for `apps/docs`, and the config and changelog drift checks. Drift checks fail only when a source was reachable and disagreed; an unreachable registry or GitHub is a warning.
+`.github/workflows/ci.yml` runs typecheck, content links, the command-index and guide-commands checks against the latest released CLI, the guide-H1 and CLI-invocation checks, a built-links check for `apps/docs`, and the config and changelog drift checks. Drift checks fail only when a source was reachable and disagreed; an unreachable registry or GitHub is a warning.
 
 ---
 

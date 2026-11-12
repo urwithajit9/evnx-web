@@ -39,6 +39,26 @@ export function findBinary() {
   return null;
 }
 
+/**
+ * RM-W3(c). For scripts that must read a SPECIFIC binary: no EVNX_BIN, no run.
+ * Falling back to a hint path, or "skipped, exit 0", lets a check pass
+ * vacuously or read the wrong binary's command tree.
+ */
+export function requireEvnxBin(script) {
+  if (!process.env.EVNX_BIN) {
+    console.error(
+      `${script}: EVNX_BIN is not set, refusing to run.\n` +
+        "  This script joins the guides against one binary's own command tree, and\n" +
+        "  guessing which binary is how the wrong tree gets read.\n" +
+        "  Set it explicitly, for example:\n" +
+        "    EVNX_BIN=../evnx/target/release/evnx node " + script + "\n" +
+        "  or, in CI:  npm i -g @evnx/cli && export EVNX_BIN=$(command -v evnx)",
+    );
+    process.exit(1);
+  }
+  return findBinary();
+}
+
 /** Bumped by `evnx commands --json` when the payload shape changes. */
 export const SUPPORTED_SCHEMA = 1;
 

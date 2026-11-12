@@ -24,6 +24,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = getBlogPost(slug);
   if (!post) return {};
   return {
+    // RM-W1: getBlogPost only returns a draft outside production (dev preview).
+    // Keep it out of any index even there.
+    ...(post.draft ? { robots: { index: false, follow: false } } : {}),
     title: post.title,
     description: post.excerpt,
     alternates: { canonical: canonicalUrl(`/blog/${post.slug}`) },
@@ -111,6 +114,15 @@ export default async function BlogPostPage({ params }: Props) {
                 </span>
               ))}
             </div>
+
+            {post.draft && (
+              <p
+                role="status"
+                className="mb-4 inline-block font-mono text-xs px-2 py-1 rounded border border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+              >
+                Draft: not published. Visible only outside production.
+              </p>
+            )}
 
             <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6 leading-tight">
               {post.title}

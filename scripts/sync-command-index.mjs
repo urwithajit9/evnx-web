@@ -26,7 +26,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findBinary, readSurface, index } from "./lib/surface.mjs";
+import { requireEvnxBin, readSurface, index } from "./lib/surface.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -53,7 +53,7 @@ function guidesOnDisk() {
 
 let bin;
 try {
-  bin = findBinary();
+  bin = requireEvnxBin("scripts/sync-command-index.mjs");
 } catch (e) {
   console.error(e.message);
   process.exit(1);

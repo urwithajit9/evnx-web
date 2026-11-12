@@ -16,8 +16,6 @@ prerequisites:
 draft: false
 ---
 
-# Migrate to GitHub Actions Secrets
-
 `evnx migrate --to github-actions` is the only destination where evnx uploads secrets for you — no commands to copy and run. It calls the GitHub REST API, encrypts each value with the repository's public key, and uploads it. In a terminal it shows a progress bar and a line per secret.
 
 <Prerequisites>

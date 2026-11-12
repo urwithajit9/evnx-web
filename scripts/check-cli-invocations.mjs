@@ -36,7 +36,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { globSync } from "node:fs";
-import { findBinary, readSurface, index } from "./lib/surface.mjs";
+import { requireEvnxBin, readSurface, index } from "./lib/surface.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -273,7 +273,7 @@ function checkInvocation({ text, file, where }) {
 
 let bin;
 try {
-  bin = findBinary();
+  bin = requireEvnxBin("scripts/check-cli-invocations.mjs");
 } catch (e) {
   console.error(e.message);
   process.exit(1);

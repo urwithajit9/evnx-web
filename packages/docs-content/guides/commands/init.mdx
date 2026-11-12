@@ -15,8 +15,6 @@ prerequisites:
 draft: false
 ---
 
-# evnx init — Command Reference
-
 Initialize `.env.example` and `.env` files using Blank, Blueprint, or Architect modes with schema-driven variable generation.
 
 Run with no flags in a terminal, `init` shows a menu with **Blank** pre-selected (it was Blueprint before 0.10.1). Yes/no questions take their answer on Enter (since 0.10.1): type `y` or `n` and press Enter, or just Enter for the default. Esc or `q` cancels without writing anything (exit 0): at once in a list, and followed by Enter at a yes/no question. If the output is piped into a command that stops reading early (`| head`), init exits 141, quietly, like other command-line tools. `.evnx.toml` is written before anything is printed (**v0.11.0+**; in 0.10.18 it could be missing after `| head`). Without a terminal (CI, a pipe, an AI agent) the menu cannot be shown, so `init` stops with exit 2 and lists the flags to use instead; `--with` and `--blueprint` without `--yes` likewise stop and say to add `--yes`. With **`CI` set** (any value except `0` and `false`, **v0.10.16+**), init does not ask even at a terminal:
