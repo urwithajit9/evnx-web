@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, Fraunces } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
+import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { Footer } from "@/components/layout/footer";
 import {
   SITE_NAME,
@@ -80,6 +81,7 @@ export default function RootLayout({
           <a href="#main-content" className="sr-only focus:not-sr-only">
     Skip to content
   </a>
+        <AnnouncementBanner />
         <Header />
         <SearchModal />
         {/* ⚠️ `id` and `tabIndex` are both required. The skip link above has
