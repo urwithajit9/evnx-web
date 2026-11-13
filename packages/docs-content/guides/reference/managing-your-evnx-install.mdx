@@ -100,6 +100,8 @@ below.
 | Install script | `curl -fsSL https://dotenv.space/install.sh \| bash` | run the same command again | delete the file (see below) |
 | Homebrew | `brew install urwithajit9/evnx/evnx` | `brew upgrade evnx` | `brew uninstall evnx` |
 | npm | `npm install -g @evnx/cli` | `npm install -g @evnx/cli@latest` | `npm uninstall -g @evnx/cli` |
+| pnpm (0.14.0+) | `pnpm add -g @evnx/cli` | `pnpm update -g @evnx/cli` | `pnpm remove -g @evnx/cli` |
+| bun (0.14.0+) | `bun add -g @evnx/cli` | `bun update -g @evnx/cli` | `bun remove -g @evnx/cli` |
 | pipx | `pipx install evnx` | `pipx upgrade evnx` | `pipx uninstall evnx` |
 | pip, in a virtual environment | `pip install evnx` | `pip install --upgrade evnx` | `pip uninstall evnx` |
 | cargo | `cargo install evnx --all-features` | `cargo install evnx --all-features --force` | `cargo uninstall evnx` |
@@ -193,6 +195,11 @@ placeholder `evnx` exited `1`. A missing platform package is the one failure lef
 project can pin its own version with `npm install --save-dev @evnx/cli`. A
 per-project install does not count as a second global copy: it is only reachable
 through `npx` or an npm script.
+
+**v0.14.0+** — pnpm and bun have the same two forms. `pnpm dlx @evnx/cli --version` and
+`bunx @evnx/cli --version` run it without installing anything. For a per-project install,
+use `pnpm add -D @evnx/cli` or `bun add -d @evnx/cli`, then run `pnpm evnx …` or
+`bunx evnx …`, or call `evnx` from a `package.json` script.
 
 <Callout type="info" title="nvm, fnm and volta keep globals per Node version">
 With a Node version manager, `npm install -g` installs into **the current Node
@@ -691,6 +698,14 @@ brew uninstall evnx
 
 ```bash
 npm uninstall -g @evnx/cli
+```
+
+```bash
+pnpm remove -g @evnx/cli
+```
+
+```bash
+bun remove -g @evnx/cli
 ```
 
 ```bash
