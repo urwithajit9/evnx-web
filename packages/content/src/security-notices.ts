@@ -23,7 +23,17 @@ export interface SecurityNotice {
   published: boolean;
 }
 
-export const securityNotices: SecurityNotice[] = [];
+export const securityNotices: SecurityNotice[] = [
+  {
+    slug: "2026-11-security-update",
+    date: "2026-11-13",
+    title: "Security update: November 2026",
+    summary:
+      "We fixed twelve issues in the evnx cloud server and CLI. Secrets were never readable by the server. Teams using evnx cloud in CI need evnx 0.14.0 and an EVNX_KEY_BUNDLE secret.",
+    severity: "action-required",
+    published: true,
+  },
+];
 
 /** Published notices only, newest first. */
 export function getPublishedSecurityNotices(): SecurityNotice[] {

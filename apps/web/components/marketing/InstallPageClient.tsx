@@ -188,7 +188,9 @@ const TROUBLE_ITEMS: TroubleItem[] = [
         script. Up to 0.10.5 only <IC>npm install -g</IC> created an <IC>evnx</IC> command
         &mdash; upgrade with <IC>npm install --save-dev @evnx/cli@latest</IC>. Or install
         globally, <IC>npm install -g @evnx/cli</IC>, or run without installing:{" "}
-        <IC>npx @evnx/cli --version</IC>.
+        <IC>npx @evnx/cli --version</IC>. With pnpm or bun (evnx 0.14.0 and later), use{" "}
+        <IC>pnpm add -D @evnx/cli</IC> and <IC>pnpm evnx</IC>, or <IC>bun add -d @evnx/cli</IC>{" "}
+        and <IC>bunx evnx</IC>.
       </>
     ),
   },
@@ -482,6 +484,11 @@ function NpmPanel() {
       <CmdLine label="pnpm" code="pnpm add -g @evnx/cli" />
       <CmdLine label="bun" code="bun add -g @evnx/cli" />
       <CmdLine label="Or run without installing" code="npx @evnx/cli --version" />
+      <CmdLine label="pnpm, without installing" code="pnpm dlx @evnx/cli --version" />
+      <CmdLine label="bun, without installing" code="bunx @evnx/cli --version" />
+      <CmdLine label="Per project (npm)" code="npm install --save-dev @evnx/cli" />
+      <CmdLine label="Per project (pnpm)" code="pnpm add -D @evnx/cli" />
+      <CmdLine label="Per project (bun)" code="bun add -d @evnx/cli" />
       <p className="text-sm text-text-secondary mb-4 leading-relaxed">
         Package:{" "}
         <a

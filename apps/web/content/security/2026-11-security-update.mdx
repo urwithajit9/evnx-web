@@ -1,0 +1,52 @@
+**Summary.** We reviewed the evnx cloud server and CLI while writing our protocol and threat-model documentation, and fixed twelve issues. Your secrets were never readable by the server, and we have no evidence that any issue was used against anyone. Teams that use evnx cloud in CI need evnx 0.14.0 and one new CI secret.
+
+## Do I need to do anything?
+
+| You use… | Action |
+|---|---|
+| evnx cloud from your laptop only | Update to evnx 0.14.0. Nothing else. |
+| evnx cloud in CI (`EVNX_TOKEN` + `EVNX_MASTER_PASSWORD`) | Update to 0.14.0, run `evnx auth key-bundle` on a signed-in machine, and store the output as a CI secret named `EVNX_KEY_BUNDLE`. Since 2026-11-13 the server no longer serves key material to API tokens, so CI without it cannot unlock a vault. |
+| Two-factor authentication | Nothing. Your 2FA keeps working. If you want extra assurance, you can turn 2FA off and on again to get a new secret. |
+| A CI token you think may have leaked | Revoke it (`evnx auth token revoke`), create a new one, and consider changing your master password. |
+| Only the evnx CLI without cloud (scan, validate, convert…) | Nothing beyond the normal update. |
+
+## What changed
+
+**API tokens and account key material.** Until now, an API token could fetch the encrypted copy of the account's private key and its password salt, the same data a signed-in session gets. That data is encrypted with your master password, so a token alone could not read secrets, but a leaked token gave an attacker something to attack offline with password guesses. CI now carries this encrypted data itself (`EVNX_KEY_BUNDLE`), and the server no longer hands it to tokens.
+
+**2FA secrets are encrypted at rest.** The secret behind your authenticator app was stored without encryption on the server. It is now encrypted with a server key kept outside the database. Existing secrets are upgraded automatically the next time they are used.
+
+**Old data is now really deleted.**
+
+- When a vault is re-keyed (for example after removing a member), the server now deletes the old encrypted copies instead of leaving them in storage. Leftovers from earlier re-keys have been cleaned up.
+- When the undo window after a master-password change closes, the previous key material is now erased, not just marked expired.
+
+**Stricter checks.**
+
+- Re-keying only switches a version to data that was prepared for that exact vault and version and matches its checksum.
+- Malformed uploads are refused.
+- Two pushes at the same moment can no longer exceed a plan's version limit.
+- A push and its audit-log entry now succeed or fail together.
+
+**Account privacy.** The sign-in start step no longer reveals whether an email address has an evnx account.
+
+**New: roll back a bad version.** An admin can now delete the latest version of a vault when an older one exists, which makes the previous version the latest again.
+
+## What did not change
+
+- Secrets are still encrypted on your machine before upload. The server never had, and still does not have, your master password or plaintext values.
+- No vault had to be re-encrypted. No one needs to change their master password because of this update.
+
+## What we are working on next
+
+A coming release adds signed key sharing, key fingerprints and stronger protection against a server that replays old versions. These close the remaining limits described in our threat model, which we will publish soon.
+
+## Timeline
+
+| Date | Event |
+|---|---|
+| 2026-11-12 | Issues found during an internal review; fixes written, tested and deployed to the server |
+| 2026-11-13 | evnx 0.14.0 released with `EVNX_KEY_BUNDLE` |
+| 2026-11-13 | API tokens stop receiving key material |
+
+Questions or a security report: see [SECURITY.md](https://github.com/urwithajit9/evnx/blob/main/SECURITY.md) (security@evnx.dev or GitHub's private vulnerability reporting).
