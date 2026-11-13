@@ -23,8 +23,11 @@ export interface Announcement {
 }
 
 export const ANNOUNCEMENT: Announcement = {
-  id: "none",
-  enabled: false,
-  message: "",
-  severity: "info",
+  id: "security-2026-11",
+  enabled: true,
+  message:
+    "Security update: evnx 0.14.0 fixes twelve issues in evnx cloud. CI that uses evnx cloud needs a new secret.",
+  href: "/security/2026-11-security-update",
+  linkText: "Read the notice",
+  severity: "action",
 };
