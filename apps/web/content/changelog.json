@@ -1,7 +1,202 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
-  "latest": "0.13.0",
+  "latest": "0.14.0",
   "releases": [
+    {
+      "version": "0.14.0",
+      "date": "2026-11-13",
+      "summary": "**Read this first: what changes for scripts and CI.** Each item has its own entry below with the details and how to migrate.",
+      "highlights": [
+        {
+          "type": "feature",
+          "text": "`evnx auth resend-verification`"
+        },
+        {
+          "type": "feature",
+          "text": "Each release carries a CycloneDX SBOM"
+        },
+        {
+          "type": "feature",
+          "text": "CI: `EVNX_KEY_BUNDLE` replaces fetching key material with an API token."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx platform diff|pull --to vercel`: compare and pull a Vercel project's environment variables"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx platform push --to vercel`: create and update Vercel variables from the local file"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx platform push --prune`, custom environments and `--git-branch`"
+        },
+        {
+          "type": "feature",
+          "text": "`SSL_CERT_FILE` and `SSL_CERT_DIR` add trusted root certificates"
+        },
+        {
+          "type": "feature",
+          "text": "`validate` and `spec check` report a name some environment files have and others lack"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx remove --check NAME…`: is it gone everywhere?"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx sync --prune`: remove stale names from the template"
+        },
+        {
+          "type": "feature",
+          "text": "A precision and recall gate for `scan`, run by `cargo test`"
+        },
+        {
+          "type": "feature",
+          "text": "`init`'s `schema.json` says how `scan` sees each secret variable"
+        },
+        {
+          "type": "feature",
+          "text": "`tests/invariants.rs`: evnx accepts what evnx generates"
+        },
+        {
+          "type": "feature",
+          "text": "Known-answer tests for every primitive and for evnx's own envelope"
+        },
+        {
+          "type": "feature",
+          "text": "Local fuzz targets for the `.env` parser, the scan engine and decryption"
+        },
+        {
+          "type": "improvement",
+          "text": "Repo files: CODEOWNERS, Dependabot grouping for cargo, a PR template"
+        },
+        {
+          "type": "improvement",
+          "text": "`SECURITY.md` states the support policy"
+        },
+        {
+          "type": "improvement",
+          "text": "`scan` reads files in parallel"
+        },
+        {
+          "type": "fix",
+          "text": "`convert` output shapes checked against each tool's documented input (RM-65, I-092, I-093, I-097)."
+        },
+        {
+          "type": "fix",
+          "text": "`scan -v` says names are checked in Dockerfiles, Containerfiles, shell scripts and Python modules."
+        },
+        {
+          "type": "fix",
+          "text": "`scan`: false positives found by the RM-70 corpus"
+        },
+        {
+          "type": "fix",
+          "text": "`scan`: names are checked in Dockerfiles, shell scripts and Python modules"
+        },
+        {
+          "type": "fix",
+          "text": "`scan`: the `github-token` rule matches stateless GitHub App installation tokens"
+        },
+        {
+          "type": "fix",
+          "text": "`scan` no longer flags the Neon sample URL `init --with neon` writes"
+        },
+        {
+          "type": "fix",
+          "text": "Monorepos: paths in `.evnx.toml` are read from the folder that holds it, and `doctor` notices nested `.env` files"
+        },
+        {
+          "type": "fix",
+          "text": "`scan` reads Jupyter notebooks cell by cell"
+        },
+        {
+          "type": "fix",
+          "text": "`platform pull`: no more \"already up to date\" for a file that does not exist."
+        },
+        {
+          "type": "fix",
+          "text": "`platform push`: the plan says when it splits a shared entry."
+        },
+        {
+          "type": "fix",
+          "text": "`platform`: the state file keeps one record per environment"
+        },
+        {
+          "type": "fix",
+          "text": "Backups no longer pile up."
+        },
+        {
+          "type": "fix",
+          "text": "`platform diff`: a Secret present on both sides is no longer a difference"
+        },
+        {
+          "type": "fix",
+          "text": "`platform`: a 403 that says `invalidToken` exits 10, not 11"
+        },
+        {
+          "type": "fix",
+          "text": "`platform diff` with no `.env.<env>` and no `.env` compares against an empty local side"
+        },
+        {
+          "type": "fix",
+          "text": "`platform pull` and `push` offer to add `.evnx/platform/` to `.gitignore`"
+        },
+        {
+          "type": "fix",
+          "text": "`evnx spec init` wrote `[vars.spring.datasource.url]` for a variable with dots in its name."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx migrate --to vercel` printed `production` for a development file."
+        },
+        {
+          "type": "fix",
+          "text": "`evnx add --help` said a declined confirmation exits 0"
+        },
+        {
+          "type": "fix",
+          "text": "Vercel secrets are now `sensitive` in `development` too"
+        },
+        {
+          "type": "fix",
+          "text": "A scan rule's `names` now beats a built-in rule in YAML and JSON too."
+        },
+        {
+          "type": "fix",
+          "text": "Two `remove` (or `sync --prune`) runs on the same file can no longer undo each other"
+        },
+        {
+          "type": "fix",
+          "text": "A secret under a browser-exposed prefix is worse, and says why"
+        },
+        {
+          "type": "fix",
+          "text": "`cloud` warns when a vault's \"latest\" goes backwards"
+        },
+        {
+          "type": "fix",
+          "text": "A vault id typed in upper case is stored in lower case"
+        },
+        {
+          "type": "fix",
+          "text": "`migrate` keeps values off the command line where the tool allows it, and says so where it does not"
+        },
+        {
+          "type": "fix",
+          "text": "Paid-user output gaps"
+        },
+        {
+          "type": "fix",
+          "text": "`@evnx/cli` works where install scripts do not run"
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.13.0...v0.14.0"
+      }
+    },
     {
       "version": "0.13.0",
       "date": "2026-11-08",
