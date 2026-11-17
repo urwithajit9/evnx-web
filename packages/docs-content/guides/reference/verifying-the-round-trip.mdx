@@ -3,12 +3,13 @@ title: "Verifying the Round Trip"
 section: reference
 order: 7
 publishedAt: "2026-09-23"
+updatedAt: "2026-11-17"
 excerpt: "Check evnx's zero-knowledge claims yourself: a byte-identical push/pull round trip, and proof that evnx cloud run keeps secrets out of ps and propagates a child's exit code. Real commands, real output."
 difficulty: intermediate
 timeToComplete: "15 minutes"
 tags: ["cloud", "zero-knowledge", "verification", "testing", "security", "evnx"]
 commands: ["auth status", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "migrate", "vault delete"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/cloud-sync-quickstart
 draft: false
@@ -123,27 +124,27 @@ really there — it is the first thing a normalising bug would eat.
 Then create a vault and push:
 
 ```bash
-printf '%s\n' "$PW" | evnx vault create roundtrip-test -e development --password-stdin
-printf '%s\n' "$PW" | evnx cloud push --vault roundtrip-test/development --file .env.development --password-stdin
+printf '%s\n' "$PW" | evnx vault create roundtrip-test --environment development --password-stdin
+printf '%s\n' "$PW" | evnx cloud push --vault roundtrip-test/development --env .env.development --password-stdin
 ```
 
 ```
   ✓ created roundtrip-test/development
 
   Push a .env into it with:  evnx cloud push --vault roundtrip-test/development
-  file      .env.development (--file)
+  file      .env.development (--env)
   ✓ pushed .env.development to roundtrip-test/development as version 1
 ```
 
 ## 4. Pull it back and compare bytes
 
 ```bash
-printf '%s\n' "$PW" | evnx cloud pull --vault roundtrip-test/development --file .env.pulled --password-stdin
+printf '%s\n' "$PW" | evnx cloud pull --vault roundtrip-test/development --env .env.pulled --password-stdin
 cmp .env.development .env.pulled && echo "PASS: byte-identical"
 ```
 
 ```
-  file      .env.pulled (--file)
+  file      .env.pulled (--env)
   ✓ pulled version 1 of roundtrip-test/development into .env.pulled
 PASS: byte-identical
 ```

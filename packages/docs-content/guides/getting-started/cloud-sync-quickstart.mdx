@@ -3,13 +3,13 @@ title: "Cloud Sync in 10 Minutes"
 section: getting-started
 order: 6
 publishedAt: "2026-09-16"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "From no account to a .env pulled byte-identical on a second machine. Every encryption step happens locally — the server only ever holds ciphertext."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["cloud", "sync", "getting-started", "encryption", "evnx"]
 commands: ["auth login", "auth register", "auth status", "cloud", "cloud history", "cloud link", "cloud pull", "cloud push", "update", "vault create"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -82,7 +82,7 @@ This asks the server, so it tells you whether the credential is genuinely still 
 <Step number={4} title="Create a vault">
 
 ```bash
-evnx vault create my-api --env production
+evnx vault create my-api --environment production
 ```
 
 ```text
@@ -120,11 +120,11 @@ Because this is a **production** vault and the file is the default `.env`, the p
 
 ```text
   file      ./.env (default)
-  ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! pushing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
 Push ./.env into production vault my-api/production? [y/N]
 ```
 
-Answer `y`. The question is there because a forgotten `--file` is how development secrets end up in production. Keep production values in `.env.production` and the push picks that file up without asking. In a script with no terminal, add `--yes` or name the file with `--file`.
+Answer `y`. The question is there because a forgotten `--env` is how development secrets end up in production. Keep production values in `.env.production` and the push picks that file up without asking. In a script with no terminal, add `--yes` or name the file with `--env`.
 
 Your `.env` is encrypted here, then uploaded. Comments, ordering, blank lines and quoting all survive, because evnx encrypts the file itself rather than a parsed version of it.
 
@@ -143,7 +143,7 @@ evnx cloud pull --vault my-api/production
 
 ```text
   file      ./.env (default)
-  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! writing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
   ✓ pulled version 1 of my-api/production into ./.env
 ! '.env' may contain secrets and is not in .gitignore
 ```

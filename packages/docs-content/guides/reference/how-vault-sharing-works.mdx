@@ -3,13 +3,13 @@ title: "How Sharing a Vault Works"
 section: reference
 order: 6
 publishedAt: "2026-10-22"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "Which key opens a vault someone shared with you: three people, seven steps, and each person's path from their own password to the same vault key, with a diagram for every step."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["cloud", "vault", "sharing", "cryptography", "zero-knowledge", "team"]
 commands: ["auth login", "auth register", "cloud pull", "cloud push", "vault create", "vault leave", "vault list", "vault revoke", "vault share"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/cloud-sync-quickstart
 draft: false
@@ -156,7 +156,7 @@ sequenceDiagram
 ## Step 2: AJ creates the vault
 
 ```bash
-evnx vault create myapp --env production
+evnx vault create myapp --environment production
 ```
 
 ```
@@ -296,7 +296,7 @@ This is the step the question was about. On Joy's laptop:
 
 ```bash
 evnx vault list
-evnx cloud pull --vault myapp/production --file .env.production
+evnx cloud pull --vault myapp/production --env .env.production
 ```
 
 ```
@@ -305,7 +305,7 @@ evnx cloud pull --vault myapp/production --file .env.production
 ```
 
 ```
-  file      .env.production (--file)
+  file      .env.production (--env)
   ✓ pulled version 1 of myapp/production into .env.production
 ```
 
@@ -347,15 +347,15 @@ Error: that master password did not open your keypair, so it is not the one this
 ```
 
 <Callout type="tip" title="Which file a pull writes">
-Without `--file`, a first pull into a folder that has no `.env.production` yet writes
+Without `--env`, a first pull into a folder that has no `.env.production` yet writes
 `.env` and warns that it came from a production vault:
 
 ```
   file      ./.env (default)
-  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! writing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
 ```
 
-Pass `--file .env.production` to keep the same name as on AJ's machine.
+Pass `--env .env.production` to keep the same name as on AJ's machine.
 </Callout>
 
 ---
@@ -363,7 +363,7 @@ Pass `--file .env.production` to keep the same name as on AJ's machine.
 ## Step 6: Joy pushes a change
 
 ```bash
-evnx cloud push --vault myapp/production --file .env.production
+evnx cloud push --vault myapp/production --env .env.production
 ```
 
 ```

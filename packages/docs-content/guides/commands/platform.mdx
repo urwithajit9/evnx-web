@@ -3,13 +3,13 @@ section: "commands"
 order: 21
 title: "evnx platform"
 publishedAt: "2026-11-12"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx platform: compare a local .env with a Vercel project's environment variables, pull Vercel's readable values down, and push your changes up, without ever printing a value."
 difficulty: "intermediate"
 timeToComplete: "12 minutes"
 tags: ["platform", "vercel", "reference", "cli", "environment-variables", "secrets"]
 commands: ["convert", "migrate", "platform", "platform diff", "platform pull", "platform push"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -87,16 +87,16 @@ resolved, and the file it chose, on the first line or two of its output.
 
 ### The local file
 
-`--env-name` picks the Vercel environment and the file together:
+`--target` picks the Vercel environment and the file together:
 
-| `--env-name` | Local file used |
-|--------------|-----------------|
+| `--target` | Local file used |
+|------------|-----------------|
 | `development` (the default) | `.env.development` if it exists, otherwise `.env` |
 | `production` | `.env.production` if it exists, otherwise `.env` |
 | `preview` | `.env.preview` if it exists, otherwise `.env` |
 | a custom environment's slug | `.env.<slug>` if it exists, otherwise `.env` |
 
-`--file <path>` overrides the choice. The file used is always printed.
+`--env <path>` overrides the choice. The file used is always printed.
 
 ---
 
@@ -110,17 +110,17 @@ These are the options all three subcommands share. `--to` is required.
 | `--project <ID>` | Vercel project id (`prj_…`) or name |
 | `--team <ID>` | Vercel team id (`team_…`) or slug |
 | `--token-file <PATH>` | Read the token from this file (otherwise `VERCEL_TOKEN`) |
-| `--env-name <ENV>` | `production`, `preview`, `development` (the default), or a [custom environment](#custom-environments)'s slug |
-| `--git-branch <BRANCH>` | Work on one [preview branch](#preview-branches). Only with `--env-name preview` |
-| `--file`, `-f <PATH>` | The local file, instead of `.env.<environment>` or `.env` |
+| `--target <ENV>` | **v0.15.0** — was `--env-name`, which now exits 2. `production`, `preview`, `development` (the default), or a [custom environment](#custom-environments)'s slug |
+| `--git-branch <BRANCH>` | Work on one [preview branch](#preview-branches). Only with `--target preview` |
+| `--env <FILE>` | **v0.15.0** — the local file (was `-f`/`--file`), instead of `.env.<environment>` or `.env` |
 
 Per subcommand:
 
 | Flag | `diff` | `pull` | `push` | Description |
 |------|:------:|:------:|:------:|-------------|
-| `--format pretty\|json` | yes | | yes | Output format. `json` prints one document |
+| `--format pretty\|json` | yes | | yes | Output format. `json` prints one document. `--json` is the same |
 | `--strict` | yes | | | Count a Secret present on both sides as a difference |
-| `--dry-run` | | yes | yes | Show the plan and change nothing |
+| `-n`, `--dry-run` | | yes | yes | Show the plan and change nothing |
 | `--yes`, `-y` | | yes | yes | Go ahead without asking |
 | `--only-new` | | | yes | Leave existing Secrets alone |
 | `--prune` | | | yes | Delete the variables only Vercel has |
@@ -151,7 +151,7 @@ way: see [Vercel development secrets](#vercel-development-secrets-are-secrets-to
 
 ```bash
 evnx platform diff --to vercel
-evnx platform diff --to vercel --env-name production
+evnx platform diff --to vercel --target production
 ```
 
 ```text
@@ -186,7 +186,7 @@ Vercel  prj_demo  development        local  .env.development
 | `15` | Vercel failed, or the rate limit did not clear |
 
 With no `.env.<env>` and no `.env`, `diff` compares against an empty local side: every
-Vercel variable is "remote only", and a note says so. A `--file` that does not exist is an
+Vercel variable is "remote only", and a note says so. An `--env` file that does not exist is an
 error.
 
 ### Using `diff` in CI
@@ -197,7 +197,7 @@ reading back: such a Secret becomes an `update (value cannot be compared: write-
 the exit code is `1`.
 
 ```bash
-evnx platform diff --to vercel --env-name production --strict --format json
+evnx platform diff --to vercel --target production --strict --format json
 ```
 
 In `--format json` the Secret is `"action": "unchanged"` with `"compare": "write_only"`,
@@ -259,7 +259,7 @@ the value in before you push it.
 
 ```bash
 evnx platform push --to vercel --dry-run
-evnx platform push --to vercel --env-name production --yes
+evnx platform push --to vercel --target production --yes
 ```
 
 ```text
@@ -381,12 +381,12 @@ most, before exit `15`.
 
 ## Custom environments
 
-**New in v0.14.0.** `--env-name` also takes the slug of one of the project's custom environments
+**New in v0.14.0.** `--target` also takes the slug of one of the project's custom environments
 (such as `staging`), as well as `production`, `preview` and `development`.
 
 ```bash
-evnx platform diff --to vercel --env-name staging
-evnx platform push --to vercel --env-name staging --yes
+evnx platform diff --to vercel --target staging
+evnx platform push --to vercel --target staging --yes
 ```
 
 ```text
@@ -410,11 +410,11 @@ The local file is `.env.<slug>` if it exists, otherwise `.env`.
 ## Preview branches
 
 **New in v0.14.0.** `--git-branch <branch>` limits a run to one branch's preview variables.
-It works only with `--env-name preview`; with anything else the command exits `2`.
+It works only with `--target preview`; with anything else the command exits `2`.
 
 ```bash
-evnx platform diff --to vercel --env-name preview --git-branch feature/login
-evnx platform push --to vercel --env-name preview --git-branch feature/login --yes
+evnx platform diff --to vercel --target preview --git-branch feature/login
+evnx platform push --to vercel --target preview --git-branch feature/login --yes
 ```
 
 - A key with an entry for the branch uses it.

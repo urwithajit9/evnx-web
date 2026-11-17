@@ -3,13 +3,13 @@ title: "evnx cloud"
 section: commands
 order: 9
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
 commands: ["auth", "auth key-bundle", "auth status", "auth token create", "cloud", "cloud audit", "cloud delete-version", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "org", "restore", "run", "spec init", "vault", "vault delete", "vault list", "vault share"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/auth
   - commands/vault
@@ -85,13 +85,13 @@ which only 0.13.0 and earlier still send. Pull them once with 0.13.0
 Versions pushed from now on open by id or by name.
 </Callout>
 
-### Binding the file too: `--file` — **v0.11.0+**
+### Binding the file too: `--env` — **v0.11.0+**
 
 ```bash
-cd deploy && evnx cloud link my-api/production --file .env
+cd deploy && evnx cloud link my-api/production --env .env
 ```
 
-This also writes `[cloud] file = "deploy/.env"`, relative to the `.evnx.toml`'s folder. `push`, `pull` and `diff --local` then use that file from **every** folder below the binding; without it they use `./.env` from wherever they run, so the same command in the project root and in `deploy/` read different files for one production vault. `--file` and `--env-name` on the command still win, the binding's file applies only with the binding's vault (not with an explicit `--vault`), and a path outside the project is refused.
+This also writes `[cloud] file = "deploy/.env"`, relative to the `.evnx.toml`'s folder. `push`, `pull` and `diff --local` then use that file from **every** folder below the binding; without it they use `./.env` from wherever they run, so the same command in the project root and in `deploy/` read different files for one production vault. `--env` and `--env-name` on the command still win, the binding's file applies only with the binding's vault (not with an explicit `--vault`), and a path outside the project is refused.
 
 The file is the project's one `.evnx.toml`: the config in force, found at or above the current folder, or, with none, a new one at the git root — where `evnx spec init` writes too (**v0.10.6+**; run from a subfolder with no config, it used to create one in that subfolder).
 
@@ -109,12 +109,12 @@ The file is the project's one `.evnx.toml`: the config in force, found at or abo
 evnx cloud push
 evnx cloud push --vault my-api/staging                 # picks up .env.staging
 evnx cloud push --vault my-api/staging --env-name staging
-evnx cloud push --vault my-api/staging --file .env.staging
+evnx cloud push --vault my-api/staging --env .env.staging
 ```
 
 ### Which file gets pushed — **v0.5.0+**
 
-In order: `--file`, `--env-name`, the binding's `[cloud] file` (**v0.11.0+**), then the
+In order: `--env`, `--env-name`, the binding's `[cloud] file` (**v0.11.0+**), then the
 vault's environment: pushing `my-api/production` uses `.env.production` when that file
 exists, and `.env` otherwise. **The file chosen is printed every time**, as an absolute
 path since 0.11.0, under the vault it came from:
@@ -126,7 +126,7 @@ path since 0.11.0, under the vault it came from:
 ```
 
 <Callout type="warning">
-Before v0.5.0 `--file` defaulted to `.env` whatever the vault was, and nothing said which
+Before v0.5.0 `--env` defaulted to `.env` whatever the vault was, and nothing said which
 file had been read — so `evnx cloud push --vault app/production` with a forgotten flag
 pushed **local development secrets into the production vault**, encrypted, versioned and
 shared with everyone holding a key.
@@ -143,7 +143,7 @@ before it encrypts anything:
 
 ```text
   file      /home/you/my-api/.env (default)
-  ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! pushing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
 Push ./.env into production vault my-api/production? [y/N]
 ```
 
@@ -152,19 +152,19 @@ With no terminal (a script, a CI job), it is refused with exit 2 instead of push
 ```text
 Error: there is no terminal to confirm with.
 
-./.env is the default file and my-api/production is a production vault, so this is asked first. Name the file you mean (--file or --env-name), or add --yes:
+./.env is the default file and my-api/production is a production vault, so this is asked first. Name the file you mean (--env or --env-name), or add --yes:
   evnx cloud push --vault my-api/production --yes
 ```
 
-Only that case asks. A file you named with `--file`, `--env-name` or `[cloud] file` never does, and
+Only that case asks. A file you named with `--env`, `--env-name` or `[cloud] file` never does, and
 neither does a derived `.env.production`. By id, a signed-in session looks the
 vault's environment up for the question. A vault-scoped API token cannot look it up,
 so it is not asked.
 
 <OptionTable>
   <Option flag="--vault" type="string">Vault to push to: `name`, `name/environment`, or an id. Optional in a bound directory.</Option>
-  <Option flag="--file" type="path">File to push. Defaults to `.env.&lt;environment&gt;` when the vault names one and that file exists, otherwise `.env`. Short form `-f`.</Option>
-  <Option flag="--env-name" type="string">**v0.5.0+** — push `.env.&lt;NAME&gt;`. Conflicts with `--file`; a name whose file does not exist is an error.</Option>
+  <Option flag="--env" type="path">File to push. Defaults to `.env.&lt;environment&gt;` when the vault names one and that file exists, otherwise `.env`.</Option>
+  <Option flag="--env-name" type="string">**v0.5.0+** — push `.env.&lt;NAME&gt;`. Conflicts with `--env`; a name whose file does not exist is an error.</Option>
   <Option flag="--yes" type="flag">**v0.10.18+** — push the default `.env` into a production vault without asking. Short form `-y`.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
   <Option flag="--server" type="url">Server to talk to. Plain `http://` is refused for anything but loopback.</Option>
@@ -182,7 +182,7 @@ Only the key *names* are sent in the clear, so a dashboard can list what a vault
 evnx cloud pull
 evnx cloud pull --vault my-api/production              # writes .env.production if it exists
 evnx cloud pull --env-name production
-evnx cloud pull --version 7 --file .env.restored
+evnx cloud pull --version 7 --env .env.restored
 ```
 
 `pull` derives the same way, with one difference: it only uses `.env.<environment>` when
@@ -193,10 +193,10 @@ one. The file written is always printed.
 <OptionTable>
   <Option flag="--vault" type="string">Vault to pull from. Optional in a bound directory. **v0.13.0+** — repeatable: see [Several vaults at once](#several-vaults-at-once).</Option>
   <Option flag="--allow-override" type="flag">**v0.13.0+** — with several `--vault`, let the later vault win a key both hold.</Option>
-  <Option flag="--file" type="path">Where to write the decrypted file. Derived as above; `-` writes to stdout and creates no file. Short form `-f`.</Option>
+  <Option flag="--env" type="path">Where to write the decrypted file. Derived as above; `-` writes to stdout and creates no file.</Option>
   <Option flag="--env-name" type="string">Write `.env.&lt;NAME&gt;` instead of the derived or default file.</Option>
   <Option flag="--version" type="number" default="latest">Version to pull, **1 or more**. Refused with more than one `--vault` (**v0.13.0+**).</Option>
-  <Option flag="--yes" type="flag">Overwrite the target without asking. Short form `-y`; `--force` is the same flag (**v0.12.0+**; before, only `--force`). The replaced file is still kept as `.bak` (**v0.11.0+**).</Option>
+  <Option flag="--yes" type="flag">Overwrite the target without asking. Short form `-y`. Replaces `--force` (**v0.15.0**; `--force` now exits 2). The replaced file is still kept as `.bak` (**v0.11.0+**).</Option>
   <Option flag="--gitignore" type="flag">**v0.10.18+** — add the pulled file to `.gitignore` without asking.</Option>
   <Option flag="--no-gitignore" type="flag">**v0.10.18+** — skip the `.gitignore` check.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
@@ -227,7 +227,7 @@ terminal it warns and leaves `.gitignore` alone:
 ```
 
 `--gitignore` adds it without asking (`✓ Added '.env' to .gitignore`), and
-`--no-gitignore` skips the check. `--file -` writes no file, so nothing is checked.
+`--no-gitignore` skips the check. `--env -` writes no file, so nothing is checked.
 
 ### Replacing a file that differs
 
@@ -276,7 +276,7 @@ evnx cloud pull --vault acme/shared --vault acme/prod
   (the key and the winning vault, never a value).
 - `--version` selects a version of one vault, so it is refused with more than one
   `--vault`.
-- `--include` / `--exclude` and `--file` / `--env-name` apply to the merged result. A
+- `--include` / `--exclude` and `--env` / `--env-name` apply to the merged result. A
   merged `pull` writes `.env` unless told otherwise.
 - One `--vault`, or none (a [bound directory](#binding-a-directory)), behaves exactly as
   before.
@@ -559,7 +559,7 @@ A BLAKE3 digest of ciphertext says only *that* bytes differ, never what they are
 
 ```bash
 evnx cloud diff --local
-evnx cloud diff --local --version 3 --file deploy/.env
+evnx cloud diff --local --version 3 --env deploy/.env
 ```
 
 `--local` compares **your local file** with a version of the vault, by key name:
@@ -580,7 +580,7 @@ never printed, and nothing is written.
 It exits `0` when the file is identical to the version and `1` when it is not, so it is
 the check to run before and after a deploy. It replaces pulling into a scratch folder
 and running `cmp`, which writes production secrets in plaintext to `/tmp`. The file is
-chosen as `pull` chooses it (`--file`, `--env-name`, `[cloud] file`, then `.env`).
+chosen as `pull` chooses it (`--env`, `--env-name`, `[cloud] file`, then `.env`).
 
 ---
 
@@ -923,14 +923,14 @@ The examples keep the id in a CI variable; it is not a secret.
     EVNX_MASTER_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
     EVNX_KEY_BUNDLE: ${{ secrets.EVNX_KEY_BUNDLE }}
     EVNX_VAULT_ID: ${{ vars.EVNX_VAULT_ID }}
-  run: evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
+  run: evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
 ```
   </Tab>
   <Tab label="GitLab CI">
 ```yaml
 fetch-secrets:
   script:
-    - evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
+    - evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
   variables:
     EVNX_TOKEN: $EVNX_TOKEN
     EVNX_MASTER_PASSWORD: $EVNX_MASTER_PASSWORD
@@ -950,10 +950,10 @@ Pulling is a GET, so a read-only token handles deploys perfectly. Give a job a r
   `evnx auth token create … -q` prints the new token alone on stdout. ⚠️ A script
   that read a `✓ pushed …` line from stdout under `-q` now gets nothing.
 - **Every confirmation names its flag when there is no terminal**: `--yes` for
-  `delete-version`, and for a `pull` over a file that differs (`--yes` since
-  **v0.12.0**; `--force` still works).
+  `delete-version`, and for a `pull` over a file that differs (`--yes`; `--force` was removed in
+  **v0.15.0**).
 - **A job that pushes the default `.env` into a production vault** needs `--yes`,
-  or better, `--file` naming the file it means.
+  or better, `--env` naming the file it means.
 </Callout>
 
 <Callout type="info" title="Pulling still needs the master password">
@@ -974,8 +974,8 @@ Verified before each release against a fixture built to break exactly that:
 
 ```bash
 printf '# leading comment\n\nZEBRA_LAST=ordering-must-survive\nQUOTED="value with  spaces"\nUNICODE=café-日本\nTRAILING=ws   \n' > .env.development
-evnx cloud push --vault my-app/development --file .env.development
-evnx cloud pull --vault my-app/development --file .env.pulled
+evnx cloud push --vault my-app/development --env .env.development
+evnx cloud pull --vault my-app/development --env .env.pulled
 cmp .env.development .env.pulled && echo "byte-identical"
 ```
 

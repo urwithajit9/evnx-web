@@ -3,13 +3,13 @@ title: "evnx vault"
 section: commands
 order: 8
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Create, share and revoke encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "vault", "encryption", "key-management", "sharing", "rbac", "evnx"]
 commands: ["auth token create", "cloud history", "cloud link", "cloud pull", "cloud push", "org", "vault", "vault create", "vault delete", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/auth
 draft: false
@@ -27,7 +27,7 @@ A **vault** is one encrypted `.env` file plus its full version history. It has a
 
 <CommandSignature>
 evnx vault [SUBCOMMAND]
-evnx vault create my-api --env production
+evnx vault create my-api --environment production
 evnx vault list
 evnx vault share my-api/production --with alice@example.com
 evnx vault members my-api/production
@@ -43,12 +43,12 @@ evnx vault delete my-api/production
 ## Creating a vault
 
 ```bash
-evnx vault create my-api --env production
+evnx vault create my-api --environment production
 ```
 
 <OptionTable>
   <Option flag="NAME" type="string" required>Vault name — **lower-case** letters, digits and hyphens.</Option>
-  <Option flag="--env" type="enum" default="development" options="production, staging, development, test">Which environment this vault holds. Short form `-e`.</Option>
+  <Option flag="--environment" type="enum" default="development" options="production, staging, development, test">Which environment this vault holds. **v0.15.0** — was `--env`/`-e`, which now exits 2.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
   <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `.evnx.toml`.</Option>
 </OptionTable>

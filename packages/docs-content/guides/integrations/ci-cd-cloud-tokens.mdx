@@ -3,13 +3,13 @@ title: "API Tokens in CI/CD"
 section: integrations
 order: 4
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Pull encrypted secrets into a pipeline with a scoped API token — and understand exactly what a runner can and cannot do with it."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["ci-cd", "cloud", "tokens", "github-actions", "security", "evnx"]
 commands: ["auth key-bundle", "auth login", "auth status", "auth token create", "auth token list", "auth token revoke", "cloud history", "cloud pull", "cloud run", "vault list", "vault members"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/auth
   - commands/cloud
@@ -228,7 +228,7 @@ It is not a secret.
 
 A push by id with a token is **not** asked the production question that a push of the
 default `.env` asks a signed-in user: the token cannot look up the vault's environment.
-Name the file with `--file` anyway, so the job pushes what you mean.
+Name the file with `--env` anyway, so the job pushes what you mean.
 
 <Callout type="info" title="Why refusals are 403 and not 401">
 A token that reaches an account-management route gets **403**, deliberately distinct from 401. The credential was recognised; it is the wrong *kind*. That distinction is what tells you "rotate the scope" rather than "the token is broken".
@@ -262,7 +262,7 @@ jobs:
           EVNX_MASTER_PASSWORD: ${{ secrets.EVNX_MASTER_PASSWORD }}
           EVNX_KEY_BUNDLE:      ${{ secrets.EVNX_KEY_BUNDLE }}
           EVNX_VAULT_ID:        ${{ vars.EVNX_VAULT_ID }}
-        run: evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
+        run: evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
 
       - name: Deploy
         run: ./deploy.sh
@@ -284,7 +284,7 @@ jobs:
 deploy:
   script:
     - curl -fsSL https://dotenv.space/install.sh | bash
-    - evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
+    - evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
   variables:
     EVNX_TOKEN: $EVNX_TOKEN
     EVNX_MASTER_PASSWORD: $EVNX_MASTER_PASSWORD
@@ -298,7 +298,7 @@ deploy:
 `EVNX_MASTER_PASSWORD` is the simplest way to hand evnx the password, and evnx says on stderr that it used it. If you would rather keep it out of the environment, `--password-stdin` still works and beats the variable. Use `printf '%s'`, not `echo`: `printf` writes the password with no trailing newline and no interpretation of backslashes, and a passphrase containing a backslash can silently become a different password under `echo`.
 
 ```bash
-printf '%s' "$MASTER_PASSWORD" | evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes --password-stdin
+printf '%s' "$MASTER_PASSWORD" | evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes --password-stdin
 ```
 </Callout>
 
@@ -306,7 +306,7 @@ printf '%s' "$MASTER_PASSWORD" | evnx cloud pull --vault "$EVNX_VAULT_ID" --file
 
 ## Prefer `evnx cloud run` over writing a file
 
-**Added in v0.5.0.** Every example above ends with `--file .env`, which writes your
+**Added in v0.5.0.** Every example above ends with `--env .env`, which writes your
 decrypted secrets to the runner's filesystem. They then live there for the rest of the
 job, readable by every later step, and land in any artifact or cache that picks up the
 working directory.
@@ -350,7 +350,7 @@ vault, and `cloud pull` takes repeated `--vault` the same way.
 The command runs directly rather than through a shell. For a pipeline or a shell builtin,
 ask for one: `-- sh -c 'a | b'`.
 
-Use `cloud pull --file` when something later in the job genuinely needs a file on disk —
+Use `cloud pull --env` when something later in the job genuinely needs a file on disk —
 a container build context, a tool that only reads `.env`. Otherwise `cloud run` is
 strictly less exposure for the same result.
 
@@ -373,7 +373,7 @@ on the rest, without reading the message:
 
 ```bash
 for attempt in 1 2 3; do
-  evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
+  evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
   code=$?
   case "$code" in
     0)        break ;;
@@ -407,7 +407,7 @@ codes. The full table, and what the `403` reasons say, are in
 
 ```bash
 trap 'rm -f .env' EXIT
-evnx cloud pull --vault "$EVNX_VAULT_ID" --file .env --yes
+evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
 ```
 
 **Use `-q` in jobs.** **v0.10.18+** every cloud command prints nothing on success under

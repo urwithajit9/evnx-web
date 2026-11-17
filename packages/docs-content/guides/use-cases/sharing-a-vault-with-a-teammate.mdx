@@ -3,13 +3,13 @@ section: "use-cases"
 order: 3
 title: "Sharing a Vault, and Taking It Back"
 publishedAt: "2026-09-29"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "The full two-account walkthrough: share an encrypted vault, have the other person pull it, then revoke and confirm the old key no longer works."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["cloud", "vault", "sharing", "team", "revocation", "workflow"]
 commands: ["auth register", "cloud link", "cloud pull", "cloud push", "vault create", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/cloud-sync-quickstart
   - commands/vault
@@ -49,7 +49,7 @@ explains which key opens a shared vault, one step and one diagram at a time.
 ## 1. Create the vault and push a version
 
 ```bash
-evnx vault create my-app --env production
+evnx vault create my-app --environment production
 evnx cloud push --vault my-app/production
 ```
 
@@ -61,17 +61,17 @@ evnx cloud push --vault my-app/production
 
 ```
   file      ./.env (default)
-  ! pushing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! pushing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
 Push ./.env into production vault my-app/production? [y/N] yes
   ✓ pushed ./.env to my-app/production as version 1
 ```
 
 Pass `--vault`: a folder isn't tied to a vault until you run
 `evnx cloud link my-app/production`. Pushing the default `.env` into a production
-vault asks first (**v0.10.18+**), because a forgotten `--file` is how development
+vault asks first (**v0.10.18+**), because a forgotten `--env` is how development
 secrets end up in production. Name the file `.env.production` and the push picks it
 up without the warning or the question. In a script with no terminal, the push is
-refused unless you add `--yes` or name the file with `--file`.
+refused unless you add `--yes` or name the file with `--env`.
 
 Your `.env` is encrypted on this machine. The server receives ciphertext and a
 BLAKE3 hash, and never holds anything that can open it.
@@ -176,7 +176,7 @@ evnx cloud pull --vault my-app/production
 
 ```
   file      ./.env (default)
-  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! writing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
   ✓ pulled version 1 of my-app/production into ./.env
 ```
 
@@ -317,7 +317,7 @@ evnx cloud pull --vault my-app/production --yes
 
 ```
   file      ./.env (default)
-  ! writing to a production vault from ./.env — pass --env-name or --file if that is not what you meant
+  ! writing to a production vault from ./.env — pass --env-name or --env if that is not what you meant
   ✓ pulled version 1 of my-app/production into ./.env
 ```
 
