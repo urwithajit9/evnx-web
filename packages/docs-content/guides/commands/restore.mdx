@@ -3,13 +3,13 @@ title: "evnx restore"
 section: commands
 order: 4
 publishedAt: "2026-03-10"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Decrypt a backup made by evnx backup back into a .env file. Never replaces a file silently, keeps the one it replaces, says why a backup will not open, and has exit codes a script can branch on."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["restore", "backup", "encryption", "disaster-recovery", "evnx"]
 commands: ["backup", "cloud export", "cloud pull", "restore"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/backup
@@ -29,7 +29,7 @@ file that evnx itself could not read.
 <Callout type="warning">
 **Changed in 0.10.11 — check your scripts.**
 
-- **`--yes` (alias `--force`, `-y`)** replaces an existing output without asking.
+- **`--yes` (`-y`)** replaces an existing output without asking.
   Without it and with no terminal, the run stops with exit `2` and a line naming
   `--yes` and `--output` — it failed with `IO error: not a terminal`. The replaced
   file is kept as `<output>.bak` either way.
@@ -56,10 +56,10 @@ evnx restore <BACKUP> [OPTIONS]
 |-----------------|---------|-------------|
 | `<BACKUP>` | required | The backup file to decrypt, as written by `evnx backup`. A file on disk; for a vault, use [`evnx cloud pull`](/guides/commands/cloud) |
 | `--output <PATH>` | the file the backup was made from | **v0.11.0+** — `.env.staging` for a backup of `.env.staging`, in the current folder (it was always `.env`). A recorded name that is not `.env` or `.env.<name>` restores to `.env`. Not the backup itself |
-| `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. Also accepted as `--force` |
+| `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. `--force` was removed in v0.15.0 |
 | `--inspect` | off | Show the variable names in the backup — never values — and write nothing |
-| `--dry-run` | off | Decrypt and check the content, and write nothing |
-| `--password-file <PATH>` | — | Read the passphrase from a file. Also accepted as `--key-file`, the spelling `backup` uses |
+| `-n`, `--dry-run` | off | Decrypt and check the content, and write nothing |
+| `--password-file <PATH>` | — | Read the passphrase from a file; `backup` takes the same flag. Was also spelled `--key-file`, which exits 2 since v0.15.0 |
 | `--gitignore` | off | Add the restored file to `.gitignore` without asking |
 | `--no-gitignore` | off | Skip the `.gitignore` check |
 | `-v`, `--verbose` | off | Print each step to stderr |
@@ -155,7 +155,7 @@ Answering no (or Enter) exits `4` and changes nothing:
 
 **v0.12.0+** — this is the question [`evnx cloud pull`](/guides/commands/cloud#replacing-a-file-that-differs)
 asks over a file that differs, in the same words, and a declined pull now exits `4`
-too. `--force` is accepted as the same flag as `--yes`, as in `cloud pull`.
+too. `--force` was the same flag until v0.15.0, as in `cloud pull`; it now exits 2.
 
 **Different, in a script.** With no terminal to ask on, the run stops:
 
@@ -293,7 +293,7 @@ Next steps:
 The same rule as [`backup`](/guides/commands/backup#the-passphrase), highest priority
 first:
 
-1. **`--password-file <path>`** (or `--key-file`) — UTF-8 content trimmed of
+1. **`--password-file <path>`** — UTF-8 content trimmed of
    surrounding whitespace, binary content Base64-encoded; the reader `backup` uses,
    so one file opens what it locked.
 2. **`EVNX_PASSWORD`** — read once, then removed from evnx's environment, with a
@@ -427,7 +427,7 @@ passphrase, and remove the plaintext:
 
 ```bash
 evnx restore old.backup --password-file /run/secrets/old-pass --output /tmp/plain.env
-evnx backup /tmp/plain.env --key-file /run/secrets/new-pass --output new.backup --verify
+evnx backup /tmp/plain.env --password-file /run/secrets/new-pass --output new.backup --verify
 rm /tmp/plain.env
 ```
 
