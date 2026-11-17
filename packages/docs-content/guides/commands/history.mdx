@@ -1,0 +1,148 @@
+---
+title: "evnx history"
+section: commands
+order: 23
+publishedAt: "2026-11-17"
+excerpt: "List the copies evnx kept before it changed a file: which file, which command made the change, and when. Names and times only, never a value."
+difficulty: beginner
+timeToComplete: "3 minutes"
+tags: ["history", "backup", "undo", "bak", "evnx"]
+commands: ["align", "backup", "cloud pull", "diff", "history", "platform pull", "remove", "restore", "undo", "validate"]
+evnxVersion: "0.15.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+Before a command rewrites an env file, evnx keeps the old text beside it as `<file>.bak` and
+records that in `.evnx/backups.json`. `evnx history` reads that record and lists what is
+there: the file, the command that changed it, when, and where the copy is.
+
+It prints **no value**, so it is safe to run in a log or paste into an issue. To put a file
+back as it was, use [`evnx undo`](/guides/commands/undo). **v0.15.0+**.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+## Quick example
+
+```bash
+evnx remove OLD_TOKEN --yes
+evnx history
+```
+
+```text
+  FILE  COMMAND  WHEN              COPY
+  .env  remove   2026-11-17 04:22  .env.bak
+
+  Put one back: evnx undo FILE   Delete the copies: evnx undo --clear
+```
+
+---
+
+## Command signature
+
+```bash
+evnx history [OPTIONS]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--format <FORMAT>` | `pretty` | `pretty` or `json` |
+| `--json` | off | One JSON document on stdout. The same as `--format json` |
+| `-v`, `--verbose` | off | Verbose output |
+| `-q`, `--quiet` | off | Print nothing on success. Requested data still prints |
+| `--no-color` | off | Plain output (as does `NO_COLOR`) |
+
+`history` takes no file argument and never writes. It exits `0` whether or not there is
+anything to list.
+
+---
+
+## Which commands keep a copy
+
+Every command that rewrites an env file in place keeps one, and `history` shows them all:
+
+| Command | When it keeps a copy |
+|---------|----------------------|
+| [`evnx remove`](/guides/commands/remove) | The env file it removes names from |
+| [`evnx validate --fix`](/guides/commands/validate) | `.env`, before the repair |
+| [`evnx diff --format patch --interactive`](/guides/commands/diff) | The file whose chosen changes it writes |
+| [`evnx align`](/guides/commands/align) | Each file it reorders |
+| [`evnx restore`](/guides/commands/restore) | The output it replaces |
+| [`evnx cloud pull`](/guides/commands/cloud) and [`evnx platform pull`](/guides/commands/platform) | The file the pull replaces |
+
+There is **one copy per file**. A second change replaces the first copy, so the list holds
+the file as it was before the **latest** change, and each file appears once.
+
+A copy is made with the file's own care: it is mode `600`, and evnx adds `*.bak` and
+`.evnx/backups.json` to `.gitignore` when it makes one in a git repository. It is still a
+second plaintext copy of your secrets. [`evnx undo --clear`](/guides/commands/undo#delete-the-copies)
+deletes them.
+
+<Callout type="info">
+`evnx backup` and `evnx restore` are a different thing. `backup` writes an **encrypted
+archive** you keep wherever you like; `history` lists only the `.bak` copies evnx makes
+beside a file it is about to change. See [`evnx backup`](/guides/commands/backup).
+</Callout>
+
+---
+
+## When there is nothing to list
+
+```bash
+evnx history
+```
+
+```text
+  No copies kept here. evnx keeps one (<file>.bak) when a command changes an env file.
+```
+
+Exit `0`. With `--json` the list is empty:
+
+```json
+{
+  "backups": []
+}
+```
+
+---
+
+## Machine-readable output
+
+```bash
+evnx history --json
+```
+
+```json
+{
+  "backups": [
+    {
+      "command": "remove",
+      "copy": ".env.bak",
+      "exists": true,
+      "file": ".env",
+      "time": "2026-11-17T04:22:41Z"
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `file` | The file that was changed |
+| `command` | The evnx command that changed it (`undo` too: it swaps the file and its copy) |
+| `copy` | The `.bak` kept beside it |
+| `exists` | Whether the copy is still on disk. `false` if somebody deleted it |
+| `time` | When the copy was made, in UTC |
+
+The pretty output shows the time in your local zone, as `2026-11-17 04:22`.
+
+---
+
+## See also
+
+- [`evnx undo`](/guides/commands/undo): put a file back as it was, or delete the copies
+- [`evnx align`](/guides/commands/align), [`evnx remove`](/guides/commands/remove): commands that keep a copy
+- [`evnx backup`](/guides/commands/backup): the encrypted archive, a different thing
