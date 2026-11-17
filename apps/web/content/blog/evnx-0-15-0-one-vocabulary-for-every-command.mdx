@@ -1,0 +1,168 @@
+---
+title: "evnx 0.15.0: One Vocabulary for Every Command"
+publishedAt: "2026-11-17" # TODO(release): set to the 0.15.0 tag date before publishing
+excerpt: "The same idea now has the same flag in every evnx command: one spelling for the folder, the env file, 'do not ask', 'show, do not write' and machine output. The old spellings are removed with an error that names the new one. What changed, how to fix your CI, and why we broke it once instead of keeping aliases."
+author: "ajit"
+category: "release"
+tags: ["release", "cli", "flags", "breaking", "ci", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "exit-codes-as-an-api"
+  - "evnx-0-11-0-what-you-hit-and-the-contracts"
+---
+
+{/*
+  DRAFT. Not for publishing until the 0.15.0 tag. Before it goes out:
+  1. Set publishedAt (and take draft: true off).
+  2. Check every [CHECK] below against the tagged binary.
+  3. The `evnx set` / `evnx get` paragraph assumes they ship in 0.15.0. The binary this was
+     written against (the WP-8 tip) does not have them yet. Move it to "next release" if
+     they are not in the tag.
+  4. The `Available:` list that `evnx convert` prints without a terminal still said
+     `github-actions` in that binary. Re-run it on the tag; if it still does, say nothing about it here.
+*/}
+
+evnx 0.15.0 changes how you spell a flag. It does not change what any command does, apart
+from a few improvements that are listed below. But if a script of yours calls
+evnx with one of 45 old spellings, that script will stop with exit `2` the day you upgrade.
+This post says what changed, why we did it as a break, and how to fix a CI job in about
+ten minutes. The complete table is in [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0).
+
+---
+
+## The problem
+
+Each evnx command was designed well on its own. Together they did not share a vocabulary,
+and a person who learned `init` guessed wrong on `sync`. An outside review of the CLI
+printed `--help` for five commands and lined the flags up. [CHECK: the review's table, seven
+rows over `init`, `add custom`, `validate`, `sync` and `scan`, on 0.14.x]
+
+| Idea | `init` | `add custom` | `validate` | `sync` | `scan` |
+|---|---|---|---|---|---|
+| Machine output | `--json` | `--json` | `--format json` | `--format json` (only with `--check`) | `--format json` |
+| Where the files are | `-p, --path` | `-p, --path` | `--env`, `--example` | `--env`, `--example` | positional paths |
+| "Do not ask me" | `-y, --yes` | `-y, --yes` | none | `-f, --force` (`--yes` needed `--prune`) | not needed |
+| "Show, do not write" | `--dry-run` | `--dry-run` | `--dry-run` | `-n, --dry-run` | not needed |
+| GitHub annotations | n/a | n/a | `github-actions` | n/a | `github` |
+
+Seven rows, and no row where all commands agree. It got wider once cloud and platform were
+counted. The env file was `--env` on `validate`, `--file` on `cloud push`, and
+`--source-file` on `migrate`. `-p` meant "the folder" on `init` and `-f` meant "skip the
+prompts" on `sync` and "this file" on `cloud`.
+
+Each wrong guess is a trip to `--help`. In a pipeline it is a failed run. And anything that
+wraps evnx needs its own table of which flag goes with which command.
+
+---
+
+## The decision: break once, with a hint
+
+There were two ways to fix it. Add the common spelling everywhere and keep the old ones as
+aliases, or remove the old ones.
+
+Aliases are the polite choice, and they leave the problem in place. The old name keeps
+working, so every page, example and forum answer shows two names for one thing, and a new
+command can still copy whichever it saw last. We kept them out.
+
+So the old spellings are gone, and typing one fails in a way that tells you what to do:
+
+```console
+$ evnx sync --force
+error: '--force' was removed from 'evnx sync' in 0.15.0; use '--yes'
+```
+
+It exits `2` before it reads a file or contacts a server, so nothing is half-done. The
+message has the same shape for every command, and `evnx commands --json` carries the same
+pairs under `removed`, for anyone who wraps evnx. There are 45 of them.
+
+<Callout type="warning" title="Pin the version while you fix your scripts">
+A CI job that installs `latest` picks up 0.15.0 and fails at the first removed flag. Pin
+`@evnx/cli@0.14.1` (or your channel's equivalent) until the job passes on 0.15.0, then move
+the pin.
+</Callout>
+
+---
+
+## The common changes
+
+| You wrote | Write | Commands |
+|---|---|---|
+| `-p ./app`, `--path ./app` | `-C ./app`, `--dir ./app` | `init`, `add`, `remove`, `doctor` |
+| `--file .env.ci`, `-f .env.ci` | `--env .env.ci` | `cloud push\|pull\|diff\|link`, `platform diff\|pull\|push` |
+| `--format github-actions` | `--format github` | `validate`, `scan` |
+| `--to github-actions` | `--to github` | `convert`, `migrate`, `cloud export` |
+| `--format text` | `--format pretty` | `validate`, `scan`, `parse`, `doctor`, `auth` |
+| `sync --force`, `-f`, `--placeholder` | `sync --yes` | `sync` |
+| `restore --force`, `cloud pull --force` | `--yes` | `restore`, `cloud pull` |
+| `--key-file` | `--password-file` | `backup`, `restore` |
+| `platform --env-name production` | `platform --target production` | `platform` |
+| `vault create -e production` | `vault create --environment production` | `vault` |
+
+In a GitHub Actions workflow it is one line:
+
+```diff
+-        run: evnx validate --fail-on warning --format github-actions
++        run: evnx validate --fail-on warning --format github
+```
+
+The upgrade guide has `sed` one-liners for each row, written to touch only lines that
+mention evnx, and the full table of all 45.
+
+---
+
+## What you get in return
+
+The same release adds the other half of the vocabulary, so the new spellings exist everywhere:
+
+- **`--json`** is a visible shorthand for `--format json` on every command that has `--format`.
+- **`-n`** is the short form of `--dry-run` everywhere.
+- **`--env FILE`** names the env file on every command, `cloud` and `platform` included.
+- **`-C/--dir`** names the project folder on `init`, `add`, `remove` and `doctor`.
+
+Two commands also got better while we were in there:
+
+**`sync`.** `--yes` used to work only with `--prune`; at any other time it failed with a
+message about `--prune`. It now means what it says: skip the prompts and use placeholder
+values, which is what `--force` and `--placeholder` did. `sync --format json` (or `--json`)
+used to work only with `--check`. It now works in every mode, and a run that writes adds an
+`added` array with the names it added. `sync --to example|env` is another spelling of
+`--direction forward|reverse`.
+
+**`validate` and `convert`.** `validate --fix --yes` is accepted, so a script can say it
+means it, and `convert` takes `--yes` and `--dry-run`. `migrate --github-token` is now hidden
+and warns when used, because a token on the command line lands in your shell history and in
+`ps`; export `GITHUB_TOKEN` instead.
+
+---
+
+## A test that keeps new commands honest
+
+Renaming 45 flags once is not the hard part. Keeping the next command from inventing its
+own is. A test, `cli_vocabulary`, walks the command tree the CLI prints with
+`evnx commands --json` and checks that:
+
+- every `--format` is a value list that contains `pretty` and `json`, with no `text` and no `github-actions`;
+- a visible `--force` means "overwrite" or "go ahead despite a named safety check", and nothing else;
+- every command that can ask a question has `--yes`;
+- the only visible file selectors are `--env`, `--env-name`, `--example` and `--dir`;
+- every removed spelling exits `2` with its hint, and writes nothing.
+
+The list of commands allowed to break these rules is empty now, except for a few permanent
+exceptions that have a reason, such as `auth delete-account --confirm-stdin`. [CHECK: the
+exact exception list in `tests/cli_vocabulary_allow.rs` at the tag.] A new command that
+spells a thing its own way fails the build.
+
+---
+
+## What is next
+
+Two more commands are planned for 0.15.0, next to `add` and `remove`: `evnx set`, which
+changes one variable in place without touching the rest of the file, and `evnx get`, which
+prints one value without sourcing the file. They come after the work on exit codes, JSON
+output and messages, and they use the vocabulary above from the first day. [CHECK: confirm
+both are in the tag; otherwise move this to the next release.]
+
+For now: run `evnx --version`, read the [upgrade guide](/guides/reference/upgrading-to-0-15-0),
+fix the lines it finds, and check `evnx commands --json | jq '.commands[] | select((.removed // []) | length > 0)'`
+if you wrap evnx. The full list of changes is in the [changelog](/changelog).
