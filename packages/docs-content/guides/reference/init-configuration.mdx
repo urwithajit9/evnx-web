@@ -3,13 +3,13 @@ section: "reference"
 order: 4
 title: "Init Configuration Reference"
 publishedAt: "2026-03-06"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "What shapes evnx init: the compiled-in component catalogue, the flags, CI, and the four files it writes. Checked against evnx 0.13.0."
 difficulty: "intermediate"
 timeToComplete: "12 minutes"
 tags: ["init", "reference", "configuration", "schema", "setup"]
 commands: ["add", "init", "sync", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/init
   - getting-started/init-basic
@@ -129,7 +129,7 @@ scanner.
 
 | Flag | Description |
 |------|-------------|
-| `--path`, `-p <PATH>` | Output directory. Default `.` |
+| `-C`, `--dir <DIR>` | Output directory. Default `.`. Was `-p`/`--path` before 0.15.0 |
 | `--yes`, `-y` | Skip all prompts. Blank files unless `--blueprint` or `--with` names a stack; beside an existing template, keeps it and creates `.env` from it |
 | `--blueprint <ID>` | Generate from a named stack, e.g. `t3_modern`. An unknown id lists the valid ones |
 | `--with <LIST>` | Name the components, e.g. `nextjs,postgresql,stripe`. Repeatable and comma-separated; an unknown name suggests near matches |
@@ -272,14 +272,14 @@ used to override a placeholder.
 ```bash
 # One template, .env and .evnx.toml per package
 for pkg in packages/*; do
-  evnx init --path "$pkg" --yes
+  evnx init --dir "$pkg" --yes
 done
 ```
 
 ### Docker build integration
 
 ```dockerfile
-RUN evnx init --yes --path /app/config
+RUN evnx init --yes --dir /app/config
 # /app/config now holds .env.example, .env (0600), .gitignore and .evnx.toml
 ```
 
@@ -323,7 +323,7 @@ Name what you want: `evnx init --yes`, `--blueprint <id>` or `--with <a,b,c>`.
 
 ### Permission denied on write
 
-The output path is not writable. Check it with `ls -ld`, or choose another with `--path`.
+The output path is not writable. Check it with `ls -ld`, or choose another with `--dir`.
 
 ---
 

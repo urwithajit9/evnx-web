@@ -3,13 +3,13 @@ section: "commands"
 order: 3
 title: "evnx remove"
 publishedAt: "2026-11-08"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx remove: take a variable out of .env, and optionally the template and the contract, with a preview, a backup and a clear exit code."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["remove", "reference", "cli", "environment-variables"]
 commands: ["add", "remove"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/add
@@ -43,17 +43,18 @@ evnx rm <NAME>... [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `--path`, `-p` | Project folder (default `.`) |
+| `-C`, `--dir <DIR>` | **v0.15.0** — project folder (default `.`). Was `-p`/`--path` |
 | `--env-name <NAME>` | Remove from `.env.<NAME>` instead of `.env`. Defaults to `[defaults] env_name` |
 | `--template` | Also remove from the template (`.env.example`, or `[defaults] example`) |
 | `--contract` | Also remove the `[vars.NAME]` declaration from `.evnx.toml` |
 | `--all` | Every environment file, the template and the contract |
-| `--dry-run` | Show what would be removed; write nothing. Needs no terminal |
+| `-n`, `--dry-run` | Show what would be removed; write nothing. Needs no terminal |
 | `--yes`, `-y` | Remove without asking |
 | `--ignore-missing` | A name found nowhere is not an error (for scripts that run twice) |
 | `--no-backup` | Keep no `.bak` copy of the env files. Needs `--yes`; refused for a file git tracks |
 | `--check` | **v0.14.0+** — read-only: exit `0` if the names are gone from every file, `1` if not. See [below](#is-it-gone-everywhere---check) |
-| `--json` | Print the result as one JSON document. Needs `--yes` or `--dry-run`, or `--check` |
+| `--format <FORMAT>` | `pretty` (default) or `json` |
+| `--json` | Print the result as one JSON document, the same as `--format json`. Needs `--yes` or `--dry-run`, or `--check` |
 | `--verbose`, `-v` | Enable verbose output |
 | `--quiet`, `-q` | Print nothing on success. Findings, warnings, errors and requested data still print |
 | `--no-color` | Plain output |

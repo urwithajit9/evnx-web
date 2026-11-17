@@ -3,13 +3,13 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
 tags: ["add", "reference", "cli", "environment-variables"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "spec init"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/init
@@ -51,11 +51,12 @@ to pick from. `evnx add --list` prints every id.
 
 | Flag | Description |
 |------|-------------|
-| `--path`, `-p` | Folder holding `.env.example` and `.env` (default `.`) |
+| `-C`, `--dir <DIR>` | **v0.15.0** — folder holding `.env.example` and `.env` (default `.`). Was `-p`/`--path`, on `add` and every `add` subcommand |
 | `--env-name <NAME>` | **v0.11.0+** — write to `.env.<NAME>` instead of `.env`, one file per run (loop over names for several). Defaults to `[defaults] env_name` |
 | `--yes`, `-y` | Do not ask; needed in scripts and CI |
-| `--dry-run` | Show what would be added, skipped and kept; write nothing |
-| `--json` | Print the result as one JSON document (with `--yes` or `--dry-run`) |
+| `-n`, `--dry-run` | Show what would be added, skipped and kept; write nothing |
+| `--format <FORMAT>` | `pretty` (default) or `json` |
+| `--json` | Print the result as one JSON document, the same as `--format json` (with `--yes` or `--dry-run`) |
 | `--list` | List every id `add` takes |
 | `--language`, `-l` | `framework` only: check that the framework belongs to this language |
 | `--desc`, `--category`, `--required` | `custom` only: applied to every name given |
@@ -182,7 +183,7 @@ The final question names every file the run writes, for example
 ### A blueprint, into a project of its own folder
 
 ```bash
-evnx add blueprint t3_modern --path ./apps/web --yes
+evnx add blueprint t3_modern --dir ./apps/web --yes
 ```
 
 ---
@@ -356,7 +357,7 @@ catalogue's example value would fail is left out, and a URL with a password in
 it, or a `*_PWD` name, is declared secret.
 
 It **only appends**: a name already declared is left exactly as it is, so a
-hand-written `required = false` survives an unrelated `evnx add`. With `--path`,
+hand-written `required = false` survives an unrelated `evnx add`. With `--dir`,
 the contract is the nearest `.evnx.toml` at or above that folder. A project with
 no `.evnx.toml` sees nothing. One with a config but no `[vars]` gets a note on
 stderr pointing at `evnx spec init`, never an error. An inline

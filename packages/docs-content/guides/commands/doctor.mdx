@@ -3,13 +3,13 @@ title: "evnx doctor"
 section: commands
 order: 4
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Check the setup around your env files: ignored and untracked by git, valid dotenv, private permissions, a committed template, and the project around them. Repairs .gitignore and file modes with --fix; JSON for CI."
 difficulty: beginner
 timeToComplete: "8 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
 commands: ["backup", "diff", "doctor", "init", "parse", "scan", "sync", "validate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -39,14 +39,15 @@ evnx doctor [OPTIONS] [PATH]
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `PATH` | `.` | Project directory to check. `--path <PATH>` is the same thing; giving both is an error |
+| `PATH` | `.` | Project directory to check. `-C`/`--dir <PATH>` is the same thing (**v0.15.0**, was `--path`); giving both is an error |
 
 | Flag | Description |
 |------|-------------|
 | `--fix` | Repair what can be repaired: `.gitignore` entries and file modes. See [`--fix`](#--fix) |
 | `--strict` | Count warnings as problems, so they affect the exit code |
 | `--skip-without-env` | **v0.10.15+** — with no env file, skip (exit 0) and say so. For pre-commit hooks, **not** for CI |
-| `--format <FORMAT>` | `pretty` (default) or `json`. An unknown value is an error, exit 2 |
+| `--format <FORMAT>` | `pretty` (default) or `json`. An unknown value is an error, exit 2. `text` was renamed `pretty` in v0.15.0 |
+| `--json` | **v0.15.0** — the same as `--format json` |
 | `-v`, `--verbose` | Show the detail line under every check, passed ones included |
 | `-q`, `--quiet` | Print nothing on a healthy project. Problems and errors still print |
 | `--no-color` | Disable colour |
