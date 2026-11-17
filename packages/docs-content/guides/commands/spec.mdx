@@ -3,13 +3,13 @@ title: "evnx spec"
 section: commands
 order: 12
 publishedAt: "2026-09-22"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Declare what each variable is — required, a URL, a secret, production-only — in a contract .env.example cannot express. Generated from your project, then enforced by evnx validate."
 difficulty: intermediate
 timeToComplete: "8 minutes"
 tags: ["spec", "contract", "validate", "schema", "evnx"]
 commands: ["add", "add service", "diff", "init", "scan", "spec check", "spec init", "sync", "template", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/validate
@@ -487,14 +487,14 @@ the variables are on disk either way.
 ### `sync` can satisfy the contract
 
 `evnx sync --direction reverse` adds declared-but-missing variables to `.env`,
-not just the ones in `.env.example`. In a terminal it asks first; `--force` adds
+not just the ones in `.env.example`. In a terminal it asks first; `--yes` adds
 them without asking (and so does a run with no terminal, or with `CI` set):
 
 ```console
 $ evnx validate
   ✗  Missing required variable: ONLY_IN_SPEC
 
-$ evnx sync --direction reverse --force
+$ evnx sync --direction reverse --yes
 ┌─ Missing Variables ──────────────────────────────────────────────────────────┐
 │ Found 1 variable missing from .env:                                          │
 │   • ONLY_IN_SPEC  (required by [vars] in .evnx.toml)                         │
@@ -556,6 +556,7 @@ $ evnx spec check
 | `--example` | `.env.example`, or `[defaults] example` | The template to check |
 | `--env` | `.env`, or `[defaults] env_name` | The env file; skipped when absent unless named |
 | `--env-name` | — | Check `.env.<NAME>` instead of `.env` |
+| `--format <FORMAT>` | `pretty` | `pretty` or `json` (names only, never a value). `--json` is the same (**v0.15.0**) |
 
 Exit `0`: they agree, or there is no `[vars]` (skipped, and said). Exit `1`: they
 disagree. Exit `2`: the template is missing or does not parse, or a file named by
