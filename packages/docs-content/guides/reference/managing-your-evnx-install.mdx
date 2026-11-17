@@ -9,7 +9,7 @@ difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["install", "upgrade", "uninstall", "troubleshooting", "path", "pipx", "npm", "homebrew", "winget"]
 commands: ["cloud", "cloud run", "cloud status", "commands", "migrate", "platform", "scan", "update"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -642,7 +642,7 @@ xattr -d com.apple.quarantine ./evnx
 A proxy that inspects TLS re-signs every connection with your organisation's own certificate
 authority. evnx trusts a bundled set of public roots, so it refuses that certificate, and a
 command that reaches the network (`evnx cloud`, `evnx update --check`,
-`evnx migrate --to github-actions`, `evnx scan packs`, `evnx platform`) fails with an
+`evnx migrate --to github`, `evnx scan packs`, `evnx platform`) fails with an
 unknown-issuer error. **v0.14.0+** — the error says what to do, and `evnx cloud` exits `13`:
 
 ```text

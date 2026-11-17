@@ -3,13 +3,13 @@ section: "use-cases"
 order: 3
 title: "Migrate to GCP Secret Manager"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-17"
 excerpt: "Generate a gcloud script that stores each .env variable as its own secret in Google Cloud Secret Manager, creating it or adding a new version."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "gcp", "secret-manager", "gcloud"]
 commands: ["cloud export", "convert", "migrate", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -82,7 +82,7 @@ evnx migrate --to gcp-secret-manager --project my-gcp-project
 `gcp` is accepted as a shorthand:
 
 ```bash
-evnx migrate --to gcp --project my-gcp-project
+evnx migrate --to gcp-secret-manager --project my-gcp-project
 ```
 
 `--project` is required. In a terminal, evnx asks for it (`GCP project ID:`) when you leave it out. Without a terminal, or with `--dry-run`, a missing `--project` is an error, exit 2, and nothing is printed:
@@ -114,7 +114,7 @@ evnx validate --strict
 
 <Step title="Preview the migration">
 ```bash
-evnx migrate --to gcp --project my-gcp-project --dry-run
+evnx migrate --to gcp-secret-manager --project my-gcp-project --dry-run
 ```
 
 ```text
@@ -143,7 +143,7 @@ A dry run prints the count, not the script.
 <Step title="Filter what you need">
 ```bash
 evnx migrate \
-  --to gcp \
+  --to gcp-secret-manager \
   --project my-gcp-project \
   --exclude "*_LOCAL,*_TEST" \
   --dry-run
@@ -165,7 +165,7 @@ Save only the script with `--print-only`, read it, then run it:
 
 ```bash
 evnx migrate \
-  --to gcp \
+  --to gcp-secret-manager \
   --project my-gcp-project \
   --exclude "*_LOCAL,*_TEST" \
   --print-only > gcp-upload.sh
@@ -178,7 +178,7 @@ rm gcp-upload.sh     # it holds every value
 With `--print-only`, stdout carries only the script; the status lines and the summary still appear in your terminal, on stderr. You can also pipe it straight into a shell:
 
 ```bash
-evnx migrate --to gcp --project my-gcp-project --exclude "*_LOCAL" --print-only | bash
+evnx migrate --to gcp-secret-manager --project my-gcp-project --exclude "*_LOCAL" --print-only | bash
 ```
 
 Use `--print-only` whenever the output goes to a file or a shell. Without it, stdout also holds the status lines and the summary, so `> gcp-upload.sh` does not save a script, and `| bash` stops at a syntax error on the `· Requires Google Cloud CLI` line before it reaches the first `gcloud` call. (Earlier versions of this page showed both without the flag, plus `set -a && source .env` to export the values first. The values are in the script now, so nothing needs exporting.)
@@ -205,7 +205,7 @@ A re-run adds a version to every secret in the script, including those whose val
 
 ```bash
 evnx migrate \
-  --to gcp \
+  --to gcp-secret-manager \
   --project my-gcp-project \
   --include "DATABASE_URL" \
   --print-only > gcp-update.sh

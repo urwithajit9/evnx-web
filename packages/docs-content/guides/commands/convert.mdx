@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx convert"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx convert: turn a .env into the format one of 14 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["convert", "reference", "cli", "env", "formats"]
 commands: ["cloud export", "cloud run", "convert", "migrate", "platform", "template"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -55,6 +55,8 @@ Without `--to`, evnx opens a format menu when there is a terminal, and exits `2`
 | `--env <PATH>` | `.env` | The file to convert |
 | `--env-name <NAME>` | — | Convert `.env.<NAME>` instead. Conflicts with `--env` |
 | `--to <FORMAT>` | menu | The output format; see [Formats](#formats) |
+| `-n`, `--dry-run` | off | **v0.15.0** — with `--output`, check everything and say what would be written; write nothing |
+| `-y`, `--yes` | off | **v0.15.0** — do not ask: add `FILE` to `.gitignore` as `--gitignore` does. With no `--to` it is an error, because the format menu is a question too |
 | `-o, --output <FILE>` | stdout | Write to `FILE`, readable by you only (`0600`) |
 | `--force` | off | Replace `FILE` when it exists. The input is never replaced |
 | `--gitignore` | — | Add `FILE` to `.gitignore` without asking |
@@ -90,7 +92,7 @@ so a pipe carries the artefact alone.
 | `aws-secrets` | `aws`, `aws-secrets-manager` | the flat JSON `create-secret --secret-string` takes | — |
 | `gcp-secrets` | `gcp`, `gcp-secret-manager` | script that creates each secret or adds a version; names lowercased, `_` → `-` (`DB_URL` → `db-url`) | `--project` |
 | `azure-keyvault` | `azure`, `azure-key-vault` | `az keyvault secret set` script, `_` → `-` | `--vault-name` |
-| `github-actions` | `github`, `gh-actions` | text to paste into the GitHub web form | — |
+| `github` | — | text to paste into the GitHub web form. Was `github-actions`; `github-actions` and `gh-actions` exit 2 since v0.15.0 | — |
 | `docker-compose` | `docker`, `compose` | `environment:` list, `$` written `$$` | — |
 | `kubernetes` | `k8s`, `kubectl` | `v1` Secret, `stringData:` (or `data:` with `--base64`) | `--name` |
 | `terraform` | `tf`, `tfvars` | `NAME = "value"`, names as written; `--terraform-declarations` writes `variable` blocks instead (**v0.14.0+**) | — |
@@ -253,7 +255,7 @@ Exit `2`. `--exclude 'spring.*,my-key'` leaves them out. What each format takes:
 
 | Format | Name rule |
 |--------|-----------|
-| `shell`, `github-actions`, `vercel`, `heroku`, `doppler`, `railway` | letters, digits and `_`, not starting with a digit |
+| `shell`, `github`, `vercel`, `heroku`, `doppler`, `railway` | letters, digits and `_`, not starting with a digit |
 | `kubernetes` | ASCII letters, digits, `_`, `.` and `-` |
 | `terraform` | ASCII letters, digits, `_` and `-`, starting with a letter or `_` |
 | `gcp-secrets`, `azure-keyvault` | ASCII letters, digits, `_` and `-` (`-` replaces `_` in the output) |
@@ -428,7 +430,7 @@ Select output format:
   aws-secrets - AWS Secrets Manager JSON (for create-secret --secret-string)
   gcp-secrets - GCP Secret Manager script (gcloud; needs --project)
   azure-keyvault - Azure Key Vault script (az; needs --vault-name)
-  github-actions - GitHub Actions secrets (text to paste into the web form)
+  github - GitHub Actions secrets (text to paste into the web form)
   docker-compose - Docker Compose YAML environment
   kubernetes - Kubernetes Secret YAML (stringData, or data with --base64; needs --name)
   terraform - Terraform .tfvars file (--terraform-declarations: variable blocks)
@@ -447,7 +449,7 @@ Error: --to is required when there is no terminal to ask.
   Pass one explicitly:
     evnx convert --to <FORMAT>
 
-  Available: json, yaml, shell, aws-secrets, gcp-secrets, azure-keyvault, github-actions, docker-compose, kubernetes, terraform, doppler, heroku, vercel, railway
+  Available: json, yaml, shell, aws-secrets, gcp-secrets, azure-keyvault, github, docker-compose, kubernetes, terraform, doppler, heroku, vercel, railway
 ```
 
 ---

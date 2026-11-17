@@ -3,13 +3,13 @@ title: "evnx validate"
 section: commands
 order: 4
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx validate: check .env against .env.example and the [vars] contract, catch missing, placeholder, weak and misformatted values, and fix what can be fixed."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
 commands: ["add custom", "convert", "doctor", "parse", "platform", "remove", "run", "scan", "spec init", "validate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -44,9 +44,11 @@ evnx validate [OPTIONS]
 | `--ignore <TYPES>` | `[validate] ignore` | Comma-separated [issue types](#validation-checks) to suppress, added to the config list. **v0.10.8+**: an unknown type is exit `2` |
 | `--fail-on <LEVEL>` | `error`, or `[validate] fail_on` | **v0.10.8+** — `warning` makes warnings exit `1` too. See [Failing on warnings](#failing-on-warnings) |
 | `--fix` | off | Repair what can be repaired. See [Fixing](#fixing-with---fix) |
-| `--dry-run` | off | **v0.10.8+** — with `--fix`, show what it would change and write nothing |
+| `-n`, `--dry-run` | off | **v0.10.8+** — with `--fix`, show what it would change and write nothing |
 | `--rotate-weak-secrets` | off | With `--fix`, also replace a weak secret that holds a real value. Requires `--fix` |
-| `--format <FORMAT>` | `pretty` | `pretty`, `json` or `github-actions`, in any case (**v0.10.8+**). Anything else is exit `2` |
+| `-y`, `--yes` | off | **v0.15.0** — with `--fix`, apply the fixes without asking. `--fix` never stops to ask, so this changes nothing today; it is accepted so a script can say so |
+| `--format <FORMAT>` | `pretty` | `pretty`, `json` or `github`, in any case (**v0.10.8+**). Anything else is exit `2`. `text` and `github-actions` were removed in v0.15.0 |
+| `--json` | off | **v0.15.0** — the same as `--format json` |
 | `--exit-zero` | off | Exit `0` whatever the findings. A run that could not finish still exits `2` |
 | `-q, --quiet` | off | Print nothing on success. Findings still print |
 | `-v, --verbose` | off | Verbose output |
@@ -990,11 +992,11 @@ pretty output prints.
 
 ### GitHub Actions
 
-`--format github-actions` prints workflow commands, which GitHub shows as annotations on
+`--format github` prints workflow commands, which GitHub shows as annotations on
 the pull request:
 
 ```console
-$ evnx validate --format github-actions
+$ evnx validate --format github
 ::error file=.env,line=1::Missing required variable: PORT%0ASuggestion: Add PORT=<value> to ./.env
 ::error file=.env,line=1::Missing required variable: STRIPE_KEY%0ASuggestion: Add STRIPE_KEY=<value> to ./.env. If it is optional: run `evnx spec init`, then set `required = false` under [vars.STRIPE_KEY] in .evnx.toml
 ::error file=.env,line=4::SECRET_KEY looks like a placeholder%0ASuggestion: Run: openssl rand -hex 32
@@ -1099,7 +1101,7 @@ evnx validate --fix --dry-run
 evnx validate --fix
 
 # CI: annotations on the pull request, warnings fail too
-evnx validate --format github-actions --fail-on warning
+evnx validate --format github --fail-on warning
 
 # Production file, with format checks and undeclared variables reported
 evnx validate --env-name production --strict --validate-formats
