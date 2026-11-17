@@ -3,13 +3,13 @@ title: "Scan rules: the core, your own, and packs"
 section: reference
 order: 17
 publishedAt: "2026-11-01"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-17"
 excerpt: "How evnx scan builds its rule set: 63 built-in rules, rule files of your own shared through the repository, and optional packs from the evnx-rules catalogue (gitleaks, betterleaks) pinned by sha256 and never fetched during a scan. The rule file format, importing gitleaks and Betterleaks files, and testing rules."
 difficulty: intermediate
 timeToComplete: "15 minutes"
 tags: ["scan", "secrets", "rules", "gitleaks", "betterleaks", "ci-cd", "evnx"]
 commands: ["scan", "scan rules add", "scan rules remove", "scan rules test", "scan rules update"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/scan
 draft: false
@@ -336,11 +336,11 @@ never committed.
 
 ## Importing a gitleaks or Betterleaks file
 
-`scan rules add <file> --format gitleaks` converts a gitleaks configuration on import. The
+`scan rules add <file> --from gitleaks` converts a gitleaks configuration on import. The
 converted copy is what is stored and locked, so a scan only ever reads evnx's own format.
 
 ```text
-$ evnx scan rules add gl.toml --format gitleaks
+$ evnx scan rules add gl.toml --from gitleaks
   2 gitleaks rule(s) not converted:
     path-only: no regex: it matches file paths only
     lookahead: its regex does not compile in Rust: error: look-around, including look-ahead and look-behind, is not supported
@@ -385,7 +385,7 @@ source gives a confidence.
 | `scan rules list [--category <name>] [--json]` | Every active rule with its id, provider, severity, confidence and source, grouped by category. `--json` adds `provider` and `category` (null when unset). An unknown category exits 2 |
 | `scan rules new <id> [--personal]` | Scaffold a rule file |
 | `scan rules test [<file>]` | Check each rule against its fixtures; exit 1 on any failure |
-| `scan rules add <name\|url\|path> [--format evnx\|gitleaks] [--personal]` | Add a pack |
+| `scan rules add <name\|url\|path> [--from evnx\|gitleaks] [--personal]` | Add a pack |
 | `scan rules update [<name>] [-y]` | Fetch again, show changes, ask |
 | `scan rules remove <name>` | Remove a pack and its lock entry |
 

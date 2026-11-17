@@ -3,13 +3,13 @@ title: "evnx parse"
 section: commands
 order: 20
 publishedAt: "2026-11-01"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "See exactly what evnx reads from a .env file, line by line: every key, whether its value is empty, a placeholder or a secret, and every problem in the file at once. Names only, unless you ask for values."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["parse", "inspect", "keys", "json", "validate", "evnx"]
 commands: ["diff", "parse", "scan", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -64,9 +64,10 @@ evnx parse [OPTIONS]
 |---|---|---|
 | `--env <ENV>` | `.env`, or `[defaults] env_name` | The file to read; `-` reads stdin |
 | `--env-name <NAME>` | — | Read `.env.<NAME>` instead |
-| `--format <FORMAT>` | `pretty` | `pretty` or `json` |
+| `--format <FORMAT>` | `pretty` | `pretty` or `json` (`text` was renamed `pretty` in v0.15.0) |
 | `--values` | off | Print each value too, in plain text (see below) |
-| `--yes`, `-y` | off | Allow `--values` when stdout is a terminal |
+| `--show-values` | off | Allow `--values` when stdout is a terminal. **v0.15.0** — was `-y`/`--yes`, which now exits 2 |
+| `--json` | off | **v0.15.0** — the same as `--format json` |
 
 ---
 
@@ -166,10 +167,10 @@ evnx parse --values | less
 the scrollback:
 
 ```text
-Error: --values prints every value in plain text, and stdout is a terminal, where it stays in the scrollback. Pipe it, or pass --yes.
+Error: --values prints every value in plain text, and stdout is a terminal, where it stays in the scrollback. Pipe it, or pass --show-values.
 ```
 
-Pipe it somewhere, or pass `--yes` when you mean it. A multi-line value stays on its row,
+Pipe it somewhere, or pass `--show-values` when you mean it. A multi-line value stays on its row,
 with its newlines shown as `\n`.
 
 ---
@@ -223,7 +224,7 @@ printf 'X=1\nY=2\n' | evnx parse --env -
 |---|---|
 | `0` | The file was read in full |
 | `1` | The file has problems; every one was listed |
-| `2` | Could not run: the file does not exist, `--values` at a terminal without `--yes`, nothing piped to `--env -` |
+| `2` | Could not run: the file does not exist, `--values` at a terminal without `--show-values`, nothing piped to `--env -` |
 
 ---
 

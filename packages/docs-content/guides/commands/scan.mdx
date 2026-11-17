@@ -3,13 +3,13 @@ title: "evnx scan"
 section: commands
 order: 5
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Scan a project for secrets: 63 built-in provider rules, names checked in .env, YAML, JSON and TOML, severity separate from confidence, allow markers, a baseline for existing findings, and a pre-commit hook. JSON, SARIF and GitHub annotation output."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions", "baseline", "pre-commit", "evnx"]
 commands: ["backup", "init", "scan", "scan hook", "scan hook install", "scan rules", "scan rules list", "scan rules new", "scan rules test", "validate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -79,7 +79,8 @@ A folder literally named `rules` or `hook` is scanned as `evnx scan ./rules`.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `[PATH]...` | positional | `.` | Files or directories to scan. Repeatable: `evnx scan .env config/`. `-` reads stdin (**v0.11.0+**) |
-| `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format. **An unrecognised value is an error** — it used to fall back to `pretty` silently |
+| `--format` | `pretty\|json\|sarif\|github` | `pretty` | Output format. **An unrecognised value is an error** — it used to fall back to `pretty` silently. `text` and `github-actions` were removed in v0.15.0 (`pretty`, `github`) |
+| `--json` | `bool` | `false` | **v0.15.0** — the same as `--format json` |
 | `--severity` | `critical\|high\|medium\|low` | `low` | **v0.13.0+** — lowest **severity** (how bad if real) worth reporting. Filters the findings, the counts and the exit code together. Until 0.12 this filtered on confidence |
 | `--confidence` | `high\|medium\|low` | `low` | **v0.13.0+** — lowest **confidence** (how sure evnx is) worth reporting. Must pass together with `--severity` |
 | `--staged` | `bool` | `false` | **v0.13.0+** — scan what the next commit records, read from the git index. See [Staged scans and the pre-commit hook](#staged-scans-and-the-pre-commit-hook) |
@@ -659,7 +660,7 @@ The commands:
 | `scan rules list [--category <name>] [--json]` | Every rule a scan here would use, grouped by category, with id, provider, severity, confidence and source. An unknown category exits 2 and lists the 12 allowed |
 | `scan rules new <id> [--personal]` | Writes `.evnx/rules/<id>.toml` to fill in |
 | `scan rules test [<file>]` | Runs each rule against its own `positive` and `near_miss` values. Exit 1 on any failure |
-| `scan rules add <name\|url\|path> [--format gitleaks] [--personal]` | Adds a rule pack and pins its sha256 in `.evnx/rules.lock` |
+| `scan rules add <name\|url\|path> [--from gitleaks] [--personal]` | Adds a rule pack and pins its sha256 in `.evnx/rules.lock` |
 | `scan rules update [<name>] [-y]` | Fetches a pack again, shows rules added and removed, asks before replacing |
 | `scan rules remove <name>` | Removes a pack and its lock entry |
 

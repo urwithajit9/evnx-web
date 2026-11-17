@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx template"
 publishedAt: "2026-03-11"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Reference documentation for the evnx template command: generate configuration files from templates with variable substitution and filters."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["template", "reference", "cli", "config", "env", "gitignore"]
 commands: ["template"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - reference/env-file-syntax
@@ -107,7 +107,7 @@ evnx template --input <TEMPLATE> --output <OUTPUT> [OPTIONS]
 | `--env-name` | — | Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
 | `--allow-unresolved` | off | **v0.11.0+** — write a placeholder that has no value through literally and exit `0`. Without it, an unresolved placeholder is an error and nothing is written |
 | `--strict` | — | The default since 0.11.0. Still accepted, with a notice; removed in 1.0 |
-| `--dry-run` | off | **v0.10.5+** — render and report what would be written; write nothing |
+| `-n`, `--dry-run` | off | **v0.10.5+** — render and report what would be written; write nothing |
 | `--mkdir` | off | **v0.10.5+** — create the output's missing directories |
 | `--mode` | `0600` for a new file | **v0.10.3+** — the output's file mode in octal (`0640`), applied to a new or an existing file |
 | `--gitignore` | — | Add the output to `.gitignore` without asking. Conflicts with `--no-gitignore` |

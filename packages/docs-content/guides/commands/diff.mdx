@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx diff"
 publishedAt: "2026-03-11"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Compare .env with its template by key name, or two environments by key and value. Values stay hidden unless asked for; --fail-on picks what fails the run, so the exit code is a CI gate."
 difficulty: "beginner"
 timeToComplete: "6 minutes"
 tags: ["diff", "reference", "cli", "env", "security", "ci-cd"]
 commands: ["diff", "init", "spec", "sync"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -65,6 +65,7 @@ evnx diff --format json | jq -e '.summary.missing == 0'
 | `--values` | Compare values against the template too. Expect every filled-in value to be listed |
 | `--show-values` | Print values. Secrets stay masked in `pretty` and `json`; see [Values and secrets](#values-and-secrets) |
 | `--format <FORMAT>` | `pretty` (default), `json` or `patch`. An unknown value exits 2 |
+| `--json` | **v0.15.0** — the same as `--format json` |
 | `--reverse` | Swap the two sides |
 | `--ignore-keys <KEYS>` | Leave these keys out (comma-separated, exact case). Adds to `[diff] ignore_keys` |
 | `--fail-on <WHAT>` | What fails the run: `missing`, `extra`, `different`, comma-separated. All three by default |

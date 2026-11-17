@@ -3,12 +3,13 @@ title: "evnx auth"
 section: commands
 order: 7
 publishedAt: "2026-09-16"
+updatedAt: "2026-11-17"
 excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, enable two-factor authentication, and manage sessions and devices — without your password ever leaving the machine."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
 commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth key-bundle", "auth login", "auth logout", "auth register", "auth resend-verification", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status", "vault list"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -245,6 +246,10 @@ pipeline needs `EVNX_TOKEN`, `EVNX_MASTER_PASSWORD` and `EVNX_KEY_BUNDLE`, and
 [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens#the-recommended-setup-three-secrets)
 shows them together. `--no-key-bundle` leaves it out.
 
+**v0.15.0** — `--format pretty|json` (or `--json`) picks the output. `json` prints one document
+with `name`, `token`, `scope`, `vault`, `expires_at` and `key_bundle` and nothing else, for a
+script to pass to a secret store. `pretty` was called `text`; `--format text` now exits `2`.
+
 With `-q` (**v0.10.18+**) `create` prints the new token alone on stdout and nothing else,
 so a script can capture it:
 
@@ -259,7 +264,8 @@ evnx auth key-bundle
 ```
 
 Run it after a master-password change too, and replace the CI secret: a bundle made under the
-old password no longer opens. `-q` prints the bundle alone.
+old password no longer opens. `-q` prints the bundle alone, and `--format json` (**v0.15.0**,
+also `--json`) prints `{"key_bundle": "…"}`.
 
 <Callout type="tip" title="Or mint it in the dashboard">
 The same tokens are listed and created at **[app.evnx.dev](https://app.evnx.dev)** →
