@@ -1,0 +1,294 @@
+---
+title: "Upgrading to 0.15.0"
+section: reference
+order: 1
+publishedAt: "2026-11-17"
+excerpt: "evnx 0.15.0 gives every command one flag vocabulary and removes the old spellings. What changed, the complete old-to-new table, what the error looks like, and sed one-liners to fix your CI."
+difficulty: intermediate
+timeToComplete: "10 minutes"
+tags: ["upgrade", "breaking", "flags", "ci", "migration", "evnx"]
+commands: ["add", "add blueprint", "add custom", "add framework", "add service", "align", "auth key-bundle", "auth token create", "backup", "cloud diff", "cloud export", "cloud link", "cloud pull", "cloud push", "commands", "convert", "doctor", "history", "init", "migrate", "parse", "platform", "platform diff", "platform pull", "platform push", "remove", "restore", "scan", "scan rules add", "sync", "undo", "validate", "vault create"]
+evnxVersion: "0.15.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+{/*
+  The table below is generated, not typed. It is the `removed` list that every command
+  carries in `evnx commands --json`, printed once from the 0.15.0 binary:
+
+    evnx commands --json | node -e 'const j=JSON.parse(require("fs").readFileSync(0));
+      for (const c of j.commands) for (const r of (c.removed||[]))
+        console.log(`| \`evnx ${c.path.join(" ")}\` | \`${r.old}\` | \`${r.new}\` |`)'
+
+  The same table is in the CLI's CHANGELOG under "Breaking: one flag vocabulary (WP-8)".
+  Nothing regenerates it: if a later release removes more spellings, add rows by hand
+  from that release's `removed` list, under a new heading, not into this one.
+*/}
+
+evnx 0.15.0 renames flags so that the same idea has the same spelling in every command.
+The old spellings are **removed, not aliased**. A script that uses one stops with exit
+`2` before it does anything, and the message tells you the new spelling.
+
+If you only call evnx from a terminal, run the command again with the spelling in the
+error. If you call it from CI, hooks or scripts, work through [Fix your CI](#fix-your-ci)
+before you upgrade.
+
+<Callout type="warning" title="Pin the old version until your scripts are fixed">
+A job that installs `latest` picks up 0.15.0 on the day it is released and fails at the
+first removed flag. Pin the version while you fix the scripts, for example
+`npm install -g @evnx/cli@0.14.1`, and move the pin once they pass.
+</Callout>
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+---
+
+## Why one vocabulary
+
+Before 0.15.0 the same idea had several spellings, and no spelling was used by every
+command. The folder a command works in was `--path` in one place and `-p` in another. The
+env file was `--env` on `validate` and `sync`, `--file` or `-f` on `cloud` and `platform`,
+and `--source-file` on `migrate`. "Do not ask" was `--yes` on most commands, `--force` on
+`restore` and `cloud pull`, and `--force` or `--placeholder` on `sync`. Machine output was
+`--format json` in one command and `--json` in the next, and the plain format was called
+`text` on some commands and `pretty` on others.
+
+That is hard to remember and harder to script. It is also how a flag gets documented onto
+the wrong command. In 0.15.0 each idea has one name, everywhere it applies, and a test
+fails the build when a new command invents a spelling of its own.
+
+| Idea | One spelling |
+|------|--------------|
+| The folder a command works in | `-C` / `--dir` |
+| The env file | `--env FILE`, on every command, `cloud` and `platform` included |
+| Which `.env.NAME` | `--env-name NAME` |
+| Do not ask | `--yes` / `-y` |
+| Show what would change | `--dry-run` / `-n` |
+| Machine-readable output | `--format json`, or `--json` for short |
+| Human output | `--format pretty` |
+| Annotations on a pull request | `--format github` |
+
+We removed the old spellings instead of keeping them as aliases. An alias keeps the old
+name working for years, and then every page, example and answer shows two names for one
+thing. A hard error with the new spelling in it costs you one failed run, once.
+
+---
+
+## What the error looks like
+
+A removed spelling exits `2` before evnx reads a file or contacts a server, so nothing is
+half-done:
+
+```console
+$ evnx sync --force
+error: '--force' was removed from 'evnx sync' in 0.15.0; use '--yes'
+$ echo $?
+2
+```
+
+The message has the same shape for every command: the spelling you typed, the command, the
+version, and what to type instead.
+
+```text
+error: '--format github-actions' was removed from 'evnx validate' in 0.15.0; use '--format github'
+error: '-p' was removed from 'evnx init' in 0.15.0; use '-C/--dir'
+error: '--env-name' was removed from 'evnx platform push' in 0.15.0; use '--target'
+```
+
+`evnx commands --json` lists the same table for the binary you run, under `removed` on each
+command, so a script can check itself against it.
+
+---
+
+## Every removed spelling
+
+| Command | Removed | Use instead |
+|---------|---------|-------------|
+| `evnx init` | `-p, --path` | `-C/--dir` |
+| `evnx add` | `-p, --path` | `-C/--dir` |
+| `evnx add service` | `-p, --path` | `-C/--dir` |
+| `evnx add framework` | `-p, --path` | `-C/--dir` |
+| `evnx add blueprint` | `-p, --path` | `-C/--dir` |
+| `evnx add custom` | `-p, --path` | `-C/--dir` |
+| `evnx remove` | `-p, --path` | `-C/--dir` |
+| `evnx validate` | `--format text` | `--format pretty` |
+| `evnx validate` | `--format github-actions` | `--format github` |
+| `evnx scan` | `--format text` | `--format pretty` |
+| `evnx scan` | `--format github-actions` | `--format github` |
+| `evnx scan rules add` | `--format` | `--from` |
+| `evnx convert` | `--to github-actions` | `--to github` |
+| `evnx convert` | `--to gh-actions` | `--to github` |
+| `evnx migrate` | `--source-file` | `--env` |
+| `evnx migrate` | `--to github-actions` | `--to github` |
+| `evnx migrate` | `--to aws` | `--to aws-secrets-manager` |
+| `evnx migrate` | `--to gcp` | `--to gcp-secret-manager` |
+| `evnx migrate` | `--to azure` | `--to azure-keyvault` |
+| `evnx migrate` | `--from env` | `--from env-file` |
+| `evnx sync` | `-f, --force` | `--yes` |
+| `evnx sync` | `--placeholder` | `--yes` |
+| `evnx backup` | `--key-file` | `--password-file` |
+| `evnx restore` | `--key-file` | `--password-file` |
+| `evnx restore` | `--force` | `--yes` |
+| `evnx auth key-bundle` | `--format text` | `--format pretty` |
+| `evnx auth token create` | `--format text` | `--format pretty` |
+| `evnx vault create` | `-e, --env` | `--environment` |
+| `evnx cloud push` | `-f, --file` | `--env` |
+| `evnx cloud pull` | `-f, --file` | `--env` |
+| `evnx cloud pull` | `--force` | `--yes` |
+| `evnx cloud diff` | `-f, --file` | `--env` |
+| `evnx cloud link` | `-f, --file` | `--env` |
+| `evnx cloud export` | `--to github-actions` | `--to github` |
+| `evnx cloud export` | `--to gh-actions` | `--to github` |
+| `evnx platform diff` | `--env-name` | `--target` |
+| `evnx platform diff` | `-f, --file` | `--env` |
+| `evnx platform pull` | `--env-name` | `--target` |
+| `evnx platform pull` | `-f, --file` | `--env` |
+| `evnx platform push` | `--env-name` | `--target` |
+| `evnx platform push` | `-f, --file` | `--env` |
+| `evnx doctor` | `--path` | `-C/--dir` |
+| `evnx doctor` | `--format text` | `--format pretty` |
+| `evnx parse` | `--format text` | `--format pretty` |
+| `evnx parse` | `-y, --yes` | `--show-values` |
+
+Notes on the table:
+
+- `-C/--dir` is `-C` or `--dir`. `add` and each of its subcommands take it.
+- `evnx platform` keeps `--to`, which is still required. `--target` names the Vercel
+  environment (`production`, `preview`, `development`, or a custom one). The local file
+  is `--env`.
+- `evnx migrate --github-token` still works, but it is hidden from `--help` and prints a
+  warning, because a token on the command line lands in shell history and in `ps`. Export
+  `GITHUB_TOKEN` instead; evnx reads it when the flag is absent.
+- `evnx migrate --to` takes the full destination name only: `github`, `aws-secrets-manager`,
+  `gcp-secret-manager`, `azure-keyvault`, `doppler`, `infisical`, `vercel`, `heroku`,
+  `railway`.
+- `evnx convert --to` keeps its other short names (`aws`, `gcp`, `k8s`, `tf`, `yml`).
+  Only `github-actions` and `gh-actions` went, for `github`.
+
+---
+
+## Fix your CI
+
+First find every use. In a repository:
+
+```bash
+grep -rnE -e '--format (text|github-actions)' -e '--to (github-actions|gh-actions)' \
+  -e '--(key-file|source-file|placeholder|env-name)' -e 'evnx.* (-f|--file|--force|--path|-p) ' \
+  .github .gitlab-ci.yml scripts Makefile .pre-commit-config.yaml 2>/dev/null
+```
+
+That over-matches on purpose. `--env-name` is still correct on most commands, and the
+hits are a list to read, not a list to replace blindly.
+
+These `sed` one-liners cover the common cases. They use GNU `sed`; on macOS use `sed -i ''`.
+Each acts only on lines that mention `evnx` and the command, so it leaves `docker compose -f`
+and `rm -f` alone. Run them from the repository root and read `git diff` afterwards.
+
+```bash
+FILES=$(git ls-files '.github/*' '*.yml' '*.yaml' '*.sh' 'Makefile' | tr '\n' ' ')
+
+# GitHub annotations, and the plain format
+sed -i -E '/evnx (validate|scan)/ s/--format github-actions/--format github/' $FILES
+sed -i -E '/evnx / s/--format text/--format pretty/' $FILES
+
+# convert, migrate and cloud export: the GitHub destination
+sed -i -E '/evnx (convert|migrate|cloud export)/ s/--to (github-actions|gh-actions)/--to github/' $FILES
+
+# the folder a command works in
+sed -i -E '/evnx (init|add|remove|doctor)/ s/ (--path|-p)( |=)/ --dir\2/' $FILES
+
+# the env file on cloud and platform
+sed -i -E '/evnx (cloud|platform) (push|pull|diff|link)/ s/ (--file|-f)( |=)/ --env\2/' $FILES
+
+# the Vercel environment on platform
+sed -i -E '/evnx platform/ s/--env-name/--target/' $FILES
+
+# "do not ask"
+sed -i -E '/evnx sync/ s/ (--force|-f|--placeholder)( |$)/ --yes\2/' $FILES
+sed -i -E '/evnx (restore|cloud pull)/ s/ --force( |$)/ --yes\1/' $FILES
+
+# backup and restore passphrase file
+sed -i -E '/evnx (backup|restore)/ s/--key-file/--password-file/' $FILES
+
+# migrate
+sed -i -E '/evnx migrate/ s/--source-file/--env/; s/--from env( |$)/--from env-file\1/' $FILES
+sed -i -E '/evnx migrate/ s/--to aws( |$)/--to aws-secrets-manager\1/; s/--to gcp( |$)/--to gcp-secret-manager\1/; s/--to azure( |$)/--to azure-keyvault\1/' $FILES
+
+# parse and vault create
+sed -i -E '/evnx parse/ s/ (-y|--yes)( |$)/ --show-values\2/' $FILES
+sed -i -E '/evnx vault create/ s/ (-e|--env)( |=)/ --environment\2/' $FILES
+```
+
+Two limits. The commands only see an invocation written on one line, so a command split
+with `\` needs a manual pass; the grep above still finds its lines. And `scan rules add
+--format` became `--from`, which is rare enough to change by hand.
+
+When the scripts pass, run each changed command once. A remaining old spelling fails
+immediately with the message above.
+
+### A GitHub Actions workflow
+
+Before:
+
+```diff
+-      - name: Validate .env
+-        run: evnx validate --fail-on warning --format github-actions
+```
+
+After:
+
+```diff
++      - name: Validate .env
++        run: evnx validate --fail-on warning --format github
+```
+
+The `scan` step is the same change. `evnx scan --format github` has been the spelling since
+v0.5.0; only `github-actions` was removed:
+
+```yaml
+      - name: Scan for secrets
+        run: evnx scan --format github --severity high
+```
+
+### A pre-commit hook
+
+The hooks that evnx ships, `evnx-sync-fix` among them, use the new spellings from 0.15.0.
+A local hook of your own that runs `sync --force --skip-without-env` becomes
+`evnx sync --yes --skip-without-env`.
+
+---
+
+## What is new
+
+The same release adds the other half of the vocabulary:
+
+- `--json` is a visible shorthand for `--format json` on every command that has `--format`.
+- `-n` is the short form of `--dry-run` everywhere.
+- `-C/--dir` names the project folder on `init`, `add`, `remove` and `doctor`.
+- `--env FILE` names the env file on `cloud` and `platform` as well, as it does elsewhere.
+- `evnx sync --yes` works without `--prune`, and `sync --json` works in every mode, not only
+  with `--check`. `--yes` replaces both `--force` and `--placeholder`.
+- `evnx sync --to example|env` is another spelling of `--direction forward|reverse`.
+- `evnx validate --fix --yes`, and `evnx convert --yes` and `--dry-run`.
+- `evnx auth key-bundle` and `evnx auth token create` take `--format pretty|json`.
+- `evnx vault create --environment` replaces `-e/--env`.
+- [`evnx align`](/guides/commands/align), [`evnx history`](/guides/commands/history) and
+  [`evnx undo`](/guides/commands/undo) are documented.
+
+See the page for each command: [`sync`](/guides/commands/sync),
+[`validate`](/guides/commands/validate), [`convert`](/guides/commands/convert),
+[`migrate`](/guides/commands/migrate), [`cloud`](/guides/commands/cloud),
+[`platform`](/guides/commands/platform), [`backup`](/guides/commands/backup) and
+[`restore`](/guides/commands/restore).
+
+---
+
+## See also
+
+- [Managing your evnx install](/guides/reference/managing-your-evnx-install): pin a version, upgrade, roll back
+- [GitHub Actions](/guides/integrations/github-actions): the workflows with the new spellings
+- [CI/CD: keeping .env and .env.example in step](/guides/integrations/ci-cd-sync)
