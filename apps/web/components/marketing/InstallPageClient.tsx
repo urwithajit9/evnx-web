@@ -249,7 +249,7 @@ function CmdLine({ label, code }: { label?: string; code: string }) {
   return (
     <div className="rounded-lg border border-border-muted overflow-hidden mb-3">
       {label && (
-        <p className="text-xs text-text-tertiary uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
+        <p className="text-xs text-text-muted uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
           {label}
         </p>
       )}
@@ -453,15 +453,15 @@ function CargoPanel({
       <div className="grid grid-cols-2 gap-3 mt-2">
         <div className="rounded-lg border border-border-muted bg-bg-surface p-3">
           <p className="font-mono text-xs text-text-secondary mb-1">--features migrate</p>
-          <p className="text-xs text-text-tertiary">adds evnx migrate</p>
+          <p className="text-xs text-text-muted">adds evnx migrate</p>
         </div>
         <div className="rounded-lg border border-border-muted bg-bg-surface p-3">
           <p className="font-mono text-xs text-text-secondary mb-1">--features backup</p>
-          <p className="text-xs text-text-tertiary">adds backup + restore</p>
+          <p className="text-xs text-text-muted">adds backup + restore</p>
         </div>
         <div className="col-span-2 rounded-lg border border-border-muted bg-bg-surface p-3">
           <p className="font-mono text-xs text-text-secondary mb-1">--features cloud</p>
-          <p className="text-xs text-text-tertiary">adds auth, org, vault + cloud</p>
+          <p className="text-xs text-text-muted">adds auth, org, vault + cloud</p>
         </div>
         <div className="col-span-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20 p-3">
           <p className="font-mono text-xs text-green-800 dark:text-green-300 mb-1">
@@ -559,7 +559,7 @@ function PipPanel({
 
           <div className="space-y-3">
             <div className="rounded-lg border border-border-muted overflow-hidden">
-              <p className="text-xs text-text-tertiary uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
+              <p className="text-xs text-text-muted uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
                 macOS
               </p>
               <div className="p-4 space-y-2">
@@ -569,14 +569,14 @@ function PipPanel({
             </div>
 
             <div className="rounded-lg border border-border-muted overflow-hidden">
-              <p className="text-xs text-text-tertiary uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
+              <p className="text-xs text-text-muted uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
                 Ubuntu / Debian
               </p>
               <div className="p-4 space-y-2">
-                <p className="text-xs text-text-tertiary mb-1">Ubuntu 22.04+ (pipx is in apt)</p>
+                <p className="text-xs text-text-muted mb-1">Ubuntu 22.04+ (pipx is in apt)</p>
                 <CmdLine code="sudo apt install pipx" />
                 <CmdLine code="pipx ensurepath" />
-                <p className="text-xs text-text-tertiary mt-3 mb-1">Ubuntu 20.04 and below</p>
+                <p className="text-xs text-text-muted mt-3 mb-1">Ubuntu 20.04 and below</p>
                 <CmdLine code="pip install --user pipx" />
                 <CmdLine code="python -m pipx ensurepath" />
                 <InfoBox variant="warn">
@@ -588,7 +588,7 @@ function PipPanel({
             </div>
 
             <div className="rounded-lg border border-border-muted overflow-hidden">
-              <p className="text-xs text-text-tertiary uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
+              <p className="text-xs text-text-muted uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
                 Windows (PowerShell)
               </p>
               <div className="p-4 space-y-2">
@@ -599,7 +599,7 @@ function PipPanel({
                   logout and login may be required for PATH changes to take effect. Then run{" "}
                   <IC>pipx install evnx</IC>.
                 </InfoBox>
-                <p className="text-xs text-text-tertiary mt-1">
+                <p className="text-xs text-text-muted mt-1">
                   Alternatively, use <IC>cargo install evnx --all-features</IC> or{" "}
                   <IC>npm install -g @evnx/cli</IC> on Windows &mdash; simpler if you already
                   have Rust or Node.js installed.
@@ -846,7 +846,7 @@ function TroubleAccordion({ items }: { items: TroubleItem[] }) {
           >
             <span className="text-sm font-medium leading-snug">{item.q}</span>
             <span
-              className={`text-text-tertiary flex-shrink-0 transition-transform text-xs ${
+              className={`text-text-muted flex-shrink-0 transition-transform text-xs ${
                 open.has(i) ? "rotate-90" : ""
               }`}
             >

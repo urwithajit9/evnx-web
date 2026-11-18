@@ -76,7 +76,7 @@ export function Stories() {
               className="flex flex-col items-start p-5 rounded-xl border border-border-muted bg-bg-base"
             >
               <div className="flex items-center justify-between w-full mb-3">
-                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-500 text-black font-mono font-bold text-xs">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-500 text-brand-fg font-mono font-bold text-xs">
                   {i + 1}
                 </span>
                 <Spot id={step.spot} size={48} />
@@ -92,7 +92,7 @@ export function Stories() {
           ))}
         </ol>
 
-        <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-lg bg-brand-500 text-black px-5 py-3">
+        <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-lg bg-brand-500 text-brand-fg px-5 py-3">
           <p className="font-medium">{story.outcome}</p>
           <Link
             href={docsUrl(story.guide)}

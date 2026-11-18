@@ -2,7 +2,37 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { HOSTS, SITE, appUrl } from "@evnx/config";
 import { SearchModal, SearchTrigger } from "@/components/search-modal";
+import { IBM_Plex_Sans, IBM_Plex_Mono, Fraunces } from "next/font/google";
+import { ThemeProvider } from "@/components/theme/theme-provider";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+// Tokens first: globals.css reads the variables they declare.
+import "@evnx/tokens/tokens.css";
 import "./globals.css";
+
+// ⚠️ Until this revamp the docs loaded no fonts at all: globals.css named
+// IBM Plex Mono and Fraunces, but nothing fetched them, so every reader without
+// them installed got Courier New and Georgia. Same three families as evnx.dev.
+// ⚠️ No `weight`. Plex Sans is a variable font on Google Fonts; asking for
+// fixed weights makes Google answer with `/l/font?kit=…&skey=…` URLs, and
+// Turbopack's font loader fails on the `&` ("next/font/google queries have
+// exactly one entry"). The variable file covers 400–600 anyway.
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono",
+  display: "swap",
+});
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  axes: ["opsz"],
+  variable: "--font-serif",
+  display: "swap",
+});
 
 /**
  * ⚠️ Canonicals point at docs.evnx.dev from day one, even before the DNS
@@ -22,8 +52,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-bg-base text-text-primary antialiased flex flex-col">
+    <html
+      lang="en"
+      className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} ${fraunces.variable}`}
+      // next-themes adds class="light" | "dark" before hydration (D-V6).
+      suppressHydrationWarning
+    >
+      <body className="min-h-screen bg-bg-base text-text-primary font-sans antialiased flex flex-col">
+        <ThemeProvider>
         <a href="#main-content" className="sr-only focus:not-sr-only">
           Skip to content
         </a>
@@ -45,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   this app shipped without it. Pagefind indexes the build, so
                   it returns nothing in `next dev` — expected, not broken. */}
               <SearchTrigger className="mx-1" />
+              <ThemeToggle />
               {/* ⚠️ Hidden below `sm`: with it the nav is 383 px wide and every
                   page scrolls sideways at 375 px. The footer links evnx.dev
                   too, so it stays reachable on a phone. */}
@@ -77,6 +114,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </a>
           </div>
         </footer>
+        </ThemeProvider>
       </body>
     </html>
   );

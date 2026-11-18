@@ -12,6 +12,12 @@
     "search:index": "pagefind --site .next/server/app --output-path public/pagefind"
   },
   "dependencies": {
+    "@evnx/config": "workspace:*",
+    "@evnx/content": "workspace:*",
+    "@evnx/docs-content": "workspace:*",
+    "@evnx/mdx": "workspace:*",
+    "@evnx/tokens": "workspace:*",
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
     "@hookform/resolvers": "^3.9.0",
     "@next/swc-wasm-nodejs": "13.5.1",
     "@radix-ui/react-accordion": "^1.2.0",
@@ -78,11 +84,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "5.2.2",
     "vaul": "^0.9.9",
-    "zod": "^3.23.8",
-    "@evnx/config": "workspace:*",
-    "@evnx/content": "workspace:*",
-    "@evnx/docs-content": "workspace:*",
-    "@evnx/mdx": "workspace:*"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/mdx": "^2.0.13",

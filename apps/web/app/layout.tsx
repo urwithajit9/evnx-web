@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Fraunces } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono, Fraunces } from "next/font/google";
 import Script from "next/script";
+// Tokens first: globals.css reads the variables they declare.
+import "@evnx/tokens/tokens.css";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Header } from "@/components/layout/header";
 import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { Footer } from "@/components/layout/footer";
@@ -13,7 +16,18 @@ import {
 } from "@/lib/config";
 import { SearchModal } from "@/components/ui/search-modal";
 
-// IBM Plex Mono — UI / body font (fully monospace site)
+// D-V5 — IBM Plex Sans for body and UI copy.
+// ⚠️ No `weight`. Plex Sans is a variable font on Google Fonts; asking for
+// fixed weights makes Google answer with `/l/font?kit=…&skey=…` URLs, and
+// Turbopack's font loader fails on the `&` ("next/font/google queries have
+// exactly one entry"). The variable file covers 400–600 anyway.
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+// IBM Plex Mono — code, commands, labels and pills (`font-mono`)
 const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -75,9 +89,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${ibmPlexMono.variable} ${fraunces.variable} dark`}
+      className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} ${fraunces.variable}`}
+      // next-themes adds class="light" | "dark" before hydration (D-V6).
+      suppressHydrationWarning
     >
-      <body className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] font-mono antialiased">
+      <body className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased">
+        <ThemeProvider>
           <a href="#main-content" className="sr-only focus:not-sr-only">
     Skip to content
   </a>
@@ -100,6 +117,7 @@ export default function RootLayout({
           data-website-id="b50850fb-0a46-4863-bfbb-75c67d04b312"
           strategy="afterInteractive"
         />
+        </ThemeProvider>
       </body>
     </html>
   );

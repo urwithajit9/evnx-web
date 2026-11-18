@@ -34,7 +34,7 @@ export function Road() {
 
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-500 text-black font-mono font-bold text-sm mb-3">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-500 text-brand-fg font-mono font-bold text-sm mb-3">
                   {s.n}
                 </span>
                 <h3 className="font-serif text-2xl font-bold leading-tight">{s.name}</h3>
@@ -61,7 +61,7 @@ export function Road() {
         ))}
       </ol>
 
-      <p className="mt-6 rounded-lg bg-brand-500 text-black font-medium px-5 py-3">
+      <p className="mt-6 rounded-lg bg-brand-500 text-brand-fg font-medium px-5 py-3">
         {road.banner}
       </p>
     </>
