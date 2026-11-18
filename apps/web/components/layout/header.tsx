@@ -8,6 +8,7 @@ import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
 import { SearchTrigger , SearchModal} from'@/components/ui/search-modal'
 import { TESTIMONIALS_ENABLED, docsUrl } from "@evnx/config";
 import { BrandMark } from "./brand-mark";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 // ⚠️ Testimonials is appended only when the flag is on — see
 // TESTIMONIALS_ENABLED. A "Testimonials" tab leading to an empty page reads as
@@ -69,7 +70,8 @@ export function Header() {
 
           {/* Right actions */}
           <div className="flex items-center gap-3">
-            <SearchTrigger /> 
+            <SearchTrigger />
+            <ThemeToggle />
             <a
               href={GITHUB_URL}
               target="_blank"
@@ -82,7 +84,7 @@ export function Header() {
 
             <Link
               href="/install"
-              className="hidden sm:block font-mono text-xs bg-brand-500 text-black px-3 py-1.5 rounded hover:bg-brand-400 transition-colors font-semibold"
+              className="hidden sm:block font-mono text-xs bg-brand-500 text-brand-fg px-3 py-1.5 rounded hover:bg-brand-400 transition-colors font-semibold"
             >
               Install
             </Link>
@@ -118,7 +120,7 @@ export function Header() {
             <div className="pt-3 mt-3 border-t border-border-subtle px-3 flex gap-3">
               <Link
                 href="/install"
-                className="font-mono text-xs bg-brand-500 text-black px-4 py-2 rounded hover:bg-brand-400 transition-colors"
+                className="font-mono text-xs bg-brand-500 text-brand-fg px-4 py-2 rounded hover:bg-brand-400 transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
                 Install evnx

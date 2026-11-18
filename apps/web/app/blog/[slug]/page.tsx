@@ -292,7 +292,7 @@ export default async function BlogPostPage({ params }: Props) {
                 </div>
                 <Link
                   href="/install"
-                  className="block text-center text-xs font-mono bg-brand-500 text-black py-2 rounded hover:bg-brand-400 transition-colors"
+                  className="block text-center text-xs font-mono bg-brand-500 text-brand-fg py-2 rounded hover:bg-brand-400 transition-colors"
                 >
                   Install evnx →
                 </Link>

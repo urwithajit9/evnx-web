@@ -253,7 +253,7 @@ export function TestimonialForm() {
             onClick={() => setMode(m)}
             className={`flex items-center justify-center gap-2 h-12 rounded-lg text-base font-medium transition-all ${
               mode === m
-                ? 'bg-brand-500 text-black shadow-sm'
+                ? 'bg-brand-500 text-brand-fg shadow-sm'
                 : 'text-text-muted hover:text-text-primary hover:bg-bg-overlay'
             }`}
           >
@@ -453,7 +453,7 @@ export function TestimonialForm() {
                     {/* The badge is the affordance. Without it the dashed ring
                         reads as an empty slot rather than a button. */}
                     <span className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-brand-500 border-2 border-bg-base flex items-center justify-center">
-                      <Camera className="w-3.5 h-3.5 text-black" />
+                      <Camera className="w-3.5 h-3.5 text-brand-fg" />
                     </span>
                   </span>
 
@@ -595,7 +595,7 @@ export function TestimonialForm() {
         <button
           type="submit"
           disabled={!canSubmit}
-          className="w-full flex items-center justify-center gap-2 font-semibold text-base bg-brand-500 text-black h-14 rounded-xl hover:bg-brand-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 font-semibold text-base bg-brand-500 text-brand-fg h-14 rounded-xl hover:bg-brand-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {status === 'loading'
             ? <><Loader2 className="w-5 h-5 animate-spin" /> Submitting…</>

@@ -102,7 +102,7 @@ export function WaitlistForm({
       <button
         type="submit"
         disabled={status === 'loading' || !email}
-        className={`flex items-center justify-center gap-2 font-mono font-semibold bg-brand-500 text-black rounded hover:bg-brand-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+        className={`flex items-center justify-center gap-2 font-mono font-semibold bg-brand-500 text-brand-fg rounded hover:bg-brand-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
           compact ? 'text-xs px-4 py-2 whitespace-nowrap' : 'text-sm px-6 py-3 w-full'
         }`}
       >

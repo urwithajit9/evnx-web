@@ -1,0 +1,11 @@
+{
+  "name": "@evnx/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Design tokens shared by apps/web and apps/docs: the light and dark palettes as CSS variables, and the Tailwind preset that maps them to class names. One source of colour for both sites (D-V16).",
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./tailwind-preset": "./tailwind-preset.js"
+  },
+  "files": ["tokens.css", "tailwind-preset.js"]
+}

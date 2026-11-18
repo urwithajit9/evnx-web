@@ -204,7 +204,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                       href="/blog"
                       className={`font-mono text-xs px-2 py-1 rounded border transition-colors ${
                         !activeTag
-                          ? 'bg-brand-500 text-black border-brand-500 font-bold'
+                          ? 'bg-brand-500 text-brand-fg border-brand-500 font-bold'
                           : 'bg-bg-surface border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-muted'
                       }`}
                     >
