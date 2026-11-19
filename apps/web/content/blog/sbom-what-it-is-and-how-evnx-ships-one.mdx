@@ -266,27 +266,25 @@ Run on 2026-11-19 against `evnx-0.15.0.cdx.json` (253 packages):
 
 | Check | Result |
 |---|---|
-| Checksum (`sha256sum -c`) | {/* fill: run step 2 */}TBD |
+| Checksum (`sha256sum -c`) | OK |
 | Signature (`gh attestation verify`) | {/* fill: run step 3 and record the result */}TBD |
 | Grype | 0 vulnerabilities (0 critical, 0 high, 0 medium, 0 low) |
 | Trivy | 0 vulnerabilities (cargo) |
-| OSV-Scanner | 4 advisories, severity "Unknown", no fixed version (below) |
+| OSV-Scanner | 4 informational advisories: crates that are no longer maintained (below) |
 
 The four OSV-Scanner entries:
 
 | Advisory | Crate | Reaches evnx through | Type | What we are doing |
 |---|---|---|---|---|
-| [RUSTSEC-2025-0119](https://osv.dev/RUSTSEC-2025-0119) | `number_prefix` 0.4.0 | `indicatif` 0.17 (progress bars) | {/* fill */}TBD | upgrade `indicatif` in 0.16.0 |
-| [RUSTSEC-2024-0449](https://osv.dev/RUSTSEC-2024-0449) | `unsafe-libyaml` 0.2.11 | `serde_yaml` 0.9 (deprecated by its author) | {/* fill */}TBD | move to a maintained YAML crate in 0.16.0 |
-| [RUSTSEC-2026-0441](https://osv.dev/RUSTSEC-2026-0441) | `pin-utils` 0.1.0 | `hyper`, via the cloud HTTP client | {/* fill */}TBD | upstream; follows `hyper` |
-| [RUSTSEC-2026-0543](https://osv.dev/RUSTSEC-2026-0543) | `chrono` 0.4.43 | evnx directly | {/* fill */}TBD | {/* fill after reading the advisory */}TBD |
+| [RUSTSEC-2025-0119](https://osv.dev/RUSTSEC-2025-0119) | `number_prefix` 0.4.0 | `indicatif` 0.17 (progress bars) | unmaintained | upgrade `indicatif` in 0.16.0 |
+| [RUSTSEC-2024-0449](https://osv.dev/RUSTSEC-2024-0449) | `unsafe-libyaml` 0.2.11 | `serde_yaml` 0.9 (deprecated by its author) | unmaintained | move to a maintained YAML crate in 0.16.0 |
+| [RUSTSEC-2026-0441](https://osv.dev/RUSTSEC-2026-0441) | `pin-utils` 0.1.0 | `hyper`, via the cloud HTTP client | unmaintained | none in evnx; it goes when `hyper` drops it |
+| [RUSTSEC-2026-0543](https://osv.dev/RUSTSEC-2026-0543) | `chrono` 0.4.43 | evnx directly | unmaintained | evaluate a replacement for date handling in 0.16.0 |
 
-{/* TODO: replace each TBD with "informational (unmaintained)" or "vulnerability", and the
-    last column for chrono, before publishing. If any is a real vulnerability that evnx can
-    reach, it ships as 0.15.1 and this table says so. */}
 
-None of them has a severity score or a fixed version. On RustSec that pattern usually marks
-an informational notice rather than an exploitable bug, and that is why Grype and Trivy,
+
+All four are RustSec "unmaintained" notices: the crate gets no more updates, but no bug in
+it is known. None has a severity score or a fixed version, which is why Grype and Trivy,
 which report scored vulnerabilities, show zero. We still treat every entry as work: each one
 either gets a replacement dependency or a written reason in the project's audit
 configuration, so the decision is recorded and re-checked when the lockfile changes.
