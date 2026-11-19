@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { docsUrl } from "@evnx/config";
 import { road } from "@evnx/content";
 import { Spot } from "@/components/art/spots";
 import { SectionHeading } from "./section-shell";
+import { CommandPill } from "@/components/ui/command-pill";
 
 /**
  * The whole tool as four stages along one road.
@@ -47,12 +47,7 @@ export function Road() {
             <ul className="space-y-3">
               {s.commands.map((c) => (
                 <li key={c.label}>
-                  <Link
-                    href={docsUrl(`commands/${c.guide}`)}
-                    className="inline-block font-mono text-xs text-brand-400 bg-terminal-bg border border-border-muted rounded px-2 py-1 hover:border-brand-500 transition-colors"
-                  >
-                    {c.label}
-                  </Link>
+                  <CommandPill href={docsUrl(`commands/${c.guide}`)}>{c.label}</CommandPill>
                   <div className="text-sm text-text-secondary mt-1">{c.line}</div>
                 </li>
               ))}

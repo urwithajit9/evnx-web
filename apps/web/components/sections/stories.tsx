@@ -7,6 +7,7 @@ import { docsUrl } from "@evnx/config";
 import { stories } from "@evnx/content";
 import { Spot } from "@/components/art/spots";
 import { SectionHeading } from "./section-shell";
+import { CommandPill } from "@/components/ui/command-pill";
 
 /**
  * Use cases as strips: what goes wrong today, then the commands that fix it,
@@ -81,12 +82,9 @@ export function Stories() {
                 </span>
                 <Spot id={step.spot} size={48} />
               </div>
-              <Link
-                href={docsUrl(`commands/${step.guide}`)}
-                className="font-mono text-xs text-brand-400 bg-terminal-bg border border-border-muted rounded px-2 py-1 mb-2 hover:border-brand-500 transition-colors"
-              >
+              <CommandPill href={docsUrl(`commands/${step.guide}`)} className="mb-2">
                 {step.label}
-              </Link>
+              </CommandPill>
               <p className="text-sm text-text-secondary">{step.caption}</p>
             </li>
           ))}
