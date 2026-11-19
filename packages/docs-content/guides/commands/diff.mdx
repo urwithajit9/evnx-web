@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx diff"
 publishedAt: "2026-03-11"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-19"
 excerpt: "Compare .env with its template by key name, or two environments by key and value. Values stay hidden unless asked for; --fail-on picks what fails the run, so the exit code is a CI gate."
 difficulty: "beginner"
 timeToComplete: "6 minutes"
 tags: ["diff", "reference", "cli", "env", "security", "ci-cd"]
 commands: ["diff", "init", "spec", "sync"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -30,6 +30,13 @@ masked. Every output on this page was checked against evnx 0.13.0.
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
 </Prerequisites>
 
+<Callout type="warning" title="Changed in v0.15.0: the left file is printed first">
+`evnx diff A B` compares two files. In the "Different values" section, the **left** file's
+value is now listed before the right one (it was the other way round), in the order of the
+`left ↔ right` heading. The JSON keeps `env_value` (the left file) and `example_value` (the
+right). A script that read the printed order should read the file names instead.
+</Callout>
+
 <Callout type="warning" title="Changed in v0.10.13">
 Against a template, `diff` used to compare values too, so every correctly filled-in value
 showed as "different" and a healthy project exited 1. Older versions of this page told you
@@ -42,13 +49,14 @@ against a template: a healthy project exits 0, and the exit code is a gate.
 ## Command signature
 
 ```bash
-evnx diff [OPTIONS]
+evnx diff [OPTIONS] [A] [B]
 ```
 
 ```bash
 evnx diff                                         # keys .env lacks, or the template lacks
 evnx diff --fail-on missing                       # fail only when .env lacks a template key
 evnx diff --env-name production --against staging # two environments: keys and values
+evnx diff .env.staging .env.production            # the same for two files, left first (v0.15.0)
 evnx diff --format json | jq -e '.summary.missing == 0'
 ```
 
@@ -58,6 +66,7 @@ evnx diff --format json | jq -e '.summary.missing == 0'
 
 | Flag | Description |
 |------|-------------|
+| `[A] [B]` | **v0.15.0** — two files to compare, keys **and** values, as `--against` does. `A` is the left file. One file is compared with the template. They cannot be combined with `--env`, `--env-name`, `--example` or `--against` ([below](#two-files)) |
 | `--env <FILE>` | The file on the left. Default `.env`, or `[defaults] env_name` from `.evnx.toml` |
 | `--example <FILE>` | The template on the right, compared by key name only. Default `.env.example`, or `[defaults] example` |
 | `--env-name <NAME>` | Use `.env.<NAME>` on the left. A name with no file is an error listing the ones that exist; it never falls back to `.env` |
@@ -65,6 +74,7 @@ evnx diff --format json | jq -e '.summary.missing == 0'
 | `--values` | Compare values against the template too. Expect every filled-in value to be listed |
 | `--show-values` | Print values. Secrets stay masked in `pretty` and `json`; see [Values and secrets](#values-and-secrets) |
 | `--format <FORMAT>` | `pretty` (default), `json` or `patch`. An unknown value exits 2 |
+| `--json` | **v0.15.0** — the same as `--format json` |
 | `--reverse` | Swap the two sides |
 | `--ignore-keys <KEYS>` | Leave these keys out (comma-separated, exact case). Adds to `[diff] ignore_keys` |
 | `--fail-on <WHAT>` | What fails the run: `missing`, `extra`, `different`, comma-separated. All three by default |
@@ -187,20 +197,48 @@ Different values:
   1 not in ./.env.staging  ·  3 different values
 ```
 
+### Two files
+
+**v0.15.0+.** Name the files instead of the flags:
+
+```bash
+evnx diff .env.staging .env.production
+```
+
+```text
+  evnx diff  ./.env.staging ↔ ./.env.production
+
+Missing from ./.env.staging (present in ./.env.production):
+  + ONLY_PROD
+
+Extra in ./.env.staging (not in ./.env.production):
+  - ONLY_STAGING
+
+Different values:
+  ~ PORT
+  ~ DB_URL
+
+  1 missing from ./.env.staging  ·  1 not in ./.env.production  ·  2 different values
+```
+
+Keys and values are compared, as with `--against`. The first file is the left side
+(`--env`) and the second the right. Combining the positionals with `--env`, `--env-name`,
+`--example` or `--against` is a usage error, exit `2`.
+
 Keys and values are both compared. Which values differ is shown; the values themselves are
 not, unless you add `--show-values`:
 
 ```text
 Different values:
   ~ DATABASE_URL
-    ./.env.staging: postgres://admin:***@db.stg:5432/app
     ./.env.production: postgres://admin:***@db.prod:5432/app
+    ./.env.staging: postgres://admin:***@db.stg:5432/app
   ~ STRIPE_SECRET_KEY
-    ./.env.staging: ***
     ./.env.production: ***
+    ./.env.staging: ***
   ~ NODE_ENV
-    ./.env.staging: staging
     ./.env.production: production
+    ./.env.staging: staging
 ```
 
 ---
@@ -209,12 +247,16 @@ Different values:
 
 ### `json`
 
+**v0.15.0+** — like every JSON output, the document starts with a `run` header (`tool`, `version`,
+`schema_version`, `ruleset`, `features`); the keys below it are unchanged, `schema_version` included.
+
 ```bash
 evnx diff --format json
 ```
 
 ```json
 {
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 2, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
   "schema_version": 2,
   "compared": "keys",
   "missing": [

@@ -1,0 +1,150 @@
+---
+title: "evnx get"
+section: commands
+order: 26
+publishedAt: "2026-11-19"
+excerpt: "Print one variable's value from an env file without sourcing it, so PORT=$(evnx get PORT) works. A secret is refused unless you ask for it, and --exists tests a name without printing anything."
+difficulty: beginner
+timeToComplete: "3 minutes"
+tags: ["get", "set", "env", "secrets", "scripts", "evnx"]
+commands: ["get", "run"]
+evnxVersion: "0.15.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx get` prints one variable's value, alone, from an env file. It does not source the
+file, so a line you did not mean to run is never run. The value is read the way
+[`evnx run`](/guides/commands/run) would pass it on: quotes removed, escapes resolved and
+`${NAME}` expanded. **v0.15.0+**.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+## Quick example
+
+```text
+# .env
+PORT=8081
+export LOG_LEVEL="debug"   # keep me
+API_TOKEN=tok_live_999999999
+```
+
+```bash
+PORT=$(evnx get PORT)
+evnx get LOG_LEVEL
+```
+
+```text
+debug
+```
+
+---
+
+## Command signature
+
+```bash
+evnx get [OPTIONS] <NAME>
+```
+
+```bash
+PORT=$(evnx get PORT)                     # one value, no sourcing
+evnx get --exists DATABASE_URL            # exit 0 when set, 1 when not; prints nothing
+evnx get API_TOKEN --reveal               # a secret is printed only on request
+evnx get PORT --env-name staging          # from .env.staging
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `<NAME>` | required | The variable to print |
+| `--exists` | off | Print nothing. Exit `0` when the name is in the file, `1` when it is not |
+| `--reveal` | off | Print the value even when the name looks secret |
+| `--env <FILE>` | `.env` | The env file |
+| `--env-name <NAME>` | none | Use `.env.<NAME>` instead of `.env` |
+| `-C`, `--dir <DIR>` | current folder | The project folder to work in |
+| `--format <FORMAT>` | `pretty` | `pretty` or `json` |
+| `--json` | off | The result as JSON. A secret value is left out unless `--reveal` |
+| `-q`, `--quiet` | off | Print nothing on success. Requested data still prints |
+| `-v`, `--verbose` | off | Verbose output |
+
+---
+
+## Secrets are refused unless you ask
+
+A name that looks secret (`API_TOKEN`, `DB_PASSWORD`), or a value that looks like a
+credential, is not printed. That holds when the output is piped too, so a script cannot
+leak one by accident:
+
+```bash
+evnx get API_TOKEN
+```
+
+```text
+Error: API_TOKEN looks like a secret, so evnx did not print it.
+
+  To print it anyway:   evnx get API_TOKEN --reveal
+  To test that it is set:   evnx get API_TOKEN --exists
+
+evnx stopped before making changes (exit 4). Run one of the commands above.
+```
+
+`--reveal` prints it. `--exists` answers "is it there" in the exit code and prints nothing,
+secret or not.
+
+---
+
+## Is it set
+
+```bash
+if evnx get --exists DATABASE_URL; then
+  echo "DATABASE_URL is set"
+fi
+```
+
+A name that is not in the file exits `1`, for `--exists` and for a plain `get`:
+
+```text
+NOPE is not in ./.env.
+```
+
+That is a plain "not there", not an error. A missing file or a usage mistake is exit `2`.
+
+---
+
+## JSON
+
+`--json` prints one document with the `run` header, then whether the name was found, whether
+it looks secret and the value. For a secret, `value` is `null` unless you pass `--reveal`:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "file": "./.env",
+  "name": "PORT",
+  "found": true,
+  "secret": false,
+  "value": "8081"
+}
+```
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | The value was printed, or with `--exists` the name is in the file |
+| `1` | The name is not in the file |
+| `2` | Could not run: no env file, a usage error |
+| `4` | A secret was asked for without `--reveal` |
+| `141` | Output closed early (broken pipe) |
+
+---
+
+## See also
+
+- [evnx set](/guides/commands/set) - change one variable in place
+- [evnx run](/guides/commands/run) - run a command with the file's variables, masked
+- [evnx parse](/guides/commands/parse) - what is in a file, without values

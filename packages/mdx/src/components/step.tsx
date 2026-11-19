@@ -10,7 +10,7 @@
  *   <Step number={1} title="Install evnx">
  *     Run the install script on your machine.
  *     ```bash
- *     curl -fsSL https://dotenv.space/install.sh | bash
+ *     curl -fsSL https://evnx.dev/install.sh | bash
  *     ```
  *   </Step>
  *

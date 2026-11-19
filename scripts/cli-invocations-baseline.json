@@ -40,6 +40,11 @@
       "file": "packages/docs-content/guides/use-cases/use-cases-add-production.mdx",
       "invocation": "evnx validate --recursive",
       "why": "Named among flags that never existed on validate."
+    },
+    {
+      "file": "packages/docs-content/guides/reference/upgrading-to-0-15-0.mdx",
+      "invocation": "evnx sync --force",
+      "why": "The upgrade guide shows the exit-2 message a removed spelling prints; the block says it was removed in 0.15.0."
     }
   ]
 }

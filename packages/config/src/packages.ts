@@ -31,17 +31,14 @@ export const REGISTRIES = {
 } as const;
 
 /**
- * ⚠️ FLIPS AT SCHEDULE P5.
- *
- * `evnx.dev/install.sh` does not exist yet; `dotenv.space/install.sh` is the
- * live one (a Netlify 200-proxy to the script in the CLI repo). P5 serves both
- * from one source and makes the evnx.dev URL canonical. Until then this must
- * point at the URL that actually answers — a hero section advertising a 404 is
- * the worst possible first impression.
+ * The install host. `https://evnx.dev/install.sh` is canonical since evnx 0.15.0 and is served by
+ * the rewrite in `apps/web/next.config.js` (a 200, not a redirect, so a copied `curl` without `-L`
+ * still works). `dotenv.space/install.sh` keeps answering for pinned old commands; set
+ * `NEXT_PUBLIC_INSTALL_HOST=dotenv.space` only to fall back to it.
  */
 export const INSTALL_HOST: "evnx.dev" | "dotenv.space" =
   (process.env.NEXT_PUBLIC_INSTALL_HOST as "evnx.dev" | "dotenv.space") ??
-  "dotenv.space";
+  "evnx.dev";
 
 export const CANONICAL_INSTALL_SCRIPT =
   INSTALL_HOST === "evnx.dev" ? INSTALL_SCRIPT_URL : INSTALL_SCRIPT_URL_LEGACY;

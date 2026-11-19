@@ -3,13 +3,13 @@ section: "use-cases"
 order: 2
 title: "Production Use Cases — Real-World `evnx add` Workflows"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "Explore real production scenarios where `evnx add` solves environment variable management challenges — with before/after comparisons showing manual friction vs. evnx efficiency."
 difficulty: "intermediate"
 timeToComplete: "12 minutes"
 tags: ["add", "use-cases", "production", "workflow", "best-practices"]
 commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "scan", "validate"]
-evnxVersion: "0.10.2"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - getting-started/add-basic
@@ -353,13 +353,13 @@ Your monorepo has 3 services (API, Worker, Frontend). Each needs its own environ
 
 ```bash
 # Use path flag to target each service directory
-evnx add service postgresql --path ./services/api --yes
-evnx add service postgresql --path ./services/worker --yes
-evnx add framework nextjs --path ./services/frontend --yes
+evnx add service postgresql --dir ./services/api --yes
+evnx add service postgresql --dir ./services/worker --yes
+evnx add framework nextjs --dir ./services/frontend --yes
 
 # Add shared config to every service (here: error tracking)
 for dir in ./services/*/; do
-  evnx add service sentry --path "$dir" --yes
+  evnx add service sentry --dir "$dir" --yes
 done
 
 # Validate all services — loop, since validate takes one file at a time:
@@ -370,7 +370,7 @@ done
 ```
 
 **Benefits:**
-- ✅ `--path` flag enables precise targeting in monorepos
+- ✅ `--dir` flag enables precise targeting in monorepos
 - ✅ Blueprints ensure shared config stays synchronized
 - ✅ One `evnx validate` per service folder catches issues in each
 - ✅ Schema-driven approach scales: add service = one command

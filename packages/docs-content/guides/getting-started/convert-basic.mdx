@@ -3,13 +3,13 @@ section: "guides"
 order: 10
 title: "Convert basics"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Step-by-step examples for evnx convert — JSON, YAML, shell, filtering, renaming, a Kubernetes Secret, Terraform and cloud CLIs, every output from a real run."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["convert", "examples", "tutorial", "env", "kubernetes", "terraform"]
 commands: ["convert", "migrate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/convert
@@ -387,7 +387,7 @@ can run it again after changing a value. Names are lowercased with `-` for `_`
 names them the same way (it used to keep `DATABASE_URL`).
 
 A `.env` key such as `spring.datasource.url` or `my-key` is read by evnx 0.13.0, but
-`shell`, `github-actions`, `vercel`, `heroku`, `doppler`, `railway` and the GCP and Azure
+`shell`, `github`, `vercel`, `heroku`, `doppler`, `railway` and the GCP and Azure
 formats cannot hold some of them: `convert` names the ones they refuse, writes nothing and exits `2`. Leave it out
 with `--exclude`. See [Convert reference](/guides/reference/convert-reference#names-a-format-cannot-hold).
 
@@ -411,11 +411,11 @@ heroku config:set \
 
 ## GitHub Actions
 
-`--to github-actions` prints the names and values to paste into **Settings → Secrets and
+`--to github` prints the names and values to paste into **Settings → Secrets and
 variables → Actions**:
 
 ```bash
-evnx convert --to github-actions --include "APP_*"
+evnx convert --to github --include "APP_*"
 ```
 
 ```text
@@ -435,7 +435,7 @@ Value: info
 
 It is text for a person, not a script. To set secrets from the command line,
 `gh secret set -f <file>` reads a dotenv file, and
-[`evnx migrate --to github-actions`](/guides/commands/migrate) uploads through the API.
+[`evnx migrate --to github`](/guides/commands/migrate) uploads through the API.
 
 ---
 

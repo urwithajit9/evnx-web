@@ -167,6 +167,7 @@ const sections = new Set([...guides.keys()].map((s) => s.split("/")[0]));
 /** Routes that exist outside the content system. */
 const STATIC_ROUTES = new Set([
   "/", "/guides", "/blog", "/pricing", "/install", "/changelog", "/testimonials", "/talks",
+  "/security", "/features", "/integrations",
 ]);
 
 /**

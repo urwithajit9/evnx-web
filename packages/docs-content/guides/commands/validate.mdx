@@ -3,13 +3,13 @@ title: "evnx validate"
 section: commands
 order: 4
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx validate: check .env against .env.example and the [vars] contract, catch missing, placeholder, weak and misformatted values, and fix what can be fixed."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
 commands: ["add custom", "convert", "doctor", "parse", "platform", "remove", "run", "scan", "spec init", "validate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -40,13 +40,16 @@ evnx validate [OPTIONS]
 | `--env-name <NAME>` | — | Check `.env.<NAME>` instead. Conflicts with `--env`. A name whose file does not exist is exit `2`, listing the environments that do |
 | `--example <PATH>` | `.env.example`, or `[defaults] example` | The template to compare against |
 | `--strict` | off, or `[validate] strict` | Also report variables that are set but not declared, as warnings. Measured against `.env.example`, or against `[vars]` when there is a contract |
-| `--validate-formats` | off, or `[validate] validate_formats` | Check URL, port and email values |
+| `--no-formats` | off, or `[validate] validate_formats = false` | **v0.15.0** — turn the URL, port and email checks off. They are on by default, as warnings ([below](#format-checks-are-on-by-default)) |
+| `--validate-formats` | — | Still accepted since v0.15.0, and changes nothing: the checks are already on |
 | `--ignore <TYPES>` | `[validate] ignore` | Comma-separated [issue types](#validation-checks) to suppress, added to the config list. **v0.10.8+**: an unknown type is exit `2` |
 | `--fail-on <LEVEL>` | `error`, or `[validate] fail_on` | **v0.10.8+** — `warning` makes warnings exit `1` too. See [Failing on warnings](#failing-on-warnings) |
 | `--fix` | off | Repair what can be repaired. See [Fixing](#fixing-with---fix) |
-| `--dry-run` | off | **v0.10.8+** — with `--fix`, show what it would change and write nothing |
+| `-n`, `--dry-run` | off | **v0.10.8+** — with `--fix`, show what it would change and write nothing |
 | `--rotate-weak-secrets` | off | With `--fix`, also replace a weak secret that holds a real value. Requires `--fix` |
-| `--format <FORMAT>` | `pretty` | `pretty`, `json` or `github-actions`, in any case (**v0.10.8+**). Anything else is exit `2` |
+| `-y`, `--yes` | off | **v0.15.0** — with `--fix`, apply the fixes without asking. `--fix` never stops to ask, so this changes nothing today; it is accepted so a script can say so |
+| `--format <FORMAT>` | `pretty` | `pretty`, `json` or `github`, in any case (**v0.10.8+**). Anything else is exit `2`. `text` and `github-actions` were removed in v0.15.0 |
+| `--json` | off | **v0.15.0** — the same as `--format json` |
 | `--exit-zero` | off | Exit `0` whatever the findings. A run that could not finish still exits `2` |
 | `-q, --quiet` | off | Print nothing on success. Findings still print |
 | `-v, --verbose` | off | Verbose output |
@@ -223,9 +226,9 @@ These are the issue types — the names `--ignore` takes and the `type` field in
 | `duplicate_key` | warning | The same key is assigned more than once. Names the lines and which one takes effect | — |
 | `extra_variable` | warning | **`--strict` only.** A variable set but not declared, or one set in a file its `environments` exclude | — |
 | `localhost_in_docker` | warning | `localhost` or `127.0.0.1` in a name containing `URL`, `HOST` or `ADDR`, and a Docker file is [found](#docker-files) | — |
-| `invalid_url` | warning | **`--validate-formats` only.** A name containing `URL`, `URI` or `ENDPOINT` whose value is not a URL | — |
-| `invalid_port` | error | **`--validate-formats` only.** A name containing `PORT` whose value is not 1–65535 | — |
-| `invalid_email` | warning | **`--validate-formats` only.** A name containing `EMAIL` or `MAIL` whose value is not an address | — |
+| `invalid_url` | warning | A name containing `URL`, `URI` or `ENDPOINT` whose value is not a URL | — |
+| `invalid_port` | warning | A name containing `PORT` whose value is not 1–65535. An error before v0.15.0 | — |
+| `invalid_email` | warning | A name containing `EMAIL` or `MAIL` whose value is not an address | — |
 | `format_mismatch` | error | The value does not match the `format` its `[vars]` entry declares | — |
 | `unknown_spec_key` | error | **v0.10.6+** — a key under `[vars.NAME]` evnx does not know, such as `requird = false`, with the key you probably meant. It used to be ignored silently, leaving the variable required | — |
 | `unknown_environment` | warning | **v0.10.8+** — see [Environment names](#environment-names) | — |
@@ -867,12 +870,15 @@ terminal.
 
 ### JSON
 
-`--format json` prints one JSON document on stdout. The files from
+`--format json` prints one JSON document on stdout. **v0.15.0+** it starts with a `run` header
+(`tool`, `version`, `schema_version`, `features`) that every JSON output carries; the keys below it did
+not change. The files from
 [A first run](#a-first-run):
 
 ```console
 $ evnx validate --format json
 {
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
   "status": "failed",
   "dry_run": false,
   "required_present": 4,
@@ -990,11 +996,11 @@ pretty output prints.
 
 ### GitHub Actions
 
-`--format github-actions` prints workflow commands, which GitHub shows as annotations on
+`--format github` prints workflow commands, which GitHub shows as annotations on
 the pull request:
 
 ```console
-$ evnx validate --format github-actions
+$ evnx validate --format github
 ::error file=.env,line=1::Missing required variable: PORT%0ASuggestion: Add PORT=<value> to ./.env
 ::error file=.env,line=1::Missing required variable: STRIPE_KEY%0ASuggestion: Add STRIPE_KEY=<value> to ./.env. If it is optional: run `evnx spec init`, then set `required = false` under [vars.STRIPE_KEY] in .evnx.toml
 ::error file=.env,line=4::SECRET_KEY looks like a placeholder%0ASuggestion: Run: openssl rand -hex 32
@@ -1031,6 +1037,39 @@ wins over everything, then the `--fail-on` flag, then `[validate] fail_on`, then
 
 ---
 
+## Format checks are on by default
+
+**v0.15.0+.** The URL, port and email checks used to run only with `--validate-formats`. Now
+every run reports them, always as **warnings** (the port finding was an error):
+
+- a name ending in `_URL`, `_URI` or `_ENDPOINT` should hold a URL
+- a name with `PORT` should hold a port from 1 to 65535
+- a name with `EMAIL` should hold an address
+
+```text
+  !  API_URL does not appear to be a valid URL
+     ./.env
+     →  Expected format: https://example.com/path
+
+  !  PORT is not a valid port number (1-65535)
+     ./.env
+     →  Expected format: 8080
+
+  !  ADMIN_EMAIL does not appear to be a valid email
+     ./.env
+     →  Expected format: user@example.com
+
+  3 warnings
+```
+
+A default `validate` still **exits `0`** for them; `--fail-on warning` exits `1`. A name declared in
+`[vars]` is checked against its declared `format` instead, with or without these checks.
+`--no-formats` (or `[validate] validate_formats = false`) turns them off. `--validate-formats` is
+still accepted and changes nothing. A CI job that gated on a wrong port as an error now needs
+`--fail-on warning`.
+
+---
+
 ## Configuration
 
 `[validate]` in `.evnx.toml` sets this project's defaults. The flags add to them
@@ -1040,7 +1079,7 @@ wins over everything, then the `--fail-on` flag, then `[validate] fail_on`, then
 # .evnx.toml
 [validate]
 strict           = true
-validate_formats = true
+validate_formats = true     # the default since v0.15.0; false is --no-formats
 ignore           = ["boolean_trap"]
 fail_on          = "warning"     # v0.10.8+ — "error" (default) or "warning"
 ```
@@ -1099,10 +1138,13 @@ evnx validate --fix --dry-run
 evnx validate --fix
 
 # CI: annotations on the pull request, warnings fail too
-evnx validate --format github-actions --fail-on warning
+evnx validate --format github --fail-on warning
 
-# Production file, with format checks and undeclared variables reported
-evnx validate --env-name production --strict --validate-formats
+# Production file, with undeclared variables reported (format checks are on)
+evnx validate --env-name production --strict
+
+# Without the URL, port and email checks
+evnx validate --no-formats
 
 # Report without failing the build
 evnx validate --format json --exit-zero

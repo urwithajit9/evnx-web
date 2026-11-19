@@ -3,13 +3,13 @@ section: "getting-started"
 order: 3
 title: "Init Basics — Start Your Project Right"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "Learn how to use evnx init to generate .env.example and .env files. Perfect for beginners setting up a new project."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["init", "tutorial", "beginner", "setup", "env"]
 commands: ["init", "sync", "validate"]
-evnxVersion: "0.10.1"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -291,7 +291,7 @@ evnx init --yes
 evnx init --yes --blueprint t3_modern
 
 # Custom output path for monorepos
-evnx init --yes --path ./packages/api
+evnx init --yes --dir ./packages/api
 
 # Quiet: no output unless something goes wrong (exit code still tells you)
 evnx -q init --yes

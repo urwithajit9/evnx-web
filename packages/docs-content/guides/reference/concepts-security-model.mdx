@@ -3,13 +3,13 @@ title: "Security Model"
 section: reference
 order: 2
 publishedAt: "2026-03-10"
-updatedAt: "2026-03-10"
+updatedAt: "2026-11-17"
 excerpt: "Deep dive into evnx cryptographic architecture: AES-256-GCM encryption, Argon2id key derivation, and defense-in-depth design principles."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["security", "cryptography", "encryption", "argon2", "aes-gcm", "evnx"]
 commands: ["backup", "cloud run", "restore"]
-evnxVersion: "0.5.2"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/backup
@@ -513,10 +513,10 @@ None of those needs the passphrase to be right, so naming them gives nothing awa
 ```bash
 # 1. The passphrase source you think you are using is the one evnx uses:
 #    a key file beats EVNX_PASSWORD, and evnx warns when both are set.
-evnx restore .env.backup --password-file /run/secrets/evnx-pass --inspect
+evnx restore .env.backup --key-file /run/secrets/evnx-pass --inspect
 
 # 2. Try an earlier generation, in case this one was changed
-evnx restore .env.backup.1 --password-file /run/secrets/evnx-pass --inspect
+evnx restore .env.backup.1 --key-file /run/secrets/evnx-pass --inspect
 ```
 
 ### "Derived key too short: X bytes (expected 32)"
@@ -544,9 +544,9 @@ cat /dev/random | head -c 32 | base64  # Should produce output without error
 
 **Cause**: a prompt needs a terminal, and CI has none. Since 0.10.11 evnx says so
 instead of failing with `IO error: not a terminal`, and names the two ways in:
-`--key-file`/`--password-file`, or `EVNX_PASSWORD`.
+`--key-file`, or `EVNX_PASSWORD`.
 
-**Solution**: Use `--password-file` with secure secret injection:
+**Solution**: Use `--key-file` with secure secret injection:
 
 ```yaml
 # GitHub Actions example
@@ -557,14 +557,14 @@ instead of failing with `IO error: not a terminal`, and names the two ways in:
     # `restore` reads the password from a FILE, never from an argument —
     # a command line is visible in `ps` and in CI logs.
     printf '%s' "$ENV_PASSWORD" > "$RUNNER_TEMP/pw"
-    evnx restore backup.env --password-file "$RUNNER_TEMP/pw"
+    evnx restore backup.env --key-file "$RUNNER_TEMP/pw"
     shred -u "$RUNNER_TEMP/pw"
 ```
 
 <Callout type="warning" title="Never hardcode passwords">
 ❌ Bad: a password as an argument — `--password` does not exist, and would be
 visible in `ps` and in CI logs if it did.
-✅ Good: `evnx restore backup --password-file "$RUNNER_TEMP/pw"`, with the file
+✅ Good: `evnx restore backup --key-file "$RUNNER_TEMP/pw"`, with the file
 written from a secret and removed afterwards.
 
 Hardcoded passwords in scripts or CI configs are a critical security risk.

@@ -3,13 +3,13 @@ title: "evnx run"
 section: commands
 order: 19
 publishedAt: "2026-10-29"
-updatedAt: "2026-10-29"
+updatedAt: "2026-11-19"
 excerpt: "Run a command with a .env file's variables in its environment, without the command reading the file — and with secret values masked in its output wherever that output is kept."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["run", "environment", "masking", "ci-cd", "ai-agents", "evnx"]
 commands: ["cloud run", "convert", "run", "template"]
-evnxVersion: "0.11.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -69,10 +69,12 @@ evnx run -- sh -c 'psql "$DATABASE_URL" < schema.sql'
 | `--env-name <NAME>` | — | Read `.env.<NAME>` instead. Conflicts with `--env` |
 | `--include <GLOB>` | all | Inject only names matching these globs, comma-separated |
 | `--exclude <GLOB>` | none | Skip names matching these; applied after `--include` |
+| `--prefer <SIDE>` | `vault` | `env` or `vault`: which side wins when a variable is set in both your environment and the file ([below](#which-value-wins)). **v0.15.0** |
 | `--mask` | see below | Mask secret values in the output |
 | `--no-mask` | see below | Never mask the output. Conflicts with `--mask` |
 | `--allow-unsafe-names` | off | Inject names that make a program load or run other code (below) |
-| `--verbose`, `-v` | off | Name the variables injected (names only) |
+| `--verbose`, `-v` | off | Name the variables injected, and what was replaced (names only) |
+| `-q`, `--quiet` | off | Hide the notes and warnings evnx adds on stderr |
 
 ---
 
@@ -99,6 +101,18 @@ evnx run --no-mask -- sh -c 'echo "pw=$DB_PASSWORD"' | cat     # pw=hunter22hunt
   base64, splitting it, reversing it — gets past it. Masking stops `echo $KEY` and a
   stack trace that prints its config from landing in a log; it is not a sandbox.
 
+### What masking does not cover
+
+- Values the command transforms: encoded, split or hashed.
+- Files the command writes, and core dumps.
+- `/proc/<pid>/environ`, which the same user can read.
+- Programs that log their own environment.
+- A value kept by `--prefer env`: evnx did not inject it, so it is not masked.
+
+Masking pipes stdout and stderr, so **the command sees no terminal**: colour and progress
+output turn off, and Python holds its output in a buffer, so set `PYTHONUNBUFFERED=1`.
+`--no-mask` leaves the streams as they are.
+
 ---
 
 ## What is not passed on
@@ -106,17 +120,54 @@ evnx run --no-mask -- sh -c 'echo "pw=$DB_PASSWORD"' | cat     # pw=hunter22hunt
 - **evnx's own settings.** `EVNX_TOKEN`, `EVNX_PASSWORD`, `EVNX_SERVER` and the rest of
   `EVNX_*` are removed from the child's environment, so a CI job's API token does not
   reach every command it runs.
-- **Names that make a program load other code** — `PATH`, `LD_*`, `DYLD_*`,
-  `NODE_OPTIONS`, `BASH_ENV` and similar — are refused, and nothing runs:
+- **Names that make a program load other code or start a program** are refused, and
+  nothing runs: `PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `BASH_ENV`, and, since v0.15.0,
+  `EDITOR`, `PAGER`, `VISUAL`, `GIT_PAGER`, `GIT_ASKPASS`, `SSH_ASKPASS`, `RUSTC_WRAPPER`,
+  `CLASSPATH`, `PERL5DB`, `PYTHONINSPECT` and the prefixes `npm_config_`, `NPM_CONFIG_` and
+  `GIT_CONFIG_`. On Windows the match ignores case; elsewhere it is exact.
 
 ```text
-Error: .env sets LD_PRELOAD, which make a program load or run other code.
-  Anyone who can edit .env could use them to run code here.
+Error: .env2 sets EDITOR, which make a program load or run other code.
+  EDITOR, PAGER and similar names start a program.
+  Anyone who can edit .env2 could use them to run code here.
   Nothing was run. Exclude them with --exclude, or pass
   --allow-unsafe-names if you meant to set them.
 ```
 
-Pass `--allow-unsafe-names` only when the file is meant to set them.
+Pass `--allow-unsafe-names` only when the file is meant to set them, or `--exclude` the name.
+The check also applies to names kept by `--prefer env`.
+
+- **Proxy and certificate names** run as before, with one warning on stderr that names
+  them and never their values: `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`,
+  `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`,
+  `NODE_EXTRA_CA_CERTS` and their lower-case forms. `-q` hides it.
+
+```text
+! HTTPS_PROXY set proxy or certificate settings: the command's traffic may go through another host or trust other authorities
+```
+
+---
+
+## Which value wins
+
+When a name is set in your environment **and** in the file, the file wins by default
+(`--prefer vault`): it replaces what your environment holds. `--prefer env` reverses that.
+A variable your environment already holds is kept (an empty one counts as set), and the file
+only fills the names you left unset:
+
+```bash
+DB_URL=postgres://localhost evnx run --prefer env -- npm test
+```
+
+```text
+  kept from your environment: DB_URL
+```
+
+Test with your shell's values, deploy with the file's or the vault's. The line names what was
+kept, never a value, and `-q` hides it. With the default, `--verbose` names what was replaced.
+The unsafe-name check still runs on the file's names, and a kept value is not masked.
+[`evnx cloud run`](/guides/commands/cloud#running-a-command-without-writing-a-file) takes
+the same flag.
 
 ---
 
@@ -138,7 +189,7 @@ Error: --include/--exclude left nothing to inject — all 12 variable(s) were fi
 
 ---
 
-## Exit codes
+## Signals and exit codes
 
 `evnx run` exits with **the command's own code**, so a script branches on your command:
 
@@ -146,15 +197,31 @@ Error: --include/--exclude left nothing to inject — all 12 variable(s) were fi
 evnx run -- sh -c 'exit 7'; echo $?      # 7
 ```
 
-A command killed by a signal has no code to pass through; that is reported and becomes
-`1`. Failures before the command starts — a missing `.env`, a refused name, a command
-that does not exist — are evnx's own errors, exit `2`, ending with
-`No verdict: evnx did not finish.`:
+A command killed by a signal exits **128+n**, where n is the signal (a `SIGTERM` is `143`),
+and evnx prints a note on stderr (not under `-q`):
+
+```text
+  ! the command was killed by signal 15
+```
+
+Before v0.15.0 this was `1`. Exit `1` now means "findings" everywhere else, so a script can
+tell them apart. Failures before the command starts — a missing `.env`, a refused name, a
+command that does not exist, an empty command (`evnx run --`) — are evnx's own errors,
+exit `2`, ending with `No verdict: evnx did not finish.` or the reason there is no verdict:
 
 ```text
 Error: no such command: nope-cmd
   `evnx run` runs the command after `--`, not through a shell; pipelines and builtins need one: evnx run -- sh -c 'a | b'
 ```
+
+| Platform and mode | What happens to the terminal and signals |
+|---|---|
+| Unix, **not masking** | The command **replaces evnx** (`exec`): signals, the terminal and the exit status are the command's own, and evnx's copy of the secrets is gone while it runs |
+| Unix, **masking** | evnx stays to filter the output and passes `SIGTERM`, `SIGHUP`, `SIGQUIT` and `SIGINT` to the command (not to what it starts), then exits with its code, or 128+n |
+| Windows | evnx spawns the command and waits. **No signal forwarding and no job object**: the command can outlive evnx when the console closes. Its exit code is passed through |
+
+With masking, a terminal Ctrl-C reaches the command twice (once from the terminal, once from
+evnx). A command that counts interrupts should run with `--no-mask`.
 
 ---
 

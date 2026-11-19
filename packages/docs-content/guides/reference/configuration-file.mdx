@@ -3,13 +3,13 @@ title: ".evnx.toml Configuration"
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["configuration", "toml", "reference", "scan", "validate"]
 commands: ["backup", "cloud link", "convert", "diff", "platform", "scan", "scan rules list", "spec init", "sync", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/scan
   - commands/validate
@@ -173,7 +173,7 @@ keep = 3                       # previous backups to retain
 # ─── evnx cloud ──────────────────────────────────────────────────────────────
 [cloud]
 vault = "my-app/production"    # written by `evnx cloud link` — see below
-file  = "deploy/.env"          # `evnx cloud link … --file` (v0.11.0+), from this file's folder
+file  = "deploy/.env"          # `evnx cloud link … --env` (v0.11.0+), from this file's folder
 
 # ─── The variable contract ───────────────────────────────────────────────────
 [vars]
@@ -369,7 +369,7 @@ Placeholder rules for `sync` are not in this file: they go in a JSON file passed
 | Key | Type | Effect |
 |---|---|---|
 | `vault` | string | The vault this directory is bound to, as `name/environment` |
-| `file` | string | **v0.11.0+** — the file `cloud push`, `cloud pull` and `cloud diff --local` use with that vault, relative to this `.evnx.toml`'s folder, so every folder below it means the same file. `--file` and `--env-name` still win. Written by `evnx cloud link <vault> --file <path>`; a path outside the project is refused |
+| `file` | string | **v0.11.0+** — the file `cloud push`, `cloud pull` and `cloud diff --local` use with that vault, relative to this `.evnx.toml`'s folder, so every folder below it means the same file. `--env` and `--env-name` still win. Written by `evnx cloud link <vault> --env <path>`; a path outside the project is refused |
 
 <Callout type="tip">
 You do not write these by hand. `evnx cloud link` writes them for you, preserving your

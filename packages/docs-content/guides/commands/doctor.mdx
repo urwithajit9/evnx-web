@@ -3,13 +3,13 @@ title: "evnx doctor"
 section: commands
 order: 4
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Check the setup around your env files: ignored and untracked by git, valid dotenv, private permissions, a committed template, and the project around them. Repairs .gitignore and file modes with --fix; JSON for CI."
 difficulty: beginner
 timeToComplete: "8 minutes"
 tags: ["doctor", "diagnostics", "env", "security", "ci-cd", "setup"]
 commands: ["backup", "diff", "doctor", "init", "parse", "scan", "sync", "validate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -39,22 +39,29 @@ evnx doctor [OPTIONS] [PATH]
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `PATH` | `.` | Project directory to check. `--path <PATH>` is the same thing; giving both is an error |
+| `PATH` | `.` | Project directory to check. `-C`/`--dir <PATH>` is the same thing (**v0.15.0**, was `--path`); giving both is an error |
 
 | Flag | Description |
 |------|-------------|
 | `--fix` | Repair what can be repaired: `.gitignore` entries and file modes. See [`--fix`](#--fix) |
+| `--all` | **v0.15.0** — also run `validate`, `sync --check` and `scan`, in one report with one verdict. See [`--all`](#--all) |
 | `--strict` | Count warnings as problems, so they affect the exit code |
 | `--skip-without-env` | **v0.10.15+** — with no env file, skip (exit 0) and say so. For pre-commit hooks, **not** for CI |
-| `--format <FORMAT>` | `pretty` (default) or `json`. An unknown value is an error, exit 2 |
+| `--format <FORMAT>` | `pretty` (default) or `json`. An unknown value is an error, exit 2. `text` was renamed `pretty` in v0.15.0 |
+| `--json` | **v0.15.0** — the same as `--format json` |
 | `-v`, `--verbose` | Show the detail line under every check, passed ones included |
 | `-q`, `--quiet` | Print nothing on a healthy project. Problems and errors still print |
 | `--no-color` | Disable colour |
 
 | Environment variable | Same as |
 |---|---|
-| `EVNX_AUTO_FIX=1` | `--fix`. Either saying yes is enough; stderr says when the variable turned repair on |
 | `EVNX_OUTPUT_JSON=1` | `--format json`. An explicit `--format` wins |
+
+<Callout type="warning" title="EVNX_AUTO_FIX is gone in v0.15.0">
+`EVNX_AUTO_FIX` is no longer read. `doctor` prints one warning,
+`EVNX_AUTO_FIX is no longer read; pass --fix`, and repairs nothing. A CI image that exported it to
+repair on every run passes `evnx doctor --fix` instead.
+</Callout>
 
 ---
 
@@ -319,6 +326,7 @@ evnx doctor --format json
 
 ```json
 {
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
   "project_path": ".",
   "checks": [
     {
@@ -341,10 +349,10 @@ evnx doctor --format json
     }
   ],
   "summary": {
-    "total": 6,
+    "total": 7,
     "errors": 0,
     "warnings": 0,
-    "passed": 6,
+    "passed": 7,
     "info": 0,
     "fixable": 0
   },
@@ -352,7 +360,7 @@ evnx doctor --format json
 }
 ```
 
-(Two of the six checks shown.) `severity` is `ok`, `info`, `warning` or `error`.
+The `run` header names the tool and the schema. There are seven checks since v0.15.0: `empty_sections` is new (empty evnx sections in env files and templates; `--fix` clears them). Two are shown. `severity` is `ok`, `info`, `warning` or `error`.
 `ran` is `false` for a check that could not finish (**v0.10.15+**). `details` is plain
 text, one finding per line. `-v` does not change the JSON, and the docs link goes to
 stderr, so stdout holds only the document:
@@ -360,6 +368,50 @@ stderr, so stdout holds only the document:
 ```bash
 evnx doctor --format json | jq '[.checks[] | select(.severity == "error") | .name]'
 ```
+
+---
+
+## `--all`
+
+**v0.15.0+.** `evnx doctor --all` runs the doctor checks, then `validate`, `sync --check` (both
+ways) and `scan`, as one report with one verdict:
+
+```bash
+evnx doctor --all
+```
+
+```text
+doctor --all
+  doctor    findings
+  validate  clean
+  sync      clean
+  scan      clean
+```
+
+Each part is the command of that name with its defaults, read from this project's `.evnx.toml`.
+The verdict is the worst of the parts: `2` if any part could not run, else `1` if any found
+something, else `0`. A part with nothing to read (no template, no env file) is skipped with a
+note. `--fix` repairs what `doctor --fix` repairs and nothing more: it never runs `validate --fix`.
+
+With `--format json` the document has one `run` header (`schema_version` **2**, only with `--all`;
+`doctor` alone is still `1`), then a `sections` object, each part with its own `status` and `report`:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 2, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "path": ".",
+  "sections": {
+    "doctor":   { "status": "findings", "report": { } },
+    "validate": { "status": "clean",    "report": { } },
+    "sync":     { "status": "clean",    "report": { } },
+    "scan":     { "status": "clean",    "report": { } }
+  },
+  "verdict": "findings"
+}
+```
+
+(`report` holds each command's own JSON, abbreviated here.) For a CI step that used to run four
+commands, `evnx doctor --all` is the one to run.
 
 ---
 
@@ -451,7 +503,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install evnx
-        run: curl -fsSL https://dotenv.space/install.sh | bash
+        run: curl -fsSL https://evnx.dev/install.sh | bash
 
       - name: Run diagnostics
         run: evnx doctor --strict --format json > report.json

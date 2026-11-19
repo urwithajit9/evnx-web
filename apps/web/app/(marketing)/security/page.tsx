@@ -4,6 +4,7 @@ import { security, getPublishedSecurityNotices } from "@evnx/content";
 import { canonicalUrl, GITHUB_ORG } from "@evnx/config";
 import { LegalPage } from "@/components/legal/legal-page";
 import { ServerHolds } from "@/components/legal/server-holds";
+import { ReleaseVerification } from "@/components/legal/release-verification";
 
 export const metadata: Metadata = {
   title: security.title,
@@ -31,6 +32,7 @@ export default function Page() {
     <>
       <LegalPage doc={security} />
       <ServerHolds />
+      <ReleaseVerification />
 
       <section className="pb-16 md:pb-24" aria-labelledby="security-notices">
         <div className="container-base max-w-2xl">

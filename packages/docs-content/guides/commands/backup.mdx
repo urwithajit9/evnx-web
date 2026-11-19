@@ -3,13 +3,13 @@ title: "evnx backup"
 section: commands
 order: 3
 publishedAt: "2026-03-10"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Encrypt a .env file into one portable backup file — AES-256-GCM, a key from Argon2id over a passphrase you choose — and keep the last few versions beside it. No account, no network."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["backup", "encryption", "security", "disaster-recovery", "evnx"]
 commands: ["backup", "restore"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -56,7 +56,9 @@ evnx backup [ENV] [OPTIONS]
 | `[ENV]` | `.env` | The file to back up — `evnx backup .env.production` |
 | `--env-name <NAME>` | — | Back up `.env.<NAME>` instead; a name with no file is an error listing the environments there are |
 | `--output <PATH>` | `<env>.backup` | Where to write the backup. Not the source file, not a directory, and not `-`: standard output is refused since 0.13.0 (a file literally named `-` is `./-`) |
-| `--key-file <PATH>` | — | Use a file's contents as the passphrase. Also accepted as `--password-file`, the spelling [`restore`](/guides/commands/restore) uses |
+| `--key-file <PATH>` | — | Use a file's contents as the passphrase; the same flag [`restore`](/guides/commands/restore) takes. `--password-file` still works as a hidden alias |
+| `--gitignore` | off | **v0.15.0** — add the backup to `.gitignore` without asking |
+| `--no-gitignore` | off | **v0.15.0** — leave `.gitignore` alone and drop the "This file is encrypted" line |
 | `--keep <N>` | `3`, or `[backup] keep` | Previous backups to keep beside the new one; `0` overwrites |
 | `--verify` | off | Decrypt the backup again after writing it and compare, byte for byte |
 | `-v`, `--verbose` | off | Print each step to stderr |
@@ -139,7 +141,7 @@ name of your own.
 
 One rule, the same for `backup` and `restore`, highest priority first:
 
-1. **`--key-file <path>`** (or `--password-file`) — the file's contents.
+1. **`--key-file <path>`** — the file's contents.
 2. **`EVNX_PASSWORD`** — read once, then removed from evnx's environment.
 3. **A prompt**, when there is a terminal to show it on.
 
@@ -418,7 +420,7 @@ They solve different problems, and neither reads the other's files.
 | Secret | a passphrase or key file you choose | your account's master password |
 | History | `--keep N` numbered files | server versions: `--version N`, `history`, `diff` |
 | Non-interactive | `--key-file`, `EVNX_PASSWORD` | `--password-stdin` |
-| Replacing a file | `restore --yes` (alias `--force`), keeps `.bak` | `cloud pull --force` |
+| Replacing a file | `restore --yes`, keeps `.bak` | `cloud pull --yes` |
 | Works with no account or network | yes | no |
 | Everything back at once | the file is the backup | `cloud export` |
 
@@ -426,6 +428,23 @@ Use `backup` for an offline copy that does not depend on any service; use the cl
 commands to share and version secrets across machines and people.
 
 ---
+
+### A hint for a weak passphrase — v0.15.0+
+
+A new passphrase that is under 12 characters, only digits, one repeated character or a common
+word gets a one-time hint on stderr, naming the reason and **never the passphrase**:
+
+```text
+! This passphrase is weak: <reason>. A backup can be attacked offline. 4 random words is stronger.
+```
+
+It never changes the exit code, and a `--key-file` run prints it only at a terminal.
+
+### Where the backup goes in git — v0.15.0+
+
+The backup is encrypted, and evnx says so: `This file is encrypted. Committing it is as safe as its
+passphrase.` `--gitignore` adds it to `.gitignore` (`✓ Added 'd.backup' to .gitignore`);
+`--no-gitignore` leaves `.gitignore` alone and drops the line.
 
 ## Troubleshooting
 
@@ -435,7 +454,7 @@ Every source of a new backup's passphrase — the prompt, a key file,
 `EVNX_PASSWORD` — needs 8 characters. Use a longer one: four or five unrelated words
 are easy to type and hard to guess.
 
-### "Passwords do not match" (exit 3)
+### "Passwords do not match" (exit 2)
 
 The confirmation prompt did not match. Re-run and type both carefully. There is no
 confirmation for a key file or `EVNX_PASSWORD`.
@@ -451,11 +470,11 @@ unexpected.
 `--output` names the source, or a directory. Choose another `--output`. Nothing was
 written or renamed.
 
-### "Failed to write backup file: the directory … does not exist" (exit 5)
+### "Failed to write backup file: the directory … does not exist" (exit 2)
 
 The directory part of `--output` does not exist. Create it first.
 
-### "Backup integrity check failed" (exit 6)
+### "Backup integrity check failed" (exit 2)
 
 `--verify` could not read back what it just wrote, or the content differed. The
 backup is left on disk for inspection. Check free space and the storage, then retry,
@@ -481,11 +500,14 @@ cargo install evnx --features backup
 | Code | Meaning |
 |------|---------|
 | `0` | Backup written (and verified, with `--verify`) |
-| `2` | Could not run: source file, key file or passphrase, an output that is the source or a directory, no terminal to ask on |
-| `3` | Passphrase confirmation did not match |
-| `4` | Encryption failed |
-| `5` | Could not write the backup file |
-| `6` | Integrity check failed after writing (`--verify`) |
+| `2` | Could not run: source file, key file or passphrase, a passphrase confirmation that did not match, encryption or write failure, a failed `--verify`, an output that is the source or a directory, no terminal to ask on |
+
+<Callout type="warning" title="Changed in v0.15.0">
+  `backup` used to exit `3` (passphrase confirmation did not match), `4` (encryption failed), `5`
+  (could not write the file) and `6` (integrity check failed after `--verify`). All four are now `2`,
+  following the one exit-code table. The message still says which one it was. A script that tested
+  `3`–`6` tests `2` now.
+</Callout>
 
 <Callout type="info">
   `1` means "ran, and found something" for the commands that have findings; a backup

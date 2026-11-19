@@ -11,7 +11,7 @@
  *   <CodeTabs>
  *   <Tab label="macOS / Linux">
  *   ```bash
- *   curl -fsSL https://dotenv.space/install.sh | bash
+ *   curl -fsSL https://evnx.dev/install.sh | bash
  *   ```
  *   </Tab>
  *   <Tab label="Windows">

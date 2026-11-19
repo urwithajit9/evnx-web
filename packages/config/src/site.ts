@@ -164,9 +164,10 @@ export const SITE = {
 /**
  * The canonical install URL.
  *
- * ⚠️ `dotenv.space/install.sh` must keep returning **200**, not a redirect —
+ * `https://evnx.dev/install.sh` since evnx 0.15.0. ⚠️ The legacy
+ * `dotenv.space/install.sh` must keep returning **200**, not a redirect —
  * copied `curl` commands frequently omit `-L`. Both URLs are proxied to the
- * same source file; see schedule P5.
+ * same source file.
  */
 export const INSTALL_SCRIPT_URL = `${HOSTS.web}/install.sh`;
 export const INSTALL_SCRIPT_URL_LEGACY = `${HOSTS.dotenvSpace}/install.sh`;

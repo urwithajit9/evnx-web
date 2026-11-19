@@ -3,13 +3,13 @@ title: "Quick Start"
 section: getting-started
 order: 2
 publishedAt: "2024-03-15"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "Five minutes to your first evnx workflow — check, scan, template, validate and convert a real .env file."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["getting-started", "scan", "validate", "convert"]
 commands: ["convert", "diff", "doctor", "init", "scan", "sync", "validate"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -212,9 +212,9 @@ first choice; with no terminal, as above, placeholders are used. Review the file
 commit `.env.example` — it tells teammates what variables are needed without exposing
 values.
 
-<Callout type="info" title="--placeholder is deprecated">
-Older guides said `evnx sync --placeholder`. It still works but prints a notice: it
-does what `--force` does (placeholder values, no prompt). Use `--force` in scripts.
+<Callout type="info" title="--placeholder and --force are gone">
+Older guides said `sync --placeholder` or `sync --force`. Both were removed in
+0.15.0 and exit 2. Use `--yes` (placeholder values, no prompt) in scripts.
 </Callout>
 
 ---

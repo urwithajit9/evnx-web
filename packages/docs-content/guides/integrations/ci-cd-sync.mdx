@@ -3,13 +3,13 @@ section: "integrations"
 order: 3
 title: "CI/CD Integration for Sync Validation"
 publishedAt: "2026-03-06"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "Check .env.example in GitHub Actions, GitLab CI and pre-commit hooks with evnx sync --check: the one-way form for automation, the spec comparison when CI has no .env, and the JSON report."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["sync", "ci-cd", "github-actions", "gitlab", "automation", "validation"]
 commands: ["doctor", "spec", "spec init", "sync"]
-evnxVersion: "0.10.18"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/sync
   - getting-started/sync-basic
@@ -45,7 +45,7 @@ evnx sync --check --direction forward
 | `--template-config FILE` | Optional: load your placeholder rules, so a broken file fails here |
 | `--format json` | Optional: say *which* names drifted, on stdout |
 
-`--force` and `--dry-run` do not belong in a gate: `--check` already never prompts or
+`--yes` and `--dry-run` do not belong in a gate: `--check` already never prompts or
 writes, and `--dry-run` exits `0` whatever it finds.
 
 ### Exit codes
@@ -242,11 +242,11 @@ It runs `evnx sync --check --direction forward --skip-without-env`:
   blocked.
 
 <Callout type="info" title="Changed in 0.10.12">
-This hook used to run `evnx sync --direction forward --placeholder`. pre-commit gives a
+This hook used to run `sync --direction forward --placeholder` (a flag removed in 0.15.0). pre-commit gives a
 hook no terminal, so on any drift it failed with `IO error: not a terminal`, and on a
 clone with no `.env` it failed `file not found`. It now checks instead of writing.
 
-The writing variant is `evnx-sync-fix` (`evnx sync --force --skip-without-env`): it adds
+The writing variant is `evnx-sync-fix` (`evnx sync --yes --skip-without-env`): it adds
 missing names to `.env.example` with placeholder values. pre-commit stops a commit when a
 hook changes a file, so stage the updated template and commit again.
 </Callout>
@@ -367,7 +367,7 @@ evnx doctor --format json | jq '.summary.errors'
 ## Best practices checklist
 
 ### For CI configuration
-- [ ] Use `evnx sync --check --direction forward`, never `--dry-run` or `--force`, as the gate
+- [ ] Use `evnx sync --check --direction forward`, never `--dry-run` or `--yes`, as the gate
 - [ ] Commit a spec (`.evnx.toml` with `[vars]`) so the check has something to compare with
 - [ ] Never add `--skip-without-env` to a CI command
 - [ ] Set `--naming-policy error` to enforce conventions

@@ -1,0 +1,203 @@
+---
+title: "evnx set"
+section: commands
+order: 25
+publishedAt: "2026-11-19"
+excerpt: "Change one variable in an env file in place: its position, comments, export prefix and quoting stay. A secret is typed with no echo or piped in, and the result never shows it."
+difficulty: beginner
+timeToComplete: "4 minutes"
+tags: ["set", "get", "env", "secrets", "ci-cd", "evnx"]
+commands: ["add", "doctor", "get", "history", "remove", "set", "undo"]
+evnxVersion: "0.15.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx set` changes one variable in an env file and leaves everything else as it was. The
+line keeps its position, the comment after it, an `export` prefix and its quoting. A name
+that is not in the file is added at the end. **v0.15.0+**.
+
+It is the small tool for the small job. You do not have to open the file, find the line and
+hope your editor keeps the rest, and a script does not have to `sed` a secret into place.
+To read a value back, use [`evnx get`](/guides/commands/get).
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+## Quick example
+
+```text
+# .env
+# App
+PORT=3000
+export LOG_LEVEL="debug"   # keep me
+```
+
+```bash
+evnx set PORT=8080 --yes
+```
+
+```text
+✓ ./.env: PORT  3000 → 8080
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+```text
+# .env
+# App
+PORT=8080
+export LOG_LEVEL="debug"   # keep me
+```
+
+Only the `PORT` line changed. The file is written atomically, keeps its mode, and the old
+text is kept once as `.env.bak`. No template, contract or `.gitignore` entry is touched by
+the write itself.
+
+---
+
+## Command signature
+
+```bash
+evnx set [OPTIONS] <NAME[=VALUE]>
+```
+
+```bash
+evnx set PORT=8080                        # change one line, keep the rest
+evnx set API_TOKEN                        # typed with no echo, or read from stdin
+printf %s "$TOKEN" | evnx set API_TOKEN   # from a pipe, nothing in shell history
+evnx set LOG_LEVEL=info --if-missing      # only when the name is not there yet
+evnx set PORT=8080 --dry-run              # show the change, write nothing
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `<NAME[=VALUE]>` | required | The variable, as `NAME` or `NAME=VALUE` |
+| `--if-missing` | off | Do nothing when the name is already in the file |
+| `-n`, `--dry-run` | off | Show what would change and write nothing. Needs no terminal |
+| `-y`, `--yes` | off | Do not ask before replacing a value |
+| `--env <FILE>` | `.env` | The env file |
+| `--env-name <NAME>` | none | Use `.env.<NAME>` instead of `.env` |
+| `-C`, `--dir <DIR>` | current folder | The project folder to work in |
+| `--format <FORMAT>` | `pretty` | `pretty` or `json` |
+| `--json` | off | The result as JSON: names and statuses, never a value |
+| `-q`, `--quiet` | off | Print nothing on success. Warnings and errors still print |
+| `-v`, `--verbose` | off | Verbose output |
+
+A name holds letters, digits, `_`, `.`, `-`, `[` and `]`. Anything else (`'a b=1'`) is a
+usage error, exit `2`.
+
+---
+
+## Where the value comes from
+
+| You give | evnx does |
+|---|---|
+| `NAME=VALUE` | Uses it. If the name looks secret, it warns that your shell history now has it |
+| `NAME`, value piped on stdin | Reads one value from stdin. Nothing reaches shell history |
+| `NAME`, at a terminal | Asks. A name that looks secret (`API_TOKEN`, `DB_PASSWORD`) is asked for with **no echo** |
+| `NAME`, no terminal and nothing on stdin | Exit `4` |
+
+```bash
+printf %s "$TOKEN" | evnx set API_TOKEN --yes
+```
+
+```text
+✓ ./.env: API_TOKEN  changed (value hidden)
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+A value on the command line still works for a name that is not secret. For one that is,
+evnx warns that the value is in your shell's history and `ps`, and says what to do next
+time:
+
+```text
+! The value is on the command line, so your shell history has it. Next time leave it off and
+  type it when asked, or pipe it in: printf %s "$VALUE" | evnx set NAME
+✓ ./.env: DB_PASSWORD  added (value hidden)
+```
+
+---
+
+## What it prints
+
+A change shows `old → new` for an ordinary value, and `changed (value hidden)` for a
+secret. A new name shows `added`:
+
+| Result | Line |
+|---|---|
+| Replaced, not secret | `PORT  3000 → 8080` |
+| Replaced, secret | `API_TOKEN  changed (value hidden)` |
+| Added, not secret | `NEW_FLAG  added: on` |
+| Added, secret | `DB_PASSWORD  added (value hidden)` |
+| Name already there, `--if-missing` | `PORT is already set in ./.env; left as it is.` Exit `0` |
+
+`--dry-run` prints the same line under `Dry run: nothing was written.` and changes
+nothing, with or without a terminal.
+
+---
+
+## Confirming a replacement
+
+Replacing a value asks first (default No). With no terminal, nothing to answer it and no
+`--yes`, `evnx set` exits `4` and says what to add:
+
+```text
+Error: there is no terminal to confirm with.
+
+Add --yes (-y) to go ahead without being asked:
+  evnx set PORT --yes
+```
+
+A script that replaces values passes `--yes`. Adding a name that is not there does not ask.
+
+---
+
+## JSON
+
+`--json` (or `--format json`) prints one document with the usual `run` header, then the
+name and what happened. A value is never in it:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "dry_run": false,
+  "file": "./.env",
+  "name": "PORT",
+  "status": "changed",
+  "secret": false,
+  "backup": "./.env.bak"
+}
+```
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | The change was made, shown (`--dry-run`) or not needed (`--if-missing`) |
+| `2` | Could not run: no env file, a name that is not a valid variable name, a usage error |
+| `4` | Declined: you answered no, or a confirmation or value was needed and there is no terminal and no `--yes` |
+| `141` | Output closed early (broken pipe) |
+
+---
+
+## Good to know
+
+- **The backup is private.** `.env.bak` is mode 600, is recorded in `.evnx/backups.json` and,
+  in a git repository, `*.bak` and that record are added to `.gitignore`. See
+  [`evnx history`](/guides/commands/history) and [`evnx undo`](/guides/commands/undo).
+- **The file's own mode is kept.** `set` does not change it. If the file is readable by
+  other users, evnx says so and names `evnx doctor --fix`.
+- **Other environments.** `evnx set PORT=8080 --env-name staging` edits `.env.staging`.
+- **One variable only.** To remove one, see [`evnx remove`](/guides/commands/remove); to add
+  several with templates, see [`evnx add`](/guides/commands/add).
+
+## See also
+
+- [evnx get](/guides/commands/get) - read one value
+- [evnx undo](/guides/commands/undo) - put the file back as it was
+- [evnx history](/guides/commands/history) - the copies evnx kept
+- [Environments](/guides/reference/environments) - `--env-name`

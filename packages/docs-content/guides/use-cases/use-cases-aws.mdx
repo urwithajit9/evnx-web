@@ -3,13 +3,13 @@ section: "use-cases"
 order: 2
 title: "Migrate to AWS Secrets Manager"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Generate ready-to-run AWS CLI commands to store your .env secrets in AWS Secrets Manager as a single JSON secret."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "aws", "secrets-manager", "cli"]
 commands: ["convert", "migrate", "validate"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
@@ -212,7 +212,7 @@ If you use named AWS profiles, pass `--aws-profile` and evnx includes it in the 
 
 ```bash
 evnx migrate \
-  --to aws \
+  --to aws-secrets-manager \
   --secret-name prod/myapp/config \
   --aws-profile production
 ```
@@ -273,7 +273,7 @@ If your `.env` uses an application prefix, strip it so AWS key names stay clean:
 ```bash
 # APP_DATABASE_URL → DATABASE_URL in the JSON
 evnx migrate \
-  --to aws \
+  --to aws-secrets-manager \
   --secret-name prod/myapp/config \
   --strip-prefix "APP_"
 ```
@@ -297,7 +297,7 @@ Rename one in the .env, migrate without --strip-prefix, or pass --allow-collisio
 ```bash
 evnx migrate \
   --env-name production \
-  --to aws \
+  --to aws-secrets-manager \
   --secret-name prod/myapp/config \
   --print-only > aws-upload.sh
 ```

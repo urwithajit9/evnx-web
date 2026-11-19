@@ -3,13 +3,13 @@ title: "evnx vault"
 section: commands
 order: 8
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Create, share and revoke encrypted vaults. Each vault gets its own 256-bit key, generated and wrapped on your machine before the server ever sees it."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "vault", "encryption", "key-management", "sharing", "rbac", "evnx"]
 commands: ["auth token create", "cloud history", "cloud link", "cloud pull", "cloud push", "org", "vault", "vault create", "vault delete", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - commands/auth
 draft: false
@@ -27,7 +27,7 @@ A **vault** is one encrypted `.env` file plus its full version history. It has a
 
 <CommandSignature>
 evnx vault [SUBCOMMAND]
-evnx vault create my-api --env production
+evnx vault create my-api --environment production
 evnx vault list
 evnx vault share my-api/production --with alice@example.com
 evnx vault members my-api/production
@@ -43,12 +43,12 @@ evnx vault delete my-api/production
 ## Creating a vault
 
 ```bash
-evnx vault create my-api --env production
+evnx vault create my-api --environment production
 ```
 
 <OptionTable>
   <Option flag="NAME" type="string" required>Vault name — **lower-case** letters, digits and hyphens.</Option>
-  <Option flag="--env" type="enum" default="development" options="production, staging, development, test">Which environment this vault holds. Short form `-e`.</Option>
+  <Option flag="--environment" type="enum" default="development" options="production, staging, development, test">Which environment this vault holds. **v0.15.0** — was `--env`/`-e`, which now exits 2.</Option>
   <Option flag="--password-stdin" type="flag">Read the master password from stdin instead of prompting.</Option>
   <Option flag="--server" type="url">Server to talk to. Overrides `EVNX_SERVER` and `.evnx.toml`.</Option>
 </OptionTable>
@@ -146,6 +146,9 @@ evnx vault list
   my-api      production   owner             2  2026-10-24
 </TerminalOutput>
 
+**v0.15.0+** — `--format json` (or `--json`) prints one document with the usual `run` header and the
+same columns, names and metadata only. `vault members` takes it too.
+
 `ROLE` is your role on each vault: the ones you created say `owner`, and the ones
 shared with you say the role you were given.
 
@@ -209,13 +212,15 @@ evnx vault share my-api/production --with alice@example.com
 ```
 
 ```text
-  ✓ shared my-api/production with alice@example.com as developer
+  ✓ shared my-api/production with alice@example.com as viewer
 
   They can pull it with:  evnx cloud pull --vault my-api/production
+  To raise the role:      evnx vault role my-api/production --user alice@example.com --role developer
 ```
 
-The role defaults to `developer`. Pass `--role viewer` for read-only access, or
-`--role admin` to let them manage members too. **From v0.6.0** `--user` is
+**Changed in v0.15.0:** the role defaults to **`viewer`** (read-only), not `developer`. A script that
+relied on write access for the recipient passes `--role developer`; `--role admin` lets them manage
+members too. The success line says how to raise the role. **From v0.6.0** `--user` is
 accepted as an alias for `--with`, so the flag is the same one `revoke` and
 `role` take; on earlier versions `share` takes only `--with`. **v0.14.0+** — the other
 way round too: `vault role` and `vault revoke` take `--with` as well as `--user`, so the
@@ -232,7 +237,7 @@ as `vault rekey` already did.
 | Flag | Description |
 |---|---|
 | `--with <EMAIL>` | **Required.** The evnx account to share with. `--user` is an alias |
-| `--role <ROLE>` | `viewer`, `developer` or `admin`. Default `developer` |
+| `--role <ROLE>` | `viewer`, `developer` or `admin`. Default `viewer` (**v0.15.0**; it was `developer`) |
 | `--password-stdin` | Read the master password from stdin instead of prompting |
 | `--server <URL>` | Override the server for this command |
 
@@ -554,12 +559,17 @@ This removes the vault and **every version in it**. You are asked to confirm:
   There is no undelete in the CLI.
 ```
 
+**Changed in v0.15.0:** the question asks you to type the vault's full `name/environment`
+(`my-api/production`). Anything else cancels, and nothing is deleted. With `--yes` there is no
+question, so the target must be the full `name/environment` or an id: `evnx vault delete my-api --yes`
+now exits `2`. With no terminal and no `--yes` it still exits `4`.
+
 ⓘ The line names the server you are signed in to; this run used a local test server,
 shown here as `https://api.evnx.dev`.
 
 | Flag | Effect |
 |------|--------|
-| `-y`, `--yes` | Skip the confirmation prompt — what a teardown script needs. With no terminal and no `--yes`, `delete` refuses and names this flag |
+| `-y`, `--yes` | Skip the confirmation prompt — what a teardown script needs. The target must be the full `name/environment` or an id (**v0.15.0**). With no terminal and no `--yes`, `delete` refuses with exit `4` and names this flag |
 
 <Callout type="info">
 **There is no `--password-stdin` here**, unlike `create`, `share` and `revoke`. Deleting is
@@ -582,7 +592,8 @@ So deleting a vault does not merely hide the blobs. It destroys the wrapped key 
 
 - **Every confirmation names its flag when there is no terminal.** `delete`,
   `revoke`, `rekey` and `leave` stop before sending anything and print the command
-  with `--yes` added.
+  with `--yes` added. **v0.15.0+** that is exit `4` (declined, or a confirmation was needed with no
+  terminal and no `--yes`), the same on every command.
 - **`-q` prints nothing on success.** `evnx vault create my-api -q` is silent when
   it works. Tables you asked for (`vault list`, `vault members`), warnings and
   errors still print.

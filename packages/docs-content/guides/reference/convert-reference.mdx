@@ -3,13 +3,13 @@ section: "reference"
 order: 1
 title: "Convert reference"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Deep reference for evnx convert — the processing pipeline, every format's output from a real run, what each target accepts, and troubleshooting."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["convert", "reference", "formats", "troubleshooting", "env"]
 commands: ["convert", "init", "migrate", "platform"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/convert
@@ -239,10 +239,10 @@ is created `0600`, holds the value's exact bytes, and is removed when the step e
 
 ---
 
-### `github-actions` (aliases: `github`, `gh-actions`)
+### `github` (was `github-actions`)
 
 ```bash
-evnx convert --to github-actions
+evnx convert --to github
 ```
 
 ```text
@@ -549,7 +549,7 @@ Error: terraform cannot hold this name: names there are ASCII letters, digits, _
 
 | Format | Accepts |
 |--------|---------|
-| `shell`, `github-actions`, `vercel`, `heroku`, `doppler`, `railway` | letters, digits and `_`, not starting with a digit |
+| `shell`, `github`, `vercel`, `heroku`, `doppler`, `railway` | letters, digits and `_`, not starting with a digit |
 | `kubernetes` | ASCII letters, digits, `_`, `.` and `-` |
 | `terraform` | ASCII letters, digits, `_` and `-`, starting with a letter or `_` |
 | `gcp-secrets`, `azure-keyvault` | ASCII letters, digits, `_` and `-` |
@@ -588,7 +588,7 @@ Supported formats:
     aws-secrets, gcp-secrets, azure-keyvault
 
   CI/CD:
-    github-actions
+    github
 
   Containers:
     docker-compose, kubernetes
@@ -601,7 +601,7 @@ Supported formats:
 
   Aliases:
     k8s → kubernetes, tf → terraform, yml → yaml
-    gh-actions → github-actions, compose → docker-compose
+    compose → docker-compose
 ```
 
 **Fix:** use a name or alias from the list (`kubernetes`, `k8s`); case does not matter.

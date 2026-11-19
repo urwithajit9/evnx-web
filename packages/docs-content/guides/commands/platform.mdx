@@ -3,13 +3,13 @@ section: "commands"
 order: 21
 title: "evnx platform"
 publishedAt: "2026-11-12"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx platform: compare a local .env with a Vercel project's environment variables, pull Vercel's readable values down, and push your changes up, without ever printing a value."
 difficulty: "intermediate"
 timeToComplete: "12 minutes"
 tags: ["platform", "vercel", "reference", "cli", "environment-variables", "secrets"]
 commands: ["convert", "migrate", "platform", "platform diff", "platform pull", "platform push"]
-evnxVersion: "0.14.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -60,7 +60,8 @@ evnx platform diff --to vercel
 evnx platform diff --to vercel --token-file ~/.vercel-token
 ```
 
-`--token-file` reads a file that holds only the token, one line. **There is no `--token`
+`--token-file` reads a file that holds only the token, one line. **v0.15.0+**: a token file that group or
+others can read gets a warning with the `chmod 600` that fixes it (Unix). **There is no `--token`
 flag**, on purpose: a value on the command line lands in shell history. With neither, the
 command stops with exit `2`:
 
@@ -87,16 +88,16 @@ resolved, and the file it chose, on the first line or two of its output.
 
 ### The local file
 
-`--env-name` picks the Vercel environment and the file together:
+`--target` picks the Vercel environment and the file together:
 
-| `--env-name` | Local file used |
-|--------------|-----------------|
+| `--target` | Local file used |
+|------------|-----------------|
 | `development` (the default) | `.env.development` if it exists, otherwise `.env` |
 | `production` | `.env.production` if it exists, otherwise `.env` |
 | `preview` | `.env.preview` if it exists, otherwise `.env` |
 | a custom environment's slug | `.env.<slug>` if it exists, otherwise `.env` |
 
-`--file <path>` overrides the choice. The file used is always printed.
+`--env <path>` overrides the choice. The file used is always printed.
 
 ---
 
@@ -110,20 +111,21 @@ These are the options all three subcommands share. `--to` is required.
 | `--project <ID>` | Vercel project id (`prj_…`) or name |
 | `--team <ID>` | Vercel team id (`team_…`) or slug |
 | `--token-file <PATH>` | Read the token from this file (otherwise `VERCEL_TOKEN`) |
-| `--env-name <ENV>` | `production`, `preview`, `development` (the default), or a [custom environment](#custom-environments)'s slug |
-| `--git-branch <BRANCH>` | Work on one [preview branch](#preview-branches). Only with `--env-name preview` |
-| `--file`, `-f <PATH>` | The local file, instead of `.env.<environment>` or `.env` |
+| `--target <ENV>` | **v0.15.0** — was `--env-name`, which now exits 2. `production`, `preview`, `development` (the default), or a [custom environment](#custom-environments)'s slug |
+| `--git-branch <BRANCH>` | Work on one [preview branch](#preview-branches). Only with `--target preview` |
+| `--env <FILE>` | **v0.15.0** — the local file (was `-f`/`--file`), instead of `.env.<environment>` or `.env` |
 
 Per subcommand:
 
 | Flag | `diff` | `pull` | `push` | Description |
 |------|:------:|:------:|:------:|-------------|
-| `--format pretty\|json` | yes | | yes | Output format. `json` prints one document |
+| `--format pretty\|json` | yes | | yes | Output format. `json` prints one document. `--json` is the same |
 | `--strict` | yes | | | Count a Secret present on both sides as a difference |
-| `--dry-run` | | yes | yes | Show the plan and change nothing |
+| `-n`, `--dry-run` | | yes | yes | Show the plan and change nothing |
 | `--yes`, `-y` | | yes | yes | Go ahead without asking |
 | `--only-new` | | | yes | Leave existing Secrets alone |
 | `--prune` | | | yes | Delete the variables only Vercel has |
+| `--prune-all` | | | yes | **v0.15.0** — allow a prune that removes more than half of an environment. Needs `--prune` |
 | `--type config\|secret` | | | yes | The type of a key that does not exist on Vercel yet |
 | `--gitignore` | | yes | yes | Add `.evnx/platform/` to `.gitignore` without asking |
 | `--no-gitignore` | | yes | yes | Skip the `.gitignore` check |
@@ -151,7 +153,7 @@ way: see [Vercel development secrets](#vercel-development-secrets-are-secrets-to
 
 ```bash
 evnx platform diff --to vercel
-evnx platform diff --to vercel --env-name production
+evnx platform diff --to vercel --target production
 ```
 
 ```text
@@ -186,7 +188,7 @@ Vercel  prj_demo  development        local  .env.development
 | `15` | Vercel failed, or the rate limit did not clear |
 
 With no `.env.<env>` and no `.env`, `diff` compares against an empty local side: every
-Vercel variable is "remote only", and a note says so. A `--file` that does not exist is an
+Vercel variable is "remote only", and a note says so. An `--env` file that does not exist is an
 error.
 
 ### Using `diff` in CI
@@ -197,7 +199,7 @@ reading back: such a Secret becomes an `update (value cannot be compared: write-
 the exit code is `1`.
 
 ```bash
-evnx platform diff --to vercel --env-name production --strict --format json
+evnx platform diff --to vercel --target production --strict --format json
 ```
 
 In `--format json` the Secret is `"action": "unchanged"` with `"compare": "write_only"`,
@@ -243,6 +245,8 @@ it, the pull stops (exit `2`), and answering no exits `4`. `--dry-run` writes no
 the file and not the state. The replaced file is kept as a single `<file>.bak`; see
 [Backups](/guides/commands/sync#backups-one-bak-per-file).
 
+**v0.15.0+**: `pull` writes the pulled file `600`, whatever mode it had (it used to keep an existing mode and warn).
+
 When Vercel has nothing for the environment and the local file does not exist, `pull` says
 `nothing to pull; <file> not created` and exits `0`. An existing file with nothing to change
 says `<file> is already up to date`.
@@ -259,7 +263,7 @@ the value in before you push it.
 
 ```bash
 evnx platform push --to vercel --dry-run
-evnx platform push --to vercel --env-name production --yes
+evnx platform push --to vercel --target production --yes
 ```
 
 ```text
@@ -334,10 +338,23 @@ evnx platform push --to vercel --prune --dry-run
 ```
 
 - Without a terminal, `--prune` needs `--yes`, and that is checked before anything is sent.
+- **v0.15.0+ — a prune that would remove most of an environment stops.** If it would delete or
+  detach **more than half** of the variables in the environment (and there are at least 4), evnx
+  shows the plan and exits `2` unless `--prune-all` is also given. A wrong project or target would
+  otherwise wipe it. `--dry-run` is not affected.
 - A remote-only variable shared with other environments is **not deleted**: this
   environment is taken out of its targets instead, shown as `detach`.
 - A key that is in the local file with an empty value (`KEY=`) is not remote-only, and is
   never pruned.
+
+### Where the token is sent — **v0.15.0+**
+
+When the API address is overridden (`EVNX_VERCEL_API_URL`) to anywhere other than `api.vercel.com`,
+stderr gets one line naming it, because the token is sent there:
+
+```text
+API  https://vercel.example.test:8443
+```
 
 ### Changed on Vercel since your last pull
 
@@ -364,8 +381,8 @@ stays applied.
 |-----:|---------|
 | `0` | Done, or a dry run |
 | `1` | Vercel refused some variables (the rest stays applied) |
-| `2` | Could not run: a bad flag, no token, no project, no terminal and no `--yes` |
-| `4` | You answered no to the question |
+| `2` | Could not run: a bad flag, no token, no project, or a prune that would remove most of an environment without `--prune-all` |
+| `4` | You answered no to the question, or there was a question, no terminal and no `--yes` (it was `2` before v0.15.0) |
 | `10` | Vercel refused the token |
 | `11` | The token may not do that |
 | `13` | Vercel could not be reached |
@@ -381,12 +398,12 @@ most, before exit `15`.
 
 ## Custom environments
 
-**New in v0.14.0.** `--env-name` also takes the slug of one of the project's custom environments
+**New in v0.14.0.** `--target` also takes the slug of one of the project's custom environments
 (such as `staging`), as well as `production`, `preview` and `development`.
 
 ```bash
-evnx platform diff --to vercel --env-name staging
-evnx platform push --to vercel --env-name staging --yes
+evnx platform diff --to vercel --target staging
+evnx platform push --to vercel --target staging --yes
 ```
 
 ```text
@@ -410,11 +427,11 @@ The local file is `.env.<slug>` if it exists, otherwise `.env`.
 ## Preview branches
 
 **New in v0.14.0.** `--git-branch <branch>` limits a run to one branch's preview variables.
-It works only with `--env-name preview`; with anything else the command exits `2`.
+It works only with `--target preview`; with anything else the command exits `2`.
 
 ```bash
-evnx platform diff --to vercel --env-name preview --git-branch feature/login
-evnx platform push --to vercel --env-name preview --git-branch feature/login --yes
+evnx platform diff --to vercel --target preview --git-branch feature/login
+evnx platform push --to vercel --target preview --git-branch feature/login --yes
 ```
 
 - A key with an entry for the branch uses it.

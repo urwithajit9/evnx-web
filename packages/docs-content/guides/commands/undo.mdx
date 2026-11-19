@@ -1,0 +1,165 @@
+---
+title: "evnx undo"
+section: commands
+order: 24
+publishedAt: "2026-11-17"
+excerpt: "Put an env file back as it was before evnx last changed it. It swaps the file and its .bak copy, so running it twice puts the newer text back. Shows names, never values, and asks first."
+difficulty: beginner
+timeToComplete: "3 minutes"
+tags: ["undo", "history", "backup", "bak", "evnx"]
+commands: ["align", "backup", "history", "remove", "restore", "undo"]
+evnxVersion: "0.15.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx undo` puts a file back as it was before evnx last changed it. Commands such as
+[`remove`](/guides/commands/remove), [`validate --fix`](/guides/commands/validate) and
+[`align`](/guides/commands/align) keep the old text as `<file>.bak` first; `undo` brings it back.
+**v0.15.0+**.
+
+It **swaps** the file and its copy. The file gets the old text, and the copy gets what the file
+held, so running `undo` again puts the newer text back. Nothing is lost either way.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
+</Prerequisites>
+
+## Quick example
+
+```bash
+evnx remove B --yes
+evnx undo
+```
+
+```text
+  .env ← .env.bak (kept by `remove`, 2026-11-17 04:22)
+    + B  back
+Put .env back as it was? [y/N]
+```
+
+On `y`:
+
+```text
+✓ .env is back as it was before `remove`
+  what it held is now .env.bak; evnx undo .env again puts it back
+```
+
+The lines under the heading say what changes **by name**: `+ NAME  back` for a name that
+returns, `- NAME  goes` for one that leaves, `~ NAME  value changes` for one whose value
+differs. No value is ever printed.
+
+---
+
+## Command signature
+
+```bash
+evnx undo [OPTIONS] [FILE]
+```
+
+| Argument or flag | Default | Description |
+|------------------|---------|-------------|
+| `FILE` | the only file with a copy | The file to put back, for example `.env`. With copies of more than one file, `undo` stops and asks you to name one |
+| `-n`, `--dry-run` | off | Show what would change and write nothing. Exits `0` |
+| `-y`, `--yes` | off | Do not ask. Needed with no terminal |
+| `--clear` | off | Delete the copies (all, or `FILE`'s) instead of putting one back |
+| `-v`, `--verbose` | off | Verbose output |
+| `-q`, `--quiet` | off | Print nothing on success |
+| `--no-color` | off | Plain output (as does `NO_COLOR`) |
+
+[`evnx history`](/guides/commands/history) lists the copies there are.
+
+---
+
+## Preview first
+
+```bash
+evnx undo .env --dry-run
+```
+
+```text
+  .env ← .env.bak (kept by `remove`, 2026-11-17 04:22)
+    + B  back
+  Dry run: nothing was written.
+```
+
+---
+
+## Asking, and scripts
+
+`undo` replaces a file, so it asks first, and the default answer is no. Answer `n` and it
+says `Nothing was changed.` and exits `0`.
+
+With no terminal and no `--yes` it stops before it changes anything:
+
+```text
+  .env ← .env.bak (kept by `remove`, 2026-11-17 04:22)
+    + A  back
+Error: undo replaces .env and needs a yes.
+  evnx undo .env --yes
+```
+
+Exit `2`. In a script, name the file and pass `--yes`.
+
+---
+
+## Which file
+
+With one file that has a copy, `evnx undo` needs no argument. With several, name one:
+
+```text
+Error: copies of .env, .env.production are kept; name the file to put back:
+  evnx undo .env
+```
+
+A file with no copy is exit `2` too:
+
+```text
+Error: there is no copy of .env.staging to put back (.env.staging.bak does not exist).
+  evnx history lists the copies there are.
+```
+
+---
+
+## Delete the copies
+
+A `.bak` is a second plaintext copy of your secrets. Once you no longer need it, delete it:
+
+```bash
+evnx undo --clear .env     # one file's copy
+evnx undo --clear --yes    # every copy
+```
+
+```text
+  1 plaintext copy: .env.production.bak
+✓ deleted 1 copy
+```
+
+`--clear` deletes the `.bak` files and forgets them in `.evnx/backups.json`. It does not touch
+the env files themselves. It cannot be undone.
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | The file was put back, `--dry-run` previewed it, you answered no, or `--clear` deleted the copies |
+| `2` | Could not run: no copy to put back, several files with copies and none named, no terminal and no `--yes` |
+
+---
+
+## Not for `evnx backup` archives
+
+`undo` reads the `.bak` copy evnx keeps **beside a file**. An encrypted archive written by
+[`evnx backup`](/guides/commands/backup) is opened with
+[`evnx restore`](/guides/commands/restore).
+
+---
+
+## See also
+
+- [`evnx history`](/guides/commands/history): list the copies evnx kept
+- [`evnx remove`](/guides/commands/remove), [`evnx align`](/guides/commands/align): commands that keep a copy first
+- [`evnx restore`](/guides/commands/restore): open an `evnx backup` archive

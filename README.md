@@ -235,7 +235,7 @@ CLI ships through, with the exact command. Names and commands come from the evnx
 
 | Channel | Command |
 |---|---|
-| Shell installer | `curl -fsSL https://raw.githubusercontent.com/urwithajit9/evnx/main/scripts/install.sh \| bash` |
+| Shell installer | `curl -fsSL https://evnx.dev/install.sh \| bash` |
 | Homebrew | `brew install urwithajit9/evnx/evnx` |
 | Scoop | `scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx` then `scoop install evnx` |
 | winget | `winget install urwithajit9.evnx` |
@@ -324,7 +324,6 @@ Typography: body, UI and code in `font-mono` (IBM Plex Mono); headings and displ
 
 **In progress**
 - Docs split: move guides to `docs.evnx.dev/cli/*` (schedule P3), then flip `NEXT_PUBLIC_DOCS_MODE=split`
-- Serve `/install.sh` from `evnx.dev` (schedule P5), then flip `NEXT_PUBLIC_INSTALL_HOST`
 - Retire `apps/web/lib/config.ts` as its last consumers move to `@evnx/config`
 
 **Not started**

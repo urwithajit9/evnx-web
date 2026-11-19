@@ -3,13 +3,13 @@ section: "commands"
 order: 3
 title: "evnx sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Reference for evnx sync: keep .env and .env.example in step by name, gate CI with --check, and generate placeholders a template can safely carry."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["sync", "reference", "cli", "env", "security"]
-commands: ["add custom", "diff", "init", "remove", "scan", "spec init", "sync"]
-evnxVersion: "0.14.0"
+commands: ["add custom", "align", "diff", "init", "remove", "scan", "spec init", "sync"]
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -37,7 +37,7 @@ changes a value that is already there. The one exception is [`--prune`](#--prune
   adds `template_only`.
 - **No terminal, or `CI` set:** sync uses placeholder values and says so, on an existing
   template and in reverse too, instead of failing with `IO error: not a terminal`.
-  `--placeholder` is deprecated and does what `--force` does.
+  `--placeholder` was deprecated then; it was removed in 0.15.0 (use `--yes`).
 - **A misspelt key in a `--template-config` file, or an invalid `[sync] naming_policy`,
   is exit `2`**, naming the accepted values. Both used to be ignored.
 - `--check` with an empty `.env` beside a populated template is exit `2`, not a pass.
@@ -45,6 +45,14 @@ changes a value that is already there. The one exception is [`--prune`](#--prune
   `8000`. `DEBUG=false` stays `false`. A URL placeholder follows the value's scheme.
 - Reverse into a new `.env` adds the names your spec requires, and no longer copies the
   template's `# Generated from .env` header.
+</Callout>
+
+<Callout type="warning">
+**Changed in 0.15.0 — `--force` and `--placeholder` are gone.** `sync -f`, `sync --force` and
+`sync --placeholder` now exit `2` with `'--force' was removed from 'evnx sync' in 0.15.0; use
+'--yes'`, and nothing runs. `--yes` does what they did: skip the prompts and use placeholder
+values. It no longer needs `--prune`. `--format json` (or `--json`) now works in every mode,
+not only with `--check`. See [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0).
 </Callout>
 
 ---
@@ -65,14 +73,14 @@ evnx sync [OPTIONS]
 | `--direction <DIR>` | `forward` | `forward` fills the template, `reverse` fills `.env`. With `--check`, naming one makes the check one-way |
 | `-n`, `--dry-run` | off | Preview; writes nothing, asks nothing, exits `0` whatever it finds |
 | `--check` | off | Report the verdict through the [exit code](#exit-codes). Implies `--dry-run` |
-| `--format <FMT>` | `pretty` | `json` (requires `--check`): which names drifted. See [JSON output](#machine-readable-output) |
-| `-f`, `--force` | off | Skip the prompts and use placeholder values |
+| `--to <TO>` | — | **v0.15.0** — `example` or `env`: another spelling of `--direction forward` or `reverse`. Give one or the other |
+| `--format <FMT>` | `pretty` | `json`, in every mode (**v0.15.0**; before, only with `--check`). See [JSON output](#machine-readable-output) |
+| `--json` | off | **v0.15.0** — the same as `--format json` |
+| `-y`, `--yes` | off | Skip the prompts and use placeholder values. With `--prune`, also confirms the removal. Replaces `-f`/`--force` and `--placeholder` (**v0.15.0**) |
 | `--skip-without-env` | off | Forward only: with no `.env` and no spec to compare, skip (exit `0`) and say so. For pre-commit hooks, not CI |
 | `--template-config <PATH>` | — | A JSON file of placeholder rules: `patterns`, `default`, `allow_actual`. See [Sync configuration](/guides/reference/sync-configuration) |
 | `--naming-policy <P>` | `warn` | `warn`, `error` or `ignore` for names that are not `UPPER_SNAKE_CASE`; defaults to `[sync] naming_policy` in `.evnx.toml` |
 | `--prune` | off | **v0.14.0+** — remove from the template the names no environment file has. A mode of its own: see [`--prune`](#--prune-remove-stale-names-from-the-template) |
-| `-y`, `--yes` | off | **v0.14.0+** — with `--prune` only: remove without asking |
-| `--placeholder` | off | **Deprecated**: does what `--force` does, with a notice |
 | `-v`, `--verbose` | off | More detail |
 | `-q`, `--quiet` | off | Print nothing on success; findings, warnings and errors still print |
 | `--no-color` | off | Plain output (as does `NO_COLOR`) |
@@ -80,7 +88,7 @@ evnx sync [OPTIONS]
 <Callout type="info">
 There are no `-d` or `-p` short flags. Earlier versions of this page listed them; the
 parser has never accepted them and answers `unexpected argument '-d' found`, exit `2`.
-Spell them out: `--direction`, and `--force` rather than `--placeholder`.
+Spell them out: `--direction` (or `--to`), and `--yes` for "no prompts".
 </Callout>
 
 ### Directions
@@ -249,8 +257,8 @@ Error: .env has no variables, while .env.example has 1: evnx could not verify th
 
 ### Machine-readable output
 
-`--format json` requires `--check`. The verdict and the exit code are the same as the
-pretty output's. A two-way report carries `template_only`:
+`--format json` (or `--json`) works in every mode. With `--check` it is the verdict, and the
+exit code is the same as the pretty output's. A two-way report carries `template_only`:
 
 ```bash
 evnx sync --check --format json
@@ -258,6 +266,7 @@ evnx sync --check --format json
 
 ```json
 {
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
   "in_sync": false,
   "direction": "forward",
   "env": ".env",
@@ -275,11 +284,18 @@ evnx sync --check --format json
 }
 ```
 
+A run that writes, or with `--dry-run` would write, adds an `added` array: the names added to the target, sorted. A run that would stop to ask needs `--yes` or `--dry-run`, because JSON mode never asks.
+
+```bash
+evnx sync --yes --format json
+```
+
 With `--direction`, `missing` is the only list. With no `.env`, the report says what it
 compared against:
 
 ```json
 {
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
   "in_sync": false,
   "direction": "forward",
   "env": ".env",
@@ -324,12 +340,10 @@ Reverse copies the template's values instead
 creating a template says `· no terminal: creating .env.example with placeholder values`.
 `sync` reads `CI`, and so does `init` since v0.10.16.
 
-`--force` does the same at a terminal
-(`· Force mode: using placeholder values and skipping prompts`). `--placeholder` is
-deprecated and now means `--force`:
+`--yes` does the same at a terminal. A removed spelling stops before anything runs:
 
 ```text
-! --placeholder is deprecated: it does what --force does (placeholder values, no prompt). Use --force.
+error: '--force' was removed from 'evnx sync' in 0.15.0; use '--yes'
 ```
 
 ---
@@ -398,7 +412,7 @@ Create .env.example with:
   Actual values copied from .env  ! SECURITY RISK
 ```
 
-Without a terminal, or with `--force`, it uses placeholders. The new file carries a
+Without a terminal, or with `--yes`, it uses placeholders. The new file carries a
 two-line header and is created `0644`, because it is meant to be committed:
 
 ```text
@@ -519,8 +533,8 @@ one-line comment above a removed name goes with it.
   second stops at once with exit `2`, `another evnx (process N) is changing .env`, and changes
   nothing. A lock left by a crashed run is taken over.
 - It is a mode of its own, and clap refuses `--prune` together with `--check`, `--format`,
-  `--env`, `--env-name`, `--direction`, `--force`, `--placeholder`, `--skip-without-env`,
-  `--template-config` and `--naming-policy`.
+  `--env`, `--env-name`, `--direction`, `--to`, `--json`, `--skip-without-env`,
+  `--template-config` and `--naming-policy`. `--yes` is how it confirms the removal.
 
 The mirror of this check, for a CI job after a removal merges, is
 [`evnx remove --check`](/guides/commands/remove#is-it-gone-everywhere---check).
@@ -774,6 +788,7 @@ placeholder for it in a template config:
 
 ## See also
 
+- [`evnx align`](/guides/commands/align): give each file the template's sections and key order
 - [Sync Basics](/guides/getting-started/sync-basic): sync step by step
 - [Team Collaboration](/guides/use-cases/team-collaboration): onboarding, adding a variable, review
 - [CI/CD Integration](/guides/integrations/ci-cd-sync): the gate in GitHub Actions, GitLab CI and pre-commit

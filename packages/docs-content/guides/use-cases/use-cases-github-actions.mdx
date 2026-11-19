@@ -3,20 +3,20 @@ section: "use-cases"
 order: 1
 title: "Migrate to GitHub Actions Secrets"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-20"
+updatedAt: "2026-11-17"
 excerpt: "Upload secrets from your .env file directly into GitHub Actions repository secrets using evnx migrate."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["migrate", "github-actions", "ci-cd", "secrets"]
 commands: ["backup", "migrate", "scan", "validate"]
-evnxVersion: "0.10.10"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - reference/concepts-migrate-intro
 draft: false
 ---
 
-`evnx migrate --to github-actions` is the only destination where evnx uploads secrets for you — no commands to copy and run. It calls the GitHub REST API, encrypts each value with the repository's public key, and uploads it. In a terminal it shows a progress bar and a line per secret.
+`evnx migrate --to github` is the only destination where evnx uploads secrets for you — no commands to copy and run. It calls the GitHub REST API, encrypts each value with the repository's public key, and uploads it. In a terminal it shows a progress bar and a line per secret.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
@@ -77,11 +77,11 @@ Every request names API version `2022-11-28`, identifies itself as `evnx/<versio
 export GITHUB_TOKEN=…   # a token with the repository's Secrets permission
 evnx migrate \
   --from env-file \
-  --to github-actions \
+  --to github \
   --repo owner/repo
 ```
 
-`--from env-file` reads a `.env` file; without `--from`, evnx asks in a terminal and uses `env-file` when there is none. It reads `.env` in the current directory, or the file named by `--source-file`. `--env-name production` reads `.env.production`, and `[defaults] env_name` in `.evnx.toml` applies as it does for every other command.
+`--from env-file` reads a `.env` file; without `--from`, evnx asks in a terminal and uses `env-file` when there is none. It reads `.env` in the current directory, or the file named by `--env`. `--env-name production` reads `.env.production`, and `[defaults] env_name` in `.evnx.toml` applies as it does for every other command.
 
 ---
 
@@ -106,7 +106,7 @@ evnx validate
 
 ```bash
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --dry-run
 ```
@@ -133,7 +133,7 @@ Your `.env` probably has local-only variables that should not go into CI. Use `-
 
 ```bash
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST" \
   --dry-run
@@ -156,7 +156,7 @@ Remove `--dry-run`. In a terminal, evnx asks about each secret that already exis
 
 ```bash
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST"
 ```
@@ -165,7 +165,7 @@ To answer both questions up front — and to run without a terminal — add `--y
 
 ```bash
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --exclude "*_LOCAL,*_DEV,DATABASE_URL_TEST" \
   --yes --skip-existing
@@ -220,18 +220,18 @@ A secret that already exists in the repository is never replaced without your sa
 
 **Interactive (default, in a terminal)** — evnx asks for each existing secret, defaulting to No:
 ```bash
-evnx migrate --to github-actions --repo owner/repo
+evnx migrate --to github --repo owner/repo
 # evnx asks "Overwrite existing secret 'DATABASE_URL'?" — Enter means no
 ```
 
 **Skip all existing** — never overwrite:
 ```bash
-evnx migrate --to github-actions --repo owner/repo --skip-existing
+evnx migrate --to github --repo owner/repo --skip-existing
 ```
 
 **Overwrite all existing** — no prompts:
 ```bash
-evnx migrate --to github-actions --repo owner/repo --overwrite
+evnx migrate --to github --repo owner/repo --overwrite
 ```
 
 **`--yes` does not answer "overwrite?"** It only skips "Proceed with migration?". If a secret exists and you passed neither `--skip-existing` nor `--overwrite`, evnx stops before uploading anything:
@@ -256,7 +256,7 @@ A CI job has no terminal, so evnx cannot ask "Proceed with migration?". Without 
 Error: there is no terminal to confirm with.
 
 Add --yes to upload without asking:
-  evnx migrate --to github-actions --repo owner/repo --yes
+  evnx migrate --to github --repo owner/repo --yes
 ```
 
 Pass `--yes`, choose `--skip-existing` or `--overwrite`, and give evnx the token through `GITHUB_TOKEN`:
@@ -265,7 +265,7 @@ Pass `--yes`, choose `--skip-existing` or `--overwrite`, and give evnx the token
       - name: Upload secrets
         env:
           GITHUB_TOKEN: ${{ secrets.SECRETS_ADMIN_TOKEN }}
-        run: evnx migrate --to github-actions --repo owner/repo --yes --skip-existing
+        run: evnx migrate --to github --repo owner/repo --yes --skip-existing
 ```
 
 The token a workflow gets automatically (`secrets.GITHUB_TOKEN`) cannot manage repository secrets. Store a personal access token with the Secrets permission as a secret of its own, and map it to `GITHUB_TOKEN` as above.
@@ -289,7 +289,7 @@ Strip an application prefix from key names so GitHub secrets stay clean:
 ```bash
 # APP_DATABASE_URL → DATABASE_URL
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --strip-prefix "APP_"
 ```
@@ -299,7 +299,7 @@ Add an environment prefix so staging and production secrets can coexist in one r
 ```bash
 # DATABASE_URL → PROD_DATABASE_URL
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --add-prefix "PROD_"
 ```

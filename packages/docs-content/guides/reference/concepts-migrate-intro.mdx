@@ -3,13 +3,13 @@ section: "concepts"
 order: 1
 title: "How evnx migrate works"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Understand the evnx migration pipeline: source loading, filtering, key transforms, and how each destination is handled."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["migrate", "concepts", "secrets", "pipeline"]
 commands: ["backup", "convert", "migrate", "scan", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -48,7 +48,7 @@ evnx reads secrets from one of two sources, chosen with `--from`. Without `--fro
 
 **`env-file`** — parses a `.env` file using the same parser that powers `evnx validate` and `evnx convert`. Comments, quoted values, and multi-line values are all handled. It reads `.env`, unless you name another file:
 
-- `--source-file PATH` reads that file.
+- `--env FILE` reads that file.
 - `--env-name production` reads `.env.production`. A name with no file is an error that lists the environments there are.
 - With neither, `[defaults] env_name` in `.evnx.toml` applies, as it does for every other evnx command. (Before 0.10.10, migrate ignored it and read `.env`.)
 
@@ -76,13 +76,13 @@ The glob syntax is intentionally minimal: `*` matches any sequence of characters
 
 ```bash
 # Migrate only database and AWS credentials
-evnx migrate --to aws --secret-name prod/myapp/config --include "DB_*,AWS_*"
+evnx migrate --to aws-secrets-manager --secret-name prod/myapp/config --include "DB_*,AWS_*"
 
 # Migrate everything except local-only overrides
 evnx migrate --to doppler --exclude "*_LOCAL,*_TEST,*_DEV"
 
 # Combine both
-evnx migrate --to github-actions --repo owner/repo \
+evnx migrate --to github --repo owner/repo \
   --include "DB_*,STRIPE_*" \
   --exclude "*_TEST"
 ```
@@ -112,7 +112,7 @@ Both transforms can be combined: strip first, then add.
 
 ```bash
 # APP_DB_URL → DB_URL → PROD_DB_URL
-evnx migrate --to aws \
+evnx migrate --to aws-secrets-manager \
   --secret-name prod/myapp \
   --strip-prefix "APP_" \
   --add-prefix  "PROD_"
@@ -157,10 +157,10 @@ For every other destination, evnx **prints ready-to-run CLI commands** to your t
 **Save them with `--print-only`.** Without it, stdout carries the status lines and the summary as well as the commands. With it, stdout holds only the commands and everything else goes to stderr, so the file is a script `sh` can run:
 
 ```bash
-evnx migrate --to aws --secret-name prod/myapp/config --print-only > upload-commands.sh
+evnx migrate --to aws-secrets-manager --secret-name prod/myapp/config --print-only > upload-commands.sh
 ```
 
-`--print-only` is new in 0.10.10. It does not combine with `--dry-run`, and does not apply to `github-actions`, which prints no commands.
+`--print-only` is new in 0.10.10. It does not combine with `--dry-run`, and does not apply to `github`, which prints no commands.
 
 The specific command format per destination:
 
@@ -195,7 +195,7 @@ No file is written, no command is printed, no API call is made — not even for 
 
 ```bash
 evnx migrate \
-  --to aws \
+  --to aws-secrets-manager \
   --secret-name prod/myapp/config \
   --include "DB_*" \
   --dry-run
@@ -277,7 +277,7 @@ Remove `--dry-run`. For command-generation destinations, save the commands with 
 
 ```bash
 # Command-generation destination: review first
-evnx migrate --to aws --secret-name prod/myapp/config \
+evnx migrate --to aws-secrets-manager --secret-name prod/myapp/config \
   --exclude "*_LOCAL,*_TEST" --print-only > upload-commands.sh
 
 cat upload-commands.sh   # review; keep create-secret or update-secret
@@ -288,7 +288,7 @@ sh upload-commands.sh    # run
 # GitHub Actions: direct upload, token from the environment
 export GITHUB_TOKEN=…
 evnx migrate \
-  --to github-actions \
+  --to github \
   --repo owner/repo \
   --exclude "*_LOCAL"
 ```
@@ -317,7 +317,7 @@ rm .env
 | AWS | Generates JSON or CLI snippets | Prints `aws secretsmanager` commands with full JSON |
 | Interaction | No prompts | In a terminal, asks for a missing flag; GitHub asks before uploading and about existing secrets |
 
-For GCP, `evnx convert --to gcp-secrets --project my-gcp-project > upload.sh` and `evnx migrate --to gcp --project my-gcp-project --print-only > upload.sh` print the same `upsert_secret` script (convert adds a header). **v0.13.0+** — the secret names now agree: both lowercase them with `-` for `_` (`database-url`), from one shared function.
+For GCP, `evnx convert --to gcp-secrets --project my-gcp-project > upload.sh` and `evnx migrate --to gcp-secret-manager --project my-gcp-project --print-only > upload.sh` print the same `upsert_secret` script (convert adds a header). **v0.13.0+** — the secret names now agree: both lowercase them with `-` for `_` (`database-url`), from one shared function.
 
 <Callout type="warning">
 ⚠️ **Projects migrated with 0.12** got `DATABASE_URL` (the `.env` name). Running `migrate` with 0.13.0 creates `database-url` **beside** it; the old upper-case secret stays. Point the app at the new names, then delete the old ones (`gcloud secrets delete DATABASE_URL --project=my-gcp-project`).

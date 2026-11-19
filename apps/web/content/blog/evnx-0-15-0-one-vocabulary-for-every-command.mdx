@@ -1,0 +1,331 @@
+---
+title: "evnx 0.15.0: One Vocabulary, One Exit-Code Table, Safer Defaults"
+publishedAt: "2026-11-19"
+excerpt: "evnx 0.15.0 gives every command the same flags and one exit-code table, adds evnx set and get, align, doctor --all and run --prefer, and makes the runtime and cloud defaults safer. It is a minor release with breaking changes: here is what changed and how to upgrade your scripts in five minutes."
+author: "ajit"
+category: "release"
+tags: ["release", "cli", "breaking", "exit-codes", "security", "ci", "evnx"]
+featured: true
+draft: false
+relatedSlugs:
+  - "exit-codes-as-an-api"
+  - "evnx-0-11-0-what-you-hit-and-the-contracts"
+  - "how-to-verify-an-evnx-download"
+---
+
+evnx 0.15.0 is about three things:
+
+- **One CLI contract.** The same idea has the same flag spelling in every command, and one
+  exit-code table applies everywhere.
+- **Safer runtime and cloud defaults.** `run` refuses more names that can start a program,
+  tokens expire, shares are read-only by default, large deletions ask first, and files that
+  hold secrets are private on every operating system.
+- **Secrets held in one type that redacts itself**, so a value cannot end up in a log line, an
+  error or a debug print by accident.
+
+<Callout type="warning" title="A minor release with breaking changes">
+Old flag spellings are removed, not aliased, and some defaults changed. Read
+[Upgrade in five minutes](#upgrade-in-five-minutes) before you update scripts or CI. Every
+removed spelling stops with a hint and exit `2`, so nothing silently does the wrong thing.
+The complete list, with what each script must change, is in
+[Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0).
+</Callout>
+
+---
+
+## Highlights
+
+- **`evnx set` and `evnx get`**: change or read one variable in place, keeping comments, order,
+  `export` and quoting. `PORT=$(evnx get PORT)` works; secrets come from a no-echo prompt or a pipe
+  and are never printed without `--reveal`. See [`set`](/guides/commands/set) and
+  [`get`](/guides/commands/get).
+- **One flag vocabulary.** `--env` is a file, `--env-name` is a name, and `--example`, `-C/--dir`,
+  `--yes`, `-n/--dry-run` and `--format` (with `--json` as a shorthand) mean the same in every command.
+- **One exit-code table**, printed in every `--help`, in `evnx commands --json` and in the CLI's
+  `docs/exit-codes.md`: `0` clean, `1` findings, `2` could not run, `4` declined or needs `--yes`,
+  `10` to `15` cloud and platform failures. More on why that matters in
+  [Exit codes as an API](/blog/exit-codes-as-an-api).
+- **JSON for scripts and agents.** Every JSON document starts with a `run` header (tool, version,
+  schema, features). The org, vault, cloud and auth list commands gain `--format json`, and
+  `auth status --check` and `cloud status --check` exit `10` when signed out.
+- **[`evnx align`](/guides/commands/align)** gives every `.env` the layout of its template without
+  touching a value. It was contributed by Henrik Svensson
+  ([@henriksvensson](https://github.com/henriksvensson)) in evnx #302, his first contribution.
+- **[`evnx doctor --all`](/guides/commands/doctor#--all)** runs the doctor checks, `validate`,
+  `sync --check` and the scan as one report with one verdict.
+- **[`run --prefer env|vault`](/guides/commands/run#which-value-wins)** (also on `cloud run`): test with
+  your shell's values, deploy with the vault's. The default is unchanged.
+- **`run` behaves like the command it wraps.** On Unix it hands over the terminal, forwards signals
+  and exits `128+n` when a signal ended the command.
+- **[`scan --policy FILE`](/guides/commands/scan#a-policy-the-repository-cannot-lower)** sets a
+  floor a repository's own config cannot lower; `scan --exit-only` and `--strict` suit CI.
+- **`diff A B`** compares two files. **`convert`** reads JSON and dotenv, writes dotenv, reads `-` for
+  standard input, and writes Kubernetes ConfigMaps or a Secret and ConfigMap split.
+- **`cloud run --min-version N`** refuses to run with a vault older than N.
+- **`--env-name prod`** pairs with `.env.prod.example`, and `init` adopts a project that only has
+  named env files.
+- **Windows**: files that hold secrets become owner-only through an ACL, as mode 600 does elsewhere.
+- **Install**: one address, `https://evnx.dev/install.sh`. Shell completions ship in the Linux and
+  macOS archives, and the installer tells you how to use `evnx` now and how to keep it on `PATH`.
+- **Signed SBOM**: `evnx-0.15.0.cdx.json` (CycloneDX 1.5) lists every crate in the build and
+  carries the same signed attestation as the binaries. See [Verify your download](#verify-your-download).
+
+---
+
+## Upgrade in five minutes
+
+1. **Update** with the channel you used before, or:
+
+   ```bash
+   curl -fsSL https://evnx.dev/install.sh | bash
+   ```
+
+   `evnx update` prints the right command for your copy. In CI, pin the version with
+   `EVNX_VERSION=0.15.0` and move the pin once your scripts pass.
+
+2. **Search scripts and CI for the removed spellings.** Each one now stops with
+   `error: '<old>' was removed from 'evnx <command>' in 0.15.0; use '<new>'` and exit `2`. There are 45;
+   the [upgrade guide](/guides/reference/upgrading-to-0-15-0) has the table and `sed` one-liners.
+3. **Check the exit codes your scripts test.** `backup` and `restore` failures are now `2`, and a
+   command killed by a signal under `run` exits `128+n`.
+4. **Add `--yes` where a command asks a question without a terminal** (CI, cron, containers). Without it
+   the command exits `4` and names `--yes`. This now includes `cloud push` when it would remove most of
+   a vault's keys, `org seats --set`, and `set` replacing a value.
+5. **Cloud and platform scripts.** Pass `--vault VAULT` or `--all-vaults` (and `--no-expiry` if you
+   need it) to `auth token create`; `--role developer` to `vault share` if the recipient needs write
+   access; the full `name/environment` to `vault delete --yes`; `--prune-all` to a `platform push
+   --prune` that removes most of an environment.
+6. **Run `evnx doctor --all` once** in each project.
+
+In a GitHub Actions workflow the flag change is one line:
+
+```diff
+-        run: evnx validate --fail-on warning --format github-actions
++        run: evnx validate --fail-on warning --format github
+```
+
+---
+
+## Breaking changes
+
+### Exit codes
+
+- `backup` failures that exited `3`, `4`, `5` or `6` now exit `2`; `restore` `3` is now `2` (`4`
+  cancelled and `5` written aside stay).
+- A command that needs a confirmation, has no terminal and got no `--yes` exits `4` everywhere (it was
+  `2` on `migrate` and some others).
+- A current folder that cannot be read exits `2`, not `1`.
+- A command killed by a signal under `run` exits `128+n`, not `1`.
+
+### `run` and the cloud
+
+- `run` and `cloud run` refuse more names that start a program or load code: `EDITOR`, `PAGER`,
+  `VISUAL`, `GIT_PAGER`, `GIT_ASKPASS`, `SSH_ASKPASS`, `RUSTC_WRAPPER`, `CLASSPATH`, `PERL5DB`,
+  `PYTHONINSPECT`, and the prefixes `npm_config_`, `NPM_CONFIG_` and `GIT_CONFIG_`. Pass
+  `--allow-unsafe-names` or `--exclude` the name.
+- `auth token create` expires after 90 days (`--no-expiry` for none) and needs `--vault VAULT` or
+  `--all-vaults`.
+- `vault share` gives `viewer` by default. `vault delete` needs the full `name/environment` (or an
+  id), also with `--yes`.
+- `org seats --set` and `--unlimited` ask first. `org accept TOKEN` still works with a warning; use
+  `--token-stdin` or the prompt.
+- `cloud push` asks before removing more than half of the previous version's keys (at least 4).
+- `platform push --prune` stops when it would remove more than half of an environment (at least 4)
+  unless `--prune-all`. `platform` warns about a readable token file and prints the API address when it
+  is overridden.
+- `cloud pull` and `platform pull` write the pulled file with mode 600.
+- Windows: `.env`, backups and `credentials.json` keep access only for you, SYSTEM and
+  Administrators (as root can read a 0600 file). Setups that read them from another account must
+  grant it access again.
+
+### Local files
+
+- `--env-name` takes a name, not a path, and uses the environment's own template (`.env.prod.example`)
+  when it exists. Outside a git repository only the working folder's `.evnx.toml` applies.
+- `remove` refuses to leave dangling `${NAME}` references (`--allow-dangling`), and `remove '*'` needs
+  `--all-names`.
+- `template` needs `--force` to replace an existing output and refuses a symlink that leaves the folder
+  unless `--follow-symlinks`.
+- `validate` runs the URL, port and email checks by default, as warnings (`--no-formats` turns them off).
+- `diff A B` compares two files, and the left file's value is listed first.
+- `init` and `spec init` mark a name required only when the template gives it no default; templates
+  never turn debugging on (`DEBUG=false`).
+- `convert --to yaml` quotes every value; `add` and `init --from-source` write no dated "Added by evnx"
+  line.
+- `migrate --to vercel` prints `--force` only with `--overwrite`.
+- `doctor` no longer reads `EVNX_AUTO_FIX`; pass `--fix`.
+- `restore --output -` writes the decrypted text to stdout (it was refused; a terminal still needs
+  `--show-values`).
+- `parse --format json` is schema 2 (additive fields only).
+- The install address is `https://evnx.dev/install.sh` everywhere.
+
+---
+
+## One vocabulary
+
+Each evnx command was designed well on its own, but together they did not share a vocabulary. The env
+file was `--env` on `validate`, `--file` on `cloud push` and `--source-file` on `migrate`; `-p` meant
+"the folder" on `init`, and `-f` meant "skip the prompts" on `sync` and "this file" on `cloud`.
+
+There were two ways to fix it: add the common spelling and keep the old ones as aliases, or remove
+the old ones. Aliases are the polite choice, and they leave the problem in place: every page, example
+and forum answer shows two names for one thing, and a new command can still copy whichever it saw last.
+So the old spellings are gone, and typing one fails in a way that tells you what to do:
+
+```console
+$ evnx sync --force
+error: '--force' was removed from 'evnx sync' in 0.15.0; use '--yes'
+```
+
+It exits `2` before it reads a file or contacts a server, so nothing is half-done. `evnx commands
+--json` lists the same pairs under `removed`, for anything that wraps evnx. The common ones:
+
+| You wrote | Write | Commands |
+|---|---|---|
+| `-p ./app`, `--path ./app` | `-C ./app`, `--dir ./app` | `init`, `add`, `remove`, `doctor` |
+| `--file .env.ci`, `-f .env.ci` | `--env .env.ci` | `cloud push\|pull\|diff\|link`, `platform diff\|pull\|push` |
+| `--format github-actions` | `--format github` | `validate`, `scan` |
+| `--to github-actions` | `--to github` | `convert`, `migrate`, `cloud export` |
+| `--format text` | `--format pretty` | `validate`, `scan`, `parse`, `doctor`, `auth` |
+| `sync --force`, `-f`, `--placeholder` | `sync --yes` | `sync` |
+| `restore --force`, `cloud pull --force` | `--yes` | `restore`, `cloud pull` |
+| `platform --env-name production` | `platform --target production` | `platform` |
+| `vault create -e production` | `vault create --environment production` | `vault` |
+
+A test walks the command tree that `evnx commands --json` prints and fails the build when a new
+command invents a spelling of its own, so the work does not have to be done twice.
+
+---
+
+## What else is new
+
+**Commands and flags**
+
+- `evnx set NAME[=VALUE]` and `evnx get NAME` (`--reveal`, `--exists`, `--if-missing`, `-n/--dry-run`, `--json`).
+- `evnx align`: one layout for every `.env`, with `--check` for CI.
+- `evnx history` and `evnx undo FILE`: see and reverse the copies evnx kept before changing a file.
+- `doctor --all`; `template INPUT OUTPUT` (with `-` for stdout); `parse` facts (`exported`, `multiline`,
+  `duplicate`, `expands`, `length`) without showing a value.
+- `convert --from json|dotenv`, `--to dotenv` (an exact round trip), `-` for stdin, and
+  `--kind secret|configmap|split`; `migrate --to` takes `convert`'s names; `migrate --dry-run` works
+  without the provider's target flag.
+- `scan --policy FILE` / `EVNX_POLICY`, `scan --exit-only`, `scan --strict`, a "did you mean" for
+  unknown config keys, and short values under secret names at `--confidence low`.
+- `run --prefer env|vault`, `cloud run --min-version N`, and a warning (names only) for proxy and CA
+  variables.
+- `--json` on every command with `--format`, `-n` for `--dry-run` everywhere, `-C/--dir`, and `--env` on
+  cloud and platform.
+- `init --here`, `init --no-contract`, `add --example`, `add --no-template`, `spec check --format json`.
+- `auth token create --all-vaults` / `--no-expiry`, `org accept --token-stdin`, `platform push --prune-all`.
+- `backup --gitignore` / `--no-gitignore`, and a hint for a weak new passphrase (the passphrase is never
+  printed).
+- `update --check` uses `GITHUB_TOKEN` or `GH_TOKEN` and falls back when the API rate-limits;
+  `update --list` shows the running copy.
+
+**Help and messages**
+
+- `evnx --help` lists commands in four groups (Local files, Convert and run, Cloud, This tool) with a
+  "Start here" block; `commands --json` adds `group` and `network`.
+- Arguments are checked before the banner; a usage error prints only the error; the line under an error
+  says why there is no verdict.
+- No tracker ids, history notes or markup in any `--help`.
+- `--key-file` is the name `backup` and `restore` show (`--password-file` still works).
+
+**Fixed**
+
+- `SIGTERM`, `SIGHUP` and `SIGQUIT` sent to `evnx run` no longer leave the command running as an orphan.
+- A UTF-16 env file (what PowerShell's `>` writes) is named, with the fix, instead of "stream did not
+  contain valid UTF-8".
+- The `migrate --to aws-secrets-manager --dry-run` JSON preview no longer prints secret values.
+- `restore`'s `.restored` plaintext file is mode 600, git-ignore checked, and named in full.
+- Every backup evnx keeps is private (mode 600), recorded in `.evnx/backups.json` and git-ignored.
+- Projects with only named env files (`.env.prod`, no `.env`) are understood, and a mistyped
+  `--env-name` is no longer created silently.
+- An unreachable server's error names the port; `update --help` lists all eight channels.
+
+**Under the hood**
+
+- Every env value is held in one `Secret` type: redacted in debug output, wiped from memory when dropped,
+  and readable only through one audited call. Tests fail the build if a report could hold a secret or a
+  value could reach a print line.
+- `validate`, `sync`, `scan`, `add` and `init` print their result through one renderer, so text, JSON,
+  SARIF, `-q` and `--exit-only` behave the same way.
+- Rust edition 2024; the Windows debug build no longer needs a linker flag.
+
+The full list, with the reason for each change, is in the
+[CHANGELOG](https://github.com/urwithajit9/evnx/blob/main/CHANGELOG.md#0150---2026-11-19). The release
+notes for each version are on the [changelog page](/changelog).
+
+---
+
+## Install
+
+```bash
+# Linux / macOS
+curl -fsSL https://evnx.dev/install.sh | bash
+
+# Homebrew (macOS, Linux)
+brew install urwithajit9/evnx/evnx
+
+# npm
+npm install -g @evnx/cli            # global
+npm install --save-dev @evnx/cli    # per project, then: npx evnx
+npx @evnx/cli --version             # no install
+
+# Python
+pipx install evnx
+
+# Cargo (compile from source)
+cargo install evnx --all-features
+```
+
+```powershell
+# Windows
+scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx
+scoop install evnx
+
+winget install urwithajit9.evnx
+```
+
+`cargo install evnx` without `--all-features` builds a binary without `auth`, `vault` and `cloud`.
+Every other channel ships them.
+
+## Verify your download
+
+Every archive has a signed build provenance attestation that ties it to the workflow run and commit that
+built it, and a checksum:
+
+```bash
+sha256sum -c evnx-*.tar.gz.sha256
+
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \
+  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml \
+  --source-ref refs/tags/v0.15.0
+```
+
+`evnx-0.15.0.cdx.json` is a CycloneDX 1.5 software bill of materials for this release: every crate in
+the build, with all features on. It has its own checksum and the same signed attestation:
+
+```bash
+sha256sum -c evnx-0.15.0.cdx.json.sha256
+gh attestation verify evnx-0.15.0.cdx.json -R urwithajit9/evnx \
+  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml
+
+grype sbom:evnx-0.15.0.cdx.json                 # or: trivy sbom evnx-0.15.0.cdx.json
+osv-scanner scan source -L evnx-0.15.0.cdx.json
+```
+
+At release, Grype and Trivy report no vulnerabilities in the 253 packages. The longer walk-through is
+[How to verify an evnx download](/blog/how-to-verify-an-evnx-download), and the threat model is on the
+[security page](/security).
+
+---
+
+## Thank you
+
+`evnx align` was contributed by Henrik Svensson ([@henriksvensson](https://github.com/henriksvensson)) in
+[evnx #302](https://github.com/urwithajit9/evnx/pull/302). It was rebased and merged as #304.
+Thank you.
+
+The full diff is on GitHub:
+[v0.14.1...v0.15.0](https://github.com/urwithajit9/evnx/compare/v0.14.1...v0.15.0).

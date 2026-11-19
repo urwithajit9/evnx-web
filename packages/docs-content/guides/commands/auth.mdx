@@ -3,12 +3,13 @@ title: "evnx auth"
 section: commands
 order: 7
 publishedAt: "2026-09-16"
+updatedAt: "2026-11-17"
 excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, enable two-factor authentication, and manage sessions and devices — without your password ever leaving the machine."
 difficulty: intermediate
 timeToComplete: "10 minutes"
 tags: ["cloud", "auth", "srp", "totp", "security", "evnx"]
 commands: ["auth", "auth devices disavow", "auth devices list", "auth download-data", "auth key-bundle", "auth login", "auth logout", "auth register", "auth resend-verification", "auth sessions list", "auth sessions revoke", "auth sessions revoke-others", "auth status", "auth token create", "auth token list", "auth token revoke", "auth totp disable", "auth totp enable", "auth totp recovery-codes", "cloud pull", "cloud status", "vault list"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -44,7 +45,7 @@ evnx auth download-data --output my-data.json
 | `logout` | Sign out and delete the local session |
 | `resend-verification` | **v0.14.0+** — send the email-verification link again. See [below](#lost-the-verification-email) |
 | `key-bundle` | **v0.14.0+** — print the sealed key material CI reads as `EVNX_KEY_BUNDLE`. See [API tokens for CI](#api-tokens-for-ci) |
-| `status` | Show your account as the **server** sees it |
+| `status` | Show your account as the **server** sees it. `--check` is a script's yes or no (**v0.15.0**) |
 | `token` | Mint, list and revoke API tokens for CI |
 | `totp` | Enable, disable and re-issue recovery codes for 2FA |
 | `sessions` | List and revoke active sessions |
@@ -235,15 +236,34 @@ evnx auth token list
 evnx auth token revoke ci-deploy
 ```
 
-The name is a **positional** argument. `--scope` takes `read` or `read_write`, `--vault`
-restricts the token to one vault, and `--expires-in-days` sets an expiry — omit it and the
-token never expires.
+The name is a **positional** argument. `--scope` takes `read` (the default) or `read_write`,
+`--vault` restricts the token to one vault, and `--expires-in-days` (1 to 3650) sets an expiry.
+
+<Callout type="warning" title="Changed in v0.15.0: 90 days, and a scope is required">
+- **A token expires after 90 days** unless you say otherwise. `--expires-in-days N` sets another
+  length; `--no-expiry` makes one that never expires. Before, omitting the expiry made a token that
+  never expired.
+- **A token needs a scope.** Pass `--vault VAULT` for one vault, or `--all-vaults` to reach every
+  vault on the account (the two conflict). A bare `evnx auth token create NAME` exits `2`:
+
+```text
+Error: a token needs a scope: pass --vault <VAULT> for one vault, or --all-vaults to reach every vault on the account
+```
+
+A token that never expires, or that reaches every vault, is called out in the output. Prefer
+`--vault`: a leaked all-vaults token exposes all of them. A script that created a token with no
+scope or no expiry now needs `--vault` or `--all-vaults`, and `--no-expiry` if it relied on none.
+</Callout>
 
 **v0.14.0+** — `create` also prints a **CI key bundle** (`evnxkb1_…`) after the token, to store
 as `EVNX_KEY_BUNDLE`. It is your sealed key material, with no plaintext secret in it: a
 pipeline needs `EVNX_TOKEN`, `EVNX_MASTER_PASSWORD` and `EVNX_KEY_BUNDLE`, and
 [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens#the-recommended-setup-three-secrets)
 shows them together. `--no-key-bundle` leaves it out.
+
+**v0.15.0** — `--format pretty|json` (or `--json`) picks the output. `json` prints one document
+with `name`, `token`, `scope`, `vault`, `expires_at` and `key_bundle` and nothing else, for a
+script to pass to a secret store. `pretty` was called `text`; `--format text` now exits `2`.
 
 With `-q` (**v0.10.18+**) `create` prints the new token alone on stdout and nothing else,
 so a script can capture it:
@@ -259,7 +279,8 @@ evnx auth key-bundle
 ```
 
 Run it after a master-password change too, and replace the CI secret: a bundle made under the
-old password no longer opens. `-q` prints the bundle alone.
+old password no longer opens. `-q` prints the bundle alone, and `--format json` (**v0.15.0**,
+also `--json`) prints `{"key_bundle": "…"}`.
 
 <Callout type="tip" title="Or mint it in the dashboard">
 The same tokens are listed and created at **[app.evnx.dev](https://app.evnx.dev)** →
@@ -344,6 +365,9 @@ evnx auth sessions revoke <ID>
 evnx auth sessions revoke-others
 ```
 
+**v0.15.0+** — `sessions list` (and `devices list`) take `--format json` or `--json`: one document with
+the usual `run` header, names and metadata only.
+
 Revocation is immediate, not eventual. It kills the refresh token **and** blocklists the session, so the 15-minute access token dies at once rather than lingering until it expires. `revoke-others` is what you want after losing a laptop — it clears every session except the one you are typing in.
 
 ---
@@ -355,7 +379,7 @@ evnx auth devices list
 evnx auth devices disavow <ID>
 ```
 
-**v0.8.0+.** Where this account has signed in from — a network and a browser, with repeat sign-ins collapsed into one row.
+**v0.8.0+.** (`--format json` since v0.15.0.) Where this account has signed in from — a network and a browser, with repeat sign-ins collapsed into one row.
 
 <Callout type="warning" title="Not the same as sessions, and not a location">
 A **session** is a live credential you can revoke. A **device** is somewhere you have signed in from, which may have no session left at all. Lost a laptop? `sessions revoke-others`. Think somebody else has been in your account? `devices disavow`.
@@ -422,6 +446,26 @@ A member who cannot assign seats is told to ask an owner or admin instead, and
 someone whose one seat is in another organisation is told to release it there
 first. The dashboard shows the same note, with a **Take a seat** button. More in
 [After you subscribe](/guides/reference/after-you-subscribe).
+
+### `--check`: is anyone signed in
+
+**v0.15.0+.** `evnx auth status --check` makes no request. It exits `0` when signed in and `10` when
+not, for a script that only needs the answer:
+
+```bash
+evnx auth status --check || evnx auth login
+```
+
+`-q` prints nothing; `--json` prints `{signed_in, server, user}` after the `run` header (`user` is left
+out when signed out). `evnx cloud status --check` does the same for the cloud commands.
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "server": "https://api.evnx.dev",
+  "signed_in": false
+}
+```
 
 <Callout type="info" title="Two different status commands">
 `evnx auth status` is about your **account**. `evnx cloud status` is about **this machine** — whether it has credentials, whether the directory is bound to a vault, and which server it will talk to.

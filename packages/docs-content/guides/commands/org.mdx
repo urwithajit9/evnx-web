@@ -131,6 +131,9 @@ You may only invite at a rank you outrank, so an admin cannot invite another adm
 
 ### Seeing what is outstanding
 
+**v0.15.0+** — `org list`, `org members`, `org invites` and `org billing` take `--format json` (or `--json`):
+one document with the usual `run` header, names and metadata only.
+
 ```bash
 evnx org invites
 ```
@@ -154,8 +157,15 @@ The redemption check still applies, so only the invited address could ever use i
 ### Accepting
 
 ```bash
-evnx org accept evnx_inv_b315944e8661…
+printf %s "$INVITE_TOKEN" | evnx org accept --token-stdin
+evnx org accept                     # asks for the token, input hidden
 ```
+
+**Changed in v0.15.0:** `--token-stdin` reads the invitation token from one line of stdin. With no token
+and a terminal, `org accept` asks for it with the input hidden; with neither, it exits `2`. The old
+form, `evnx org accept evnx_inv_…`, **still works in this release**, with a warning that the token stays
+in your shell history and in `ps`. It will stop working in a later release, so move scripts to
+`--token-stdin`.
 
 Joining puts you in the directory. It assigns **no seat**, so your limits do not change until an administrator gives you one — and it gives you access to no vault at all.
 
@@ -171,6 +181,15 @@ evnx org seats --set 10     # buy ten
 evnx org seats --unlimited  # no limit
 evnx org assign  colleague@example.com
 evnx org release colleague@example.com
+```
+
+**Changed in v0.15.0:** `--set` and `--unlimited` **ask first**. They print the change
+(`seats purchased X -> N`) and ask, default No. `-y`, `--yes` skips the question, and without a terminal
+and without `--yes` they exit `4`. Bare `evnx org seats` only shows, as before. A script that sets seats
+needs `--yes`:
+
+```bash
+evnx org seats --set 10 --yes
 ```
 
 <Callout type="warning">

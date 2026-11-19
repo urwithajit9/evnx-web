@@ -3,13 +3,13 @@ section: "use-cases"
 order: 1
 title: "Init in the Wild — Real Developer Scenarios"
 publishedAt: "2026-03-06"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-17"
 excerpt: "See how real developers use evnx init in daily workflows: Blank for scripts, Blueprint for quick starts, and Architect for custom stacks."
 difficulty: "beginner"
 timeToComplete: "12 minutes"
 tags: ["init", "use-cases", "tutorial", "workflow", "patterns"]
 commands: ["add", "add custom", "init", "validate"]
-evnxVersion: "0.10.1"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/init-basic
   - commands/init
@@ -342,7 +342,7 @@ graph TD
 ```bash
 # In your Makefile
 setup:
-	evnx init --yes --path ./config
+	evnx init --yes --dir ./config
 	evnx validate --env config/.env --example config/.env.example --quiet
 ```
 
@@ -354,9 +354,9 @@ target on purpose.
 
 ```bash
 # Monorepo: different modes per package
-evnx init --blueprint supabase_fullstack --yes --path ./frontend   # Next.js + Supabase
-evnx init --with gin,redis,kafka --yes --path ./backend             # custom Go services
-evnx init --yes --path ./scripts                                    # blank
+evnx init --blueprint supabase_fullstack --yes --dir ./frontend   # Next.js + Supabase
+evnx init --with gin,redis,kafka --yes --dir ./backend             # custom Go services
+evnx init --yes --dir ./scripts                                    # blank
 ```
 
 ### Tip 3: Preview before committing

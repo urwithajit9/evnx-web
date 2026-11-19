@@ -3,13 +3,13 @@ section: "commands"
 order: 4
 title: "evnx template"
 publishedAt: "2026-03-11"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Reference documentation for the evnx template command: generate configuration files from templates with variable substitution and filters."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["template", "reference", "cli", "config", "env", "gitignore"]
 commands: ["template"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - reference/env-file-syntax
@@ -89,15 +89,26 @@ $ ls -l config.yaml | cut -c1-10
 ## Command signature
 
 ```bash
-evnx template --input <TEMPLATE> --output <OUTPUT> [OPTIONS]
+evnx template [OPTIONS] <INPUT> <OUTPUT>
+evnx template [OPTIONS] --input <TEMPLATE> --output <OUTPUT>
+```
+
+**v0.15.0+.** The template and the output are positional: `evnx template config.yaml.template
+config.yaml`, with `-` for stdout. `--input` and `--output` still work, and the rest of this page
+uses them where it helps to be explicit. Give the two arguments or the two flags, not a mix: that
+is a usage error.
+
+```bash
+evnx template config.yaml.template config.yaml
+evnx template config.yaml.template -          # print on stdout, write no file
 ```
 
 ### Required arguments
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `--input` | `path` | The template to render |
-| `--output` | `path` or `-` | Where to write the result. `-` prints it on stdout and writes no file |
+| `INPUT` or `--input` | `path` | The template to render |
+| `OUTPUT` or `--output` | `path` or `-` | Where to write the result. `-` prints it on stdout and writes no file |
 
 ### Optional options
 
@@ -105,9 +116,11 @@ evnx template --input <TEMPLATE> --output <OUTPUT> [OPTIONS]
 |------|---------|-------------|
 | `--env` | `.env` | The env file to take values from. Without `--env`, `[defaults] env_name` in `.evnx.toml` applies when it is set |
 | `--env-name` | — | Use `.env.<NAME>` instead of `.env`. Conflicts with `--env`; a name whose file does not exist is an error listing the ones that do |
+| `--force` | off | **v0.15.0** — replace an existing output. Without it an existing output is refused (exit `2`) and nothing is written; a dry run reports the same refusal. Scripts that regenerate a file on every run add it |
+| `--follow-symlinks` | off | **v0.15.0** — write through an output that is a symlink to a file outside the current folder. Without it such an output is refused |
 | `--allow-unresolved` | off | **v0.11.0+** — write a placeholder that has no value through literally and exit `0`. Without it, an unresolved placeholder is an error and nothing is written |
 | `--strict` | — | The default since 0.11.0. Still accepted, with a notice; removed in 1.0 |
-| `--dry-run` | off | **v0.10.5+** — render and report what would be written; write nothing |
+| `-n`, `--dry-run` | off | **v0.10.5+** — render and report what would be written; write nothing |
 | `--mkdir` | off | **v0.10.5+** — create the output's missing directories |
 | `--mode` | `0600` for a new file | **v0.10.3+** — the output's file mode in octal (`0640`), applied to a new or an existing file |
 | `--gitignore` | — | Add the output to `.gitignore` without asking. Conflicts with `--no-gitignore` |

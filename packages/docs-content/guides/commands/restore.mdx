@@ -3,13 +3,13 @@ title: "evnx restore"
 section: commands
 order: 4
 publishedAt: "2026-03-10"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Decrypt a backup made by evnx backup back into a .env file. Never replaces a file silently, keeps the one it replaces, says why a backup will not open, and has exit codes a script can branch on."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["restore", "backup", "encryption", "disaster-recovery", "evnx"]
 commands: ["backup", "cloud export", "cloud pull", "restore"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/backup
@@ -29,7 +29,7 @@ file that evnx itself could not read.
 <Callout type="warning">
 **Changed in 0.10.11 — check your scripts.**
 
-- **`--yes` (alias `--force`, `-y`)** replaces an existing output without asking.
+- **`--yes` (`-y`)** replaces an existing output without asking.
   Without it and with no terminal, the run stops with exit `2` and a line naming
   `--yes` and `--output` — it failed with `IO error: not a terminal`. The replaced
   file is kept as `<output>.bak` either way.
@@ -55,17 +55,18 @@ evnx restore <BACKUP> [OPTIONS]
 | Argument / flag | Default | Description |
 |-----------------|---------|-------------|
 | `<BACKUP>` | required | The backup file to decrypt, as written by `evnx backup`. A file on disk; for a vault, use [`evnx cloud pull`](/guides/commands/cloud) |
-| `--output <PATH>` | the file the backup was made from | **v0.11.0+** — `.env.staging` for a backup of `.env.staging`, in the current folder (it was always `.env`). A recorded name that is not `.env` or `.env.<name>` restores to `.env`. Not the backup itself |
-| `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. Also accepted as `--force` |
+| `--output <PATH>` | the file the backup was made from (`-` is stdout, **v0.15.0**) | **v0.11.0+** — `.env.staging` for a backup of `.env.staging`, in the current folder (it was always `.env`). A recorded name that is not `.env` or `.env.<name>` restores to `.env`. Not the backup itself |
+| `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. `--force` was removed in v0.15.0 |
+| `--show-values` | off | **v0.15.0** — with `--output -`, print to a terminal anyway |
 | `--inspect` | off | Show the variable names in the backup — never values — and write nothing |
-| `--dry-run` | off | Decrypt and check the content, and write nothing |
-| `--password-file <PATH>` | — | Read the passphrase from a file. Also accepted as `--key-file`, the spelling `backup` uses |
+| `-n`, `--dry-run` | off | Decrypt and check the content, and write nothing |
+| `--key-file <PATH>` | — | Read the passphrase from a file; `backup` takes the same flag. `--password-file` still works as a hidden alias |
 | `--gitignore` | off | Add the restored file to `.gitignore` without asking |
 | `--no-gitignore` | off | Skip the `.gitignore` check |
 | `-v`, `--verbose` | off | Print each step to stderr |
 | `-q`, `--quiet` | off | Print nothing on success; warnings and errors still print |
 
-`EVNX_PASSWORD` is read when there is no `--password-file` — see
+`EVNX_PASSWORD` is read when there is no `--key-file` — see
 [The passphrase](#the-passphrase).
 
 ---
@@ -83,7 +84,7 @@ relied on the old destination.
 ### Restore to `.env`
 
 ```bash
-evnx restore .env.backup --password-file backup.key
+evnx restore .env.backup --key-file backup.key
 ```
 
 ```text
@@ -110,7 +111,7 @@ Next steps:
   Docs: https://docs.evnx.dev/cli/commands/restore
 ```
 
-Without `--password-file` (and without `EVNX_PASSWORD`) evnx asks once, with no
+Without `--key-file` (and without `EVNX_PASSWORD`) evnx asks once, with no
 confirmation: a mistyped passphrase only fails to decrypt.
 
 ### Restore somewhere else
@@ -119,7 +120,24 @@ confirmation: a mistyped passphrase only fails to decrypt.
 evnx restore .env.backup --output .env.staging
 ```
 
-A new file is created `0600`. `--output -` (standard output) is refused since 0.13.0, as for `backup`: a restored `.env` is never printed. Name a file.
+A new file is created `0600`.
+
+### Restore to standard output
+
+**v0.15.0+.** `--output -` writes the decrypted text to stdout. It was refused before. Every status line goes to
+stderr, nothing is written to disk, so there is no `.bak` and no `.gitignore` question:
+
+```bash
+evnx restore .env.backup --key-file /run/secrets/evnx-pass --output - | evnx validate --env -
+```
+
+```text
+PORT=1
+TOKEN_X=abcdefgh12345678
+```
+
+On a terminal it is **refused** unless you pass `--show-values`, as `parse --values` is, because a value
+printed there stays in the scrollback. Piped, it is not needed.
 
 ---
 
@@ -155,7 +173,7 @@ Answering no (or Enter) exits `4` and changes nothing:
 
 **v0.12.0+** — this is the question [`evnx cloud pull`](/guides/commands/cloud#replacing-a-file-that-differs)
 asks over a file that differs, in the same words, and a declined pull now exits `4`
-too. `--force` is accepted as the same flag as `--yes`, as in `cloud pull`.
+too. `--force` was the same flag until v0.15.0, as in `cloud pull`; it now exits 2.
 
 **Different, in a script.** With no terminal to ask on, the run stops:
 
@@ -172,7 +190,7 @@ No verdict: evnx did not finish. This is not a clean result.
 `--yes` replaces it:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --yes
+evnx restore .env.backup --key-file backup.key --yes
 ```
 
 ```text
@@ -196,7 +214,7 @@ symlink at `--output` is written through: the link stays, its target is replaced
 of the ciphertext with the plaintext, so it is refused, even with `--yes`:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --output .env.backup --yes
+evnx restore .env.backup --key-file backup.key --output .env.backup --yes
 ```
 
 ```text
@@ -211,7 +229,7 @@ Error: --output '.env.backup' is the same file as the backup '.env.backup'. Noth
 nothing:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --inspect
+evnx restore .env.backup --key-file backup.key --inspect
 ```
 
 ```text
@@ -236,7 +254,7 @@ Variables in this backup (names only — values never shown):
 `--dry-run` decrypts and checks that the content is a `.env` evnx can read:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --dry-run
+evnx restore .env.backup --key-file backup.key --dry-run
 ```
 
 ```text
@@ -264,7 +282,9 @@ The decrypted content is checked with the parser every evnx command reads `.env`
 files with. `export KEY=value` lines and multi-line quoted values (PEM keys, JSON)
 pass. Content the parser cannot read — prose, or a key such as `a/b`, which it
 rejects — is written to **`<output>.restored`** instead, so it cannot replace a
-working file, and the run exits `5`:
+working file, and the run exits `5`. **v0.15.0+** that file is private (mode `600`, even when an
+older copy was wider), gets the same git-ignore check as the main output, and its full path is
+printed with "This file holds plaintext secrets.":
 
 ```text
 ! Decrypted content does not look like a valid .env file.
@@ -293,7 +313,7 @@ Next steps:
 The same rule as [`backup`](/guides/commands/backup#the-passphrase), highest priority
 first:
 
-1. **`--password-file <path>`** (or `--key-file`) — UTF-8 content trimmed of
+1. **`--key-file <path>`** — UTF-8 content trimmed of
    surrounding whitespace, binary content Base64-encoded; the reader `backup` uses,
    so one file opens what it locked.
 2. **`EVNX_PASSWORD`** — read once, then removed from evnx's environment, with a
@@ -336,7 +356,7 @@ Error: Backup file not found: nope.backup
 `restore` reads files. A vault in evnx cloud is restored with the cloud commands:
 
 ```bash
-evnx restore cloud://my-app --password-file backup.key
+evnx restore cloud://my-app --key-file backup.key
 ```
 
 ```text
@@ -392,7 +412,7 @@ whether it is ignored — the same step `template` and `convert -o` take:
 
 ```bash
 #!/bin/bash
-evnx restore .env.backup --password-file /run/secrets/evnx-pass --yes
+evnx restore .env.backup --key-file /run/secrets/evnx-pass --yes
 code=$?
 
 case $code in
@@ -412,7 +432,7 @@ under `-q` — it is what was asked for — so send it away and keep the exit co
 
 ```bash
 for backup in backups/*.backup; do
-  if evnx restore "$backup" --dry-run --password-file /run/secrets/evnx-pass >/dev/null 2>&1; then
+  if evnx restore "$backup" --dry-run --key-file /run/secrets/evnx-pass >/dev/null 2>&1; then
     echo "✓ $backup"
   else
     echo "✗ $backup (exit $?)"
@@ -426,7 +446,7 @@ There is no re-key command. Restore to a private file, back up again under the n
 passphrase, and remove the plaintext:
 
 ```bash
-evnx restore old.backup --password-file /run/secrets/old-pass --output /tmp/plain.env
+evnx restore old.backup --key-file /run/secrets/old-pass --output /tmp/plain.env
 evnx backup /tmp/plain.env --key-file /run/secrets/new-pass --output new.backup --verify
 rm /tmp/plain.env
 ```
@@ -438,9 +458,8 @@ rm /tmp/plain.env
 | Code | Meaning |
 |------|---------|
 | `0` | Restored, inspected, checked (`--dry-run`), or already up to date |
-| `2` | Could not run: wrong password, unreadable backup, an output problem, no terminal to ask on |
-| `3` | Backup file not found (including a `cloud://…` argument) |
-| `4` | Cancelled at the overwrite question |
+| `2` | Could not run: wrong password, unreadable backup, **backup file not found** (including a `cloud://…` argument; was `3` before v0.15.0), an output problem |
+| `4` | Cancelled at the overwrite question, or the question needed a terminal and there is none (without `--yes`) |
 | `5` | Not a `.env` evnx can read: written to `<output>.restored` instead |
 
 <Callout type="info">
@@ -464,7 +483,7 @@ rm /tmp/plain.env
 | Passphrase source | Risk | Notes |
 |-------------------|------|-------|
 | Prompt | lowest | Never stored; not in logs or process listings |
-| `--password-file` | medium | Keep it on `tmpfs` or a secrets volume, never beside the backup |
+| `--key-file` | medium | Keep it on `tmpfs` or a secrets volume, never beside the backup |
 | `EVNX_PASSWORD` | medium-high | May appear in CI logs; removed from evnx's environment after reading |
 
 ---

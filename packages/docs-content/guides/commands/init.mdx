@@ -3,13 +3,13 @@ section: "commands"
 order: 1
 title: "evnx init"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-09"
+updatedAt: "2026-11-17"
 excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["init", "reference", "cli", "setup"]
 commands: ["add", "add blueprint", "add service", "doctor", "init"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -50,11 +50,12 @@ evnx init [OPTIONS]
 | `--list-components` | `bool` | `false` | **v0.5.0+** — print every name `--with` accepts, and exit |
 | `--blueprint <ID>` | `string` | — | generate from a named stack, e.g. `t3_modern` |
 | `--force` | `bool` | `false` | replace an existing `.env.example`. `.env` is never overwritten. Not valid with `--from-source`, which only appends (exit 2 since 0.10.1) |
-| `--path`, `-p` | `string` | `.` | output directory for generated files |
+| `-C`, `--dir <DIR>` | `string` | `.` | **v0.15.0** — output directory for generated files. Was `-p`/`--path`, which now exits 2 |
 | `--env-name <NAME>` | `string` | `[defaults] env_name` | **v0.11.0+** — write `.env.<NAME>` instead of `.env` (`--env-name staging` → `.env.staging`). The template and `.gitignore` are the project's, as without it |
 | `--yes`, `-y` | `bool` | `false` | skip prompts. With no template, writes blank files; with one, keeps it and creates `.env` from it |
-| `--dry-run` | `bool` | `false` | **v0.10.16+** — show what would be written, and write nothing |
-| `--json` | `bool` | `false` | **v0.10.16+** — print the result as one JSON document. Needs `--yes` or `--dry-run` |
+| `-n`, `--dry-run` | `bool` | `false` | **v0.10.16+** — show what would be written, and write nothing |
+| `--format <FORMAT>` | `string` | `pretty` | **v0.15.0** — `pretty` or `json` |
+| `--json` | `bool` | `false` | **v0.10.16+** — print the result as one JSON document; the same as `--format json`. Needs `--yes` or `--dry-run` |
 | `--verbose`, `-v` | `bool` | `false` | detailed debug output |
 | `--quiet`, `-q` | `bool` | `false` | **v0.10.1+** — print nothing on success. Findings, warnings, errors and requested data still print |
 | `--no-color` | `bool` | `false` | disable coloured output |
@@ -264,7 +265,7 @@ In a monorepo, `init` at the root says when a subfolder already has a `.env`, be
 commands run at the root read the root's file, not that one:
 
 ```text
-! services/api/.env also exists: commands run here read .env, not that one — to set up that folder instead: evnx init -p services/api
+! services/api/.env also exists: commands run here read .env, not that one — to set up that folder instead: evnx init --dir services/api
 ```
 
 `.evnx.toml` is written before anything is printed, so `evnx init --yes | head -1`
@@ -304,7 +305,7 @@ evnx init --blueprint t3_modern
 ### In CI
 ```bash
 evnx init --yes                      # blank, deterministic
-evnx init --detect --path /app       # accept detection without prompting
+evnx init --detect --dir /app       # accept detection without prompting
 ```
 
 ### Build from the code

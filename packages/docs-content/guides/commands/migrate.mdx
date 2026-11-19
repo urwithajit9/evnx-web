@@ -3,13 +3,13 @@ section: "commands"
 order: 6
 title: "evnx migrate"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-17"
 excerpt: "Generate the commands that move your .env into a cloud secret manager. evnx writes them out; you run them. GitHub Actions is the one destination it uploads to directly."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["migrate", "reference", "cli", "secrets", "cloud"]
-commands: ["cloud run", "convert", "migrate", "scan", "validate"]
-evnxVersion: "0.14.0"
+commands: ["cloud run", "convert", "migrate", "platform push", "scan", "validate"]
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -25,7 +25,7 @@ contact the platform at all. They print `aws secretsmanager create-secret …`,
 `doppler secrets set …`, `heroku config:set …` and so on, for you to run under
 your own already-authenticated CLI.
 
-`github-actions` is the exception: it encrypts each secret with the repository's
+`github` is the exception: it encrypts each secret with the repository's
 public key and PUTs it to the GitHub REST API. That one really does transfer.
 
 This is a deliberate design, not a gap — see
@@ -54,7 +54,7 @@ Run `evnx migrate --help`. If it prints help, you have it.
 <Callout type="warning">
 **Changed in 0.10.10 — check your scripts.**
 
-- `--to github-actions --skip-existing`, and `--yes` without `--overwrite`, could
+- `--to github --skip-existing`, and `--yes` without `--overwrite`, could
   **replace secrets they promised to keep**: evnx read only the first 30 names of
   GitHub's list, and compared them case-sensitively. Every page is read now, and
   names are compared as GitHub stores them.
@@ -71,7 +71,7 @@ Run `evnx migrate --help`. If it prints help, you have it.
 ## What it does, step by step
 
 <Step number={1} title="Reads the source">
-A `.env` file — `.env`, `--source-file`, or `.env.<name>` with `--env-name` — or,
+A `.env` file — `.env`, `--env`, or `.env.<name>` with `--env-name` — or,
 with `--from environment`, the variables you select from the process environment.
 </Step>
 
@@ -85,7 +85,7 @@ Each destination knows its platform's syntax, quoting and naming rules. Azure, f
 </Step>
 
 <Step number={4} title="Prints them, and stops">
-Except `github-actions`, which uploads. Nothing else leaves your machine.
+Except `github`, which uploads. Nothing else leaves your machine.
 </Step>
 
 ---
@@ -109,7 +109,7 @@ evnx migrate --to doppler --project my-app --doppler-config prd
 
 | Value | Description |
 |-------|-------------|
-| `env-file` | Read a `.env` file: `.env`, `--source-file PATH`, or `.env.NAME` with `--env-name NAME` (or `[defaults] env_name` in `.evnx.toml`). Used when `--from` is omitted and there is no terminal to ask |
+| `env-file` | Read a `.env` file: `.env`, `--env FILE`, or `.env.NAME` with `--env-name NAME` (or `[defaults] env_name` in `.evnx.toml`). Used when `--from` is omitted and there is no terminal to ask |
 | `environment` | Read the current process environment. **Requires `--include`** — a shell or CI job holds tokens you did not mean to send — and lists the names it will send before printing anything |
 
 The first line of the output names the file it read:
@@ -124,10 +124,10 @@ The first line of the output names the file it read:
 
 | Value | Aliases | What evnx produces | Needs | Transfers? |
 |-------|---------|--------------------|-------|------------|
-| `github-actions` | `github` | Encrypts each secret and PUTs it to the GitHub REST API | `--repo`, `GITHUB_TOKEN` | **Yes** |
-| `aws-secrets-manager` | `aws` | One `create-secret` / `update-secret` pair, all variables in a single JSON secret | `--secret-name` | No |
-| `gcp-secret-manager` | `gcp` | A script that creates each secret, or adds a version when it exists | `--project` | No |
-| `azure-keyvault` | `azure` | One `az keyvault secret set` per variable, with `_` rewritten to `-` | `--vault-name` | No |
+| `github` | — | Encrypts each secret and PUTs it to the GitHub REST API | `--repo`, `GITHUB_TOKEN` | **Yes** |
+| `aws-secrets-manager` | — | One `create-secret` / `update-secret` pair, all variables in a single JSON secret | `--secret-name` | No |
+| `gcp-secret-manager` | — | A script that creates each secret, or adds a version when it exists | `--project` | No |
+| `azure-keyvault` | — | One `az keyvault secret set` per variable, with `_` rewritten to `-` | `--vault-name` | No |
 | `heroku` | — | One bulk `heroku config:set`, so the dyno restarts once | `--heroku-app` | No |
 | `vercel` | — | One `vercel env add` per variable, the value on stdin | — | No |
 | `doppler` | — | One `doppler secrets set` per variable | — | No |
@@ -157,7 +157,7 @@ Error: Vercel cannot hold this name: names there are letters, digits and _, not 
 Nothing was printed or sent. Rename it in the env file, or leave it out with --exclude.
 ```
 
-`github-actions`, `vercel`, `heroku`, `doppler`, `railway` and `infisical` take letters,
+`github`, `vercel`, `heroku`, `doppler`, `railway` and `infisical` take letters,
 digits and `_`; GCP and Azure also take `-`. AWS Secrets Manager takes any name evnx
 reads. The rules match [`convert`](/guides/commands/convert#names-a-target-cannot-hold).
 
@@ -167,7 +167,7 @@ All variables go into **one** secret as a JSON document — the Secrets Manager
 idiom — rather than one secret per variable.
 
 ```bash
-evnx migrate --to aws --secret-name prod/myapp/config --print-only
+evnx migrate --to aws-secrets-manager --secret-name prod/myapp/config --print-only
 ```
 
 ```text
@@ -216,7 +216,7 @@ new version when it already exists — so running it again updates the values
 instead of failing:
 
 ```bash
-evnx migrate --to gcp --project my-gcp-project --print-only > gcp-upload.sh
+evnx migrate --to gcp-secret-manager --project my-gcp-project --print-only > gcp-upload.sh
 ```
 
 ```text
@@ -307,22 +307,32 @@ One command per variable; the value goes to `vercel env add` on stdin, so it is
 not an argument:
 
 ```text
-printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --force --yes
-printf '%s' 'sk_live_abc123' | vercel env add API_KEY production --project my-app --force --yes
+printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --yes
+printf '%s' 'sk_live_abc123' | vercel env add API_KEY production --project my-app --yes
 ```
 
 **v0.13.0+** — a variable whose name or value looks secret gets `--sensitive`, so Vercel
 stores it as a Sensitive variable (the same test `convert --to vercel` uses):
 
 ```text
-printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --sensitive --force --yes
-printf '%s' '3000' | vercel env add APP_PORT production --project my-app --force --yes
-printf '%s' 'example-token' | vercel env add API_TOKEN production --project my-app --sensitive --force --yes
+printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --sensitive --yes
+printf '%s' '3000' | vercel env add APP_PORT production --project my-app --yes
+printf '%s' 'example-token' | vercel env add API_TOKEN production --project my-app --sensitive --yes
 ```
 
 `--vercel-project` becomes `--project`; without it Vercel uses the linked project
-(`vercel link`). `--force` replaces a variable that already exists — without it a
-second run fails — and `--yes` keeps `env add` from asking how to store the value.
+(`vercel link`). `--yes` keeps `env add` from asking how to store the value.
+
+**v0.15.0+** — `--force` is printed **only with `--overwrite`**. Before, every printed command carried it and so replaced
+a variable that already existed. Now Vercel stops on one that exists, and `evnx migrate --to vercel --overwrite` adds `--force`:
+
+```text
+printf '%s' '8080' | vercel env add PORT production --force --yes
+```
+
+A script that re-runs the printed commands to change a value passes `--overwrite`. `--skip-existing` is still refused for `vercel` (evnx does not
+contact it, so it cannot see what exists). The output also points to `evnx platform push`, which talks to Vercel itself.
+
 **v0.14.0+** — the environment follows the file that was read: `.env.development` (or `.env.dev`) is `development`, `.env.preview` is `preview`, and anything else, including plain `.env`, is `production`. Every printed `vercel env add` and the dry-run's `Environment :` line say so. A secret-looking variable gets `--sensitive` in `development` as in the others, because Vercel allows a Sensitive variable there since 2026-08-24 (0.13.0 left it out). **If you ran this command for a development or preview file with an earlier version, check Vercel production:** every earlier version printed `production` whatever file it read, so development values may have landed there.
 
 ### `doppler` and `infisical`
@@ -371,7 +381,7 @@ Railway requires an environment whenever a command names the project, so
 Leave all three out and the command is for a directory linked with `railway link`.
 Setting variables redeploys the service.
 
-### `github-actions`
+### `github`
 
 The only destination that transfers. It fetches the repository's public key,
 seals each value with it, and PUTs the result — so GitHub receives ciphertext it
@@ -400,7 +410,7 @@ evnx migrate --to github --repo owner/repo
 
 ```bash
 # In CI: token from the environment, existing secrets left alone
-evnx migrate --to github-actions --repo owner/repo --yes --skip-existing
+evnx migrate --to github --repo owner/repo --yes --skip-existing
 ```
 
 **v0.11.0+** — a CI log names each secret: with no terminal, every `✓ NAME` and
@@ -420,7 +430,7 @@ everything else goes to stderr:
 evnx migrate --to heroku --heroku-app my-app --print-only > upload.sh
 ```
 
-`--print-only` does not apply to `github-actions`, which prints no commands, and
+`--print-only` does not apply to `github`, which prints no commands, and
 cannot be combined with `--dry-run`.
 
 ---
@@ -428,7 +438,7 @@ cannot be combined with `--dry-run`.
 ## Your secrets are in the printed commands
 
 <Callout type="danger">
-**Every destination but `github-actions` prints secret values in plaintext**,
+**Every destination but `github` prints secret values in plaintext**,
 because that is what the command needs to contain. Anything you copy into a
 terminal lands in your shell history. (From v0.14.0 the AWS and Azure commands read the
 values from a temporary file, so they do not show in `ps` or history; the others below do.)
@@ -436,7 +446,7 @@ values from a temporary file, so they do not show in `ps` or history; the others
 Mitigations, in order of preference:
 
 1. **Write the commands to a file instead of scrolling**, review it, run it, delete it:
-   `evnx migrate --to aws --secret-name prod/app --print-only > up.sh` — review,
+   `evnx migrate --to aws-secrets-manager --secret-name prod/app --print-only > up.sh` — review,
    `sh up.sh`, `shred -u up.sh`.
 2. **Prefix the command with a space** if your shell is configured with
    `HISTCONTROL=ignorespace`, so it is not recorded.
@@ -468,29 +478,25 @@ commands on a machine you trust.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--from` | `string` | — | Source: `env-file` or `environment`. Asked in a terminal; `env-file` without one |
-| `--source-file` | `path` | `.env` | The `.env` to read. Overrides `[defaults] env_name`; cannot be combined with `--env-name` |
+| `--env` | `path` | `.env` | **v0.15.0** — the `.env` to read; was `--source-file`, which now exits 2. Overrides `[defaults] env_name`; cannot be combined with `--env-name` |
 | `--env-name` | `string` | — | Read `.env.NAME`. A name with no file is an error listing the environments there are |
 | `--to` | `string` | — | Destination slug. Asked in a terminal; required without one |
-| `--dry-run` | `bool` | `false` | Preview the variable set and where it would go, without printing the commands themselves |
+| `-n`, `--dry-run` | `bool` | `false` | Preview the variable set and where it would go, without printing the commands themselves |
 | `--print-only` | `bool` | `false` | Write only the commands to stdout; status and summary go to stderr |
-| `--skip-existing` | `bool` | `false` | Leave secrets that already exist. **Only `github-actions` can honour this** — the others never ask the platform what exists, and refuse the flag |
-| `--overwrite` | `bool` | `false` | Replace existing secrets without asking. Same caveat as above |
-| `--yes`, `-y` | `bool` | `false` | Upload without asking "Proceed with migration?" (`github-actions`) |
+| `--skip-existing` | `bool` | `false` | Leave secrets that already exist. **Only `github` can honour this** — the others never ask the platform what exists, and refuse the flag |
+| `--overwrite` | `bool` | `false` | Replace existing secrets without asking. Same caveat as above, except that **v0.15.0+** `vercel` accepts it and prints `--force` |
+| `--yes`, `-y` | `bool` | `false` | Upload without asking "Proceed with migration?" (`github`) |
 | `--verbose`, `-v` | `bool` | `false` | Print diagnostic output during the run |
 | `--quiet`, `-q` | `bool` | `false` | Leave only the commands, the summary, warnings and errors |
 
-<Callout type="info">
-**`--dry-run` needs the names, not the credentials.** It contacts nothing, so
-`github-actions` runs without a token. But a name that would be printed into a
-command — `--secret-name`, `--vault-name`, `--heroku-app`, `--project` for gcp,
-`--repo` — is still required, because a preview with a placeholder in it is a
-command that fails when you run it:
-
-```text
-Error: GCP project ID is required for this destination. Pass `--project`.
-  --dry-run still needs it: without it evnx would print a command
-  with a placeholder where the name should be.
-```
+<Callout type="info" title="Changed in v0.15.0">
+**`--dry-run` works without the destination's target flag.** `evnx migrate --to heroku --dry-run`
+shows a placeholder where the name goes (`App : <--heroku-app not set>`) and says "A real run
+needs --heroku-app"; a real run still requires it. The same holds for `--secret-name`,
+`--vault-name` and `--project`. The dry run of `aws-secrets-manager` shows names only in its JSON
+preview, never the values. `migrate --to` also takes the names `convert --to` takes
+(`aws`, `aws-secrets`, `gcp`, `gcp-secrets`, `azure`, `azure-keyvault`). Without a GitHub token,
+`migrate --to github` says to set `GITHUB_TOKEN`, and the dry run reads `<GITHUB_TOKEN not set>`.
 </Callout>
 
 ### Filtering options
@@ -511,7 +517,7 @@ name stays a variable name; a strip that would leave an empty name, or one start
 with a digit, is refused.
 
 <Callout type="success">
-**A filter that matches nothing is an error — changed in v0.5.0.** `evnx migrate --to gcp
+**A filter that matches nothing is an error — changed in v0.5.0.** `evnx migrate --to gcp-secret-manager
 --project my-gcp-project --include 'DB_ *'` — note the typo — exits `2` and names the file:
 
 ```
@@ -547,14 +553,14 @@ With `--allow-collisions` the last value wins, and evnx says which on stderr:
 
 | Flag | Applies to | Description |
 |------|-----------|-------------|
-| `--repo` | `github-actions` | Repository as `owner/repo` |
-| `--github-token` | `github-actions` | A token with the repository's Secrets permission. Prefer the `GITHUB_TOKEN` environment variable |
-| `--secret-name` | `aws` | Secret name, e.g. `prod/myapp/config` |
-| `--aws-profile` | `aws` | Named AWS CLI profile, added to the printed commands |
-| `--project` | `gcp`, `doppler`, `infisical` | GCP project ID (required for gcp), Doppler project, or Infisical project ID |
+| `--repo` | `github` | Repository as `owner/repo` |
+| `--github-token` | `github` | **Hidden since v0.15.0, and it warns.** Still works, but the token lands in shell history and `ps`. Export `GITHUB_TOKEN` instead |
+| `--secret-name` | `aws-secrets-manager` | Secret name, e.g. `prod/myapp/config` |
+| `--aws-profile` | `aws-secrets-manager` | Named AWS CLI profile, added to the printed commands |
+| `--project` | `gcp-secret-manager`, `doppler`, `infisical` | GCP project ID (required for gcp), Doppler project, or Infisical project ID |
 | `--doppler-config` | `doppler` | Config name, e.g. `dev`, `staging`, `prd` |
 | `--infisical-env` | `infisical` | Environment name, e.g. `dev`, `staging`, `prod` |
-| `--vault-name` | `azure` | Azure Key Vault name |
+| `--vault-name` | `azure-keyvault` | Azure Key Vault name |
 | `--heroku-app` | `heroku` | Heroku application name |
 | `--vercel-project` | `vercel` | Vercel project ID or name, printed as `--project` |
 | `--railway-project` | `railway` | Railway project ID. Needs `--railway-environment` |
@@ -587,7 +593,8 @@ Patterns are case-sensitive. Multiple patterns are comma-separated.
 | Code | Meaning |
 |------|---------|
 | `0` | Completed — commands generated, or an upload finished |
-| `1` | `--to github-actions` ran, and at least one upload failed (**v0.10.3+**) |
+| `1` | `--to github` ran, and at least one upload failed (**v0.10.3+**) |
+| `4` | **v0.15.0** — a confirmation was needed, there is no terminal and no `--yes` (it was `2`) |
 | `2` | Did not run. Unknown destination, missing or empty source file, a filter that matched nothing, a missing or invalid name, names that collide, values a destination would misread, a flag the destination cannot honour, or an argument error |
 
 <Callout type="info">
@@ -622,7 +629,7 @@ something has to run what it prints. `--skip-existing` and `--overwrite` cannot
 work, because evnx never asks the platform what is already there. And the values
 pass through your terminal unless you use `--print-only` and a file.
 
-`github-actions` is uploaded because it can be done without a cloud credential:
+`github` is uploaded because it can be done without a cloud credential:
 one GitHub token scoped to the repository's secrets is enough, and the values are
 sealed to the repository's public key before they are sent.
 

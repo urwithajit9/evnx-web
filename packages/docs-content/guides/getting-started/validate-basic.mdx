@@ -3,13 +3,13 @@ title: "Validate your environment: A practical guide"
 section: guides
 order: 12
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-17"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["validate", "tutorial", "best-practices", "ci-cd", "evnx"]
 commands: ["init", "validate"]
-evnxVersion: "0.13.0"
+evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
   - commands/validate
@@ -236,7 +236,7 @@ When the database already exists, paste its password in instead.
 with no `.env` and it stops with exit `2`, which means it could not check:
 
 ```console
-$ evnx validate --format github-actions --fail-on warning
+$ evnx validate --format github --fail-on warning
 Error: ./.env does not exist
 
 Create it with `evnx init`, or point at another file with --env.
@@ -265,7 +265,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install evnx
-        run: curl -fsSL https://dotenv.space/install.sh | bash
+        run: curl -fsSL https://evnx.dev/install.sh | bash
 
       - name: Write .env from the ENV_FILE secret
         run: printf '%s\n' "$ENV_FILE" > .env
@@ -273,14 +273,14 @@ jobs:
           ENV_FILE: ${{ secrets.ENV_FILE }}
 
       - name: Validate
-        run: evnx validate --format github-actions --fail-on warning
+        run: evnx validate --format github --fail-on warning
 ```
 
 **Result**: annotations on the pull request. For a file holding a short `SECRET_KEY`,
 `DEBUG=False` and a localhost `DATABASE_URL`, in a project with a `compose.yaml`:
 
 ```console
-$ evnx validate --format github-actions --fail-on warning
+$ evnx validate --format github --fail-on warning
 ::warning file=.env,line=3::DEBUG is set to "False" (string, not boolean)%0ASuggestion: Use false or 0 for proper boolean handling
 ::error file=.env,line=2::SECRET_KEY is too weak or predictable%0ASuggestion: Rotate SECRET_KEY where it is issued, then replace it here. `--fix` will not: it cannot tell a real credential from an unfilled placeholder. Pass --fix --rotate-weak-secrets if nothing else holds this value
 ::warning file=.env,line=1::DATABASE_URL uses localhost/127.0.0.1%0ASuggestion: In Docker, use service name instead (e.g., db:5432)
@@ -677,7 +677,7 @@ evnx validate --ignore localhost_in_docker  # Skip Docker warnings
 # ─────────────────────────────────────
 # CI/CD Integration
 # ─────────────────────────────────────
-evnx validate --format github-actions  # GitHub annotations
+evnx validate --format github  # GitHub annotations
 evnx validate --format json            # Machine-readable
 evnx validate --fail-on warning        # Warnings fail too
 evnx validate --format json --exit-zero  # Report, never fail
