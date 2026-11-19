@@ -321,7 +321,7 @@ function CurlPanel() {
   return (
     <>
       <CmdLine
-        code="curl -fsSL https://raw.githubusercontent.com/urwithajit9/evnx/main/scripts/install.sh | bash"
+        code="curl -fsSL https://evnx.dev/install.sh | bash"
       />
       <p className="text-sm text-text-secondary mb-4 leading-relaxed">
         Installs to <IC>~/.local/bin</IC>. Detects your OS and architecture automatically. All
@@ -340,11 +340,11 @@ function CurlPanel() {
       </p>
       <CmdLine
         label="Pin a version"
-        code="curl -fsSL https://dotenv.space/install.sh | EVNX_VERSION=0.11.0 bash"
+        code="curl -fsSL https://evnx.dev/install.sh | EVNX_VERSION=0.15.0 bash"
       />
       <InfoBox variant="success">
         Recommended for most macOS and Linux users. No Rust toolchain or language runtime
-        required. <IC>https://dotenv.space/install.sh</IC> serves the same script.
+        required. The older <IC>https://dotenv.space/install.sh</IC> still serves the same script.
       </InfoBox>
     </>
   );
@@ -736,9 +736,40 @@ function GHPanel() {
 
       <h3 className="text-base font-semibold mt-6 mb-2">SBOM</h3>
       <p className="text-sm text-text-secondary mb-3 leading-relaxed">
-        From v0.14.0 each release also carries a CycloneDX software bill of materials,{" "}
-        <IC>evnx-&lt;version&gt;.cdx.json</IC>, among its assets on the Releases page.
+        From v0.14.0 each release carries a signed CycloneDX 1.5 software bill of materials,{" "}
+        <IC>evnx-&lt;version&gt;.cdx.json</IC>, with its own <IC>.sha256</IC>, among its assets on
+        the{" "}
+        <a
+          href={`${GITHUB_URL}/releases/tag/v${EVNX_VERSION}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-brand-500 hover:text-brand-400"
+        >
+          Releases page
+        </a>
+        . It lists every crate in the build, and it carries the same signed attestation as the
+        archives. Check the file, then who built it:
       </p>
+      <CmdLine
+        code={
+          `sha256sum -c evnx-${EVNX_VERSION}.cdx.json.sha256\n` +
+          `gh attestation verify evnx-${EVNX_VERSION}.cdx.json -R urwithajit9/evnx \\\n` +
+          `  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml`
+        }
+      />
+      <p className="text-sm text-text-secondary mb-3 leading-relaxed">
+        Then scan it for known vulnerabilities with any SBOM-aware scanner:
+      </p>
+      <CmdLine
+        code={
+          `grype sbom:evnx-${EVNX_VERSION}.cdx.json\n` +
+          `trivy sbom evnx-${EVNX_VERSION}.cdx.json\n` +
+          `osv-scanner scan source -L evnx-${EVNX_VERSION}.cdx.json`
+        }
+      />
+      {/* TODO(owner): link "SBOM: what it is and how evnx ships one"
+          (/blog/sbom-what-it-is-and-how-evnx-ships-one) here once the post is published.
+          It is draft: true, and the content link check fails on links to drafts. */}
     </>
   );
 }

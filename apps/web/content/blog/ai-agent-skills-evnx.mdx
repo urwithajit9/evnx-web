@@ -38,7 +38,7 @@ The skills teach your agent to use evnx. Make sure evnx is installed first.
 <Tab label="macOS / Linux">
 
 ```bash
-curl -fsSL https://dotenv.space/install.sh | bash
+curl -fsSL https://evnx.dev/install.sh | bash
 ```
 
 </Tab>
@@ -146,7 +146,7 @@ Before the `evnx-cli` skill, asking your agent to set up secret scanning in a Gi
 
 ```yaml
 - name: Install evnx
-  run: curl -fsSL https://dotenv.space/install.sh | bash
+  run: curl -fsSL https://evnx.dev/install.sh | bash
 
 - name: Scan for secrets
   run: evnx scan --format sarif > scan-results.sarif

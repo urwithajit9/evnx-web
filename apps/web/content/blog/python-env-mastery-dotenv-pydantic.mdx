@@ -253,7 +253,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install evnx
-        run: curl -fsSL https://dotenv.space/install.sh | bash
+        run: curl -fsSL https://evnx.dev/install.sh | bash
       - name: Validate .env against schema
         run: evnx validate --env-name production --strict
       - name: Check for leaked secrets

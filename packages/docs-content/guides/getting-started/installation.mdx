@@ -28,7 +28,7 @@ evnx is a single static binary with no runtime dependencies. Pick your platform 
 The fastest way is the install script:
 
 ```bash
-curl -fsSL https://dotenv.space/install.sh | bash
+curl -fsSL https://evnx.dev/install.sh | bash
 ```
 
 The script:
@@ -45,8 +45,8 @@ The script:
 Pin a version, or choose the folder:
 
 ```bash
-curl -fsSL https://dotenv.space/install.sh | EVNX_VERSION=0.11.0 bash
-curl -fsSL https://dotenv.space/install.sh | EVNX_INSTALL_DIR="$HOME/bin" bash
+curl -fsSL https://evnx.dev/install.sh | EVNX_VERSION=0.15.0 bash
+curl -fsSL https://evnx.dev/install.sh | EVNX_INSTALL_DIR="$HOME/bin" bash
 ```
 
 Verify the installation:
@@ -376,7 +376,7 @@ The `.pre-commit-config.yaml` approach is better for teams — it's committed to
 evnx update
 
 # If installed via install script
-curl -fsSL https://dotenv.space/install.sh | bash
+curl -fsSL https://evnx.dev/install.sh | bash
 
 # If installed via cargo: --all-features, or the cloud commands are dropped
 cargo install evnx --all-features --force

@@ -238,7 +238,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                 </p>
                 <div className="bg-terminal-bg rounded p-3 font-mono text-xs text-terminal-text mb-4">
                   <span className="text-brand-500">$ </span>
-                  curl -fsSL https://dotenv.space/install.sh | bash
+                  curl -fsSL https://evnx.dev/install.sh | bash
                 </div>
                 <Link
                   href="/install"

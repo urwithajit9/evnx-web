@@ -97,7 +97,7 @@ below.
 
 | Channel | Install | Upgrade | Uninstall |
 |---|---|---|---|
-| Install script | `curl -fsSL https://dotenv.space/install.sh \| bash` | run the same command again | delete the file (see below) |
+| Install script | `curl -fsSL https://evnx.dev/install.sh \| bash` | run the same command again | delete the file (see below) |
 | Homebrew | `brew install urwithajit9/evnx/evnx` | `brew upgrade evnx` | `brew uninstall evnx` |
 | npm | `npm install -g @evnx/cli` | `npm install -g @evnx/cli@latest` | `npm uninstall -g @evnx/cli` |
 | pnpm (0.14.0+) | `pnpm add -g @evnx/cli` | `pnpm update -g @evnx/cli` | `pnpm remove -g @evnx/cli` |
@@ -126,7 +126,7 @@ And where each one puts the binary, which is how you recognise it in `type -a ev
 ### Install script
 
 ```bash
-curl -fsSL https://dotenv.space/install.sh | bash
+curl -fsSL https://evnx.dev/install.sh | bash
 ```
 
 It supports Linux (x86_64 and arm64, glibc or musl, detected for you) and macOS
@@ -484,7 +484,7 @@ Also: `pipx install --upgrade evnx` is not a pipx command. It is `pipx upgrade e
   Upgrade with the one you used:
 
       pip            pip install --upgrade evnx
-      script         curl -fsSL https://dotenv.space/install.sh | bash
+      script         curl -fsSL https://evnx.dev/install.sh | bash
 ```
 
 The binary is in `~/.local/bin` or `/usr/local/bin`, where both channels write, and
