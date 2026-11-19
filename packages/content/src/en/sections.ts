@@ -11,6 +11,7 @@
 
 export type SectionId =
   | "hero"
+  | "problem"
   | "road"
   | "leak-anatomy"
   | "stories"
@@ -35,7 +36,8 @@ export interface SectionSpec {
 
 export const landingSections: SectionSpec[] = [
   { id: "hero", enabled: true, surface: "base" },
-  { id: "road", enabled: true, surface: "surface", anchor: "commands" },
+  { id: "problem", enabled: true, surface: "surface", anchor: "problem" },
+  { id: "road", enabled: true, surface: "base", anchor: "commands" },
   { id: "leak-anatomy", enabled: true, surface: "void" },
   { id: "stories", enabled: true, surface: "surface", anchor: "stories" },
   { id: "audit", enabled: true, surface: "base" },
