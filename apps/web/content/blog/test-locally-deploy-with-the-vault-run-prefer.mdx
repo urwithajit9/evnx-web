@@ -203,11 +203,11 @@ evnx run --no-mask -- sh -c 'cat /proc/$PPID/comm'
 ```
 
 ```text
-evnx-0.15.0-bin
+evnx
 bash
 ```
 
-With masking the parent is evnx (here the binary is named `evnx-0.15.0-bin`). Without it, the parent is the shell that started evnx,
+With masking the parent is evnx. Without it, the parent is the shell that started evnx,
 because evnx is no longer there. A masked run forwards `SIGTERM`, `SIGHUP`, `SIGQUIT` and
 `SIGINT` to the command, so a stopped CI job no longer leaves it running.
 
