@@ -72,3 +72,4 @@ export const SECTION_VISIBLE: Partial<Record<SectionId, () => boolean | Promise<
 
 export { SectionShell, SectionHeading } from "./section-shell";
 export { TerminalBlock } from "./terminal-block";
+export { HeroTerminal } from "./hero-terminal";

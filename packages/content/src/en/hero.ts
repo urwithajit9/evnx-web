@@ -3,7 +3,7 @@
 // 👉 THE TAGLINE LIVES HERE. Edit `headline` and `subhead` and nothing else
 //    needs to change — the hero component reads this file and only this file.
 
-import type { Link, TerminalLine } from "../types";
+import type { Link, TerminalTab } from "../types";
 
 export const hero = {
   /**
@@ -45,32 +45,88 @@ export const hero = {
   reassurance: ["MIT licensed", "No account needed", "No telemetry"],
 
   /**
-   * The terminal transcript beside the hero.
+   * The tabbed terminal beside the hero: one transcript per tab.
    *
-   * ⚠️ This must be a transcript evnx can actually produce. The earlier
+   * ⚠️ Each must be a transcript evnx can actually produce. The earlier
    * mockups invented a "scanned in 4 ms" figure and invented rule IDs; both
    * are gone because they are the one kind of claim a reader can falsify by
-   * running the tool.
+   * running the tool. Every value shown is a throw-away or a fake.
    *
-   * Lines below are from `evnx scan <staged files>` (the `evnx-scan` hook's
-   * entry) on the 0.10.18 release binary, 2026-10-25, abridged. The previews
-   * are of throw-away values generated for the run.
+   * D-V20 (DESIGN-BRIEF.md, owner 2026-11-19): three real tabs. The first is
+   * server-rendered and selected, so the first paint is unchanged.
    */
   terminal: {
-    tabs: ["pre-commit", "doctor", "convert"],
-    lines: [
-      { type: "prompt", content: 'git commit -m "fix: payment retry"' },
-      { type: "dim", content: "evnx — Secret Scanner.....................Failed" },
-      { type: "dim", content: "  evnx scan  scanning .env.production, src/config.ts, src/index.ts" },
-      { type: "output", content: "" },
-      { type: "error", content: "✗  AWS Access Key                  high" },
-      { type: "dim", content: "   .env.production:4 (AWS_ACCESS_KEY_ID)  AKIA…CZ4K" },
-      { type: "error", content: "✗  Stripe Secret Key (LIVE)        high" },
-      { type: "dim", content: "   src/config.ts:12  sk_l…aQNj" },
-      { type: "output", content: "" },
-      { type: "error", content: "2 findings  ·  2 high" },
-      { type: "dim", content: "1. Revoke or rotate the keys above — assume they are compromised" },
-    ] as TerminalLine[],
+    tabs: [
+      {
+        // `evnx scan <staged files>` (the `evnx-scan` hook's entry) on the
+        // 0.10.18 release binary, 2026-10-25, abridged.
+        label: "pre-commit",
+        lines: [
+          { type: "prompt", content: 'git commit -m "fix: payment retry"' },
+          { type: "dim", content: "evnx — Secret Scanner.....................Failed" },
+          { type: "dim", content: "  evnx scan  scanning .env.production, src/config.ts, src/index.ts" },
+          { type: "output", content: "" },
+          { type: "error", content: "✗  AWS Access Key                  high" },
+          { type: "dim", content: "   .env.production:4 (AWS_ACCESS_KEY_ID)  AKIA…CZ4K" },
+          { type: "error", content: "✗  Stripe Secret Key (LIVE)        high" },
+          { type: "dim", content: "   src/config.ts:12  sk_l…aQNj" },
+          { type: "output", content: "" },
+          { type: "error", content: "2 findings  ·  2 high" },
+          { type: "dim", content: "1. Revoke or rotate the keys above — assume they are compromised" },
+        ],
+      },
+      {
+        // `evnx doctor` on the 0.15.0 release binary, 2026-11-20, in a fresh
+        // git repo with a fake .env and a one-line .env.example.
+        // Abridged (owner, 2026-11-20): dropped the three checks that did
+        // not apply, the blank lines between checks, and the "Not examined
+        // here" footer. Every line kept is word for word.
+        label: "doctor",
+        lines: [
+          { type: "prompt", content: "evnx doctor" },
+          { type: "output", content: "  evnx doctor  Diagnosing environment setup" },
+          { type: "output", content: "" },
+          { type: "error", content: "  ✗  Validate .env file existence, security, and syntax" },
+          { type: "dim", content: "     .env is NOT in .gitignore (security risk)" },
+          { type: "warning", content: "  !  Check .env.example exists and is Git-tracked" },
+          { type: "dim", content: "     .env.example is not tracked in Git — run: git add .env.example" },
+          { type: "warning", content: "  !  Check file permissions for sensitive files" },
+          { type: "dim", content: "     .env: permissions 664 (recommended: 600)" },
+          { type: "success", content: "  ✓  Check env files and templates for empty evnx sections" },
+          { type: "output", content: "" },
+          { type: "output", content: "  1 error  ·  2 warnings  ·  1 check passed" },
+          { type: "output", content: "" },
+          { type: "output", content: "  →  2 issues evnx doctor --fix can repair:" },
+          { type: "dim", content: "     ·  Validate .env file existence, security, and syntax" },
+          { type: "dim", content: "     ·  Check file permissions for sensitive files" },
+        ],
+      },
+      {
+        // `evnx cloud run` on the 0.15.0 release binary, 2026-11-19, against
+        // api.evnx.dev with a throw-away vault holding fake values.
+        // ⚠️ D-V21: production rather than a local evnx-server is an owner-
+        // approved exception to CLAUDE.md rule 5, for this tab only — the
+        // output does not depend on the server. The command is split only
+        // inside `sh -c '…'`, where a newline is the `;` that was typed.
+        label: "cloud run",
+        lines: [
+          {
+            type: "prompt",
+            content: [
+              "evnx cloud run --vault demo-web-hero -- sh -c '",
+              '    echo "DATABASE_URL set: ${DATABASE_URL:+yes}"',
+              '    echo "STRIPE_SECRET_KEY set: ${STRIPE_SECRET_KEY:+yes}"',
+              "    ls -a'",
+            ].join("\n"),
+          },
+          { type: "dim", content: "  config    .evnx.toml" },
+          { type: "dim", content: "Master password: [hidden]" },
+          { type: "success", content: "DATABASE_URL set: yes" },
+          { type: "success", content: "STRIPE_SECRET_KEY set: yes" },
+          { type: "output", content: ".  ..  .evnx.toml" },
+        ],
+      },
+    ] as TerminalTab[],
   },
 
   /**

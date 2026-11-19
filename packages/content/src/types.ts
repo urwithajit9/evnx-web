@@ -57,6 +57,12 @@ export interface TerminalLine {
   content: string;
 }
 
+/** One tab of a tabbed terminal: its name and its transcript. */
+export interface TerminalTab {
+  label: string;
+  lines: TerminalLine[];
+}
+
 /** A question and its answer. */
 export interface Faq {
   q: string;

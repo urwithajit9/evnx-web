@@ -13,7 +13,7 @@ import {
   hasDownloadCounts,
 } from "@evnx/config";
 import { hero } from "@evnx/content";
-import { TerminalBlock } from "./terminal-block";
+import { HeroTerminal } from "./hero-terminal";
 
 export function Hero() {
   const [active, setActive] = useState(FEATURED_CHANNELS[0].id);
@@ -118,7 +118,7 @@ export function Hero() {
         </div>
       </div>
 
-      <TerminalBlock lines={hero.terminal.lines} tabs={hero.terminal.tabs} />
+      <HeroTerminal tabs={hero.terminal.tabs} />
     </div>
   );
 }

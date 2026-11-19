@@ -21,6 +21,11 @@ type Props = {
   dots?: boolean
   /** Static tab names; the first is shown as selected. */
   tabs?: readonly string[]
+  /**
+   * A working tab list, in place of `tabs`. The caller owns the state: the
+   * hero passes a Radix `Tabs.List` here, so the frame stays server-safe.
+   */
+  tabList?: ReactNode
   /** When set, a copy button copies exactly this. */
   copyText?: string
   copyLabel?: string
@@ -38,6 +43,7 @@ export function CodeFrame({
   filename,
   dots = false,
   tabs,
+  tabList,
   copyText,
   copyLabel,
   actions,
@@ -67,6 +73,7 @@ export function CodeFrame({
               ))}
             </div>
           )}
+          {tabList}
           {label && <span className="font-mono text-xs text-text-muted truncate">{label}</span>}
           {filename && (
             <>
