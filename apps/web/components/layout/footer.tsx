@@ -110,13 +110,14 @@ export async function Footer() {
             </div>
           </div>
 
-          {/* Link columns */}
+          {/* Link columns — one landmark, each column labelled by its heading */}
+          <nav aria-label="Footer" className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-10">
           {Object.entries(LINKS).map(([section, links]) => (
             <div key={section}>
-              <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">
+              <p id={`footer-${section}`} className="font-mono text-xs text-text-muted uppercase tracking-widest mb-4">
                 {section}
               </p>
-              <ul className="space-y-2">
+              <ul aria-labelledby={`footer-${section}`} className="space-y-2">
                 {links.map(({ href, label, external }) => (
                   <li key={href}>
                     {external ? (
@@ -126,7 +127,8 @@ export async function Footer() {
                         rel="noopener noreferrer"
                         className="text-sm text-text-secondary hover:text-text-primary transition-colors"
                       >
-                        {label} ↗
+                        {label} <span aria-hidden>↗</span>
+                        <span className="sr-only"> (opens in a new tab)</span>
                       </a>
                     ) : (
                       <Link
@@ -141,6 +143,7 @@ export async function Footer() {
               </ul>
             </div>
           ))}
+          </nav>
         </div>
 
         {/* Bottom bar */}
@@ -160,11 +163,11 @@ export async function Footer() {
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors group"
-              aria-label="GitHub"
+              aria-label={stars !== null ? `evnx on GitHub, ${formatStars(stars)} stars (opens in a new tab)` : "evnx on GitHub (opens in a new tab)"}
             >
-              <Github className="w-4 h-4" />
+              <Github className="w-4 h-4" aria-hidden />
               {stars !== null && (
-                <span className="flex items-center gap-1 font-mono text-xs">
+                <span aria-hidden className="flex items-center gap-1 font-mono text-xs">
                   <Star className="w-3 h-3 fill-current text-warning group-hover:text-warning" />
                   {formatStars(stars)}
                 </span>

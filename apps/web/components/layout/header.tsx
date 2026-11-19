@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Menu, X, Github } from "lucide-react";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
-import { SearchTrigger , SearchModal} from'@/components/ui/search-modal'
+import { SearchTrigger, SearchModal } from "@/components/ui/search-modal";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { TESTIMONIALS_ENABLED, docsUrl } from "@evnx/config";
 import { BrandMark } from "./brand-mark";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -13,6 +15,10 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 // ⚠️ Testimonials is appended only when the flag is on — see
 // TESTIMONIALS_ENABLED. A "Testimonials" tab leading to an empty page reads as
 // a product nobody is saying anything about.
+//
+// ⚠️ The brief's IA (DESIGN-BRIEF §6) adds Features and Integrations. They are
+// NOT here yet on purpose: those pages arrive in Phase C, and a nav link to a
+// 404 on every page is worse than a shorter nav. Add each with its page.
 const NAV_LINKS = [
   // ⚠️ docsUrl(), not "/guides". The header renders on every page, so a
   // hardcoded path here is a 301 on every page of the site once the split is
@@ -23,7 +29,6 @@ const NAV_LINKS = [
   { href: "/changelog", label: "Changelog" },
   { href: "/pricing", label: "Pricing" },
   { href: "/security", label: "Security" },
-  // { href: "/login", label: "Login"},
   ...(TESTIMONIALS_ENABLED
     ? [{ href: "/testimonials", label: "Testimonials" }]
     : []),
@@ -32,7 +37,27 @@ const NAV_LINKS = [
 export function Header() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
+  // Close the menu after navigation, so the next page is not hidden under it.
+  useEffect(() => setMobileOpen(false), [pathname]);
+
+  // ⚠️ A disclosure, not a modal: the page stays reachable, so there is no
+  // focus trap. Esc closes it and returns focus to the button that opened it,
+  // or keyboard focus would be stranded inside a menu that no longer exists.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        toggleRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
     <header className="sticky top-0 z-50 bg-bg-base/90 backdrop-blur-sm border-b border-border-subtle">
@@ -49,95 +74,92 @@ export function Header() {
 
           {/* Desktop nav */}
           <nav aria-label="Main" className="hidden md:flex items-center gap-1">
-            {NAV_LINKS.map(({ href, label }) => {
-              const isActive =
-                pathname === href || pathname.startsWith(href + "/");
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`text-sm px-3 py-1.5 rounded transition-colors ${
-                    isActive
-                      ? "text-brand-400 bg-brand-500/10"
-                      : "text-text-secondary hover:text-text-primary hover:bg-bg-surface"
-                  }`}
-                >
-                  {label}
-                </Link>
-              );
-            })}
+            {NAV_LINKS.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                aria-current={isActive(href) ? "page" : undefined}
+                className={cn(
+                  "text-sm px-3 py-1.5 rounded transition-colors",
+                  isActive(href)
+                    ? "text-brand-400 bg-brand-500/10"
+                    : "text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                )}
+              >
+                {label}
+              </Link>
+            ))}
           </nav>
 
           {/* Right actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <SearchTrigger />
             <ThemeToggle />
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors"
-              aria-label="View on GitHub"
+              className="hidden sm:flex items-center justify-center w-8 h-8 rounded text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors"
+              aria-label="evnx on GitHub (opens in a new tab)"
             >
-              <Github className="w-4 h-4" />
+              <Github className="w-4 h-4" aria-hidden />
             </a>
 
-            <Link
-              href="/install"
-              className="hidden sm:block font-mono text-xs bg-brand-500 text-brand-fg px-3 py-1.5 rounded hover:bg-brand-400 transition-colors font-semibold"
-            >
+            <Link href="/install" className={cn(buttonVariants({ size: "sm" }), "hidden sm:inline-flex")}>
               Install
             </Link>
 
-            {/* Mobile menu toggle */}
+            {/* Mobile menu toggle — 44px tap target */}
             <button
-              className="md:hidden text-text-secondary hover:text-text-primary transition-colors p-1"
+              ref={toggleRef}
+              type="button"
+              className="md:hidden inline-flex items-center justify-center w-11 h-11 -mr-2 rounded text-text-secondary hover:text-text-primary transition-colors"
               onClick={() => setMobileOpen((o) => !o)}
-              aria-label="Toggle menu"
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-nav"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
             >
-              {mobileOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
+              {mobileOpen ? <X className="w-5 h-5" aria-hidden /> : <Menu className="w-5 h-5" aria-hidden />}
             </button>
           </div>
         </div>
 
         {/* Mobile nav */}
         {mobileOpen && (
-          <nav aria-label="Mobile" className="md:hidden border-t border-border-subtle py-4 space-y-1">
+          <nav id="mobile-nav" aria-label="Mobile" className="md:hidden border-t border-border-subtle py-4 space-y-1">
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
-                className="block text-sm px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-surface rounded transition-colors"
-                onClick={() => setMobileOpen(false)}
+                aria-current={isActive(href) ? "page" : undefined}
+                className={cn(
+                  "block text-base px-3 py-3 rounded transition-colors",
+                  isActive(href)
+                    ? "text-brand-400 bg-brand-500/10"
+                    : "text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                )}
               >
                 {label}
               </Link>
             ))}
             <div className="pt-3 mt-3 border-t border-border-subtle px-3 flex gap-3">
-              <Link
-                href="/install"
-                className="font-mono text-xs bg-brand-500 text-brand-fg px-4 py-2 rounded hover:bg-brand-400 transition-colors"
-                onClick={() => setMobileOpen(false)}
-              >
+              <Link href="/install" className={buttonVariants()}>
                 Install evnx
               </Link>
               <a
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-xs border border-border-muted text-text-secondary px-4 py-2 rounded hover:text-text-primary transition-colors"
+                className={buttonVariants({ variant: "outline" })}
               >
                 GitHub
+                <span className="sr-only"> (opens in a new tab)</span>
               </a>
             </div>
           </nav>
         )}
       </div>
-      <SearchModal/>
+      <SearchModal />
     </header>
   );
 }
