@@ -73,8 +73,8 @@ export function WaitlistForm({
           <Check className="w-4 h-4 text-success" />
         </div>
         <div>
-          <p className="font-semibold text-text-primary">You're on the list.</p>
-          <p className="text-xs text-text-muted mt-0.5">We'll email you when evnx cloud launches.</p>
+          <p className="font-semibold text-text-primary">You&apos;re on the list.</p>
+          <p className="text-xs text-text-muted mt-0.5">We&apos;ll email you when evnx cloud launches.</p>
         </div>
       </div>
     )
@@ -119,7 +119,7 @@ export function WaitlistForm({
       {/* Status messages */}
       {status === 'duplicate' && (
         <p className="text-xs text-warning">
-          That email is already on the list — you're good. ✓
+          That email is already on the list — you&apos;re good. ✓
         </p>
       )}
       {status === 'error' && (
