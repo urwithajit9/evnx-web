@@ -18,6 +18,7 @@ import {
 import { CommandRef, mdxComponents } from "@evnx/mdx";
 import { HOSTS } from "@evnx/config";
 import { rehypeGuideHrefs } from "@/lib/rehype-guide-hrefs";
+import { DocsShell } from "@/components/docs-shell";
 
 /**
  * The shared components, with `CommandRef` told how this app spells a guide
@@ -100,7 +101,8 @@ export default async function DocsPage({ params }: Props) {
     const meta = GUIDE_SECTIONS.find((s) => s.key === section);
     const guides = bySection[section] ?? [];
     return (
-      <div className="container-base section-padding max-w-4xl">
+      <DocsShell currentSection={section}>
+      <div className="max-w-3xl">
         <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted mb-6">
           <Link href="/cli" className="hover:text-text-primary">CLI</Link>
           <span aria-hidden> / </span>
@@ -124,6 +126,7 @@ export default async function DocsPage({ params }: Props) {
           ))}
         </ul>
       </div>
+      </DocsShell>
     );
   }
 
@@ -133,7 +136,8 @@ export default async function DocsPage({ params }: Props) {
   const commands = resolveCommands(guide.commands);
 
   return (
-    <article className="container-base section-padding max-w-4xl">
+    <DocsShell currentSlug={guide.slug} currentSection={guide.section} toc>
+    <article className="max-w-3xl">
       <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted mb-6">
         <Link href="/cli" className="hover:text-text-primary">CLI</Link>
         <span aria-hidden> / </span>
@@ -240,7 +244,8 @@ export default async function DocsPage({ params }: Props) {
         </div>
       )}
 
-      <div className="prose-evnx">
+      {/* id read by DocsToc to find the guide's headings */}
+      <div id="guide-content" className="prose-evnx">
         <MDXRemote
           source={guide.content}
           components={docsComponents}
@@ -278,5 +283,6 @@ export default async function DocsPage({ params }: Props) {
         )}
       </nav>
     </article>
+    </DocsShell>
   );
 }

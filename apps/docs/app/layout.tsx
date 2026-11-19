@@ -74,7 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="text-text-muted text-sm">docs</span>
             </Link>
             <nav aria-label="Main" className="flex gap-1 text-sm items-center">
-              <Link href="/cli" className="px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary">
+              <Link href="/cli" className="px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors">
                 CLI
               </Link>
               {/* ⚠️ Search is the first thing a docs reader reaches for, and
@@ -86,11 +86,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   page scrolls sideways at 375 px. The footer links evnx.dev
                   too, so it stays reachable on a phone. */}
               <a href={HOSTS.web} className="hidden sm:block px-3 py-1.5 rounded-md text-text-secondary hover:text-text-primary">
-                evnx.dev ↗
+                evnx.dev <span aria-hidden>↗</span>
               </a>
               <a
                 href={appUrl("/login")}
-                className="px-3 py-1.5 rounded-md border border-border-muted text-text-primary"
+                // Same look as the marketing site's outline Button (sm): one
+                // header pattern across both apps (DESIGN-BRIEF §5).
+                className="inline-flex items-center h-9 px-3 rounded-md border border-border-default text-sm font-semibold text-text-primary hover:bg-bg-surface transition-colors"
               >
                 Log in
               </a>
