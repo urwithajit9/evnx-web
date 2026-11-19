@@ -10,17 +10,23 @@ import { CommandPill } from "@/components/ui/command-pill";
  * ⚠️ HTML, not a picture of the overview. Every command name is real text that
  * links to its guide, can be found by search, and is read by a screen reader;
  * only the four spot drawings are art.
+ *
+ * D-V8: one stage at a time is lit, local → Git → CI → deploy, so the order
+ * reads at a glance. CSS only (`.road`, `.road-stage` in globals.css): it
+ * pauses while the pointer or keyboard focus is inside the list, and does not
+ * run at all under prefers-reduced-motion.
  */
 export function Road() {
   return (
     <>
       <SectionHeading eyebrow={road.eyebrow} heading={road.heading} lede={road.lede} />
 
-      <ol className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+      <ol className="road grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         {road.stages.map((s, i) => (
           <li
             key={s.n}
-            className="relative flex flex-col p-6 rounded-xl border border-border-muted bg-bg-base"
+            className="road-stage relative flex flex-col p-6 rounded-xl border border-border-muted bg-bg-base"
+            style={{ animationDelay: `${i * 2}s` }}
           >
             {i < road.stages.length - 1 && (
               // The road: an arrow to the next stop, only where the stops sit in one row.

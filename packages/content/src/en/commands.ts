@@ -17,52 +17,56 @@ export const commands: SectionHeading & {
   featured: Card[];
   allCommandsLink: { label: string; docsSlug: string };
 } = {
-  heading: "One binary, the whole lifecycle",
-  // ⚠️ No count here: the road section above lists every command, and a typed
+  eyebrow: "What it does",
+  heading: "One CLI for the whole .env lifecycle",
+  // ⚠️ No count here: the road section lists every command, and a typed
   // number drifts (it said "Twenty" when 0.12.0 had twenty-two).
-  lede: "The six you will run most.",
+  lede: "The six jobs you will run most, each one command.",
 
+  // ⚠️ D-V7 pillars (DESIGN-BRIEF §4.5). `diff` replaced `doctor` here: doctor
+  // already leads the problem section and the hero terminal, while drift had
+  // no card at all. The title says the job; the pill says the command.
   featured: [
     {
       id: "scan",
-      title: "evnx scan",
-      mono: true,
+      title: "Catch secrets before they ship",
       spot: "guard",
+      command: { label: "evnx scan", guide: "scan" },
       body: "Find secrets before they leave the machine. Reads every .env variant, not just .env.",
     },
     {
       id: "validate",
-      title: "evnx validate",
-      mono: true,
+      title: "Deploy with the right variables",
       spot: "checklist",
+      command: { label: "evnx validate", guide: "validate" },
       body: "Placeholders, weak values, localhost in a production config.",
     },
     {
-      id: "doctor",
-      title: "evnx doctor",
-      mono: true,
+      id: "diff",
+      title: "Keep environments aligned",
       spot: "clipboard",
-      body: "Everything at once, with a single verdict and a single exit code.",
+      command: { label: "evnx diff", guide: "diff" },
+      body: "Compare two env files by key: what is missing, what is extra, and which values differ between environments.",
     },
     {
       id: "sync",
-      title: "evnx sync",
-      mono: true,
+      title: "Keep the example honest",
       spot: "sync",
+      command: { label: "evnx sync", guide: "sync" },
       body: "Keep .env and .env.example honest about each other.",
     },
     {
       id: "convert",
-      title: "evnx convert",
-      mono: true,
+      title: "Export to your stack",
       spot: "fan",
+      command: { label: "evnx convert", guide: "convert" },
       body: "Fourteen targets — JSON, YAML, Kubernetes, Terraform, Vercel and more.",
     },
     {
       id: "cloud",
-      title: "evnx cloud",
-      mono: true,
+      title: "Share and run without plaintext",
       spot: "cloud",
+      command: { label: "evnx cloud", guide: "cloud" },
       body: "Push, pull and run. Encrypted on your machine before it leaves it.",
     },
   ],

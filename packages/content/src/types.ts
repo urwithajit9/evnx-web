@@ -35,6 +35,8 @@ export interface Card {
   mono?: boolean;
   /** A spot illustration drawn at the top of the card. */
   spot?: SpotId;
+  /** The command that does this job, rendered as a CommandPill to its guide. */
+  command?: CommandPill;
 }
 
 /** One moment on a timeline. Used by both the leak anatomy and the origin story. */

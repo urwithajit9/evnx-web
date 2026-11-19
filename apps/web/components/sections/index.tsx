@@ -4,11 +4,12 @@ import { TALKS } from "@evnx/config";
 import { hasApprovedTestimonials } from "./testimonials";
 
 import { Hero, HeroProof } from "./hero";
+import { Problem } from "./problem";
 import { Road } from "./road";
 import { LeakAnatomy } from "./leak-anatomy";
 import { Stories } from "./stories";
 import { Audit } from "./audit";
-import { Ci } from "./ci";
+import { Integrations } from "./integrations";
 import { Commands } from "./commands";
 import { Cloud } from "./cloud";
 import { Trust } from "./trust";
@@ -16,6 +17,7 @@ import { OriginStory } from "./origin-story";
 import { Talks } from "./talks";
 import { Testimonials } from "./testimonials";
 import { Cta } from "./cta";
+import { DocsCards } from "./docs-cards";
 
 /**
  * Section id → component.
@@ -34,17 +36,19 @@ export const SECTIONS: Record<SectionId, ComponentType> = {
       </>
     );
   },
+  problem: Problem,
   road: Road,
   "leak-anatomy": LeakAnatomy,
   stories: Stories,
   audit: Audit,
-  ci: Ci,
+  integrations: Integrations,
   commands: Commands,
   cloud: Cloud,
   trust: Trust,
   "origin-story": OriginStory,
   talks: Talks,
   testimonials: Testimonials,
+  docs: DocsCards,
   cta: Cta,
 };
 
