@@ -1,7 +1,7 @@
 ---
 title: "SBOM: What It Is, Why It Matters, and How evnx Ships One"
 publishedAt: "2026-11-19"
-excerpt: "A software bill of materials lists everything inside a program. Here is what an SBOM is, how it moves through the software supply chain, how evnx builds and signs one with every release, and how to check it yourself with gh, Grype, Trivy and OSV-Scanner."
+excerpt: "A software bill of materials lists everything inside a program. Here is what an SBOM is, how it moves through the software supply chain, how evnx builds and signs one with every release, and how to check it yourself with gh, cosign, Grype, Trivy and OSV-Scanner."
 author: "ajit"
 category: "deep-dive"
 tags: ["sbom", "supply-chain", "security", "cyclonedx", "sigstore", "evnx"]
@@ -196,9 +196,31 @@ gh attestation verify evnx-0.15.0.cdx.json -R urwithajit9/evnx \
   --source-ref refs/tags/v0.15.0
 ```
 
-**Without gh**, the checksum in step 2 is what you can check with no account. The signature
-itself is a standard Sigstore bundle, so Sigstore's own tools (`cosign`) can verify it too;
-`gh` is simply the shortest way to fetch and check it.
+**Without gh**, with Sigstore's `cosign` and no GitHub login. GitHub serves each attestation
+through a public API, keyed by the file's SHA-256, as a standard Sigstore bundle:
+
+```bash
+# cosign is a single binary
+curl -sSfL -o ~/.local/bin/cosign \
+  https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+chmod +x ~/.local/bin/cosign
+
+# fetch the signature bundle for this exact file
+digest=$(sha256sum evnx-0.15.0.cdx.json | cut -d' ' -f1)
+curl -fsSL "https://api.github.com/repos/urwithajit9/evnx/attestations/sha256:$digest" \
+  | jq '.attestations[0].bundle' > sbom.sigstore.json
+
+# check who signed it, from which workflow and tag
+cosign verify-blob-attestation evnx-0.15.0.cdx.json \
+  --bundle sbom.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/urwithajit9/evnx/\.github/workflows/release\.yml@refs/tags/v0\.15\.0$' \
+  --type slsaprovenance1
+```
+
+On 0.15.0, with cosign v3.1.4, it prints `Verified OK`. The identity pattern is what makes
+this meaningful: it only accepts a certificate issued to evnx's own `release.yml`, run for
+the `v0.15.0` tag, by GitHub Actions.
 
 When it passes, it says: this SBOM was made by evnx's release workflow, for that tag, and
 has not changed since. On 0.15.0 the output reads:
@@ -258,6 +280,7 @@ Run on 2026-11-19 against `evnx-0.15.0.cdx.json` (253 packages):
 |---|---|
 | Checksum (`sha256sum -c`) | OK |
 | Signature (`gh attestation verify`) | verified: `release.yml` at `refs/tags/v0.15.0`, predicate SLSA provenance v1 |
+| Signature (`cosign verify-blob-attestation`, no login) | `Verified OK` |
 | Grype | 0 vulnerabilities (0 critical, 0 high, 0 medium, 0 low) |
 | Trivy | 0 vulnerabilities (cargo) |
 | OSV-Scanner | 4 informational advisories: crates that are no longer maintained (below) |
