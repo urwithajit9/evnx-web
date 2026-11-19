@@ -9,7 +9,7 @@ export { cloud } from "./cloud";
 export { features } from "./features";
 export type { Feature } from "./features";
 export { integrations } from "./integrations";
-export type { SyncTarget } from "./integrations";
+export type { SyncTarget, ExportTarget } from "./integrations";
 export { problem } from "./problem";
 export type { FailureMode } from "./problem";
 export { road } from "./road";
