@@ -1,0 +1,268 @@
+---
+title: "Upgrading your CI to evnx 0.15.0"
+publishedAt: "2026-11-19"
+excerpt: "evnx 0.15.0 removes old flag spellings, puts every command on one exit-code table and makes unattended confirmations exit 4. This is the practical checklist for a pipeline: pin the version, find the old spellings, add --yes where needed, and use the new checks that were built for CI."
+author: "ajit"
+category: "devops"
+tags: ["ci", "ci-cd", "github-actions", "exit-codes", "upgrade", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "evnx-0-15-0-one-vocabulary-for-every-command"
+  - "exit-codes-as-an-api"
+  - "how-to-verify-an-evnx-download"
+---
+
+If evnx runs in your CI, a hook or a deploy script, 0.15.0 is a release to plan for. Old flag
+spellings are removed, not aliased. Exit codes follow one table. A command that needs an
+answer and has no terminal now exits 4.
+
+None of this fails silently. A removed flag stops the command with exit 2 before it reads a
+file or contacts a server. But "fails loudly on the first run after an automatic update"
+is still a red pipeline you did not choose. This post is the order I would do it in.
+
+The release overview is in [evnx 0.15.0: one vocabulary for every command](/blog/evnx-0-15-0-one-vocabulary-for-every-command).
+The complete list of changes is in [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0),
+and I will link to it rather than repeat its tables.
+
+## 1. Pin the version
+
+A job that installs the latest release picks up 0.15.0 the day it ships. Decide when that
+happens instead. The install script takes a version:
+
+```bash
+curl -fsSL https://evnx.dev/install.sh | EVNX_VERSION=0.15.0 bash
+```
+
+The address is `https://evnx.dev/install.sh` everywhere now. If a script still uses
+`dotenv.space/install.sh` or the raw GitHub link, change it while you are there.
+
+To stay on the old behaviour while you fix things, pin the old version the same way. Move the
+pin when the pipeline passes. If you want to check what you downloaded, see
+[How to verify an evnx download](/blog/how-to-verify-an-evnx-download).
+
+## 2. Find the removed spellings
+
+Here is what a removed spelling does:
+
+```bash
+evnx validate --format github-actions
+```
+
+```text
+error: '--format github-actions' was removed from 'evnx validate' in 0.15.0; use '--format github'
+```
+
+Exit code 2. Two more, from the same release:
+
+```text
+error: '--force' was removed from 'evnx sync' in 0.15.0; use '--yes'
+error: '-p' was removed from 'evnx init' in 0.15.0; use '-C/--dir'
+```
+
+The message always has the same shape: what you typed, the command, the version, what to
+type instead. To find them before the pipeline does, search the places evnx is called from:
+
+```bash
+grep -rnE \
+  -e 'evnx.*--format (text|github-actions)( |$)' \
+  -e 'evnx.*--to (github-actions|gh-actions)( |$)' \
+  -e 'evnx.* (--force|--placeholder|--source-file|--path|--file)( |=|$)' \
+  -e 'evnx.* (-f|-p)( |$)' \
+  .github .gitlab-ci.yml scripts Makefile .pre-commit-config.yaml 2>/dev/null
+```
+
+On a small test workflow it found these three lines:
+
+```text
+.github/workflows/ci.yml:1:      - run: evnx validate --fail-on warning --format github-actions
+.github/workflows/ci.yml:2:      - run: evnx sync --force
+.github/workflows/ci.yml:3:      - run: evnx cloud pull -f .env
+```
+
+The search is deliberately wide. It matches by shape, so read each hit. A `-f` that belongs to
+`docker compose` is not yours to change, and `--env-name` is still correct on most commands.
+The upgrade guide has the full table of removed spellings, and a set of `sed` commands for
+the common ones. Commands split across lines with `\` need a manual look; the `grep` still
+finds the first line.
+
+The renames you will meet most often:
+
+| Old | New |
+|---|---|
+| `--format github-actions` | `--format github` |
+| `--format text` | `--format pretty` |
+| `sync --force` | `sync --yes` |
+| `cloud pull -f FILE` | `cloud pull --env FILE` |
+| `init -p DIR` | `init -C DIR` |
+
+## 3. Read exit codes from one table
+
+Before 0.15.0, some commands used their own numbers: `backup` used 3 to 6 for different
+failures, `migrate` used 2 for "no terminal". Now there is one table, printed in every
+`--help`. The cloud commands show all of it:
+
+```text
+Exit codes:
+    0  Ran, nothing to report
+    1  Ran, and found something: findings, problems, a difference, not in sync
+    2  Could not run: usage, config, I/O, or refused before any change
+    4  Declined: answered no, or a confirmation was needed with no terminal and no --yes
+   10  Not signed in, or the token was rejected
+   11  Forbidden, or the email is not verified
+   12  The plan's limit is reached
+   13  Server unreachable, not an evnx server, or TLS roots unusable
+   14  Conflict, or locked
+   15  Server error, or rate limited
+  141  Output closed early (broken pipe)
+    N  Once the command has started: its own exit code, or 128+n if signal n killed it
+```
+
+The rule that makes it usable: 2 is never a finding and 1 is never a failure to run. A step
+can treat 1 as "look at this" and 2 or more as "broken", and be right for every command.
+There is more on this in [Exit codes as an API](/blog/exit-codes-as-an-api).
+
+`run` and `cloud run` pass the child's code through. A command killed by a signal exits
+128 plus the signal number, and it used to exit 1:
+
+```bash
+evnx run -- sh -c 'exit 7'; echo $?
+evnx run -- sh -c 'kill -TERM $$'; echo $?
+```
+
+```text
+exit 7
+  ! the command was killed by signal 15
+exit 143
+```
+
+If a step reads 1 from `run` as "the process was killed", change it to test for 128 or more.
+
+## 4. Add --yes where nothing can answer
+
+A command that asks a question, with no terminal and no `--yes`, now exits 4 everywhere and
+names the flag. CI has no terminal, so a step that used to work because it hit an old
+fallback may now stop:
+
+```text
+Error: there is no terminal to confirm with.
+
+Add --yes (-y) to go ahead without being asked:
+  evnx set PORT --yes
+```
+
+Exit 4 means "not confirmed", which is a different thing from a crash. Add `--yes` to steps
+that you want to proceed unattended: `sync`, `restore`, `cloud pull`, `vault delete`,
+`org seats --set`, `platform push --prune`, and a `cloud push` that removes most of a
+vault's keys. The upgrade guide lists each one.
+
+## 5. Use the new checks
+
+0.15.0 also adds things written for pipelines.
+
+**`scan --exit-only`** prints nothing at all and answers in the exit code. On a clean folder:
+
+```bash
+evnx scan --exit-only .; echo "exit $?"
+```
+
+```text
+exit 0
+```
+
+On a folder with findings it prints nothing and exits 1. On a path that does not exist, it
+prints nothing and exits 2. It cannot be combined with `--format` or `--json`, and says so.
+Use it for a gate where you do not want findings in a public log. Use `--format github` where
+you do want annotations.
+
+**`auth status --check` and `cloud status --check`** exit 0 when signed in and 10 when not,
+without making a request. They are a cheap first step before a deploy that needs a login:
+
+```bash
+evnx cloud status --check -q; echo $?
+```
+
+```text
+10
+```
+
+With `--json` you get `signed_in` and `server`, under the same header every JSON document
+now starts with:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "server": "https://api.evnx.dev",
+  "signed_in": false
+}
+```
+
+That `run` object is on every `--json` or `--format json` output. A script can read
+`run.version` and `run.schema_version` and refuse to parse a document it does not know.
+
+**`scan --policy FILE`** is a floor that a repository cannot lower. A committed `.evnx.toml`
+can disable a detector, which means whoever changes a pull request can also change the rules
+that check it. A policy file kept outside the repository says what that config may not do:
+
+```toml
+# policy.toml
+max_severity_floor = "high"
+required_rules = ["AWS Access Key"]
+```
+
+```bash
+evnx scan --policy policy.toml .
+```
+
+If the repository's config tries to disable a required detector, the scan stops before it
+reads any file:
+
+```text
+Error: policy policy.toml forbids scan.disable = ["AWS Access Key"] (required_rules lists `AWS Access Key`)
+
+No verdict: evnx did not run. This is not a clean result.
+```
+
+Exit 2. A missing policy file is exit 2 too. `EVNX_POLICY` sets the same thing from the
+environment, and the flag wins.
+
+## A before and after
+
+A GitHub Actions job as it might look on 0.14:
+
+```yaml
+      - name: Install evnx
+        run: curl -fsSL https://dotenv.space/install.sh | bash
+
+      - name: Check env files
+        run: |
+          evnx validate --fail-on warning --format github-actions
+          evnx scan --format github-actions --severity high
+```
+
+The same job on 0.15.0:
+
+```yaml
+      - name: Install evnx
+        run: curl -fsSL https://evnx.dev/install.sh | EVNX_VERSION=0.15.0 bash
+
+      - name: Check env files
+        run: |
+          evnx validate --fail-on warning --format github
+          evnx scan --format github --severity high --policy ci/scan-policy.toml
+```
+
+Four changes: the install address, the pin, the two spellings and a policy file. GitHub Actions fails the step on any non-zero exit, as before.
+
+## The order, in short
+
+1. Pin `EVNX_VERSION=0.15.0` in a branch, not on main.
+2. Run the `grep`, fix the hits, run each changed command once.
+3. Check which steps have no terminal and add `--yes`.
+4. Read any code you test for: `1` from `run`, and `3` to `6` from `backup`.
+5. Add `--policy` and `--exit-only` if they fit.
+6. Merge, and move the pin only when you choose to.
+
+Everything else, including refused names in `run`, expiring tokens and read-only shares, is
+in [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0). For a closer look at one of
+the new commands, see [`evnx run`](/guides/commands/run) and [`evnx cloud`](/guides/commands/cloud).
