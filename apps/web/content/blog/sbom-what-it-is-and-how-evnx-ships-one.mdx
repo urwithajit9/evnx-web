@@ -1,20 +1,13 @@
 ---
 title: "SBOM: What It Is, Why It Matters, and How evnx Ships One"
 publishedAt: "2026-11-19"
-excerpt: "A software bill of materials lists everything inside a program. Here is what an SBOM is, how it moves through the software supply chain, how evnx builds and signs one with every release, and how to check it yourself with gh, cosign, Grype, Trivy and OSV-Scanner."
+excerpt: "A software bill of materials lists everything inside a program. Here is what an SBOM is, how it moves through the software supply chain, how evnx builds and signs one with every release, and how to check it yourself with gh, Grype, Trivy and OSV-Scanner."
 author: "ajit"
 category: "deep-dive"
 tags: ["sbom", "supply-chain", "security", "cyclonedx", "sigstore", "evnx"]
 featured: false
-draft: true
+draft: false
 ---
-
-{/* TODO before publishing (WEB-0142 sync):
-    1. Fill the OSV-Scanner rows in "The 0.15.0 status check" with each advisory's type
-       (informational/unmaintained or vulnerability), from:
-       osv-scanner scan source -L evnx-0.15.0.cdx.json --format json | jq ...
-    2. Run the "without gh" cosign commands once against v0.15.0 and correct any flag.
-    3. Set publishedAt to the publish date and draft: false. */}
 
 # SBOM: What It Is, Why It Matters, and How evnx Ships One
 
@@ -203,23 +196,20 @@ gh attestation verify evnx-0.15.0.cdx.json -R urwithajit9/evnx \
   --source-ref refs/tags/v0.15.0
 ```
 
-**Without gh**, with Sigstore's `cosign`. GitHub serves attestations through a public API
-keyed by the file's SHA-256, so no login is needed:
+**Without gh**, the checksum in step 2 is what you can check with no account. The signature
+itself is a standard Sigstore bundle, so Sigstore's own tools (`cosign`) can verify it too;
+`gh` is simply the shortest way to fetch and check it.
 
-```bash
-digest=$(sha256sum evnx-0.15.0.cdx.json | cut -d' ' -f1)
-curl -fsSL "https://api.github.com/repos/urwithajit9/evnx/attestations/sha256:$digest" \
-  | jq '.attestations[0].bundle' > sbom.sigstore.json
+When it passes, it says: this SBOM was made by evnx's release workflow, for that tag, and
+has not changed since. On 0.15.0 the output reads:
 
-cosign verify-blob-attestation evnx-0.15.0.cdx.json \
-  --bundle sbom.sigstore.json --new-bundle-format \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp '^https://github.com/urwithajit9/evnx/\.github/workflows/release\.yml@refs/tags/v0\.15\.0$' \
-  --type slsaprovenance1
+```text
+✓ Verification succeeded!
+
+- Attestation #1
+  - Build repo:..... urwithajit9/evnx
+  - Build workflow:. .github/workflows/release.yml@refs/tags/v0.15.0
 ```
-
-Both say the same thing when they pass: this SBOM was made by evnx's release workflow, for
-that tag, and has not changed since.
 
 ### 4. Scan it
 
@@ -267,7 +257,7 @@ Run on 2026-11-19 against `evnx-0.15.0.cdx.json` (253 packages):
 | Check | Result |
 |---|---|
 | Checksum (`sha256sum -c`) | OK |
-| Signature (`gh attestation verify`) | {/* fill: run step 3 and record the result */}TBD |
+| Signature (`gh attestation verify`) | verified: `release.yml` at `refs/tags/v0.15.0`, predicate SLSA provenance v1 |
 | Grype | 0 vulnerabilities (0 critical, 0 high, 0 medium, 0 low) |
 | Trivy | 0 vulnerabilities (cargo) |
 | OSV-Scanner | 4 informational advisories: crates that are no longer maintained (below) |

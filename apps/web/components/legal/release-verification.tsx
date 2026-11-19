@@ -87,9 +87,16 @@ export function ReleaseVerification() {
           </a>
           .
         </p>
-        {/* TODO(owner): link the post "SBOM: what it is and how evnx ships one"
-            (/blog/sbom-what-it-is-and-how-evnx-ships-one) here once it is published.
-            It is draft: true, and the content link check fails on links to drafts. */}
+        <p className="text-sm text-text-muted leading-relaxed mt-2">
+          What an SBOM is and how evnx builds and signs one:{" "}
+          <a
+            className="text-brand-400 hover:text-brand-300"
+            href="/blog/sbom-what-it-is-and-how-evnx-ships-one"
+          >
+            SBOM: what it is and how evnx ships one
+          </a>
+          .
+        </p>
       </div>
     </section>
   );
