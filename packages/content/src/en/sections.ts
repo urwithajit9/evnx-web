@@ -23,6 +23,7 @@ export type SectionId =
   | "origin-story"
   | "talks"
   | "testimonials"
+  | "docs"
   | "cta";
 
 export interface SectionSpec {
@@ -53,6 +54,7 @@ export const landingSections: SectionSpec[] = [
   // this true means the section slots into the right place the moment there is
   // something to put in it, rather than needing two edits later.
   { id: "testimonials", enabled: true, surface: "base" },
+  { id: "docs", enabled: true, surface: "surface", anchor: "docs" },
   { id: "cta", enabled: true, surface: "void" },
 ];
 

@@ -17,6 +17,7 @@ import { OriginStory } from "./origin-story";
 import { Talks } from "./talks";
 import { Testimonials } from "./testimonials";
 import { Cta } from "./cta";
+import { DocsCards } from "./docs-cards";
 
 /**
  * Section id → component.
@@ -47,6 +48,7 @@ export const SECTIONS: Record<SectionId, ComponentType> = {
   "origin-story": OriginStory,
   talks: Talks,
   testimonials: Testimonials,
+  docs: DocsCards,
   cta: Cta,
 };
 
