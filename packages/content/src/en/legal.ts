@@ -256,7 +256,7 @@ export const refunds: LegalDoc = {
 export const security: LegalDoc = {
   title: "Security",
   lede: "How evnx is built, how to report a problem, and what we have deliberately not claimed.",
-  updated: "2026-10-03",
+  updated: "2026-11-19",
   sections: [
     {
       heading: "Reporting a vulnerability",
@@ -278,6 +278,15 @@ export const security: LegalDoc = {
       body: [
         "Sign-in uses SRP-6a: the password is never transmitted, and the server stores a verifier that cannot be reversed. Two-factor authentication is available with recovery codes. Failed attempts are rate limited and lock out after a threshold.",
         "Sessions can be listed and revoked individually, and revoking one kills its tokens immediately rather than letting them expire.",
+      ],
+    },
+    {
+      // Source: getting-started/installation, "Verify your download" and
+      // "The SBOM". Version floors are the guide's, not rounded.
+      heading: "Verifying a release",
+      body: [
+        "Since v0.11.0, every release archive ships with a SHA-256 checksum and a signed build-provenance attestation. The checksum proves the file is intact; the attestation proves it was built by evnx's own release workflow, from the tagged commit, on a GitHub-hosted runner. A tampered file, another repository or another tag fails the check.",
+        "The install script verifies the checksum, and the attestation as well when a signed-in GitHub CLI is available. Since v0.14.0, each release also carries a software bill of materials in CycloneDX format, with its own checksum and attestation. The installation guide shows how to check all of it by hand.",
       ],
     },
     {
