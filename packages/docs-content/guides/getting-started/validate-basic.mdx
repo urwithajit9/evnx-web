@@ -3,7 +3,7 @@ title: "Validate your environment: A practical guide"
 section: guides
 order: 12
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-19"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
@@ -343,13 +343,12 @@ No verdict: evnx did not run. This is not a clean result.
 evnx validate --env-name local --ignore localhost_in_docker
 
 # Staging: moderate checks
-evnx validate --env-name staging --validate-formats
+evnx validate --env-name staging
 
 # Production: strictest validation
 evnx validate \
   --env-name production \
   --strict \
-  --validate-formats \
   --format json | tee validation-report.json
 ```
 
@@ -362,10 +361,10 @@ validate-dev:
 	evnx validate --env-name local --ignore localhost_in_docker
 
 validate-staging:
-	evnx validate --env-name staging --validate-formats
+	evnx validate --env-name staging
 
 validate-prod:
-	evnx validate --env-name production --strict --validate-formats
+	evnx validate --env-name production --strict
 
 validate-all: validate-dev validate-staging validate-prod
 ```
@@ -437,7 +436,7 @@ Using `--ignore` to suppress all warnings defeats the purpose of validation. Onl
 
 ```bash
 # Run strict validation, output JSON for analysis
-evnx validate --strict --validate-formats --format json > audit.json
+evnx validate --strict --format json > audit.json
 
 # Extract only security-relevant errors
 jq '[.issues[] | select(.severity == "error" and (.type == "weak_secret" or .type == "placeholder_value"))]' audit.json
@@ -639,8 +638,8 @@ evnx validate --fix --dry-run
 # Fail on warnings too
 evnx validate --fail-on warning
 
-# Validate formats
-evnx validate --validate-formats
+# URL, port and email checks run by default (as warnings); turn them off
+evnx validate --no-formats
 
 # A named environment
 evnx validate --env-name production
@@ -687,7 +686,7 @@ evnx validate --format json --exit-zero  # Report, never fail
 # ─────────────────────────────────────
 evnx validate --env-name local         # Dev
 evnx validate --env-name staging       # Staging
-evnx validate --env-name production --validate-formats  # Prod
+evnx validate --env-name production  # Prod
 
 # ─────────────────────────────────────
 # Security & Auditing
