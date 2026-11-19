@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code-block";
@@ -870,24 +870,30 @@ function TroubleAccordion({ items }: { items: TroubleItem[] }) {
 
 // ─── Main export ───────────────────────────────────────────────────────────────
 
+function detectOS(): OS {
+  const ua = navigator.userAgent;
+  if (/Windows/i.test(ua)) return "win";
+  if (/Linux/i.test(ua)) return "linux";
+  return "mac";
+}
+const noopSubscribe = () => () => {};
+
 export function InstallPageClient() {
-  const [os, setOS] = useState<OS>("mac");
-  const [activeTab, setActiveTab] = useState<MethodId>("curl");
+  // ⚠️ The platform is detected with useSyncExternalStore, not set from an
+  // effect: the server renders "mac", the client re-renders with the real OS,
+  // and a choice the reader makes overrides the detection.
+  const detectedOS = useSyncExternalStore(noopSubscribe, detectOS, () => "mac" as OS);
+  const [chosenOS, setOS] = useState<OS | null>(null);
+  const os = chosenOS ?? detectedOS;
+  const [chosenTab, setActiveTab] = useState<MethodId | null>(null);
+  const activeTab: MethodId =
+    chosenTab && OS_METHODS[os].includes(chosenTab) ? chosenTab : OS_METHODS[os][0];
   const [cargoVariant, setCargoVariant] = useState<CargoVariant>("core");
   const [pipVariant, setPipVariant] = useState<PipVariant>("pipx");
 
-  useEffect(() => {
-    const ua = navigator.userAgent;
-    let detected: OS = "mac";
-    if (/Windows/i.test(ua)) detected = "win";
-    else if (/Linux/i.test(ua)) detected = "linux";
-    setOS(detected);
-    setActiveTab(OS_METHODS[detected][0]);
-  }, []);
-
   const handleOSChange = (newOS: OS) => {
     setOS(newOS);
-    setActiveTab(OS_METHODS[newOS][0]);
+    setActiveTab(null); // first method for that OS
   };
 
   return (

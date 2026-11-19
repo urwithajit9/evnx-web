@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 import { ANNOUNCEMENT } from "@evnx/config";
 
@@ -23,22 +23,27 @@ function remember(id: string) {
   }
 }
 
+/** Re-read when another tab dismisses it. */
+function subscribeStorage(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
 /**
  * Site-wide announcement, driven by `ANNOUNCEMENT` in @evnx/config.
  *
  * Renders nothing when `enabled` is false. When enabled it is rendered on the
  * server too (so a visitor who has not dismissed it sees no layout shift), and
- * the first client render matches the server exactly; localStorage is read only
- * in an effect, after hydration, so there is no hydration mismatch. A visitor
+ * the first client render matches the server exactly: localStorage is read
+ * through useSyncExternalStore, whose server snapshot is "not dismissed", so
+ * there is no hydration mismatch. A visitor
  * who already dismissed it sees it for one frame before it is removed.
  */
 export function AnnouncementBanner() {
   const { id, enabled, message, href, linkText, severity } = ANNOUNCEMENT;
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (isDismissed(id)) setDismissed(true);
-  }, [id]);
+  const stored = useSyncExternalStore(subscribeStorage, () => isDismissed(id), () => false);
+  const [dismissedNow, setDismissed] = useState(false);
+  const dismissed = stored || dismissedNow;
 
   if (!enabled || dismissed) return null;
 

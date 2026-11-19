@@ -130,8 +130,8 @@ function TestimonialCard({ t }: { t: Testimonial }) {
 
   return (
     <div className="break-inside-avoid bg-bg-surface border border-border-muted rounded-xl p-6 relative overflow-hidden hover:border-border-default transition-colors">
-      <span className="absolute top-4 right-5 font-serif text-5xl text-brand-500/10 select-none leading-none">
-        "
+      <span className="absolute top-4 right-5 font-serif text-5xl text-brand-500/10 select-none leading-none" aria-hidden>
+        &ldquo;
       </span>
 
       {/* A headline is written at review time, not submitted. When one exists

@@ -62,7 +62,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
       {/* Header */}
       <section className="bg-bg-surface border-b border-border-muted">
         <div className="container-base section-padding">
-          <p className="font-mono text-brand-500 text-sm mb-4">// blog</p>
+          <p className="font-mono text-brand-500 text-sm mb-4">{"// blog"}</p>
           <h1 className="text-5xl md:text-6xl font-serif font-bold mb-4">
             Writing.
           </h1>
@@ -179,7 +179,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
             ) : (
               <div className="bg-bg-surface border border-border-muted rounded-lg p-12 text-center">
                 <p className="font-mono text-text-muted text-sm mb-2">
-                  // no posts{activeTag ? ` tagged #${activeTag}` : ''}
+                  {"// no posts"}{activeTag ? ` tagged #${activeTag}` : ''}
                 </p>
                 {activeTag ? (
                   <Link href="/blog" className="text-sm text-brand-400 hover:text-brand-300 transition-colors">

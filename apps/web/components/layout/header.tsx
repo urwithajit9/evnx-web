@@ -37,11 +37,12 @@ const NAV_LINKS = [
 
 export function Header() {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Open only on the page it was opened on, so navigating closes it, with no
+  // setState in an effect (React 19 lint: react-hooks/set-state-in-effect).
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const mobileOpen = openedOn === pathname;
+  const setMobileOpen = (open: boolean) => setOpenedOn(open ? pathname : null);
   const toggleRef = useRef<HTMLButtonElement>(null);
-
-  // Close the menu after navigation, so the next page is not hidden under it.
-  useEffect(() => setMobileOpen(false), [pathname]);
 
   // ⚠️ A disclosure, not a modal: the page stays reachable, so there is no
   // focus trap. Esc closes it and returns focus to the button that opened it,
@@ -50,7 +51,7 @@ export function Header() {
     if (!mobileOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setMobileOpen(false);
+        setOpenedOn(null); // the stable setter, so the effect needs no other dep
         toggleRef.current?.focus();
       }
     };
@@ -116,7 +117,7 @@ export function Header() {
               ref={toggleRef}
               type="button"
               className="lg:hidden inline-flex items-center justify-center w-11 h-11 -mr-2 rounded text-text-secondary hover:text-text-primary transition-colors"
-              onClick={() => setMobileOpen((o) => !o)}
+              onClick={() => setMobileOpen(!mobileOpen)}
               aria-expanded={mobileOpen}
               aria-controls="mobile-nav"
               aria-label={mobileOpen ? "Close menu" : "Open menu"}

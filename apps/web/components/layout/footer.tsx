@@ -104,7 +104,7 @@ export async function Footer() {
               </span>
             </div>
             <p className="text-sm text-text-secondary leading-relaxed mb-4">
-              The .env tool for developers who've been there.
+              The .env tool for developers who&apos;ve been there.
             </p>
             <div className="bg-terminal-bg border border-border-subtle rounded p-3 font-mono text-xs text-terminal-text">
               <span className="text-brand-500">$ </span>

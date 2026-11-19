@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Monitor, Moon, Sun } from "lucide-react";
 
+// ⚠️ useSyncExternalStore, not useEffect(() => setMounted(true)): React 19's
+// lint rule flags setState inside an effect, and this is the idiom it points
+// to. The server snapshot is false and the client one true, so the first
+// client render still matches the server and the next one shows the icon.
+const noopSubscribe = () => () => {};
 const ORDER = ["system", "light", "dark"] as const;
 type Choice = (typeof ORDER)[number];
 
@@ -22,8 +27,7 @@ const LABEL: Record<Choice, string> = {
  */
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const base =
     "inline-flex items-center justify-center w-8 h-8 rounded text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors";
