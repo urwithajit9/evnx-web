@@ -16,19 +16,20 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 // TESTIMONIALS_ENABLED. A "Testimonials" tab leading to an empty page reads as
 // a product nobody is saying anything about.
 //
-// ⚠️ The brief's IA (DESIGN-BRIEF §6) adds Features and Integrations. They are
-// NOT here yet on purpose: those pages arrive in Phase C, and a nav link to a
-// 404 on every page is worse than a shorter nav. Add each with its page.
+// DESIGN-BRIEF §6 order: what it is (Features, Integrations), then how to
+// use it (Guides), then trust and money (Security, Pricing), then news.
 const NAV_LINKS = [
+  { href: "/features", label: "Features" },
+  { href: "/integrations", label: "Integrations" },
   // ⚠️ docsUrl(), not "/guides". The header renders on every page, so a
   // hardcoded path here is a 301 on every page of the site once the split is
   // on. A redirect is a safety net for links you do not control — not a
   // substitute for fixing the ones you do.
   { href: docsUrl(), label: "Guides" },
+  { href: "/security", label: "Security" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/security", label: "Security" },
   ...(TESTIMONIALS_ENABLED
     ? [{ href: "/testimonials", label: "Testimonials" }]
     : []),
@@ -73,7 +74,8 @@ export function Header() {
           </Link>
 
           {/* Desktop nav */}
-          <nav aria-label="Main" className="hidden md:flex items-center gap-1">
+          {/* lg, not md: eight links plus the actions overflow a 768px header. */}
+          <nav aria-label="Main" className="hidden lg:flex items-center gap-1">
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
@@ -113,7 +115,7 @@ export function Header() {
             <button
               ref={toggleRef}
               type="button"
-              className="md:hidden inline-flex items-center justify-center w-11 h-11 -mr-2 rounded text-text-secondary hover:text-text-primary transition-colors"
+              className="lg:hidden inline-flex items-center justify-center w-11 h-11 -mr-2 rounded text-text-secondary hover:text-text-primary transition-colors"
               onClick={() => setMobileOpen((o) => !o)}
               aria-expanded={mobileOpen}
               aria-controls="mobile-nav"
@@ -126,7 +128,7 @@ export function Header() {
 
         {/* Mobile nav */}
         {mobileOpen && (
-          <nav id="mobile-nav" aria-label="Mobile" className="md:hidden border-t border-border-subtle py-4 space-y-1">
+          <nav id="mobile-nav" aria-label="Mobile" className="lg:hidden border-t border-border-subtle py-4 space-y-1">
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
