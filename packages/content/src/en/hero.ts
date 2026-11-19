@@ -10,15 +10,20 @@ export const hero = {
    * The H1, as two lines. Rendered as `line1<br>line2` so the break is a
    * deliberate typographic choice rather than whatever the viewport decides.
    *
+   * ⚠️ D-V12 (DESIGN-BRIEF.md): the H1 names the whole lifecycle, not only
+   * scanning — the old one made evnx read as "just a secret scanner". The leak
+   * story stays as the page's first proof point (leak-anatomy), not the H1.
+   *
    * Alternatives considered — swap in by editing these two strings:
-   *   • "Secrets leak in minutes." / "Catch them in milliseconds."   ← current
+   *   • "Your .env files," / "secure from commit to deploy."         ← current
+   *   • "Secrets leak in minutes." / "Catch them in milliseconds."   (until 2026-11)
    *   • "Your .env is one commit" / "away from being public."
    *   • "Stop leaking secrets." / "Start shipping."
    *   • "The .env file is the" / "last unguarded door."
    */
   headline: {
-    line1: "Secrets leak in minutes.",
-    line2: "Catch them in milliseconds.",
+    line1: "Your .env files,",
+    line2: "secure from commit to deploy.",
   },
 
   /**
@@ -26,7 +31,7 @@ export const hero = {
    * ⚠️ Resist adding a third clause — every one costs a reader.
    */
   subhead:
-    "evnx is an open-source Rust CLI that scans, validates and syncs your .env files — on your machine, at commit time, and in CI.",
+    "evnx is an open-source Rust CLI that finds leaked secrets, validates and syncs your .env files, and shares them encrypted with your team, CI and deploys.",
 
   /** Links under the install box. Keep to three; the middle one is the ask. */
   secondaryLinks: [
@@ -34,7 +39,10 @@ export const hero = {
   ] as Link[],
 
   /** Plain text beside the links. Short facts, no punctuation at the end. */
-  reassurance: ["MIT licensed", "No account needed"],
+  // ⚠️ "No telemetry" is a public promise (owner, 2026-11-19, D-V14). Its
+  // source is the "What evnx sends over the network" section of
+  // reference/managing-your-evnx-install — change both or neither.
+  reassurance: ["MIT licensed", "No account needed", "No telemetry"],
 
   /**
    * The terminal transcript beside the hero.
