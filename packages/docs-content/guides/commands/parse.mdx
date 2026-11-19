@@ -79,6 +79,23 @@ evnx parse [OPTIONS]
 | `placeholder` | The value is filler, not a real setting: `changeme`, `<your-key>`, `xxx`. Judged the way `evnx validate` judges it, so the two never disagree |
 | `secret` | The name or the value looks like a credential: `*_KEY`, `*_SECRET`, `*_PASSWORD`, a provider token, a URL with a password in it |
 
+**v0.15.0+** — four more flags say how the line is written, still without showing a value:
+
+| Flag | Means |
+|---|---|
+| `exported` | The line starts with `export` |
+| `multiline` | The value spans several lines |
+| `duplicate` | A **later** line sets the same name again, so this one is overridden |
+| `expands` | The value holds a `${NAME}` or `$NAME` reference (never counted in single quotes) |
+
+```text
+   1  PORT  duplicate
+   2  HOST  exported
+   3  URL   expands
+   4  PORT
+   5  CERT  multiline
+```
+
 The flags combine. `empty,secret` is a secret-named variable with nothing in it yet,
 which is usually the one to fill in next.
 
@@ -122,20 +139,26 @@ evnx parse --format json
 
 ```json
 {
-  "schema_version": 1,
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 2, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "schema_version": 2,
   "file": "./.env",
   "entries": [
-    { "key": "PORT", "line": 1, "empty": false, "placeholder": false, "secret": false },
-    { "key": "DATABASE_URL", "line": 2, "empty": false, "placeholder": false, "secret": true },
-    { "key": "API_KEY", "line": 3, "empty": true, "placeholder": false, "secret": true },
-    { "key": "SECRET_KEY", "line": 4, "empty": false, "placeholder": true, "secret": true },
-    { "key": "STRIPE_KEY", "line": 5, "empty": false, "placeholder": false, "secret": true }
+    { "key": "PORT", "line": 1, "empty": false, "placeholder": false, "secret": false,
+      "quoted": "none", "exported": false, "multiline": false, "duplicate": false, "expands": false, "length": 4 },
+    { "key": "DATABASE_URL", "line": 2, "empty": false, "placeholder": false, "secret": true,
+      "quoted": "none", "exported": false, "multiline": false, "duplicate": false, "expands": false, "length": 50 },
+    { "key": "API_KEY", "line": 3, "empty": true, "placeholder": false, "secret": true,
+      "quoted": "none", "exported": false, "multiline": false, "duplicate": false, "expands": false, "length": 0 }
   ],
   "problems": []
 }
 ```
 
-(Shown compacted; the real output has one field per line.) `problems` carries
+(Shown compacted, with the first three entries; the real output has one field per line.) **Schema 2
+(v0.15.0).** Additive: each entry gains `quoted` (`none`, `single` or `double`), `exported`, `multiline`,
+`duplicate`, `expands` and `length` (the value's length, not the value). No key changed or went, and
+a script that read schema 1 keeps working. The document starts with the `run` header every JSON
+output has. `problems` carries
 `line` and `message` for each problem. `schema_version` changes only when a field
 changes meaning.
 

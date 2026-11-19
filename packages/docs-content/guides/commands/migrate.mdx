@@ -8,7 +8,7 @@ excerpt: "Generate the commands that move your .env into a cloud secret manager.
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
 tags: ["migrate", "reference", "cli", "secrets", "cloud"]
-commands: ["cloud run", "convert", "migrate", "scan", "validate"]
+commands: ["cloud run", "convert", "migrate", "platform push", "scan", "validate"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
@@ -307,22 +307,32 @@ One command per variable; the value goes to `vercel env add` on stdin, so it is
 not an argument:
 
 ```text
-printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --force --yes
-printf '%s' 'sk_live_abc123' | vercel env add API_KEY production --project my-app --force --yes
+printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --yes
+printf '%s' 'sk_live_abc123' | vercel env add API_KEY production --project my-app --yes
 ```
 
 **v0.13.0+** — a variable whose name or value looks secret gets `--sensitive`, so Vercel
 stores it as a Sensitive variable (the same test `convert --to vercel` uses):
 
 ```text
-printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --sensitive --force --yes
-printf '%s' '3000' | vercel env add APP_PORT production --project my-app --force --yes
-printf '%s' 'example-token' | vercel env add API_TOKEN production --project my-app --sensitive --force --yes
+printf '%s' 'postgres://user:pw@db/app' | vercel env add DATABASE_URL production --project my-app --sensitive --yes
+printf '%s' '3000' | vercel env add APP_PORT production --project my-app --yes
+printf '%s' 'example-token' | vercel env add API_TOKEN production --project my-app --sensitive --yes
 ```
 
 `--vercel-project` becomes `--project`; without it Vercel uses the linked project
-(`vercel link`). `--force` replaces a variable that already exists — without it a
-second run fails — and `--yes` keeps `env add` from asking how to store the value.
+(`vercel link`). `--yes` keeps `env add` from asking how to store the value.
+
+**v0.15.0+** — `--force` is printed **only with `--overwrite`**. Before, every printed command carried it and so replaced
+a variable that already existed. Now Vercel stops on one that exists, and `evnx migrate --to vercel --overwrite` adds `--force`:
+
+```text
+printf '%s' '8080' | vercel env add PORT production --force --yes
+```
+
+A script that re-runs the printed commands to change a value passes `--overwrite`. `--skip-existing` is still refused for `vercel` (evnx does not
+contact it, so it cannot see what exists). The output also points to `evnx platform push`, which talks to Vercel itself.
+
 **v0.14.0+** — the environment follows the file that was read: `.env.development` (or `.env.dev`) is `development`, `.env.preview` is `preview`, and anything else, including plain `.env`, is `production`. Every printed `vercel env add` and the dry-run's `Environment :` line say so. A secret-looking variable gets `--sensitive` in `development` as in the others, because Vercel allows a Sensitive variable there since 2026-08-24 (0.13.0 left it out). **If you ran this command for a development or preview file with an earlier version, check Vercel production:** every earlier version printed `production` whatever file it read, so development values may have landed there.
 
 ### `doppler` and `infisical`
@@ -474,23 +484,19 @@ commands on a machine you trust.
 | `-n`, `--dry-run` | `bool` | `false` | Preview the variable set and where it would go, without printing the commands themselves |
 | `--print-only` | `bool` | `false` | Write only the commands to stdout; status and summary go to stderr |
 | `--skip-existing` | `bool` | `false` | Leave secrets that already exist. **Only `github` can honour this** — the others never ask the platform what exists, and refuse the flag |
-| `--overwrite` | `bool` | `false` | Replace existing secrets without asking. Same caveat as above |
+| `--overwrite` | `bool` | `false` | Replace existing secrets without asking. Same caveat as above, except that **v0.15.0+** `vercel` accepts it and prints `--force` |
 | `--yes`, `-y` | `bool` | `false` | Upload without asking "Proceed with migration?" (`github`) |
 | `--verbose`, `-v` | `bool` | `false` | Print diagnostic output during the run |
 | `--quiet`, `-q` | `bool` | `false` | Leave only the commands, the summary, warnings and errors |
 
-<Callout type="info">
-**`--dry-run` needs the names, not the credentials.** It contacts nothing, so
-`github` runs without a token. But a name that would be printed into a
-command — `--secret-name`, `--vault-name`, `--heroku-app`, `--project` for gcp,
-`--repo` — is still required, because a preview with a placeholder in it is a
-command that fails when you run it:
-
-```text
-Error: GCP project ID is required for this destination. Pass `--project`.
-  --dry-run still needs it: without it evnx would print a command
-  with a placeholder where the name should be.
-```
+<Callout type="info" title="Changed in v0.15.0">
+**`--dry-run` works without the destination's target flag.** `evnx migrate --to heroku --dry-run`
+shows a placeholder where the name goes (`App : <--heroku-app not set>`) and says "A real run
+needs --heroku-app"; a real run still requires it. The same holds for `--secret-name`,
+`--vault-name` and `--project`. The dry run of `aws-secrets-manager` shows names only in its JSON
+preview, never the values. `migrate --to` also takes the names `convert --to` takes
+(`aws`, `aws-secrets`, `gcp`, `gcp-secrets`, `azure`, `azure-keyvault`). Without a GitHub token,
+`migrate --to github` says to set `GITHUB_TOKEN`, and the dry run reads `<GITHUB_TOKEN not set>`.
 </Callout>
 
 ### Filtering options
@@ -588,6 +594,7 @@ Patterns are case-sensitive. Multiple patterns are comma-separated.
 |------|---------|
 | `0` | Completed — commands generated, or an upload finished |
 | `1` | `--to github` ran, and at least one upload failed (**v0.10.3+**) |
+| `4` | **v0.15.0** — a confirmation was needed, there is no terminal and no `--yes` (it was `2`) |
 | `2` | Did not run. Unknown destination, missing or empty source file, a filter that matched nothing, a missing or invalid name, names that collide, values a destination would misread, a flag the destination cannot honour, or an argument error |
 
 <Callout type="info">

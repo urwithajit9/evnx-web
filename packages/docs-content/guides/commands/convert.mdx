@@ -3,8 +3,8 @@ section: "commands"
 order: 4
 title: "evnx convert"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-17"
-excerpt: "Reference for evnx convert: turn a .env into the format one of 14 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
+updatedAt: "2026-11-19"
+excerpt: "Reference for evnx convert: turn a .env into the format one of 15 targets expects — flags, the names a target needs, filters, collisions, output files and exit codes."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["convert", "reference", "cli", "env", "formats"]
@@ -15,7 +15,7 @@ prerequisites:
 draft: false
 ---
 
-`evnx convert` reads a `.env` and prints it in the format one of 14 targets expects:
+`evnx convert` reads a `.env` (or, since v0.15.0, a flat JSON object) and prints it in the format one of 15 targets expects:
 JSON, YAML, a shell script, a Kubernetes Secret, a Compose `environment:` block, a
 Terraform `.tfvars` file, or the commands or payload for a cloud secret store. It
 never contacts the target itself: it writes the artefact, and you run it.
@@ -52,9 +52,10 @@ Without `--to`, evnx opens a format menu when there is a terminal, and exits `2`
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--env <PATH>` | `.env` | The file to convert |
+| `--env <FILE>` | `.env` | The file to convert. **v0.15.0** — `-` reads standard input |
+| `--from <FORMAT>` | `dotenv` | **v0.15.0** — what the input is: `dotenv` or `json` ([below](#reading-json-and-writing-dotenv)) |
 | `--env-name <NAME>` | — | Convert `.env.<NAME>` instead. Conflicts with `--env` |
-| `--to <FORMAT>` | menu | The output format; see [Formats](#formats) |
+| `--to <FORMAT>` | menu | The output format; see [Formats](#formats). **v0.15.0** — `dotenv` is a target too |
 | `-n`, `--dry-run` | off | **v0.15.0** — with `--output`, check everything and say what would be written; write nothing |
 | `-y`, `--yes` | off | **v0.15.0** — do not ask: add `FILE` to `.gitignore` as `--gitignore` does. With no `--to` it is an error, because the format menu is a question too |
 | `-o, --output <FILE>` | stdout | Write to `FILE`, readable by you only (`0600`) |
@@ -75,6 +76,7 @@ Without `--to`, evnx opens a format menu when there is a terminal, and exits `2`
 | `--heroku-app <APP>` | — | Heroku app. Required by `heroku` |
 | `--name <NAME>` | — | The Kubernetes Secret's name. Required by `kubernetes` |
 | `--namespace <NAMESPACE>` | — | The Secret's namespace, optional |
+| `--kind <KIND>` | `secret` | **v0.15.0** — what `--to kubernetes` writes: `secret`, `configmap` or `split` ([below](#kubernetes-a-secret-a-configmap-or-both)) |
 
 `-v` / `--verbose`, `-q` / `--quiet` and `--no-color` are global flags. The converted
 output goes to stdout and nothing else does: notices and the `Docs:` line go to stderr,
@@ -87,14 +89,15 @@ so a pipe carries the artefact alone.
 | Format | Aliases | Output | Needs |
 |--------|---------|--------|-------|
 | `json` | — | flat object, every value a string | — |
-| `yaml` | `yml` | mapping, values that look like numbers or booleans quoted | — |
+| `dotenv` | — | a `.env` with the quoting evnx's own parser reads back exactly (**v0.15.0+**) | — |
+| `yaml` | `yml` | mapping, **every value quoted**, so YAML 1.1 readers (PyYAML, most CI tools) read `yes`, `on`, `No` and `2026-01-01` as strings (**v0.15.0+**) | — |
 | `shell` | `bash`, `export` | `export NAME='value'` script | — |
 | `aws-secrets` | `aws`, `aws-secrets-manager` | the flat JSON `create-secret --secret-string` takes | — |
 | `gcp-secrets` | `gcp`, `gcp-secret-manager` | script that creates each secret or adds a version; names lowercased, `_` → `-` (`DB_URL` → `db-url`) | `--project` |
 | `azure-keyvault` | `azure`, `azure-key-vault` | `az keyvault secret set` script, `_` → `-` | `--vault-name` |
 | `github` | — | text to paste into the GitHub web form. Was `github-actions`; `github-actions` and `gh-actions` exit 2 since v0.15.0 | — |
 | `docker-compose` | `docker`, `compose` | `environment:` list, `$` written `$$` | — |
-| `kubernetes` | `k8s`, `kubectl` | `v1` Secret, `stringData:` (or `data:` with `--base64`) | `--name` |
+| `kubernetes` | `k8s`, `kubectl` | `v1` Secret, `stringData:` (or `data:` with `--base64`); `--kind configmap` or `split` (**v0.15.0+**) | `--name` |
 | `terraform` | `tf`, `tfvars` | `NAME = "value"`, names as written; `--terraform-declarations` writes `variable` blocks instead (**v0.14.0+**) | — |
 | `doppler` | — | flat JSON object, what `doppler secrets upload` reads (**v0.14.0+**) | — |
 | `heroku` | — | one `heroku config:set A=… B=…` call, so the app restarts once (**v0.14.0+**) | `--heroku-app` |
@@ -110,6 +113,69 @@ so a pipe carries the artefact alone.
   but give no schema, so evnx prints the flat object of strings its error messages describe,
   and says so on stderr when you choose it.
 </Callout>
+
+### Reading JSON and writing dotenv
+
+**v0.15.0+.** `--from json` reads a flat `{"KEY": "value"}` object, the shape
+`validate --input-format json` reads. Every value must be a string; an error names the key,
+never the value. `--to dotenv` writes a `.env` with the quoting evnx's own parser reads back
+exactly:
+
+```bash
+evnx convert --to json > vars.json
+evnx convert --from json --to dotenv --env vars.json -o .env
+```
+
+```text
+PORT=8080
+DB_PASSWORD=hunter22hunter
+GREETING="hello world"
+```
+
+`--to json` followed by `--from json --to dotenv` returns the same names, values and order,
+whatever they hold: quotes, `#`, spaces, newlines, `$`, empty values and unicode. `--env -`
+reads standard input for either `--from`, so a pipe replaces a file:
+
+```bash
+cat vars.json | evnx convert --from json --to dotenv --env -
+```
+
+`cloud export --to dotenv` takes the same format list.
+
+### Kubernetes: a Secret, a ConfigMap or both
+
+**v0.15.0+.** `--kind` chooses what `--to kubernetes` writes:
+
+| `--kind` | Writes |
+|---|---|
+| `secret` (default) | One `Secret` holding every variable |
+| `configmap` | One `ConfigMap` holding every variable as plain text. Not with `--base64` |
+| `split` | Two documents: a `Secret` for the variables that look secret, and a `ConfigMap` named `<name>-config` for the rest |
+
+```bash
+evnx convert --to kubernetes --name myapp --kind split
+```
+
+```text
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myapp
+type: Opaque
+stringData:
+  DB_PASSWORD: "hunter22hunter"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myapp-config
+data:
+  PORT: "8080"
+  GREETING: "hello world"
+```
+
+`--kind` with any other `--to` is refused, as the other format flags are: exit `2`, nothing
+printed.
 
 ### Output shapes — what changed in v0.14.0
 

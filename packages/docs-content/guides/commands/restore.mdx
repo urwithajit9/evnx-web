@@ -55,8 +55,9 @@ evnx restore <BACKUP> [OPTIONS]
 | Argument / flag | Default | Description |
 |-----------------|---------|-------------|
 | `<BACKUP>` | required | The backup file to decrypt, as written by `evnx backup`. A file on disk; for a vault, use [`evnx cloud pull`](/guides/commands/cloud) |
-| `--output <PATH>` | the file the backup was made from | **v0.11.0+** — `.env.staging` for a backup of `.env.staging`, in the current folder (it was always `.env`). A recorded name that is not `.env` or `.env.<name>` restores to `.env`. Not the backup itself |
+| `--output <PATH>` | the file the backup was made from (`-` is stdout, **v0.15.0**) | **v0.11.0+** — `.env.staging` for a backup of `.env.staging`, in the current folder (it was always `.env`). A recorded name that is not `.env` or `.env.<name>` restores to `.env`. Not the backup itself |
 | `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. `--force` was removed in v0.15.0 |
+| `--show-values` | off | **v0.15.0** — with `--output -`, print to a terminal anyway |
 | `--inspect` | off | Show the variable names in the backup — never values — and write nothing |
 | `-n`, `--dry-run` | off | Decrypt and check the content, and write nothing |
 | `--key-file <PATH>` | — | Read the passphrase from a file; `backup` takes the same flag. `--password-file` still works as a hidden alias |
@@ -119,7 +120,24 @@ confirmation: a mistyped passphrase only fails to decrypt.
 evnx restore .env.backup --output .env.staging
 ```
 
-A new file is created `0600`. `--output -` (standard output) is refused since 0.13.0, as for `backup`: a restored `.env` is never printed. Name a file.
+A new file is created `0600`.
+
+### Restore to standard output
+
+**v0.15.0+.** `--output -` writes the decrypted text to stdout. It was refused before. Every status line goes to
+stderr, nothing is written to disk, so there is no `.bak` and no `.gitignore` question:
+
+```bash
+evnx restore .env.backup --key-file /run/secrets/evnx-pass --output - | evnx validate --env -
+```
+
+```text
+PORT=1
+TOKEN_X=abcdefgh12345678
+```
+
+On a terminal it is **refused** unless you pass `--show-values`, as `parse --values` is, because a value
+printed there stays in the scrollback. Piped, it is not needed.
 
 ---
 
@@ -264,7 +282,9 @@ The decrypted content is checked with the parser every evnx command reads `.env`
 files with. `export KEY=value` lines and multi-line quoted values (PEM keys, JSON)
 pass. Content the parser cannot read — prose, or a key such as `a/b`, which it
 rejects — is written to **`<output>.restored`** instead, so it cannot replace a
-working file, and the run exits `5`:
+working file, and the run exits `5`. **v0.15.0+** that file is private (mode `600`, even when an
+older copy was wider), gets the same git-ignore check as the main output, and its full path is
+printed with "This file holds plaintext secrets.":
 
 ```text
 ! Decrypted content does not look like a valid .env file.
@@ -438,9 +458,8 @@ rm /tmp/plain.env
 | Code | Meaning |
 |------|---------|
 | `0` | Restored, inspected, checked (`--dry-run`), or already up to date |
-| `2` | Could not run: wrong password, unreadable backup, an output problem, no terminal to ask on |
-| `3` | Backup file not found (including a `cloud://…` argument) |
-| `4` | Cancelled at the overwrite question |
+| `2` | Could not run: wrong password, unreadable backup, **backup file not found** (including a `cloud://…` argument; was `3` before v0.15.0), an output problem |
+| `4` | Cancelled at the overwrite question, or the question needed a terminal and there is none (without `--yes`) |
 | `5` | Not a `.env` evnx can read: written to `<output>.restored` instead |
 
 <Callout type="info">

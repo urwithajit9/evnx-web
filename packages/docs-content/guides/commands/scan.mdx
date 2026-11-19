@@ -87,6 +87,9 @@ A folder literally named `rules` or `hook` is scanned as `evnx scan ./rules`.
 | `--baseline` | file | `.evnx/baseline.json` if it exists | **v0.13.0+** — findings accepted earlier; matching ones are `known` and do not fail the run |
 | `--update-baseline` | `bool` | `false` | **v0.13.0+** — write this run's findings to the baseline and exit 0 |
 | `--rules` | file | — | **v0.13.0+** — a rule file for this run, on top of `.evnx/rules/` and your personal rules. Repeatable |
+| `--policy` | file | — | **v0.15.0** — a policy the repository's `.evnx.toml` cannot lower. Also `EVNX_POLICY`; the flag wins. See [A policy the repository cannot lower](#a-policy-the-repository-cannot-lower) |
+| `--strict` | `bool` | `false` | **v0.15.0** — an unknown key in `.evnx.toml` exits 2 instead of a warning |
+| `--exit-only` | `bool` | `false` | **v0.15.0** — print nothing at all; the exit code is the answer. Not with `--format` or `--json` |
 | `--exit-zero` | `bool` | `false` | Suppress exit 1 (findings). Exit 2 still happens |
 | `--exclude` | `string[]` | `.env.example` | Paths to skip in a folder walk. A value with `*`, `?` or `[` is a glob; any other value matches a **whole path component**. Adds to `[scan] exclude` |
 | `--max-file-size` | size | `1MiB` | **v0.10.14+** — skip walked files larger than this (`500K`, `5MB`, `2MiB`). A file you name is read whatever its size |
@@ -399,12 +402,17 @@ does not track, they say nothing was committed instead of telling you to rewrite
 
 ### JSON
 
+**v0.15.0+** — the document starts with a `run` header (`tool`, `version`, `schema_version`, `ruleset`
+= the rule-set id, `features`); the keys below it are unchanged. `scan rules list --json` (a top-level
+array) and `--format sarif` have no `run` header.
+
 ```bash
 evnx scan --format json
 ```
 
 ```json
 {
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 2, "ruleset": "builtin@0.15.0", "features": ["backup", "cloud", "migrate", "net"] },
   "schema_version": 2,
   "files_scanned": 5,
   "files": [
@@ -1033,6 +1041,88 @@ automatically, so only new findings fail. If you use packs, commit `.evnx/rules/
 
 ---
 
+## A policy the repository cannot lower
+
+**v0.15.0+.** A committed `.evnx.toml` can disable a detector or raise the severity floor for
+everyone who scans the repository. That is fine for a team's own tuning, and not for a CI
+gate that must not be weakened by the change it is checking. A **policy file kept outside the
+repository** sets what `.evnx.toml` may not do:
+
+```toml
+# ci/scan-policy.toml
+required_rules     = ["AWS Access Key"]   # detectors .evnx.toml may not disable
+max_severity_floor = "medium"             # the highest --severity or [scan] severity allowed
+allow_disable      = false                # or the only detectors a repository may disable
+```
+
+```bash
+evnx scan --policy ci/scan-policy.toml
+EVNX_POLICY=ci/scan-policy.toml evnx scan      # the same; --policy wins over the variable
+```
+
+| Key | What it forbids |
+|---|---|
+| `required_rules` | Disabling these detectors. `scan.builtins = false` conflicts too |
+| `max_severity_floor` | A `--severity` or `[scan] severity` above this value |
+| `allow_disable` | `false`: disabling any detector. A list: disabling any detector not on it |
+
+A conflict exits `2` before any file is read and names the key and the policy file:
+
+```text
+Error: policy policy.toml forbids scan.disable = ["AWS Access Key"] (required_rules lists `AWS Access Key`)
+
+No verdict: evnx did not run. This is not a clean result.
+```
+
+A missing or invalid policy file exits `2` as well. The policy is read after `.evnx.toml`
+and **is not dropped by `--no-config`**. A hook installed by `evnx scan hook install` honours
+`EVNX_POLICY` too.
+
+---
+
+## Strict config, and scripts that only need the code
+
+**`--strict`.** An unknown key in `.evnx.toml` is normally a warning, with a "did you mean"
+when it is close to a known one. A misspelt `severty` then lowers nothing and raises
+nothing, which for a CI gate is worse than stopping. With `--strict` it exits `2`:
+
+```text
+Error: --strict: unknown key in the config
+  .evnx.toml: unknown key `scan.severty` — did you mean `severity`?
+
+No verdict: evnx did not run. This is not a clean result.
+```
+
+Unknown keys in every section now get the hint, and for `scan` the warning shows under `-q`.
+
+**`--exit-only`.** Prints nothing at all, not even an error, and answers with the exit code:
+`0` clean, `1` findings, `2` could not run. For a script that only branches on it. The global
+`-q` keeps its meaning (findings still print), a usage error from the command line is still
+printed, and `--exit-only` cannot be combined with `--format` or `--json`.
+
+```bash
+if evnx scan --exit-only .; then echo clean; fi
+```
+
+---
+
+## Short values under secret names
+
+A 4 to 7 character value under `PASSWORD`, `PASSWD`, `SECRET`, `TOKEN`, `API_KEY` or
+`PRIVATE_KEY` (`DB_PASSWORD=admin`) is too short to judge by shape. It is reported only when
+you name `--confidence low` (or set `[scan] confidence = "low"`), as `Sensitive config key`,
+medium severity and low confidence, **without its value**:
+
+```text
+  !  Sensitive config key: DB_PASSWORD           medium, low confidence
+     .env:1 (DB_PASSWORD)  <5 chars>
+     ·  flagged by variable name — the value was not checked
+```
+
+A default scan reports the same findings as before.
+
+---
+
 ## Configuring scan in `.evnx.toml`
 
 ```toml
@@ -1099,7 +1189,7 @@ Rule files and the baseline are not `[scan]` keys: they live in `.evnx/rules/` a
 |------|---------|
 | `0` | Clean: nothing new at or above `--severity` and `--confidence` in files git would commit; or nothing staged; or `--update-baseline` wrote the baseline; or `--exit-zero` was set |
 | `1` | Findings reported, or a file that could not be read |
-| `2` | The scan could not be completed, so there is no verdict: a bad path or flag, a broken config, a pattern that does not compile, an unknown `--category`, a pack that no longer matches `.evnx/rules.lock`, empty stdin, `--staged` outside a repository |
+| `2` | The scan could not be completed, so there is no verdict: a bad path or flag, a broken config, a policy that the config conflicts with or a missing policy file, `--strict` with an unknown key, a pattern that does not compile, an unknown `--category`, a pack that no longer matches `.evnx/rules.lock`, empty stdin, `--staged` outside a repository |
 
 **`2` is not a louder `1`.** "I found nothing" and "I could not look" are different
 answers. Allowed and known findings do not count toward the exit code.
