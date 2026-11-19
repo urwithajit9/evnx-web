@@ -137,7 +137,7 @@ export function SearchModal() {
             onChange={e => handleInput(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Search the docs…"
-            className="flex-1 font-mono text-sm bg-transparent text-text-primary placeholder:text-text-muted outline-none"
+            className="flex-1 text-sm bg-transparent text-text-primary placeholder:text-text-muted outline-none"
           />
           <button
             onClick={closeSearch}
@@ -150,13 +150,13 @@ export function SearchModal() {
         {/* Results */}
         <div ref={listRef} className="max-h-[400px] overflow-y-auto">
           {query && results.length === 0 && !isPending && (
-            <div className="py-12 text-center font-mono text-sm text-text-muted">
+            <div className="py-12 text-center text-sm text-text-muted">
               No results for &ldquo;{query}&rdquo;
             </div>
           )}
 
           {!query && (
-            <div className="py-8 text-center font-mono text-xs text-text-muted">
+            <div className="py-8 text-center text-xs text-text-muted">
               Type to search every guide
             </div>
           )}
@@ -183,11 +183,11 @@ export function SearchModal() {
                         }
                       </div>
                       <div className="min-w-0">
-                        <p className="font-mono text-sm font-semibold truncate">
+                        <p className="text-sm font-semibold truncate">
                           {result.meta.title}
                         </p>
                         <p
-                          className="font-mono text-xs text-text-muted mt-0.5 line-clamp-2"
+                          className="text-xs text-text-muted mt-0.5 line-clamp-2"
                           // Pagefind wraps matched terms in <mark> — style it
                           dangerouslySetInnerHTML={{ __html: result.excerpt }}
                         />

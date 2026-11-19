@@ -124,14 +124,14 @@ export async function Footer() {
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono text-sm text-text-secondary hover:text-text-primary transition-colors"
+                        className="text-sm text-text-secondary hover:text-text-primary transition-colors"
                       >
                         {label} ↗
                       </a>
                     ) : (
                       <Link
                         href={href}
-                        className="font-mono text-sm text-text-secondary hover:text-text-primary transition-colors"
+                        className="text-sm text-text-secondary hover:text-text-primary transition-colors"
                       >
                         {label}
                       </Link>

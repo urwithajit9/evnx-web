@@ -85,12 +85,12 @@ export function HelpfulVote({ slug }: Props) {
   if (voted) {
     return (
       <div className="flex items-center gap-3">
-        <span className="font-mono text-sm text-text-muted">
+        <span className="text-sm text-text-muted">
           {voted === 'yes'
             ? 'Thanks! Glad it helped. 🙌'
             : "Thanks for the feedback. We'll improve this."}
         </span>
-        <span className="font-mono text-xs text-text-muted">
+        <span className="text-xs text-text-muted">
           ({counts.yes} found this helpful)
         </span>
       </div>
@@ -99,7 +99,7 @@ export function HelpfulVote({ slug }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="font-mono text-sm text-text-muted">Was this helpful?</span>
+      <span className="text-sm text-text-muted">Was this helpful?</span>
 
       <button
         onClick={() => castVote('yes')}

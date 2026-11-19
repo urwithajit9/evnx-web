@@ -72,7 +72,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
           {/* Active tag banner */}
           {activeTag && (
             <div className="flex items-center gap-3 mt-6">
-              <span className="font-mono text-sm text-text-muted">
+              <span className="text-sm text-text-muted">
                 Showing posts tagged
               </span>
               <span className="font-mono text-sm text-brand-400 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded">
@@ -80,7 +80,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
               </span>
               <Link
                 href="/blog"
-                className="font-mono text-xs text-text-muted hover:text-text-primary transition-colors underline underline-offset-2"
+                className="text-xs text-text-muted hover:text-text-primary transition-colors underline underline-offset-2"
               >
                 Clear filter
               </Link>
@@ -119,7 +119,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
 
                 <div className="flex items-center gap-4 text-sm text-text-muted">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 text-xs font-mono">
+                    <div className="w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 text-xs">
                       {post.author.name[0]}
                     </div>
                     <span>{post.author.name}</span>
@@ -180,7 +180,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                   // no posts{activeTag ? ` tagged #${activeTag}` : ''}
                 </p>
                 {activeTag ? (
-                  <Link href="/blog" className="font-mono text-sm text-brand-400 hover:text-brand-300 transition-colors">
+                  <Link href="/blog" className="text-sm text-brand-400 hover:text-brand-300 transition-colors">
                     View all posts →
                   </Link>
                 ) : (
@@ -240,7 +240,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                 </div>
                 <Link
                   href="/install"
-                  className="block text-center text-sm font-mono text-brand-400 hover:text-brand-300 transition-colors"
+                  className="block text-center text-sm text-brand-400 hover:text-brand-300 transition-colors"
                 >
                   View all install methods →
                 </Link>

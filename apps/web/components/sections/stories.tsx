@@ -96,7 +96,7 @@ export function Stories() {
           <p className="font-medium">{story.outcome}</p>
           <Link
             href={docsUrl(story.guide)}
-            className="inline-flex items-center gap-1 font-mono text-sm underline underline-offset-4"
+            className="inline-flex items-center gap-1 text-sm underline underline-offset-4"
           >
             {stories.guideLabel}
             <ArrowRight className="w-4 h-4" aria-hidden />

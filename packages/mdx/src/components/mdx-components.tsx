@@ -227,7 +227,10 @@ function TH({ children }: { children?: React.ReactNode }) {
 }
 function TD({ children }: { children?: React.ReactNode }) {
   return (
-    <td className="py-2.5 px-4 text-text-secondary font-mono text-xs align-top">
+    // Sans, not mono: cells hold sentences ("What it does"). Code inside a
+    // cell is still mono through the inline `code` component. text-sm, because
+    // Plex Sans at xs reads smaller than the Plex Mono xs it replaces.
+    <td className="py-2.5 px-4 text-text-secondary text-sm align-top">
       {children}
     </td>
   );
