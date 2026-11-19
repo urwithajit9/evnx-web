@@ -22,6 +22,19 @@ export interface SyncTarget {
   docsSlug: string;
   /** The command that does the talking. */
   command: { label: string; guide: string };
+  /** Exact invocations, copied from the guide named by docsSlug. */
+  commands: string[];
+}
+
+export interface ExportTarget {
+  name: string;
+  /** The `--to` value, from the Formats table in commands/convert. */
+  format: string;
+  /** What the output is, paraphrased from that table. */
+  writes: string;
+  /** A flag the format requires, if any. */
+  needs?: string;
+  experimental?: boolean;
 }
 
 export const integrations: SectionHeading & {
@@ -29,7 +42,7 @@ export const integrations: SectionHeading & {
   exports: {
     title: string;
     lede: string;
-    targets: { name: string; experimental?: boolean }[];
+    targets: ExportTarget[];
     command: { label: string; guide: string };
   };
   workflow: { summary: string; title: string; language: string; code: string; exitCodes: string };
@@ -47,12 +60,21 @@ export const integrations: SectionHeading & {
         body: "Compare, pull and push a project's environment variables. Values are never printed, in any format.",
         docsSlug: "commands/platform",
         command: { label: "evnx platform", guide: "platform" },
+        commands: [
+          "evnx platform diff --to vercel",
+          "evnx platform pull --to vercel",
+          "evnx platform push --to vercel",
+        ],
       },
       {
         name: "GitHub Actions",
         body: "Gate pull requests with the Marketplace action, report findings in the Security tab, and upload repository secrets straight from a .env.",
         docsSlug: "integrations/github-actions",
         command: { label: "evnx migrate", guide: "migrate" },
+        commands: [
+          "evnx scan --format sarif --exit-zero > results.sarif",
+          "evnx migrate --to github-actions --repo owner/repo --yes --skip-existing",
+        ],
       },
     ],
   },
@@ -61,15 +83,15 @@ export const integrations: SectionHeading & {
     title: "Exports to",
     lede: "evnx convert writes the file or commands each tool expects; you apply them.",
     targets: [
-      { name: "Kubernetes Secret" },
-      { name: "Terraform .tfvars" },
-      { name: "Docker Compose" },
-      { name: "Doppler" },
-      { name: "Heroku" },
-      { name: "AWS Secrets Manager" },
-      { name: "GCP Secret Manager" },
-      { name: "Azure Key Vault" },
-      { name: "Railway", experimental: true },
+      { name: "Kubernetes Secret", format: "kubernetes", writes: "a v1 Secret, stringData (or data with --base64)", needs: "--name" },
+      { name: "Terraform .tfvars", format: "terraform", writes: "NAME = \"value\" lines, or variable blocks with --terraform-declarations" },
+      { name: "Docker Compose", format: "docker-compose", writes: "an environment: list, with $ written $$" },
+      { name: "Doppler", format: "doppler", writes: "the flat JSON that doppler secrets upload reads" },
+      { name: "Heroku", format: "heroku", writes: "one heroku config:set call, so the app restarts once", needs: "--heroku-app" },
+      { name: "AWS Secrets Manager", format: "aws-secrets", writes: "the flat JSON create-secret --secret-string takes" },
+      { name: "GCP Secret Manager", format: "gcp-secrets", writes: "a script that creates each secret or adds a version", needs: "--project" },
+      { name: "Azure Key Vault", format: "azure-keyvault", writes: "an az keyvault secret set script", needs: "--vault-name" },
+      { name: "Railway", format: "railway", writes: "the flat JSON object json prints", experimental: true },
     ],
     command: { label: "evnx convert", guide: "convert" },
   },

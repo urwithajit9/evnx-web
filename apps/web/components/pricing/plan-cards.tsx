@@ -66,7 +66,7 @@ export function PlanCards() {
               {plan.highlighted && copy.ribbon && (
                 // ⚠️ `bg-bg-base` on the WRAPPER, not the badge.
                 //
-                // `variant="brand"` is `bg-brand-500 bg-opacity-10` — a 90%
+                // `variant="brand"` is `bg-brand-500/10` — a 90%
                 // transparent fill, which is right for a badge sitting inline in
                 // text and wrong for one straddling a border. This ribbon sits on
                 // the card's 2px brand border, and the line was clearly visible

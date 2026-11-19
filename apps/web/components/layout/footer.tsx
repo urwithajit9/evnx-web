@@ -18,6 +18,8 @@ type NavLink = {
 
 const LINKS: Record<string, NavLink[]> = {
   Learn: [
+    { href: "/features", label: "Features", external: false },
+    { href: "/integrations", label: "Integrations", external: false },
     // ⚠️ Same reason as the header — see the note there.
     { href: docsUrl(), label: "Guides", external: false },
     {

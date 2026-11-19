@@ -49,23 +49,19 @@ const METHOD_LABELS: Record<MethodId, { label: string; recommended?: boolean }> 
 const CHANNELS: { label: string; className: string }[] = [
   {
     label: "npm @evnx/cli",
-    className:
-      "bg-orange-50 dark:bg-orange-950/20 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-700",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
   },
   {
     label: "crates.io",
-    className:
-      "bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
   },
   {
     label: "PyPI",
-    className:
-      "bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
   },
   {
     label: "Homebrew",
-    className:
-      "bg-teal-50 dark:bg-teal-950/20 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-700",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
   },
   {
     label: "Scoop",
@@ -81,8 +77,7 @@ const CHANNELS: { label: string; className: string }[] = [
   },
   {
     label: "shell script",
-    className:
-      "bg-green-50 dark:bg-green-950/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700",
+    className: "bg-bg-surface text-text-secondary border-border-muted",
   },
   {
     label: "GitHub Releases",
@@ -278,11 +273,12 @@ function InfoBox({
   children: React.ReactNode;
   variant?: "info" | "warn" | "success";
 }) {
+  // Token tints, not the raw Tailwind palette: these follow the site theme
+  // and keep body text at text-primary contrast in both.
   const styles = {
-    info: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300",
-    warn: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300",
-    success:
-      "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300",
+    info: "bg-info/10 border-info/30 text-text-primary",
+    warn: "bg-warning/10 border-warning/30 text-text-primary",
+    success: "bg-success/10 border-success/30 text-text-primary",
   };
   return (
     <div className={`rounded-lg border p-4 text-sm mb-3 leading-relaxed ${styles[variant]}`}>
@@ -471,11 +467,11 @@ function CargoPanel({
           <p className="font-mono text-xs text-text-secondary mb-1">--features cloud</p>
           <p className="text-xs text-text-muted">adds auth, org, vault + cloud</p>
         </div>
-        <div className="col-span-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20 p-3">
-          <p className="font-mono text-xs text-green-800 dark:text-green-300 mb-1">
+        <div className="col-span-2 rounded-lg border border-success/30 bg-success/10 p-3">
+          <p className="font-mono text-xs text-success mb-1">
             --all-features
           </p>
-          <p className="text-xs text-green-700 dark:text-green-400">
+          <p className="text-xs text-text-secondary">
             all of the above &mdash; recommended. <span className="font-mono">--features full</span>{" "}
             is migrate + backup only, with no cloud commands
           </p>
@@ -956,7 +952,7 @@ export function InstallPageClient() {
                 >
                   {meta.label}
                   {meta.recommended && (
-                    <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 font-normal">
+                    <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-success/10 text-success font-normal">
                       recommended
                     </span>
                   )}
