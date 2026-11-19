@@ -767,9 +767,16 @@ function GHPanel() {
           `osv-scanner scan source -L evnx-${EVNX_VERSION}.cdx.json`
         }
       />
-      {/* TODO(owner): link "SBOM: what it is and how evnx ships one"
-          (/blog/sbom-what-it-is-and-how-evnx-ships-one) here once the post is published.
-          It is draft: true, and the content link check fails on links to drafts. */}
+      <p className="text-sm text-text-secondary mb-3 leading-relaxed">
+        More on what the SBOM holds and how it is signed:{" "}
+        <Link
+          href="/blog/sbom-what-it-is-and-how-evnx-ships-one"
+          className="text-brand-500 hover:text-brand-400"
+        >
+          SBOM: what it is and how evnx ships one
+        </Link>
+        .
+      </p>
     </>
   );
 }

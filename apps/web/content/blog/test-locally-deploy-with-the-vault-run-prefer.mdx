@@ -1,0 +1,241 @@
+---
+title: "Test with your values, deploy with the vault's: evnx run --prefer"
+publishedAt: "2026-11-19"
+excerpt: "evnx run puts the variables from your env file or vault into a command. When your shell already sets one of them, which value should win? Until 0.15.0 the answer was fixed. Now it is a flag, with a default that does not change and a line that tells you what was kept."
+author: "ajit"
+category: "tutorial"
+tags: ["run", "cloud", "secrets", "testing", "masking", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "evnx-0-15-0-one-vocabulary-for-every-command"
+  - "one-vault-to-many-evnx-cloud"
+---
+
+`evnx run` starts a command with the variables from your env file in its environment. `evnx cloud run` does the same with a vault, without writing a file. Both raise a small question
+that you only notice when it bites: what if your shell already has a variable with the
+same name?
+
+Say the file points `DB_URL` at the shared database, and you want to run the tests against
+a local one. Before 0.15.0 evnx answered for you, and the answer was "the file wins". In
+0.15.0 you choose.
+
+## The default has not changed
+
+Here is a throwaway `.env`, with fake values:
+
+```bash
+DB_URL=postgres://prod.internal:5432/app
+API_KEY=sk_test_FAKE0123456789abcdef
+LOG_LEVEL=info
+```
+
+And a shell that already sets `DB_URL` to a local database:
+
+```bash
+DB_URL=postgres://localhost:5432/dev evnx run -- sh -c 'echo $DB_URL'
+```
+
+```text
+postgres://prod.internal:5432/app
+```
+
+The file replaced the value from the shell. That is `--prefer vault`, the default, and it
+is what `evnx run` has always done. A deploy step that runs with the vault's values should
+use the vault's values, whatever the runner's environment happens to contain. Nothing about
+that changes, so nothing in a working pipeline needs touching.
+
+With `--verbose`, evnx names what it replaced:
+
+```text
+  injecting 3 variable(s) from .env: DB_URL, API_KEY, LOG_LEVEL
+  replaced from the vault or env file: DB_URL
+postgres://prod.internal:5432/app
+```
+
+## --prefer env: your shell wins
+
+For testing you want the opposite. Pass `--prefer env`:
+
+```bash
+DB_URL=postgres://localhost:5432/dev evnx run --prefer env -- sh -c 'echo $DB_URL; echo $LOG_LEVEL'
+```
+
+```text
+  kept from your environment: DB_URL
+postgres://localhost:5432/dev
+info
+```
+
+`DB_URL` stayed as you set it. `LOG_LEVEL` was not set in the shell, so the file filled it
+in. The file now supplies what you did not say, and your shell wins what you did.
+
+That makes the common case one line. This runs the test suite against a local database
+with every other variable from the file:
+
+```bash
+DB_URL=postgres://localhost:5432/dev evnx run --prefer env -- npm test
+```
+
+Several kept names are listed together, comma-separated:
+
+```text
+  kept from your environment: DB_URL, LOG_LEVEL
+```
+
+### An empty value counts as set
+
+If your shell exports a variable as an empty string, `--prefer env` keeps it empty:
+
+```bash
+DB_URL= evnx run --prefer env -- sh -c 'echo "[$DB_URL]"'
+```
+
+```text
+  kept from your environment: DB_URL
+[]
+```
+
+That is deliberate. "Set to nothing" is a value some programs read as "turn this off", and
+a flag that guessed otherwise would be surprising. If you want the file's value, do not
+export the name at all.
+
+### The line names, never shows
+
+The `kept from your environment` line goes to stderr and carries names only. A value from
+your shell, which may be a real credential, is not printed. `-q` hides the line, and the
+command's own output is unchanged.
+
+## Masking and the one thing it does not cover
+
+`evnx run` masks injected secrets in the command's output. With `--prefer vault` and the
+fake key above:
+
+```bash
+evnx run -- sh -c 'echo $API_KEY'
+```
+
+```text
+***
+```
+
+With `--prefer env` and a value from your own shell:
+
+```bash
+API_KEY=sk_test_MINE_FAKE_999999999999 evnx run --prefer env -- sh -c 'echo $API_KEY'
+```
+
+```text
+  kept from your environment: API_KEY
+sk_test_MINE_FAKE_999999999999
+```
+
+A kept value is not masked. This is the right outcome, though it can look odd at first.
+Masking exists to stop evnx's secrets from landing in a log. evnx did not inject this
+value, your shell did, so evnx has no claim over it. It is also on the list of things
+masking does not cover in the [`run` guide](/guides/commands/run#what-masking-does-not-cover).
+
+The practical rule: if you keep a real secret from your environment, treat the output as
+you would treat the output of any command that has it.
+
+## Unsafe names are still checked
+
+`--prefer env` does not relax the safety check. Some names make a program load or run other
+code (`PATH`, `LD_*`, `NODE_OPTIONS` and, from 0.15.0, `EDITOR`, `PAGER`, `GIT_ASKPASS` and
+more). If the file or vault holds one, `run` refuses, whichever side would win:
+
+```bash
+EDITOR=nano evnx run --env .env.u --prefer env -- sh -c 'echo hi'
+```
+
+```text
+Error: .env.u sets EDITOR, which make a program load or run other code.
+  EDITOR, PAGER and similar names start a program.
+  Anyone who can edit .env.u could use them to run code here.
+  Nothing was run. Exclude them with --exclude, or pass
+  --allow-unsafe-names if you meant to set them.
+
+No verdict: evnx stopped at the error above. This is not a clean result.
+```
+
+Exit 2, and the command did not run. The check looks at the names in the file, so keeping
+your own `EDITOR` does not hide the file's. The reason is the same as before: whoever can
+edit the file should not be able to start a program by naming a variable.
+
+## The same flag on cloud run
+
+`evnx cloud run` takes the same option, with the vault in place of the file:
+
+```bash
+DB_URL=postgres://localhost:5432/dev evnx cloud run --vault myapp/dev --prefer env -- npm test
+```
+
+`--prefer vault` is the default there too, and the line on stderr and the masking rule are
+the same. `cloud run --allow-override`, which decides which vault wins when you pass several,
+is a different thing and is unchanged. See [`evnx cloud`](/guides/commands/cloud#running-a-command-without-writing-a-file).
+
+`cloud run` needs a signed-in account and a vault, so the output in this post is from `evnx run` with a file. The two commands share the flag and its help text.
+
+## Where to use which
+
+| Situation | Flag |
+|---|---|
+| Deploy, release, migration, anything that must use the vault's values | `--prefer vault` (the default, so leave it off) |
+| Local test run against a different database or API | `--prefer env` |
+| CI job that overrides one name for one test run | `--prefer env`, and set only that name |
+
+Do not use `--prefer env` in a deploy step. A runner's environment can hold anything, and
+the point of the vault is that the deploy gets the vault's values. If a step has `--prefer env`
+by accident, the stderr line tells you which names it kept.
+
+## What else changed in run
+
+0.15.0 changed how `run` hands over the terminal, and it is worth knowing if you wrap it.
+
+On Unix, when nothing needs masking, the command replaces evnx (`exec`). Signals, the
+terminal and the exit status belong to the command, and evnx's own copy of the secrets is
+gone while it runs. When there is something to mask, evnx stays to filter the output. You can
+see the difference in the parent of the command:
+
+```bash
+evnx run -- sh -c 'cat /proc/$PPID/comm'
+evnx run --no-mask -- sh -c 'cat /proc/$PPID/comm'
+```
+
+```text
+evnx
+bash
+```
+
+With masking the parent is evnx. Without it, the parent is the shell that started evnx,
+because evnx is no longer there. A masked run forwards `SIGTERM`, `SIGHUP`, `SIGQUIT` and
+`SIGINT` to the command, so a stopped CI job no longer leaves it running.
+
+A command killed by a signal now exits 128+n, not 1:
+
+```bash
+evnx run -- sh -c 'kill -TERM $$'; echo $?
+```
+
+```text
+  ! the command was killed by signal 15
+143
+```
+
+Exit 1 now means "findings" everywhere else, so you can tell the two apart. On Windows, `run`
+still spawns and waits, with no signal forwarding.
+
+## Short version
+
+```bash
+# deploy: the vault's values, as always
+evnx cloud run --vault myapp/prod -- ./deploy.sh
+
+# local test: my shell wins, the file fills in the rest
+DB_URL=postgres://localhost:5432/dev evnx run --prefer env -- npm test
+```
+
+The full details are in the guides for [`evnx run`](/guides/commands/run#which-value-wins)
+and [`evnx cloud`](/guides/commands/cloud#running-a-command-without-writing-a-file). If you
+are upgrading a pipeline, [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0)
+covers everything that changed in `run` and `cloud run`.
