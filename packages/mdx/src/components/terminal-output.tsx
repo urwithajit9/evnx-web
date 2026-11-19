@@ -19,6 +19,8 @@
  */
 
 import React from 'react'
+import { CodeFrame } from './code-frame'
+import { lineClass } from '../lib/line-class'
 
 type Props = {
   title?: string
@@ -43,42 +45,19 @@ function extractText(node: React.ReactNode): string {
   return ''
 }
 
-function getLineClass(line: string): string {
-  if (/^\[ERROR\]|^\[CRITICAL\]/.test(line))                              return 'text-danger'
-  if (/^\[WARNING\]/.test(line))                                           return 'text-warning'
-  if (/^\[OK\]|^\[SUCCESS\]|^\[CONVERT\]/.test(line))                     return 'text-success'
-  if (/^\[INFO\]|^\[SCAN\]|^\[VALIDATE\]|^\[DOCTOR\]|^\[FIX\]/.test(line)) return 'text-info'
-  if (/^\[TIP\]/.test(line))                                               return 'text-brand-300'
-  if (/^#/.test(line))                                                     return 'text-text-muted'
-  return 'text-terminal-text'
-}
-
 export function TerminalOutput({ title, children }: Props) {
   const raw = extractText(children).trim()
   const lines = raw.split('\n')
 
   return (
-    <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
-      {/* Window chrome */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-bg-surface border-b border-border-subtle">
-        <div className="w-3 h-3 rounded-full bg-danger/60" />
-        <div className="w-3 h-3 rounded-full bg-warning/60" />
-        <div className="w-3 h-3 rounded-full bg-success/60" />
-        {title && (
-          <span className="ml-3 font-mono text-xs text-text-muted">{title}</span>
-        )}
-      </div>
-
-      {/* Output lines */}
-      <div tabIndex={0} role="group" aria-label="Terminal output" className="bg-terminal-bg overflow-x-auto">
-        <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
-          {lines.map((line, i) => (
-            <span key={i} className={`block ${getLineClass(line)}`}>
-              {line || '\u00A0'}
-            </span>
-          ))}
-        </pre>
-      </div>
-    </div>
+    <CodeFrame dots label={title} ariaLabel={title ? `Terminal output: ${title}` : 'Terminal output'} className="my-6">
+      <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
+        {lines.map((line, i) => (
+          <span key={i} className={`block ${lineClass(line)}`}>
+            {line || '\u00A0'}
+          </span>
+        ))}
+      </pre>
+    </CodeFrame>
   )
 }

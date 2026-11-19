@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code-block";
-import { CopyButton } from "@/components/ui/copy-button";
+import { CopyButton } from "@evnx/mdx/copy-button";
 import { EVNX_VERSION, GITHUB_URL } from "@/lib/config";
 import { docsUrl } from "@evnx/config";
 
@@ -247,17 +247,25 @@ const TROUBLE_ITEMS: TroubleItem[] = [
 
 function CmdLine({ label, code }: { label?: string; code: string }) {
   return (
-    <div className="rounded-lg border border-border-muted overflow-hidden mb-3">
+    // theme-dark: the label strip is part of the terminal, dark in both themes.
+    <div className="theme-dark rounded-lg border border-border-muted overflow-hidden mb-3">
       {label && (
         <p className="text-xs text-text-muted uppercase tracking-wide px-4 py-2 bg-bg-surface border-b border-border-muted">
           {label}
         </p>
       )}
       <div className="bg-terminal-bg p-4 flex items-center justify-between gap-4">
-        <code className="text-terminal-text font-mono text-sm break-all flex-1 leading-relaxed whitespace-pre">
+        {/* ⚠️ min-w-0 + overflow-x-auto: a flex child won't shrink below its
+            content by default, so a long whitespace-pre command pushed the
+            copy button off-screen and made the whole page scroll sideways
+            below ~850px. The command now scrolls inside its own box. */}
+        <code
+          tabIndex={0}
+          className="text-terminal-text font-mono text-sm flex-1 min-w-0 overflow-x-auto leading-relaxed whitespace-pre"
+        >
           {code}
         </code>
-        <CopyButton text={code} />
+        <CopyButton text={code} label="command" variant="icon" />
       </div>
     </div>
   );

@@ -1,27 +1,14 @@
-'use client'
 /**
- * CodeBlock — used directly on landing page and other client pages.
- * NOT used inside MDX (that's handled by FencedCodeBlock in mdx-components.tsx).
+ * CodeBlock — a plain (unhighlighted) code block for client pages such as
+ * /install. MDX uses FencedCodeBlock, which highlights with Shiki on the server.
  *
- * Location: components/ui/code-block.tsx
- * 'use client' is fine here because this is imported by client pages directly,
- * not by MDXRemote on the server.
+ * Both draw <CodeFrame> from @evnx/mdx, so the two cannot look different, and
+ * the line colours come from the one shared lineClass().
  */
-
-import { useState } from 'react'
-// Client-safe: lang-labels has no imports and never reaches shiki.
+// Client-safe imports: none of these reach shiki.
 import { LANG_LABELS } from '@evnx/mdx/lang-labels'
-
-function getLineClass(line: string): string {
-  if (/^\[ERROR\]|^\[CRITICAL\]/.test(line))                       return 'text-danger'
-  if (/^\[WARNING\]/.test(line))                                    return 'text-warning'
-  if (/^\[OK\]|^\[SUCCESS\]|^\[CONVERT\]/.test(line))              return 'text-success'
-  if (/^\[INFO\]|^\[SCAN\]|^\[VALIDATE\]|^\[DOCTOR\]/.test(line)) return 'text-info'
-  if (/^\[TIP\]/.test(line))                                        return 'text-brand-300'
-  if (/^#/.test(line))                                              return 'text-text-muted'
-  if (/^(evnx |curl |cargo |git )/.test(line.trimStart()))         return 'text-brand-400'
-  return 'text-terminal-text'
-}
+import { CodeFrame } from '@evnx/mdx/code-frame'
+import { lineClass } from '@evnx/mdx/line-class'
 
 type Props = {
   children: string
@@ -32,55 +19,21 @@ type Props = {
 }
 
 export function CodeBlock({ children, language = 'bash', filename, className }: Props) {
-  const [copied, setCopied] = useState(false)
-
   const lang    = language.startsWith('language-') ? language.slice('language-'.length) : language
   const label   = LANG_LABELS[lang] ?? lang
   const rawCode = (children ?? '').toString().replace(/\n$/, '')
   const lines   = rawCode.split('\n')
 
-  function handleCopy() {
-    navigator.clipboard.writeText(rawCode).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
   return (
-    <div className={`rounded-xl overflow-hidden border border-border-muted ${className ?? ''}`}>
-      <div className="flex items-center justify-between bg-bg-overlay px-4 py-2.5 border-b border-border-subtle">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-text-muted">{label}</span>
-          {filename && (
-            <>
-              <span className="text-border-default select-none">·</span>
-              <span className="font-mono text-xs text-text-muted">{filename}</span>
-            </>
-          )}
-        </div>
-        <button
-          onClick={handleCopy}
-          aria-label="Copy code"
-          className={`font-mono text-xs px-2 py-0.5 rounded border transition-all ${
-            copied
-              ? 'border-success/50 text-success bg-success/10'
-              : 'border-border-subtle text-text-muted hover:text-text-primary hover:border-border-muted'
-          }`}
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
-
-      <div className="overflow-x-auto bg-terminal-bg">
-        <pre className="p-4 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
-          {lines.map((line, i) => (
-            <span key={i} className={`block ${getLineClass(line)}`}>
-              {line || '\u00A0'}
-            </span>
-          ))}
-        </pre>
-      </div>
-    </div>
+    <CodeFrame label={label} filename={filename} copyText={rawCode} ariaLabel={`${label} code`} className={className}>
+      <pre className="p-4 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
+        {lines.map((line, i) => (
+          <span key={i} className={`block ${lineClass(line, { commands: true })}`}>
+            {line || '\u00A0'}
+          </span>
+        ))}
+      </pre>
+    </CodeFrame>
   )
 }
 

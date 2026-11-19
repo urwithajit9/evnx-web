@@ -24,7 +24,7 @@
  */
 
 import React from 'react'
-import { CopyButton } from './copy-button'
+import { CodeFrame } from './code-frame'
 
 type Props = {
   filename?: string
@@ -60,28 +60,21 @@ export function DiffBlock({ filename, children }: Props) {
     .join('\n')
 
   return (
-    <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-bg-overlay border-b border-border-subtle">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-text-muted">diff</span>
-          {filename && (
-            <>
-              <span className="text-border-default">·</span>
-              <span className="font-mono text-xs text-text-muted">{filename}</span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
+    <CodeFrame
+      label="diff"
+      filename={filename}
+      copyText={copyable}
+      copyLabel="the changed file"
+      ariaLabel="Diff"
+      className="my-6"
+      actions={
+        <>
           {/* Legend */}
           <span className="font-mono text-xs text-danger/70">− removed</span>
           <span className="font-mono text-xs text-success/70">+ added</span>
-          <CopyButton code={copyable} />
-        </div>
-      </div>
-
-      {/* Diff lines */}
-      <div tabIndex={0} role="group" aria-label="Diff" className="bg-terminal-bg overflow-x-auto">
+        </>
+      }
+    >
         <pre className="p-5 m-0 font-mono text-sm leading-[1.75] whitespace-pre">
           {lines.map((line, i) => {
             let bgClass = ''
@@ -117,7 +110,6 @@ export function DiffBlock({ filename, children }: Props) {
             )
           })}
         </pre>
-      </div>
-    </div>
+    </CodeFrame>
   )
 }
