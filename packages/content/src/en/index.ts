@@ -6,6 +6,8 @@ export { leakAnatomy, originStory } from "./timeline";
 export { audit } from "./audit";
 export { commands } from "./commands";
 export { cloud } from "./cloud";
+export { features } from "./features";
+export type { Feature } from "./features";
 export { integrations } from "./integrations";
 export type { SyncTarget } from "./integrations";
 export { problem } from "./problem";
