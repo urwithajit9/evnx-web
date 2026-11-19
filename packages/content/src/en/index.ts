@@ -4,9 +4,10 @@
 export { hero } from "./hero";
 export { leakAnatomy, originStory } from "./timeline";
 export { audit } from "./audit";
-export { ci } from "./ci";
 export { commands } from "./commands";
 export { cloud } from "./cloud";
+export { integrations } from "./integrations";
+export type { SyncTarget } from "./integrations";
 export { problem } from "./problem";
 export type { FailureMode } from "./problem";
 export { road } from "./road";

@@ -9,7 +9,7 @@ import { Road } from "./road";
 import { LeakAnatomy } from "./leak-anatomy";
 import { Stories } from "./stories";
 import { Audit } from "./audit";
-import { Ci } from "./ci";
+import { Integrations } from "./integrations";
 import { Commands } from "./commands";
 import { Cloud } from "./cloud";
 import { Trust } from "./trust";
@@ -40,7 +40,7 @@ export const SECTIONS: Record<SectionId, ComponentType> = {
   "leak-anatomy": LeakAnatomy,
   stories: Stories,
   audit: Audit,
-  ci: Ci,
+  integrations: Integrations,
   commands: Commands,
   cloud: Cloud,
   trust: Trust,

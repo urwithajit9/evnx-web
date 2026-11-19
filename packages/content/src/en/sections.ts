@@ -16,7 +16,7 @@ export type SectionId =
   | "leak-anatomy"
   | "stories"
   | "audit"
-  | "ci"
+  | "integrations"
   | "commands"
   | "cloud"
   | "trust"
@@ -41,7 +41,7 @@ export const landingSections: SectionSpec[] = [
   { id: "leak-anatomy", enabled: true, surface: "void" },
   { id: "stories", enabled: true, surface: "surface", anchor: "stories" },
   { id: "audit", enabled: true, surface: "base" },
-  { id: "ci", enabled: true, surface: "surface" },
+  { id: "integrations", enabled: true, surface: "surface", anchor: "integrations" },
   { id: "commands", enabled: true, surface: "base" },
   { id: "cloud", enabled: true, surface: "surface", anchor: "cloud" },
   { id: "trust", enabled: true, surface: "void", anchor: "trust" },
