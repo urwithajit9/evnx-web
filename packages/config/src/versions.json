@@ -5,10 +5,10 @@
   "wasm": "0.2.1",
   "minSupportedCli": "0.4.0",
   "downloads": {
-    "crates": 662,
+    "crates": 673,
     "npm": 6967,
-    "pypi": 1889,
-    "total": 9518
+    "pypi": 4835,
+    "total": 12475
   },
-  "syncedAt": "2026-11-19T12:16:07.211Z"
+  "syncedAt": "2026-11-19T19:10:40.398Z"
 }
