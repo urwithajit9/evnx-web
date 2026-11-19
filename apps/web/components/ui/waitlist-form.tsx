@@ -73,8 +73,8 @@ export function WaitlistForm({
           <Check className="w-4 h-4 text-success" />
         </div>
         <div>
-          <p className="font-mono font-semibold text-text-primary">You're on the list.</p>
-          <p className="font-mono text-xs text-text-muted mt-0.5">We'll email you when evnx cloud launches.</p>
+          <p className="font-semibold text-text-primary">You're on the list.</p>
+          <p className="text-xs text-text-muted mt-0.5">We'll email you when evnx cloud launches.</p>
         </div>
       </div>
     )
@@ -89,7 +89,7 @@ export function WaitlistForm({
           onChange={e => setEmail(e.target.value)}
           placeholder={placeholder}
           required
-          className={`w-full font-mono bg-bg-surface border rounded px-4 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors ${
+          className={`w-full bg-bg-surface border rounded px-4 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-500 transition-colors ${
             compact ? 'text-sm py-2' : 'text-sm py-3'
           } ${
             status === 'error' || status === 'duplicate'
@@ -118,12 +118,12 @@ export function WaitlistForm({
 
       {/* Status messages */}
       {status === 'duplicate' && (
-        <p className="font-mono text-xs text-warning">
+        <p className="text-xs text-warning">
           That email is already on the list — you're good. ✓
         </p>
       )}
       {status === 'error' && (
-        <p className="font-mono text-xs text-danger">
+        <p className="text-xs text-danger">
           Something went wrong. Try again or email us directly.
         </p>
       )}

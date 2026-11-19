@@ -183,7 +183,7 @@ function TestimonialCard({ t }: { t: Testimonial }) {
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-mono text-sm font-semibold text-text-primary truncate">
+            <p className="text-sm font-semibold text-text-primary truncate">
               {t.name}
             </p>
             {linkUrl && (
@@ -197,8 +197,8 @@ function TestimonialCard({ t }: { t: Testimonial }) {
               </a>
             )}
           </div>
-          {t.role    && <p className="font-mono text-xs text-text-muted truncate">{t.role}</p>}
-          {t.company && <p className="font-mono text-xs text-brand-500/70 truncate">{t.company}</p>}
+          {t.role    && <p className="text-xs text-text-muted truncate">{t.role}</p>}
+          {t.company && <p className="text-xs text-brand-500/70 truncate">{t.company}</p>}
         </div>
       </div>
 

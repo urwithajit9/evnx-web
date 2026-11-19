@@ -134,14 +134,14 @@ export default async function BlogPostPage({ params }: Props) {
 
             {/* Author row */}
             <div className="flex items-center gap-4 pb-8 mb-8 border-b border-border-subtle">
-              <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-mono font-bold flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold flex-shrink-0">
                 {post.author.name[0]}
               </div>
               <div>
-                <p className="font-mono text-sm font-semibold text-text-primary">
+                <p className="text-sm font-semibold text-text-primary">
                   {post.author.name}
                 </p>
-                <p className="font-mono text-xs text-text-muted">
+                <p className="text-xs text-text-muted">
                   {post.author.role}
                 </p>
               </div>
@@ -190,14 +190,14 @@ export default async function BlogPostPage({ params }: Props) {
             {/* Author card */}
             <div className="mt-12 bg-bg-surface border border-border-muted rounded-xl p-6">
               <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-mono font-bold text-xl flex-shrink-0">
+                <div className="w-14 h-14 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-xl flex-shrink-0">
                   {post.author.name[0]}
                 </div>
                 <div>
-                  <p className="font-mono font-bold text-text-primary mb-1">
+                  <p className="font-bold text-text-primary mb-1">
                     {post.author.name}
                   </p>
-                  <p className="font-mono text-xs text-text-muted mb-3">
+                  <p className="text-xs text-text-muted mb-3">
                     {post.author.role}
                   </p>
                   <p className="text-sm text-text-secondary leading-relaxed">
@@ -209,7 +209,7 @@ export default async function BlogPostPage({ params }: Props) {
                         href={`https://github.com/${post.author.github}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                        className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
                       >
                         GitHub →
                       </a>
@@ -219,7 +219,7 @@ export default async function BlogPostPage({ params }: Props) {
                         href={`https://twitter.com/${post.author.twitter}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                        className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
                       >
                         Twitter →
                       </a>
@@ -268,7 +268,7 @@ export default async function BlogPostPage({ params }: Props) {
                     href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(`https://evnx.dev/blog/${post.slug}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block font-mono text-xs text-text-secondary hover:text-brand-400 transition-colors py-1"
+                    className="block text-xs text-text-secondary hover:text-brand-400 transition-colors py-1"
                   >
                     Share on Twitter →
                   </a>
@@ -276,7 +276,7 @@ export default async function BlogPostPage({ params }: Props) {
                     href={`https://news.ycombinator.com/submitlink?u=https://evnx.dev/blog/${post.slug}&t=${encodeURIComponent(post.title)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block font-mono text-xs text-text-secondary hover:text-brand-400 transition-colors py-1"
+                    className="block text-xs text-text-secondary hover:text-brand-400 transition-colors py-1"
                   >
                     Submit to HN →
                   </a>

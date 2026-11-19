@@ -56,7 +56,7 @@ export function Header() {
                 <Link
                   key={href}
                   href={href}
-                  className={`font-mono text-sm px-3 py-1.5 rounded transition-colors ${
+                  className={`text-sm px-3 py-1.5 rounded transition-colors ${
                     isActive
                       ? "text-brand-400 bg-brand-500/10"
                       : "text-text-secondary hover:text-text-primary hover:bg-bg-surface"
@@ -111,7 +111,7 @@ export function Header() {
               <Link
                 key={href}
                 href={href}
-                className="block font-mono text-sm px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-surface rounded transition-colors"
+                className="block text-sm px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-surface rounded transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
                 {label}
