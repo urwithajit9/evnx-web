@@ -90,7 +90,7 @@ export function Mermaid({ code, children }: Props) {
           style={{ background: 'var(--bg-overlay)', padding: '0.625rem 1rem' }}
         >
           <span className="font-mono text-xs text-text-muted">Diagram</span>
-          <CopyButton code={code} />
+          <CopyButton text={code} label="diagram source" />
         </div>
         {/* Scrolls on its own; the page never does, at any width. */}
         <div

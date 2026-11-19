@@ -8,7 +8,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./shiki": "./src/lib/shiki.ts",
-    "./lang-labels": "./src/lib/lang-labels.ts"
+    "./lang-labels": "./src/lib/lang-labels.ts",
+    "./code-frame": "./src/components/code-frame.tsx",
+    "./copy-button": "./src/components/copy-button.tsx",
+    "./line-class": "./src/lib/line-class.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

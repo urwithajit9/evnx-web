@@ -18,7 +18,7 @@
 import React from 'react'
 import { codeToHtml } from 'shiki'
 import { LANG_LABELS, resolveGrammar } from '../lib/shiki'
-import { CopyButton } from './copy-button'
+import { CodeFrame } from './code-frame'
 import { Mermaid } from './mermaid'
 
 type Props = { children?: React.ReactNode }
@@ -76,36 +76,30 @@ export async function FencedCodeBlock({ children }: Props) {
   }
 
   const block = (
-    <div className="my-6 rounded-xl overflow-hidden border border-border-muted">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-bg-overlay px-4 py-2.5 border-b border-border-subtle">
-        <span className="font-mono text-xs text-text-muted">{label}</span>
-        <CopyButton code={rawCode} />
-      </div>
-
+    <CodeFrame label={label} copyText={rawCode} ariaLabel={`${label} code`} className="my-6">
       {/* Our <pre> — single box, full control, Shiki token spans inside */}
-      <div tabIndex={0} role="group" aria-label={`${label} code`} className="overflow-x-auto bg-terminal-bg">
-        <pre
-          style={{
-            margin:     0,
-            padding:    '1.25rem',       // p-5
-            background: 'transparent',
-            border:     'none',
-            borderRadius: 0,
-            fontSize:   '0.875rem',      // text-sm
-            lineHeight: '1.75',
-            fontFamily: "'IBM Plex Mono', 'Menlo', 'Consolas', monospace",
-            tabSize:    2,
-            overflowX:  'visible',       // parent div handles scroll
-          }}
-        >
-          <code
-            style={{ background: 'transparent', padding: 0 }}
-            dangerouslySetInnerHTML={{ __html: innerHtml }}
-          />
-        </pre>
-      </div>
-    </div>
+      <pre
+        style={{
+          margin:     0,
+          padding:    '1.25rem',       // p-5
+          background: 'transparent',
+          border:     'none',
+          borderRadius: 0,
+          fontSize:   '0.875rem',      // text-sm
+          lineHeight: '1.75',
+          // The loaded font (next/font's --font-mono), not the family name:
+          // naming it only works where the reader happens to have it installed.
+          fontFamily: "var(--font-mono), 'IBM Plex Mono', Menlo, Consolas, monospace",
+          tabSize:    2,
+          overflowX:  'visible',       // parent div handles scroll
+        }}
+      >
+        <code
+          style={{ background: 'transparent', padding: 0 }}
+          dangerouslySetInnerHTML={{ __html: innerHtml }}
+        />
+      </pre>
+    </CodeFrame>
   )
 
   return lang === 'mermaid' ? <Mermaid code={rawCode}>{block}</Mermaid> : block

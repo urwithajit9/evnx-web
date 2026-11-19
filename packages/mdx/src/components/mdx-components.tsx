@@ -8,7 +8,6 @@
 import React from "react";
 import type { MDXComponents } from "mdx/types";
 import { FencedCodeBlock } from "./fenced-code-block";
-import { CopyButton } from "./copy-button";
 import { Callout } from "./callout";
 import { CodeTabs, Tab } from "./code-tabs";
 import { TerminalOutput } from "./terminal-output";
