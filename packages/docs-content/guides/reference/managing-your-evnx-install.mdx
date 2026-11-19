@@ -3,7 +3,7 @@ title: "Managing your evnx install"
 section: reference
 order: 11
 publishedAt: "2026-10-23"
-updatedAt: "2026-11-12"
+updatedAt: "2026-11-19"
 excerpt: "Every install channel with its upgrade and uninstall command, how to find out which evnx you are actually running, and fixes for the problems people really hit: an old version after upgrading, pip refusing to install, pipx not linking, missing cloud commands."
 difficulty: beginner
 timeToComplete: "10 minutes"
@@ -335,6 +335,20 @@ script. See [GitHub Actions](/guides/use-cases/use-cases-github-actions).
 Whichever you pick, **upgrade through that same channel**. Upgrading with a
 different one does not replace the old copy. It adds a second one, and the two then
 compete on `PATH`.
+
+---
+
+## What evnx sends over the network
+
+**No telemetry.** evnx sends no usage statistics, crash reports or analytics, and it
+never contacts a server on its own. Whichever channel you install from, the program is
+the same, and so is this.
+
+It reaches the network only when you run a command whose job is to: `evnx cloud` and
+the account commands that go with it (`auth`, `org`, `vault`), `evnx update --check`,
+`evnx migrate --to github-actions`, `evnx scan packs`, and `evnx platform`.
+`evnx scan` itself never touches the network, which is what makes it safe in a
+pre-commit hook and in CI.
 
 ---
 
