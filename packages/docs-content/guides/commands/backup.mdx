@@ -36,7 +36,7 @@ opens it again.
   link — nor a directory, nor a name whose rotation would move the source. Each is
   refused with exit `2` before anything is written. `--output .env` used to turn
   the `.env` itself into ciphertext.
-- When both `--password-file` and `EVNX_PASSWORD` are set, a warning now says the key
+- When both `--key-file` and `EVNX_PASSWORD` are set, a warning now says the key
   file won.
 - With no key file, no `EVNX_PASSWORD` and no terminal, the error names both
   instead of `IO error: not a terminal`.
@@ -56,7 +56,7 @@ evnx backup [ENV] [OPTIONS]
 | `[ENV]` | `.env` | The file to back up — `evnx backup .env.production` |
 | `--env-name <NAME>` | — | Back up `.env.<NAME>` instead; a name with no file is an error listing the environments there are |
 | `--output <PATH>` | `<env>.backup` | Where to write the backup. Not the source file, not a directory, and not `-`: standard output is refused since 0.13.0 (a file literally named `-` is `./-`) |
-| `--password-file <PATH>` | — | Use a file's contents as the passphrase; the same flag [`restore`](/guides/commands/restore) takes. Was `--password-file`, which exits 2 since v0.15.0 |
+| `--key-file <PATH>` | — | Use a file's contents as the passphrase; the same flag [`restore`](/guides/commands/restore) takes. `--password-file` still works as a hidden alias |
 | `--keep <N>` | `3`, or `[backup] keep` | Previous backups to keep beside the new one; `0` overwrites |
 | `--verify` | off | Decrypt the backup again after writing it and compare, byte for byte |
 | `-v`, `--verbose` | off | Print each step to stderr |
@@ -116,7 +116,7 @@ No verdict: evnx did not finish. This is not a clean result.
 ### Back up another environment
 
 ```bash
-evnx backup --env-name production --password-file backup.key
+evnx backup --env-name production --key-file backup.key
 ```
 
 ```text
@@ -139,14 +139,14 @@ name of your own.
 
 One rule, the same for `backup` and `restore`, highest priority first:
 
-1. **`--password-file <path>`** — the file's contents.
+1. **`--key-file <path>`** — the file's contents.
 2. **`EVNX_PASSWORD`** — read once, then removed from evnx's environment.
 3. **A prompt**, when there is a terminal to show it on.
 
 A new backup needs **at least 8 characters** from whichever source is used:
 
 ```bash
-evnx backup --password-file short.key --output s.bak
+evnx backup --key-file short.key --output s.bak
 ```
 
 ```text
@@ -199,7 +199,7 @@ evnx backup
 Error: there is no terminal to ask for the passphrase on.
 
   Give it without a prompt, from a file or the environment:
-    evnx backup .env --password-file <path>
+    evnx backup .env --key-file <path>
     EVNX_PASSWORD=… evnx backup .env
 
 No verdict: evnx did not finish. This is not a clean result.
@@ -223,7 +223,7 @@ The file already at the last place (`.env.backup.3` here) is replaced by the shi
 with a warning; files past it are never touched or deleted.
 
 ```bash
-evnx backup --password-file backup.key --keep 1
+evnx backup --key-file backup.key --keep 1
 ```
 
 ```text
@@ -244,7 +244,7 @@ previous backups where they were. And it refuses outputs that would destroy
 something:
 
 ```bash
-evnx backup .env --password-file backup.key --output .env
+evnx backup .env --key-file backup.key --output .env
 ```
 
 ```text
@@ -269,7 +269,7 @@ link stays, and the file it points to is rotated.
 byte, before the command finishes:
 
 ```bash
-evnx backup --password-file backup.key --verify
+evnx backup --key-file backup.key --verify
 ```
 
 ```text
@@ -311,7 +311,7 @@ services:
     command: >
       backup /work/.env
       --output /work/backups/env.backup
-      --password-file /run/secrets/backup_key
+      --key-file /run/secrets/backup_key
       --keep 5
       --verify
     volumes:
@@ -417,7 +417,7 @@ They solve different problems, and neither reads the other's files.
 | Where the ciphertext lives | a file you keep | the evnx server, as versions |
 | Secret | a passphrase or key file you choose | your account's master password |
 | History | `--keep N` numbered files | server versions: `--version N`, `history`, `diff` |
-| Non-interactive | `--password-file`, `EVNX_PASSWORD` | `--password-stdin` |
+| Non-interactive | `--key-file`, `EVNX_PASSWORD` | `--password-stdin` |
 | Replacing a file | `restore --yes`, keeps `.bak` | `cloud pull --yes` |
 | Works with no account or network | yes | no |
 | Everything back at once | the file is the backup | `cloud export` |

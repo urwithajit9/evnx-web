@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "evnx_version": "0.14.1",
+  "evnx_version": "0.15.0",
   "features": [
-    "net",
-    "migrate",
     "backup",
-    "cloud"
+    "cloud",
+    "migrate",
+    "net"
   ],
   "commands": [
     {
@@ -48,6 +48,22 @@
         "rm"
       ],
       "guide": "/guides/commands/remove",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "set",
+      "about": "Set one variable in the env file, in place",
+      "aliases": [],
+      "guide": null,
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "get",
+      "about": "Print one variable's value, without sourcing the file",
+      "aliases": [],
+      "guide": null,
       "guide_draft": false,
       "subcommands": []
     },
@@ -141,6 +157,14 @@
       "about": "Keep .env and .env.example in sync",
       "aliases": [],
       "guide": "/guides/commands/sync",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "align",
+      "about": "Give .env files the template's sections, comments and key order, keeping their values",
+      "aliases": [],
+      "guide": "/guides/commands/align",
       "guide_draft": false,
       "subcommands": []
     },
@@ -486,13 +510,29 @@
       "subcommands": [
         {
           "path": "spec init",
-          "about": "Generate a first spec from this project, or from named components"
+          "about": "Generate a first contract from this project, or from named components"
         },
         {
           "path": "spec check",
           "about": "Check the contract against `.env.example`, and `.env` when there is one. Read-only; suited to a pre-commit hook and to CI"
         }
       ]
+    },
+    {
+      "name": "history",
+      "about": "List the copies evnx kept before changing a file: which file, which command, when",
+      "aliases": [],
+      "guide": "/guides/commands/history",
+      "guide_draft": false,
+      "subcommands": []
+    },
+    {
+      "name": "undo",
+      "about": "Put a file back as it was before evnx last changed it",
+      "aliases": [],
+      "guide": "/guides/commands/undo",
+      "guide_draft": false,
+      "subcommands": []
     },
     {
       "name": "parse",
@@ -537,7 +577,13 @@
       "subcommands": []
     }
   ],
-  "undocumented": [],
-  "unshown_subcommands": [],
+  "undocumented": [
+    "set",
+    "get"
+  ],
+  "unshown_subcommands": [
+    "get",
+    "set"
+  ],
   "orphan_guides": []
 }

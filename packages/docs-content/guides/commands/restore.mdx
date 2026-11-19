@@ -59,13 +59,13 @@ evnx restore <BACKUP> [OPTIONS]
 | `-y`, `--yes` | off | Replace an existing `--output` without asking; the old file is kept as `<output>.bak`. `--force` was removed in v0.15.0 |
 | `--inspect` | off | Show the variable names in the backup — never values — and write nothing |
 | `-n`, `--dry-run` | off | Decrypt and check the content, and write nothing |
-| `--password-file <PATH>` | — | Read the passphrase from a file; `backup` takes the same flag. Was also spelled `--key-file`, which exits 2 since v0.15.0 |
+| `--key-file <PATH>` | — | Read the passphrase from a file; `backup` takes the same flag. `--password-file` still works as a hidden alias |
 | `--gitignore` | off | Add the restored file to `.gitignore` without asking |
 | `--no-gitignore` | off | Skip the `.gitignore` check |
 | `-v`, `--verbose` | off | Print each step to stderr |
 | `-q`, `--quiet` | off | Print nothing on success; warnings and errors still print |
 
-`EVNX_PASSWORD` is read when there is no `--password-file` — see
+`EVNX_PASSWORD` is read when there is no `--key-file` — see
 [The passphrase](#the-passphrase).
 
 ---
@@ -83,7 +83,7 @@ relied on the old destination.
 ### Restore to `.env`
 
 ```bash
-evnx restore .env.backup --password-file backup.key
+evnx restore .env.backup --key-file backup.key
 ```
 
 ```text
@@ -110,7 +110,7 @@ Next steps:
   Docs: https://docs.evnx.dev/cli/commands/restore
 ```
 
-Without `--password-file` (and without `EVNX_PASSWORD`) evnx asks once, with no
+Without `--key-file` (and without `EVNX_PASSWORD`) evnx asks once, with no
 confirmation: a mistyped passphrase only fails to decrypt.
 
 ### Restore somewhere else
@@ -172,7 +172,7 @@ No verdict: evnx did not finish. This is not a clean result.
 `--yes` replaces it:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --yes
+evnx restore .env.backup --key-file backup.key --yes
 ```
 
 ```text
@@ -196,7 +196,7 @@ symlink at `--output` is written through: the link stays, its target is replaced
 of the ciphertext with the plaintext, so it is refused, even with `--yes`:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --output .env.backup --yes
+evnx restore .env.backup --key-file backup.key --output .env.backup --yes
 ```
 
 ```text
@@ -211,7 +211,7 @@ Error: --output '.env.backup' is the same file as the backup '.env.backup'. Noth
 nothing:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --inspect
+evnx restore .env.backup --key-file backup.key --inspect
 ```
 
 ```text
@@ -236,7 +236,7 @@ Variables in this backup (names only — values never shown):
 `--dry-run` decrypts and checks that the content is a `.env` evnx can read:
 
 ```bash
-evnx restore .env.backup --password-file backup.key --dry-run
+evnx restore .env.backup --key-file backup.key --dry-run
 ```
 
 ```text
@@ -293,7 +293,7 @@ Next steps:
 The same rule as [`backup`](/guides/commands/backup#the-passphrase), highest priority
 first:
 
-1. **`--password-file <path>`** — UTF-8 content trimmed of
+1. **`--key-file <path>`** — UTF-8 content trimmed of
    surrounding whitespace, binary content Base64-encoded; the reader `backup` uses,
    so one file opens what it locked.
 2. **`EVNX_PASSWORD`** — read once, then removed from evnx's environment, with a
@@ -336,7 +336,7 @@ Error: Backup file not found: nope.backup
 `restore` reads files. A vault in evnx cloud is restored with the cloud commands:
 
 ```bash
-evnx restore cloud://my-app --password-file backup.key
+evnx restore cloud://my-app --key-file backup.key
 ```
 
 ```text
@@ -392,7 +392,7 @@ whether it is ignored — the same step `template` and `convert -o` take:
 
 ```bash
 #!/bin/bash
-evnx restore .env.backup --password-file /run/secrets/evnx-pass --yes
+evnx restore .env.backup --key-file /run/secrets/evnx-pass --yes
 code=$?
 
 case $code in
@@ -412,7 +412,7 @@ under `-q` — it is what was asked for — so send it away and keep the exit co
 
 ```bash
 for backup in backups/*.backup; do
-  if evnx restore "$backup" --dry-run --password-file /run/secrets/evnx-pass >/dev/null 2>&1; then
+  if evnx restore "$backup" --dry-run --key-file /run/secrets/evnx-pass >/dev/null 2>&1; then
     echo "✓ $backup"
   else
     echo "✗ $backup (exit $?)"
@@ -426,8 +426,8 @@ There is no re-key command. Restore to a private file, back up again under the n
 passphrase, and remove the plaintext:
 
 ```bash
-evnx restore old.backup --password-file /run/secrets/old-pass --output /tmp/plain.env
-evnx backup /tmp/plain.env --password-file /run/secrets/new-pass --output new.backup --verify
+evnx restore old.backup --key-file /run/secrets/old-pass --output /tmp/plain.env
+evnx backup /tmp/plain.env --key-file /run/secrets/new-pass --output new.backup --verify
 rm /tmp/plain.env
 ```
 
@@ -464,7 +464,7 @@ rm /tmp/plain.env
 | Passphrase source | Risk | Notes |
 |-------------------|------|-------|
 | Prompt | lowest | Never stored; not in logs or process listings |
-| `--password-file` | medium | Keep it on `tmpfs` or a secrets volume, never beside the backup |
+| `--key-file` | medium | Keep it on `tmpfs` or a secrets volume, never beside the backup |
 | `EVNX_PASSWORD` | medium-high | May appear in CI logs; removed from evnx's environment after reading |
 
 ---

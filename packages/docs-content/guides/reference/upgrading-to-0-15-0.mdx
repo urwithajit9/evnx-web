@@ -130,8 +130,6 @@ command, so a script can check itself against it.
 | `evnx migrate` | `--from env` | `--from env-file` |
 | `evnx sync` | `-f, --force` | `--yes` |
 | `evnx sync` | `--placeholder` | `--yes` |
-| `evnx backup` | `--key-file` | `--password-file` |
-| `evnx restore` | `--key-file` | `--password-file` |
 | `evnx restore` | `--force` | `--yes` |
 | `evnx auth key-bundle` | `--format text` | `--format pretty` |
 | `evnx auth token create` | `--format text` | `--format pretty` |
@@ -177,7 +175,7 @@ First find every use. In a repository:
 
 ```bash
 grep -rnE -e '--format (text|github-actions)' -e '--to (github-actions|gh-actions)' \
-  -e '--(key-file|source-file|placeholder|env-name)' -e 'evnx.* (-f|--file|--force|--path|-p) ' \
+  -e '--(source-file|placeholder|env-name)' -e 'evnx.* (-f|--file|--force|--path|-p) ' \
   .github .gitlab-ci.yml scripts Makefile .pre-commit-config.yaml 2>/dev/null
 ```
 
@@ -210,9 +208,6 @@ sed -i -E '/evnx platform/ s/--env-name/--target/' $FILES
 # "do not ask"
 sed -i -E '/evnx sync/ s/ (--force|-f|--placeholder)( |$)/ --yes\2/' $FILES
 sed -i -E '/evnx (restore|cloud pull)/ s/ --force( |$)/ --yes\1/' $FILES
-
-# backup and restore passphrase file
-sed -i -E '/evnx (backup|restore)/ s/--key-file/--password-file/' $FILES
 
 # migrate
 sed -i -E '/evnx migrate/ s/--source-file/--env/; s/--from env( |$)/--from env-file\1/' $FILES

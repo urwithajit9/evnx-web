@@ -1,7 +1,361 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
-  "latest": "0.14.0",
+  "latest": "0.15.0",
   "releases": [
+    {
+      "version": "0.15.0",
+      "date": "2026-11-19",
+      "summary": "A minor release, as in any 0.x release that changes what a shipped command does: flag spellings are removed, exit codes follow one table, and several defaults are safer. Read \"Breaking\" before upgrading scripts.",
+      "highlights": [
+        {
+          "type": "breaking",
+          "text": "One flag vocabulary: the old spellings are removed"
+        },
+        {
+          "type": "breaking",
+          "text": "`--env-name` pairs the environment with its own template."
+        },
+        {
+          "type": "breaking",
+          "text": "`--env-name` takes a name, not a path."
+        },
+        {
+          "type": "breaking",
+          "text": "Outside a git repository, only the working folder's `.evnx.toml` applies."
+        },
+        {
+          "type": "breaking",
+          "text": "`platform --env-name` is now `--target`."
+        },
+        {
+          "type": "breaking",
+          "text": "Generated contracts mark a name required only when the template gives it no default."
+        },
+        {
+          "type": "breaking",
+          "text": "Templates never turn debugging on."
+        },
+        {
+          "type": "breaking",
+          "text": "`template` no longer replaces an existing output without `--force`"
+        },
+        {
+          "type": "breaking",
+          "text": "`remove` refuses to leave dangling references."
+        },
+        {
+          "type": "breaking",
+          "text": "`cloud pull` and `platform pull` write the pulled file 600"
+        },
+        {
+          "type": "breaking",
+          "text": "`add` and `init --from-source` write no dated `# Added by evnx … on <date>` line"
+        },
+        {
+          "type": "breaking",
+          "text": "`convert --to yaml` quotes every value"
+        },
+        {
+          "type": "breaking",
+          "text": "Exit codes follow one table"
+        },
+        {
+          "type": "breaking",
+          "text": "`run` and `cloud run` refuse more names that start a program or load code"
+        },
+        {
+          "type": "breaking",
+          "text": "`auth token create` expires in 90 days and needs a scope"
+        },
+        {
+          "type": "breaking",
+          "text": "`vault share` gives the `viewer` role by default"
+        },
+        {
+          "type": "breaking",
+          "text": "`vault delete` needs the full vault name"
+        },
+        {
+          "type": "breaking",
+          "text": "`org seats --set` and `--unlimited` ask first"
+        },
+        {
+          "type": "breaking",
+          "text": "`org accept TOKEN` is deprecated"
+        },
+        {
+          "type": "breaking",
+          "text": "`cloud push` asks before removing most of the keys"
+        },
+        {
+          "type": "breaking",
+          "text": "`platform push --prune` stops when it would remove most of an environment"
+        },
+        {
+          "type": "breaking",
+          "text": "`platform` warns about a readable token file and names an overridden API"
+        },
+        {
+          "type": "breaking",
+          "text": "Windows: `.env`, backups and `credentials.json` become owner-only"
+        },
+        {
+          "type": "breaking",
+          "text": "`diff A B` compares two files, and the left file is printed first"
+        },
+        {
+          "type": "breaking",
+          "text": "`migrate --to vercel` prints `--force` only with `--overwrite`"
+        },
+        {
+          "type": "breaking",
+          "text": "`validate` runs the URL, port and email checks by default, as warnings"
+        },
+        {
+          "type": "breaking",
+          "text": "`EVNX_AUTO_FIX` is no longer read"
+        },
+        {
+          "type": "breaking",
+          "text": "`parse --format json` is `run.schema_version` 2"
+        },
+        {
+          "type": "breaking",
+          "text": "`restore --output -` writes the decrypted text to stdout"
+        },
+        {
+          "type": "breaking",
+          "text": "The install URL is `https://evnx.dev/install.sh` everywhere"
+        },
+        {
+          "type": "improvement",
+          "text": "`--key-file` is the name `backup` and `restore` show"
+        },
+        {
+          "type": "improvement",
+          "text": "The first lines of `validate`, `spec check` and `sync --check` help say how they differ"
+        },
+        {
+          "type": "improvement",
+          "text": "`run` and `cloud run` hand the terminal to the command (Unix)."
+        },
+        {
+          "type": "improvement",
+          "text": "A command killed by a signal exits 128+n"
+        },
+        {
+          "type": "improvement",
+          "text": "On Windows, `run` still spawns and waits."
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx --help` lists the commands in four groups"
+        },
+        {
+          "type": "improvement",
+          "text": "`evnx commands --json` says which group a command is in and what it needs from the network."
+        },
+        {
+          "type": "improvement",
+          "text": "Arguments are checked before the banner."
+        },
+        {
+          "type": "improvement",
+          "text": "The line under an error says why there is no verdict."
+        },
+        {
+          "type": "improvement",
+          "text": "`--help` carries no tracker ids, history or markup."
+        },
+        {
+          "type": "improvement",
+          "text": "`remove` ends with commands to copy."
+        },
+        {
+          "type": "improvement",
+          "text": "`sync` next steps name `evnx scan` and `evnx cloud push`."
+        },
+        {
+          "type": "improvement",
+          "text": "A long list of names shows three and a count"
+        },
+        {
+          "type": "improvement",
+          "text": "`migrate` without a GitHub token says to set `GITHUB_TOKEN`"
+        },
+        {
+          "type": "fix",
+          "text": "A file saved as UTF-16 no longer reads as \"stream did not contain valid UTF-8\""
+        },
+        {
+          "type": "fix",
+          "text": "`SIGTERM`, `SIGHUP` and `SIGQUIT` sent to `evnx run` or `evnx cloud run` no longer leave the command running."
+        },
+        {
+          "type": "fix",
+          "text": "A masked `run` returns the command's code through `main`"
+        },
+        {
+          "type": "fix",
+          "text": "Projects with only named env files"
+        },
+        {
+          "type": "fix",
+          "text": "`init` adopts a project that already has env files."
+        },
+        {
+          "type": "fix",
+          "text": "Backups are private and accounted for."
+        },
+        {
+          "type": "feature",
+          "text": "One flag vocabulary: what is new"
+        },
+        {
+          "type": "feature",
+          "text": "The install script says how to use `evnx` now and how to keep it"
+        },
+        {
+          "type": "feature",
+          "text": "Shell completions ship with the release"
+        },
+        {
+          "type": "feature",
+          "text": "`docs/STABILITY.md`"
+        },
+        {
+          "type": "feature",
+          "text": "Docs"
+        },
+        {
+          "type": "feature",
+          "text": "`doctor --all`"
+        },
+        {
+          "type": "feature",
+          "text": "`template INPUT OUTPUT`"
+        },
+        {
+          "type": "feature",
+          "text": "`parse` says more without showing a value"
+        },
+        {
+          "type": "feature",
+          "text": "A UTF-16 env file is named, not misread"
+        },
+        {
+          "type": "feature",
+          "text": "`backup` says the file is encrypted and offers `--gitignore` / `--no-gitignore`"
+        },
+        {
+          "type": "feature",
+          "text": "A weak new passphrase gets a hint"
+        },
+        {
+          "type": "feature",
+          "text": "`restore`'s `<output>.restored` file is private"
+        },
+        {
+          "type": "feature",
+          "text": "`update --check` uses `GITHUB_TOKEN` (or `GH_TOKEN`)"
+        },
+        {
+          "type": "feature",
+          "text": "`update --list` shows the running copy"
+        },
+        {
+          "type": "feature",
+          "text": "`convert --from json|dotenv`, `--to dotenv`, and `-` for standard input"
+        },
+        {
+          "type": "feature",
+          "text": "`convert --to kubernetes --kind secret|configmap|split`"
+        },
+        {
+          "type": "feature",
+          "text": "`migrate --to` takes the names `convert --to` takes"
+        },
+        {
+          "type": "feature",
+          "text": "`migrate --dry-run` works without the provider's target flag"
+        },
+        {
+          "type": "feature",
+          "text": "`convert` and `migrate` say what they are for"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan --policy FILE` (or `EVNX_POLICY`): a floor the repository cannot lower."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan --exit-only`."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan --strict`."
+        },
+        {
+          "type": "feature",
+          "text": "Short values under secret names."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud run --min-version N` (or `EVNX_MIN_VERSION`)."
+        },
+        {
+          "type": "feature",
+          "text": "`run` and `cloud run` warn about proxy and certificate names."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx run --prefer env|vault` and `evnx cloud run --prefer env|vault`."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx set` and `evnx get`: one variable, in place."
+        },
+        {
+          "type": "feature",
+          "text": "JSON output."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx align`: one layout for every `.env`."
+        },
+        {
+          "type": "feature",
+          "text": "Token flags"
+        },
+        {
+          "type": "feature",
+          "text": "`org accept --token-stdin`"
+        },
+        {
+          "type": "feature",
+          "text": "`platform push --prune-all`"
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.14.1...v0.15.0"
+      }
+    },
+    {
+      "version": "0.14.1",
+      "date": "2026-11-14",
+      "summary": null,
+      "highlights": [
+        {
+          "type": "fix",
+          "text": "The master password prompt no longer hangs."
+        }
+      ],
+      "type": "patch",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.14.0...v0.14.1"
+      }
+    },
     {
       "version": "0.14.0",
       "date": "2026-11-13",
