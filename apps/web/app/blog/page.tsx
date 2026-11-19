@@ -24,7 +24,9 @@ const CATEGORY_COLORS: Record<string, string> = {
   release:     'bg-success/10 text-success border-success/20',
   'deep-dive': 'bg-brand-500/10 text-brand-400 border-brand-500/20',
   opinion:     'bg-warning/10 text-warning border-warning/20',
-  'case-study':'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  // Neutral, not purple: purple-400 text is 2.6:1 on the light theme, and
+  // the palette has no purple token.
+  'case-study':'bg-bg-surface text-text-secondary border-border-muted',
   knowledge:   'bg-brand-500/10 text-brand-400 border-brand-500/20',
 }
 

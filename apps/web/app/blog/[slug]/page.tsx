@@ -9,6 +9,7 @@ import { mdxComponents } from "@/components/mdx/mdx-components";
 import type { Metadata } from "next";
 import { HelpfulVote } from "@/components/ui/helpful-vote";
 import { canonicalUrl } from "@evnx/config";
+import { buttonVariants } from "@/components/ui/button";
 
 // ── Next.js 16: params is a Promise, must be awaited ─────────────────────────
 type Props = {
@@ -118,7 +119,7 @@ export default async function BlogPostPage({ params }: Props) {
             {post.draft && (
               <p
                 role="status"
-                className="mb-4 inline-block font-mono text-xs px-2 py-1 rounded border border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+                className="mb-4 inline-block font-mono text-xs px-2 py-1 rounded border border-warning/40 bg-warning/10 text-warning"
               >
                 Draft: not published. Visible only outside production.
               </p>
@@ -290,11 +291,8 @@ export default async function BlogPostPage({ params }: Props) {
                 <div className="bg-terminal-bg rounded p-3 font-mono text-xs text-terminal-text mb-4">
                   <span className="text-brand-500">$ </span>evnx init
                 </div>
-                <Link
-                  href="/install"
-                  className="block text-center text-xs font-mono bg-brand-500 text-brand-fg py-2 rounded hover:bg-brand-400 transition-colors"
-                >
-                  Install evnx →
+                <Link href="/install" className={`${buttonVariants({ size: "sm" })} w-full`}>
+                  Install evnx
                 </Link>
               </div>
             </div>
