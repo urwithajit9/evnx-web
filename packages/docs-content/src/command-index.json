@@ -55,7 +55,7 @@
       "name": "set",
       "about": "Set one variable in the env file, in place",
       "aliases": [],
-      "guide": null,
+      "guide": "/guides/commands/set",
       "guide_draft": false,
       "subcommands": []
     },
@@ -63,7 +63,7 @@
       "name": "get",
       "about": "Print one variable's value, without sourcing the file",
       "aliases": [],
-      "guide": null,
+      "guide": "/guides/commands/get",
       "guide_draft": false,
       "subcommands": []
     },
@@ -577,13 +577,7 @@
       "subcommands": []
     }
   ],
-  "undocumented": [
-    "set",
-    "get"
-  ],
-  "unshown_subcommands": [
-    "get",
-    "set"
-  ],
+  "undocumented": [],
+  "unshown_subcommands": [],
   "orphan_guides": []
 }
