@@ -1,0 +1,327 @@
+---
+title: "Change one variable without opening the file: evnx set and evnx get"
+publishedAt: "2026-11-19"
+excerpt: "Changing one line of a .env file is a job people do with sed, echo and source, and each of them can quietly damage the file or run code. evnx 0.15.0 adds set and get: one variable, in place, with the comments, quoting and order left alone."
+author: "ajit"
+category: "tutorial"
+tags: ["set", "get", "env", "secrets", "scripts", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "evnx-0-15-0-one-vocabulary-for-every-command"
+  - "exit-codes-as-an-api"
+---
+
+You need to change `PORT` from 3000 to 8080. The file has a dozen lines, some comments,
+a quoted URL. How do you do it?
+
+Most people reach for one of three things. They open an editor. They run `sed -i`. Or they
+append a line with `echo >> .env` and move on. The second and third are fast, and both can
+go wrong without telling you.
+
+## What the usual tools do to a file
+
+Here is a small `.env`:
+
+```bash
+# App settings
+PORT=3000
+export LOG_LEVEL="debug"   # keep me
+GREETING='hello world'   # single quotes
+
+# Services
+DATABASE_URL="postgres://app:pw@localhost:5432/app"  # local db
+FEATURE_X=off
+```
+
+`echo 'export LOG_LEVEL=info' >> .env` does not change `LOG_LEVEL`. It adds a second one at
+the bottom. Which one wins depends on the program reading the file, and the old line is
+still there with its comment:
+
+```text
+DATABASE_URL="postgres://app:pw@localhost:5432/app"  # local db
+FEATURE_X=off
+export LOG_LEVEL=info
+```
+
+A `sed` substitution is better, until the value has a `/`, an `&` or a quote in it, or the
+pattern also matches `PORT_FILE=`. Then you are debugging a regular expression to change
+one number.
+
+Reading a value back has the same problem. `source .env; echo $PORT` works, and it also
+runs every other line of the file as shell. A line like `OOPS=$(some command)` is not
+data any more. A `.env` is a list of values, and `source` treats it as a program.
+
+`evnx set` and `evnx get` are the small tools for these two jobs. They arrived in
+evnx 0.15.0.
+
+## evnx set: change one line, keep the rest
+
+```bash
+evnx set PORT=8080
+```
+
+evnx finds the `PORT` line and changes its value. Everything around it stays. Run against
+the file above, with a few more changes:
+
+```bash
+evnx set PORT=8080 --yes
+evnx set LOG_LEVEL=info --yes
+evnx set GREETING='hi there' --yes
+evnx set NEW_FLAG=on
+```
+
+```text
+✓ ./.env: PORT  3000 → 8080
+  backup ./.env.bak   undo: evnx undo .env
+✓ ./.env: LOG_LEVEL  debug → info
+  backup ./.env.bak   undo: evnx undo .env
+✓ ./.env: GREETING  hello world → hi there
+  backup ./.env.bak   undo: evnx undo .env
+✓ ./.env: NEW_FLAG  added: on
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+The file afterwards:
+
+```bash
+# App settings
+PORT=8080
+export LOG_LEVEL="info"   # keep me
+GREETING='hi there'   # single quotes
+
+# Services
+DATABASE_URL="postgres://app:pw@localhost:5432/app"  # local db
+FEATURE_X=off
+NEW_FLAG=on
+```
+
+Look at what did not move. The comments are where they were, including the one at the end
+of a line. `LOG_LEVEL` is still `export`ed and still double-quoted. `GREETING` is still in
+single quotes. The blank line and the "Services" comment are untouched. A name that was not
+in the file, `NEW_FLAG`, was added at the end.
+
+The write is atomic and keeps the file's mode. evnx does not touch your template, your
+contract or your `.gitignore` for this (the first `.bak` does add `*.bak` to the
+`.gitignore`, for a reason covered below).
+
+## Secrets: do not put them on the command line
+
+A value typed after the name ends up in your shell's history and in `ps`. For an
+ordinary value like `PORT` that does not matter. For a token it does.
+
+When the name looks like a secret (`API_TOKEN`, `DB_PASSWORD`, `STRIPE_SECRET_KEY`), leave
+the value off. At a terminal, evnx asks for it with no echo. In a script, pipe it in:
+
+```bash
+printf %s "$TOKEN" | evnx set API_TOKEN
+```
+
+```text
+✓ ./.env: API_TOKEN  added (value hidden)
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+The result line never shows a secret. A replaced one prints `changed (value hidden)`.
+
+You can still give the value on the command line. evnx does what you asked and warns you:
+
+```bash
+evnx set STRIPE_SECRET_KEY=sk_test_FAKE0123456789abcdef
+```
+
+```text
+! The value is on the command line, so your shell history has it. Next time leave it off and type it when asked, or pipe it in: printf %s "$VALUE" | evnx set NAME
+✓ ./.env: STRIPE_SECRET_KEY  added (value hidden)
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+If there is no terminal and nothing on stdin, there is nobody to ask, so evnx stops with
+exit 4 and shows both ways to supply the value:
+
+```text
+Error: SOME_TOKEN has no value, and there is no terminal to ask for one.
+
+  Pipe it in:        printf %s "$VALUE" | evnx set SOME_TOKEN
+  Or give it here:   evnx set SOME_TOKEN=VALUE
+
+evnx stopped before making changes (exit 4). Run one of the commands above.
+```
+
+## Look first, or only fill gaps
+
+Two flags make `set` safe to put in a script.
+
+`-n` (`--dry-run`) shows the change and writes nothing. It needs no terminal:
+
+```bash
+evnx set PORT=4000 --dry-run
+```
+
+```text
+Dry run: nothing was written.
+  ./.env: PORT  8080 → 4000
+```
+
+`--if-missing` sets a default only when the name is not there yet. If it is, the file stays
+as it is and the exit code is 0:
+
+```bash
+evnx set PORT=1 --if-missing
+evnx set LOG_FORMAT=json --if-missing
+```
+
+```text
+PORT is already set in ./.env; left as it is.
+✓ ./.env: LOG_FORMAT  added: json
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+For a script that needs the result, `--json` prints one document with names and statuses.
+It never contains a value:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "dry_run": false,
+  "file": "./.env",
+  "name": "PORT",
+  "status": "changed",
+  "secret": false,
+  "backup": "./.env.bak"
+}
+```
+
+## Replacing a value asks first
+
+Replacing an existing value asks for confirmation, and the default is No. Adding a new name
+does not ask. In a terminal you answer. Without one, `set` cannot ask, so it exits 4 and
+says what to add:
+
+```bash
+evnx set PORT=9090 < /dev/null
+```
+
+```text
+  ./.env: PORT  8080 → 9090
+Error: there is no terminal to confirm with.
+
+Add --yes (-y) to go ahead without being asked:
+  evnx set PORT --yes
+
+No verdict: a question needed an answer and there is no terminal to ask on. This is not a clean result.
+```
+
+Exit 4 is the code for "declined, or needed an answer nobody could give". It is different
+from 2 (could not run) so a CI job can tell the two apart (see [Exit codes as an API](/blog/exit-codes-as-an-api)). A script that means to replace
+values passes `--yes`.
+
+## One backup, and how to undo
+
+Before it writes, `set` keeps the old text as `.env.bak`, once. The copy is mode 600, and in
+a git repository evnx adds `*.bak` and its own record, `.evnx/backups.json`, to `.gitignore`,
+because a backup holds the same secrets as the file. The record lists the file, the time and
+the command, and no values.
+
+To go back:
+
+```bash
+evnx undo .env
+```
+
+```text
+  .env ← .env.bak (kept by `set`, 2026-11-19 16:11)
+    ~ PORT  value changes
+✓ .env is back as it was before `set`
+  what it held is now .env.bak; evnx undo .env again puts it back
+```
+
+`undo` swaps the two files, so running it again puts the newer text back. It shows what
+changes by name, never a value. There is one backup, not a history: the next `set` replaces
+it. If you want the history, see [`evnx history`](/guides/commands/history).
+
+## evnx get: read one value without sourcing
+
+```bash
+PORT=$(evnx get PORT)
+echo "PORT=$PORT"
+evnx get GREETING
+```
+
+```text
+PORT=8080
+hi there
+```
+
+The value comes out the way `evnx run` would pass it on: quotes removed, escapes resolved,
+`${NAME}` expanded. The file is not executed. Given a line `OOPS=$(echo ran-code)`:
+
+```bash
+evnx get OOPS --env danger.env
+```
+
+```text
+$(echo ran-code)
+```
+
+The text is printed as text. Nothing ran.
+
+### Secrets are refused
+
+A name that looks secret is not printed unless you ask. That includes `DATABASE_URL` when it
+holds a password, and it holds when the output goes to a pipe, so a script cannot leak one
+by accident:
+
+```bash
+evnx get API_TOKEN | cat
+```
+
+```text
+Error: API_TOKEN looks like a secret, so evnx did not print it.
+
+  To print it anyway:   evnx get API_TOKEN --reveal
+  To test that it is set:   evnx get API_TOKEN --exists
+
+evnx stopped before making changes (exit 4). Run one of the commands above.
+```
+
+The exit code is 4. `--reveal` prints the value (`tok_FAKE_987654321` in this run), and
+you are choosing to do it.
+
+### Is it set?
+
+Most of the time a script does not need the value. It needs to know the variable is there.
+`--exists` prints nothing and answers in the exit code, secret or not:
+
+```bash
+if evnx get --exists API_TOKEN; then echo "token is set"; fi
+evnx get --exists NOPE; echo $?
+```
+
+```text
+token is set
+1
+```
+
+0 means the name is in the file and 1 means it is not. A plain `evnx get NOPE` also exits 1
+and says `NOPE is not in ./.env.` A missing file or a usage mistake is exit 2. For
+structured output, `evnx get PORT --json` gives `found`, `secret` and `value`, and the value
+is `null` for a secret unless you pass `--reveal`.
+
+## Which one to use
+
+| You want to | Use |
+|---|---|
+| Change a value | `evnx set NAME=VALUE --yes` |
+| Set a secret from a script | `printf %s "$X" \| evnx set NAME --yes` |
+| Set a default once | `evnx set NAME=VALUE --if-missing` |
+| Preview a change | `evnx set NAME=VALUE --dry-run` |
+| Read a plain value | `$(evnx get NAME)` |
+| Test that a name is set | `evnx get --exists NAME` |
+| Put the file back | `evnx undo .env` |
+
+Both commands take `--env FILE`, `--env-name staging` (for `.env.staging`) and `-C DIR`.
+
+The full flag lists are in the guides for [`evnx set`](/guides/commands/set) and
+[`evnx get`](/guides/commands/get). If you are updating scripts for 0.15.0 as well, start
+with [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0).
