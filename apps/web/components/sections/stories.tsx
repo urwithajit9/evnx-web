@@ -40,7 +40,7 @@ export function Stories() {
             className={
               "px-4 py-2 rounded-md text-sm font-medium border transition-colors " +
               (s.id === active
-                ? "bg-bg-base border-brand-500 text-text-primary"
+                ? "bg-bg-surface border-brand-500 text-text-primary"
                 : "border-border-muted text-text-secondary hover:text-text-primary")
             }
           >
@@ -74,7 +74,7 @@ export function Stories() {
           {story.steps.map((step, i) => (
             <li
               key={`${step.label}-${i}`}
-              className="flex flex-col items-start p-5 rounded-xl border border-border-muted bg-bg-base"
+              className="flex flex-col items-start p-5 rounded-xl border border-border-muted bg-bg-surface"
             >
               <div className="flex items-center justify-between w-full mb-3">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-500 text-brand-fg font-mono font-bold text-xs">

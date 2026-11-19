@@ -16,7 +16,7 @@ export function Problem() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {problem.modes.map((m) => (
-          <Card key={m.id} className="bg-bg-base">
+          <Card key={m.id}>
             <CardHeader className="flex-row items-start justify-between gap-4">
               <CardTitle className="text-2xl">{m.title}</CardTitle>
               <Spot id={m.spot} size={48} className="shrink-0" />

@@ -36,15 +36,24 @@ export interface SectionSpec {
 }
 
 export const landingSections: SectionSpec[] = [
+  // ── Phase B order (DESIGN-BRIEF §4) ─────────────────────────────────────────
+  // Hero → the road (D-V8: directly beneath the hero) → why it matters
+  // (problem, then the leak as proof) → what it does (pillars, stories) →
+  // where it fits (integrations) → the cloud and its honest limits → proof →
+  // docs → install.
+  //
+  // ⚠️ Surfaces must never repeat between two VISIBLE neighbours. Testimonials
+  // and talks can hide themselves (SECTION_VISIBLE), so check the order with
+  // each of them both shown and hidden before changing a surface.
   { id: "hero", enabled: true, surface: "base" },
-  { id: "problem", enabled: true, surface: "surface", anchor: "problem" },
-  { id: "road", enabled: true, surface: "base", anchor: "commands" },
+  { id: "road", enabled: true, surface: "surface", anchor: "commands" },
+  { id: "problem", enabled: true, surface: "base", anchor: "problem" },
   { id: "leak-anatomy", enabled: true, surface: "void" },
-  { id: "stories", enabled: true, surface: "surface", anchor: "stories" },
   { id: "audit", enabled: true, surface: "base" },
+  { id: "commands", enabled: true, surface: "surface", anchor: "features" },
+  { id: "stories", enabled: true, surface: "base", anchor: "stories" },
   { id: "integrations", enabled: true, surface: "surface", anchor: "integrations" },
-  { id: "commands", enabled: true, surface: "base" },
-  { id: "cloud", enabled: true, surface: "surface", anchor: "cloud" },
+  { id: "cloud", enabled: true, surface: "base", anchor: "cloud" },
   { id: "trust", enabled: true, surface: "void", anchor: "trust" },
   { id: "origin-story", enabled: true, surface: "base" },
   { id: "talks", enabled: true, surface: "surface" },
@@ -53,8 +62,8 @@ export const landingSections: SectionSpec[] = [
   // approved rows exist — see components/sections/testimonials.tsx. Leaving
   // this true means the section slots into the right place the moment there is
   // something to put in it, rather than needing two edits later.
-  { id: "testimonials", enabled: true, surface: "base" },
-  { id: "docs", enabled: true, surface: "surface", anchor: "docs" },
+  { id: "testimonials", enabled: true, surface: "void" },
+  { id: "docs", enabled: true, surface: "base", anchor: "docs" },
   { id: "cta", enabled: true, surface: "void" },
 ];
 

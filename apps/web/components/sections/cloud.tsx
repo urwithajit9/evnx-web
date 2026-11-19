@@ -27,7 +27,7 @@ export function Cloud() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
         {cloud.capabilities.map((c) => (
-          <div key={c.id} className="p-6 rounded-xl border border-border-muted bg-bg-base">
+          <div key={c.id} className="p-6 rounded-xl border border-border-muted bg-bg-surface">
             {c.spot && <Spot id={c.spot} size={56} className="mb-4" />}
             <h3 className="font-serif text-lg font-bold mb-3">{c.title}</h3>
             <p className="text-sm text-text-secondary leading-relaxed">{c.body}</p>

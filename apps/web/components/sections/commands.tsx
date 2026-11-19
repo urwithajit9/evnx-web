@@ -23,7 +23,7 @@ export function Commands() {
       <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {commands.featured.map((c) => (
           <li key={c.id}>
-            <Card className="h-full flex flex-col">
+            <Card className="h-full flex flex-col bg-bg-base">
               <CardHeader className="pb-3">
                 {c.spot && <Spot id={c.spot} size={44} className="mb-2" />}
                 <CardTitle className="text-lg">{c.title}</CardTitle>
