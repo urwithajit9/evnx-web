@@ -20,10 +20,6 @@ JSON, YAML, a shell script, a Kubernetes Secret, a Compose `environment:` block,
 Terraform `.tfvars` file, or the commands or payload for a cloud secret store. It
 never contacts the target itself: it writes the artefact, and you run it.
 
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-</Prerequisites>
-
 <Callout type="warning" title="Changed in v0.10.9">
   The formats that write a place into their output need it named:
   <code>--project</code> (gcp-secrets), <code>--vault-name</code> (azure-keyvault),

@@ -12,6 +12,7 @@ commands: ["backup", "restore"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
+  - reference/concepts-security-model
 draft: false
 ---
 
@@ -20,11 +21,6 @@ from a passphrase you choose with **Argon2id**, the content is encrypted with
 **AES-256-GCM**, and the file is written owner-only. It needs no account and makes
 no network call — the file is the backup. [`evnx restore`](/guides/commands/restore)
 opens it again.
-
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/reference/concepts-security-model">Understand evnx security model</Prerequisite>
-</Prerequisites>
 
 <Callout type="warning">
 **Changed in 0.10.11 — check your scripts.**

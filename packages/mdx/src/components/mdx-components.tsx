@@ -31,23 +31,41 @@ function InlineCode({ children }: { children?: React.ReactNode }) {
 }
 
 // ── Prose ─────────────────────────────────────────────────────────────────────
-function H2({ children }: { children?: React.ReactNode }) {
+// ⚠️ Headings MUST pass their props on. rehype-slug sets `id`, and a component
+// that takes only `children` drops it: the docs' "On this page" then finds no
+// heading, and every #anchor link stops scrolling (found 2026-11-20, every guide).
+//
+// rehype-autolink-headings wraps the text in an <a>. `[&>a]:` beats the shared
+// link style (0,1,1 over 0,1,0), so a heading reads as a heading, not a link.
+type HeadingProps = React.ComponentPropsWithoutRef<"h2">;
+const HEADING_LINK = "[&>a]:text-inherit [&>a]:no-underline";
+
+function H2({ children, ...props }: HeadingProps) {
   return (
-    <h2 className="font-serif text-2xl font-bold mt-12 mb-4 text-text-primary scroll-mt-20 leading-snug">
+    <h2
+      {...props}
+      className={`font-serif text-2xl font-bold mt-12 mb-4 text-text-primary scroll-mt-20 leading-snug ${HEADING_LINK}`}
+    >
       {children}
     </h2>
   );
 }
-function H3({ children }: { children?: React.ReactNode }) {
+function H3({ children, ...props }: HeadingProps) {
   return (
-    <h3 className="font-serif text-xl font-bold mt-8 mb-3 text-text-primary scroll-mt-20">
+    <h3
+      {...props}
+      className={`font-serif text-xl font-bold mt-8 mb-3 text-text-primary scroll-mt-20 ${HEADING_LINK}`}
+    >
       {children}
     </h3>
   );
 }
-function H4({ children }: { children?: React.ReactNode }) {
+function H4({ children, ...props }: HeadingProps) {
   return (
-    <h4 className="font-mono text-base font-semibold mt-6 mb-2 text-text-primary">
+    <h4
+      {...props}
+      className={`font-mono text-base font-semibold mt-6 mb-2 text-text-primary scroll-mt-20 ${HEADING_LINK}`}
+    >
       {children}
     </h4>
   );

@@ -18,11 +18,6 @@ draft: false
 
 `evnx migrate --to github` is the only destination where evnx uploads secrets for you — no commands to copy and run. It calls the GitHub REST API, encrypts each value with the repository's public key, and uploads it. In a terminal it shows a progress bar and a line per secret.
 
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/reference/concepts-migrate-intro">Understand the migration pipeline</Prerequisite>
-</Prerequisites>
-
 <Callout type="info">
   <strong>Building from source.</strong> <code>migrate</code> is behind a Cargo feature, but every prebuilt binary (install script, Homebrew, Scoop, winget, npm, PyPI, the GitHub Release) is built with all features and has it. Only <code>cargo install</code> needs to ask:
   <ul>

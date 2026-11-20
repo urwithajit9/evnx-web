@@ -134,55 +134,27 @@ export default async function DocsPage({ params }: Props) {
   if (!guide) notFound();
   const { prev, next } = getAdjacentGuides(guide);
   const commands = resolveCommands(guide.commands);
+  const prerequisites = guide.prerequisites ?? [];
+  const hasAbout = prerequisites.length > 0 || commands.length > 0;
 
-  return (
-    <DocsShell currentSlug={guide.slug} currentSection={guide.section} toc>
-    <article className="max-w-3xl">
-      <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted mb-6">
-        <Link href="/cli" className="hover:text-text-primary">CLI</Link>
-        <span aria-hidden> / </span>
-        <Link href={`/cli/${guide.section}`} className="hover:text-text-primary">
-          {GUIDE_SECTIONS.find((s) => s.key === guide.section)?.label}
-        </Link>
-      </nav>
-
-      <h1 className="font-serif text-4xl font-bold mb-4">{guide.title}</h1>
-      {guide.excerpt && (
-        <p className="text-lg text-text-secondary mb-6 leading-relaxed">{guide.excerpt}</p>
-      )}
-
-      {/* ⚠️ The frontmatter was already there and nothing rendered it. A guide
-          that does not say how long it takes, what it assumes, or which
-          version it was checked against is a guide a reader has to finish
-          before knowing whether it was for them. */}
-      <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-border-muted">
-        <span
-          className={`font-mono text-xs px-2 py-1 rounded border ${DIFFICULTY[guide.difficulty] ?? DIFFICULTY.beginner}`}
-        >
-          {guide.difficulty}
-        </span>
-        {guide.timeToComplete && (
-          <span className="font-mono text-xs text-text-muted">⏱ {guide.timeToComplete}</span>
-        )}
-        {guide.evnxVersion && (
-          <span className="font-mono text-xs text-text-muted">
-            evnx v{guide.evnxVersion}+
-          </span>
-        )}
-        {guide.updatedAt && (
-          <span className="font-mono text-xs text-text-muted">
-            updated {guide.updatedAt}
-          </span>
-        )}
-      </div>
-
-      {guide.prerequisites && guide.prerequisites.length > 0 && (
-        <div className="bg-info/5 border border-info/20 rounded-lg p-4 mb-8">
+  /*
+   * "Before you start" and "Commands covered" (D-V25, owner 2026-11-20): in the
+   * right rail on xl+, so the guide starts under its title and meta line; inside
+   * the article below xl. Rendered twice, and the hidden copy is display:none,
+   * so a screen reader meets it once.
+   *
+   * ⚠️ The frontmatter is the one list (D-V26). The guides' own <Prerequisites>
+   * blocks repeated it in 59 guides and were removed.
+   */
+  const about = (
+    <>
+      {prerequisites.length > 0 && (
+        <div className="rounded-lg border border-info/20 bg-info/5 p-4">
           <p className="font-mono text-xs text-info uppercase tracking-widest mb-3">
             Before you start
           </p>
           <ul className="space-y-1.5">
-            {guide.prerequisites.map((slug) => {
+            {prerequisites.map((slug) => {
               const target = getGuide(slug.split("/"));
               return (
                 <li key={slug}>
@@ -199,18 +171,15 @@ export default async function DocsPage({ params }: Props) {
         </div>
       )}
 
-      {/* ⚠️ The `commands:` frontmatter has existed on every guide since 5.2 and
-          nothing rendered it. It is generated from the page's own `evnx …`
-          invocations and checked in CI, so it is the one list on the page that
-          cannot drift from what the guide actually demonstrates — which makes
-          it worth showing and made leaving it unshown a waste of the guarantee.
+      {/* ⚠️ The `commands:` frontmatter is generated from the page's own
+          `evnx …` invocations and checked in CI, so it is the one list on the
+          page that cannot drift from what the guide demonstrates.
 
           ⓘ Resolved against the binary's command tree rather than printed
           verbatim: an entry naming a command that no longer exists is dropped
-          rather than rendered, because a "covered" list pointing at something
-          uninstallable is worse than no list. */}
+          rather than rendered. */}
       {commands.length > 0 && (
-        <div className="mb-8">
+        <div>
           <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-3">
             Commands covered
           </p>
@@ -243,6 +212,57 @@ export default async function DocsPage({ params }: Props) {
           </ul>
         </div>
       )}
+    </>
+  );
+
+  return (
+    <DocsShell
+      currentSlug={guide.slug}
+      currentSection={guide.section}
+      toc
+      rail={hasAbout ? about : undefined}
+    >
+    <article className="max-w-3xl">
+      <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted mb-4">
+        <Link href="/cli" className="hover:text-text-primary">CLI</Link>
+        <span aria-hidden> / </span>
+        <Link href={`/cli/${guide.section}`} className="hover:text-text-primary">
+          {GUIDE_SECTIONS.find((s) => s.key === guide.section)?.label}
+        </Link>
+      </nav>
+
+      <h1 className="font-serif text-4xl font-bold mb-3">{guide.title}</h1>
+      {guide.excerpt && (
+        <p className="text-lg text-text-secondary mb-4 leading-relaxed">{guide.excerpt}</p>
+      )}
+
+      {/* ⚠️ The frontmatter was already there and nothing rendered it. A guide
+          that does not say how long it takes, what it assumes, or which
+          version it was checked against is a guide a reader has to finish
+          before knowing whether it was for them. */}
+      <div className="flex flex-wrap items-center gap-3 mb-8 pb-6 border-b border-border-muted">
+        <span
+          className={`font-mono text-xs px-2 py-1 rounded border ${DIFFICULTY[guide.difficulty] ?? DIFFICULTY.beginner}`}
+        >
+          {guide.difficulty}
+        </span>
+        {guide.timeToComplete && (
+          <span className="font-mono text-xs text-text-muted">⏱ {guide.timeToComplete}</span>
+        )}
+        {guide.evnxVersion && (
+          <span className="font-mono text-xs text-text-muted">
+            evnx v{guide.evnxVersion}+
+          </span>
+        )}
+        {guide.updatedAt && (
+          <span className="font-mono text-xs text-text-muted">
+            updated {guide.updatedAt}
+          </span>
+        )}
+      </div>
+
+      {/* Below xl the rail is hidden, so its two blocks sit here instead. */}
+      {hasAbout && <div className="xl:hidden space-y-6 mb-8">{about}</div>}
 
       {/* id read by DocsToc to find the guide's headings */}
       <div id="guide-content" className="prose-evnx">
