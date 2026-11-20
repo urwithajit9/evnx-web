@@ -3,12 +3,12 @@ section: "use-cases"
 order: 1
 title: "Init in the Wild — Real Developer Scenarios"
 publishedAt: "2026-03-06"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-20"
 excerpt: "See how real developers use evnx init in daily workflows: Blank for scripts, Blueprint for quick starts, and Architect for custom stacks."
 difficulty: "beginner"
 timeToComplete: "12 minutes"
 tags: ["init", "use-cases", "tutorial", "workflow", "patterns"]
-commands: ["add", "add custom", "init", "validate"]
+commands: ["add", "add custom", "init", "set", "validate"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/init-basic
@@ -97,7 +97,8 @@ That is `.env.example`. `evnx add` appends the same names to `.env` with the val
 
 ```bash
 # 1. Put real credentials in .env (init created it; add filled in the names)
-nano .env
+evnx set SOURCE_DB_URL     # asks for each value, and does not echo it
+evnx set DEST_API_KEY
 
 # 2. Run her script
 python migrate.py
@@ -153,9 +154,8 @@ prompts: `evnx init --blueprint t3_modern --yes`.
 
 ```bash
 # 1. Fill in real values for local dev (init writes env files only; the app is Alex's)
-nano .env
-# NEXTAUTH_SECRET=<output of: openssl rand -hex 32>
-# DATABASE_URL=postgresql://alex:local@localhost:5432/dashboard
+evnx validate --fix        # generates NEXTAUTH_SECRET
+evnx set DATABASE_URL      # asks; Alex pastes postgresql://alex:local@localhost:5432/dashboard
 
 # 2. Start dev server
 npm run dev
@@ -271,9 +271,8 @@ cat .env.example
 # Sees well-documented vars with sensible defaults
 
 # 2. Point .env (already created by init) at the dev cluster
-nano .env
-# KAFKA_BROKERS=kafka.dev-cluster:9092
-# REDIS_URL=redis://redis.dev-cluster:6379/0
+evnx set KAFKA_BROKERS=kafka.dev-cluster:9092
+evnx set REDIS_URL=redis://redis.dev-cluster:6379/0
 
 # 3. Generate Kubernetes config from env vars
 envsubst < k8s/deployment.yaml.tmpl > k8s/deployment.yaml
@@ -381,8 +380,8 @@ Add a note to your `README.md`:
 We used `evnx init` in Blueprint mode (T3 stack).
 
 To set up locally:
-1. `cp .env.example .env`
-2. Fill in real values in `.env`
+1. `evnx init --yes` (makes `.env` from the template, readable by you only)
+2. `evnx validate --fix`, then `evnx set NAME` for each value it lists
 3. Run `evnx validate` to check
 
 To add new variables: `evnx add`

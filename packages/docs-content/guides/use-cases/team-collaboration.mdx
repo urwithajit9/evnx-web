@@ -3,12 +3,12 @@ section: "use-cases"
 order: 2
 title: "Team Collaboration with evnx sync"
 publishedAt: "2026-03-06"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-20"
 excerpt: "Real-world patterns for using evnx sync with multiple developers: adding a variable, onboarding, merges, review, and the CI and pre-commit checks."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
 tags: ["sync", "team", "collaboration", "workflow", "onboarding"]
-commands: ["remove", "sync", "validate"]
+commands: ["doctor", "remove", "scan", "set", "sync", "validate"]
 evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/sync-basic
@@ -58,8 +58,11 @@ the check one-way.
 **Step 1: Alice adds it to her .env**
 
 ```bash
-echo "STRIPE_WEBHOOK_SECRET=whsec_abc123" >> .env
+evnx set STRIPE_WEBHOOK_SECRET    # asks for the value, and does not echo it
 ```
+
+Leaving the value off keeps it out of her shell history. `set` writes `.env` only, so
+the template does not have the name yet; that is step 2.
 
 **Step 2: Alice previews the template change**
 
@@ -128,7 +131,7 @@ STRIPE_WEBHOOK_SECRET=YOUR_KEY_HERE
 ```
 
 <Callout type="warning" title="Don't commit secrets">
-Alice's real value `whsec_abc123` stays in her `.env` only. The template gets the
+Alice's real value stays in her `.env` only. The template gets the
 placeholder `YOUR_KEY_HERE`, because the name has the word `SECRET`. Even the
 "actual values" choice keeps a credential like this one out of the template.
 </Callout>
@@ -189,8 +192,11 @@ evnx validate
 **Step 4: Bob fills in real values from the team's password manager**
 
 ```bash
-nano .env
+evnx set STRIPE_SECRET_KEY        # paste each value when asked; nothing is echoed
+evnx set STRIPE_WEBHOOK_SECRET
 ```
+
+One `set` per name that validate listed. Opening `.env` in an editor works too.
 
 **Step 5: Bob validates again**
 
@@ -430,14 +436,14 @@ Run this monthly or when onboarding:
 # 1. My own pair, both ways (exit 1 if either file has a name the other lacks)
 evnx sync --check
 
-# 2. Look for secrets in the template
-grep -iE "(sk_live|password|secret)" .env.example | grep -v "YOUR_\|placeholder\|demo" && echo "⚠️  Potential secrets found!"
+# 2. Look for secrets in the template (exit 1 if it holds a real-looking one)
+evnx scan .env.example
 
 # 3. Names sync would add follow UPPER_SNAKE_CASE (exit 2 names the first that does not)
 evnx sync --dry-run --naming-policy error
 
-# 4. Confirm .gitignore is correct
-git check-ignore .env  # Should output: .env
+# 4. Confirm .gitignore covers every .env* file and the files are private
+evnx doctor            # evnx doctor --fix repairs both
 
 # 5. Test the onboarding flow in a fresh clone
 mkdir /tmp/test-onboarding && cd /tmp/test-onboarding

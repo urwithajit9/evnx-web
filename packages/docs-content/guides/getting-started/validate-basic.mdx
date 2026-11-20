@@ -3,7 +3,7 @@ title: "Validate your environment: A practical guide"
 section: guides
 order: 12
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-19"
+updatedAt: "2026-11-20"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
@@ -164,8 +164,8 @@ $ diff .env.bak .env
 
 ## Setup
 
-# 1. Copy the example environment file:
-cp .env.example .env
+# 1. Make .env from the template (mode 600, .gitignore checked):
+evnx init --yes
 
 # 2. Fill in what evnx can, and see what it cannot:
 evnx validate --fix
@@ -188,16 +188,26 @@ STRIPE_SECRET_KEY=
 ```
 
 ```console
-$ cp .env.example .env
+$ evnx init --yes
+
+  evnx init  Set up environment variables for your project
+
+· .env.example is the project's template: kept as it is
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+✓ Created .env from .env.example
+  ✓ 7 names from .env.example → .evnx.toml (3 secret, 3 with a format)
+…
 $ evnx validate --fix
+  config    .evnx.toml
 
   evnx validate  Check environment configuration
 
 ✓ Saved fixes to ./.env — original kept at ./.env.bak
+  undo: evnx undo .env
 
 Fixed (2):
-  • SECRET_KEY: "" → <64 hex chars>
-  • DB_PASSWORD: "" → <64 hex chars>
+  • SECRET_KEY: generated (64 chars), written to ./.env (was "")
+  • DB_PASSWORD: generated (64 chars), written to ./.env (was "")
 
   ✗  STRIPE_SECRET_KEY looks like a placeholder
      ./.env

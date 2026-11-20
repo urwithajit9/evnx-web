@@ -3,12 +3,12 @@ section: "getting-started"
 order: 5
 title: "Sync Basics — Keep .env Files in Sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-20"
 excerpt: "Learn how to use evnx sync to keep your .env and .env.example files synchronized. Perfect for beginners."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
 tags: ["sync", "tutorial", "beginner", "env", "template"]
-commands: ["add custom", "sync", "validate"]
+commands: ["add custom", "doctor", "set", "sync", "validate"]
 evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
@@ -216,11 +216,15 @@ evnx validate
   2 errors
 ```
 
-**Step 3: edit .env with real values**
+**Step 3: fill in the real values**
 
 ```bash
-nano .env
+evnx set APP_NAME=myapp
+evnx set STRIPE_SECRET_KEY    # asks for the key, and does not echo it
 ```
+
+A secret typed after `=` would stay in your shell history, so leave it off and let
+`set` ask. For many values at once, open `.env` in your editor instead.
 
 **Step 4: validate again**
 
@@ -296,13 +300,12 @@ git commit -m "Add NEW_VAR to template"
 ### Committing .env by accident
 
 ```bash
-# Check .gitignore first:
-cat .gitignore | grep "^\.env$"
-# Should output: .env
-
-# If not, add it:
-echo ".env" >> .gitignore
+evnx doctor          # reports a .env that .gitignore does not cover
+evnx doctor --fix    # adds .env*, !.env*.example, !.env*.sample, !.env*.template
 ```
+
+A bare `.env` line in `.gitignore` would leave `.env.production` and `.env.local`
+committable; `.env*` with the template exceptions covers them.
 
 ### Ignoring permission warnings
 
@@ -313,11 +316,13 @@ If other users can read your `.env`, sync says so:
      →  chmod 600 .env
 ```
 
-Fix it:
+Fix it, for every env file in the project:
 
 ```bash
-chmod 600 .env
+evnx doctor --fix
 ```
+
+`chmod 600 .env` fixes the one file, which is what the message suggests.
 
 ---
 

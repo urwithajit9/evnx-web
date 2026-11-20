@@ -3,12 +3,12 @@ section: "getting-started"
 order: 3
 title: "Init Basics — Start Your Project Right"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-20"
 excerpt: "Learn how to use evnx init to generate .env.example and .env files. Perfect for beginners setting up a new project."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["init", "tutorial", "beginner", "setup", "env"]
-commands: ["init", "sync", "validate"]
+commands: ["init", "set", "sync", "validate"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
@@ -237,16 +237,15 @@ NEXT_PUBLIC_STRIPE_PUBLIC_KEY=your_stripe_public_key_value
 The `NEXT_PUBLIC_` lines are the browser copies of public values (since 0.10.1);
 secrets never get one.
 
-**Step 6: Edit .env with real values**
+**Step 6: Fill in .env with real values**
 
 ```bash
-nano .env
-# Replace:
-#   NEXTAUTH_SECRET=your_nextauth_secret_value
-# With a random value, for example the output of:
-#   openssl rand -hex 32
-# (or let `evnx validate --fix` generate it)
+evnx set DATABASE_URL       # asks for the value, and does not echo it
+evnx set NEXTAUTH_SECRET    # or let `evnx validate --fix` generate it
 ```
+
+Each `set` changes one line in place and keeps a backup. For many values at once,
+open `.env` in your editor instead.
 
 **Step 7: Validate your setup**
 

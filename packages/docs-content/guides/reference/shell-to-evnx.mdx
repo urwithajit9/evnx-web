@@ -1,0 +1,174 @@
+---
+section: "reference"
+order: 19
+title: "From shell to evnx: the commands that replace cat, sed, cp and source"
+publishedAt: "2026-11-20"
+updatedAt: "2026-11-20"
+excerpt: "The shell lines people use on .env files, each next to the evnx command that does the same job, and what evnx adds: file modes, .gitignore, hidden input, the template kept in step."
+difficulty: "beginner"
+timeToComplete: "8 minutes"
+tags: ["reference", "shell", "set", "get", "init", "doctor", "run", "cheat-sheet"]
+commands: ["add custom", "add service", "backup", "cloud pull", "cloud push", "cloud run", "convert", "diff", "doctor", "get", "init", "remove", "restore", "run", "scan", "scan hook install", "set", "sync", "undo", "validate"]
+evnxVersion: "0.15.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+Most `.env` work is done with a handful of shell commands: `cat`, `echo >>`, `sed -i`,
+`cp`, `chmod`, `source`. They work, and nothing here says to stop using them. Each one
+also leaves a job undone: the file's mode, the `.gitignore` line, the template beside
+it, or the secret now sitting in your shell history.
+
+This page puts each shell line next to the evnx command for the same job, and says what
+the evnx version adds. Where the shell is just as good, it says that too.
+
+<Prerequisites>
+  <Prerequisite href="/guides/getting-started/installation">Install evnx 0.15.0 or later</Prerequisite>
+</Prerequisites>
+
+---
+
+## Start a project's env files
+
+| Job | Shell | evnx | What evnx adds |
+|---|---|---|---|
+| New project, no files yet | `touch .env .env.example`<br/>`echo .env >> .gitignore` | `evnx init --yes` | `.env` is mode `0600`; `.gitignore` gets `.env*` with `!.env*.example`, so `.env.production` is covered too; `.evnx.toml` records the names `evnx validate` checks |
+| A fresh clone has only the template | `cp .env.example .env` | `evnx init --yes` | The copy is `0600` (`cp` uses your umask, often `0644`) and `.gitignore` is checked. Run twice, it says the project is already set up |
+| Variables for a service | `cat >> .env.example << 'EOF'`<br/>`REDIS_URL=…` then the same for `.env` | `evnx add service redis --yes` | Both files, under one heading, with no name added twice |
+| Your own variables | `echo 'API_URL=…' >> .env`<br/>`echo 'API_URL=' >> .env.example` | `evnx add custom API_URL=https://api.example.com --yes` | The value goes into `.env` only; the template gets a placeholder |
+| A stack | copy a README's list by hand | `evnx init --with nextjs,postgresql,stripe --yes` | 56 components; `evnx init --list-components` shows them |
+
+<CodeTabs defaultTab="With evnx">
+  <Tab label="Without evnx">
+```bash
+git clone https://github.com/acme/app && cd app
+cp .env.example .env          # mode from your umask, often 0644
+grep -qx '.env' .gitignore || echo '.env' >> .gitignore   # .env.production still committable
+```
+  </Tab>
+  <Tab label="With evnx">
+```bash
+git clone https://github.com/acme/app && cd app
+evnx init --yes               # .env from the template, 0600, .gitignore checked
+evnx validate --fix           # fills the app's own secrets, lists what you must paste in
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+## Change one variable
+
+| Job | Shell | evnx | What evnx adds |
+|---|---|---|---|
+| Change a value | `sed -i 's/^PORT=.*/PORT=8080/' .env` | `evnx set PORT=8080 --yes` | Comments, quoting, `export` and order are kept; the old file is kept once as `.env.bak` |
+| Add a value | `echo 'PORT=8080' >> .env` | `evnx set PORT=8080` | No second `PORT=` line if one exists (dotenv uses the last, so a duplicate silently wins) |
+| Only if not set | `grep -q '^LOG_LEVEL=' .env \|\| echo 'LOG_LEVEL=info' >> .env` | `evnx set LOG_LEVEL=info --if-missing` | One command, exit `0` either way |
+| A secret | `read -rs T; echo "API_TOKEN=$T" >> .env` | `evnx set API_TOKEN` | Asked with no echo at a terminal; from a pipe in a script. Never in history or `ps` |
+| Read one value | `grep '^PORT=' .env \| cut -d= -f2-` | `evnx get PORT` | Handles quotes and `export`. A secret prints only with `--reveal` |
+| Is it set? | `grep -q '^DATABASE_URL=' .env` | `evnx get --exists DATABASE_URL` | Exit `0` or `1`, nothing printed |
+| Remove a name everywhere | `sed -i '/^OLD_KEY=/d' .env .env.example` | `evnx remove OLD_KEY --all` | Also every `.env.*` file and the `.evnx.toml` contract; a backup is kept |
+| Take it back | `cp .env.bak .env` | `evnx undo .env` | Restores the backup evnx recorded for its last change to that file, after showing what comes back and asking (`--yes` in a script) |
+
+```bash
+# A secret from a script, without putting it in argv:
+printf %s "$STRIPE_KEY" | evnx set STRIPE_SECRET_KEY --yes
+```
+
+More on why `sed -i` and `echo >>` go wrong: [Change one variable without opening the
+file](/blog/change-one-variable-evnx-set-and-get).
+
+<Callout type="info" title="An editor is still fine">
+For filling in ten values at once, open `.env` in your editor. `evnx set` is for one
+change, in a script, or for a secret you do not want on screen.
+</Callout>
+
+---
+
+## Keep the template in step
+
+| Job | Shell | evnx | What evnx adds |
+|---|---|---|---|
+| Make `.env.example` from `.env` | `sed 's/=.*/=/' .env > .env.example` | `evnx sync --yes` | Every value becomes a placeholder that says what goes there (`YOUR_KEY_HERE`, `postgres://user:password@localhost:5432/dbname`), so no real value reaches the template |
+| What does one file lack? | `diff <(cut -d= -f1 .env \| sort) <(cut -d= -f1 .env.example \| sort)` | `evnx diff` | Ignores comments and `export`; exit `1` while they differ, so it is a CI check |
+| Both directions, in CI | the `diff` above, twice | `evnx sync --check` | Exit `1` if either file has a name the other lacks |
+| Two environments | `diff .env.staging .env.production` | `evnx diff .env.staging .env.production` | Compares names and values; values are shown only with `--show-values` |
+
+---
+
+## Check and protect
+
+| Job | Shell | evnx | What evnx adds |
+|---|---|---|---|
+| Ignore `.env` | `echo '.env' >> .gitignore` | `evnx doctor --fix` | `.env*` with `!.env*.example`, `!.env*.sample` and `!.env*.template`, not a bare `.env` |
+| Private file mode | `chmod 600 .env` | `evnx doctor --fix` | Finds every readable env file, not only the one you named |
+| A health check | several `ls`, `grep` and `stat` lines | `evnx doctor` | Template tracked, agents' config, Docker files, permissions, in one run |
+| Secrets in the template | `grep -iE 'sk_live\|password\|secret' .env.example` | `evnx scan .env.example` | Recognises key formats and passwords in URLs, not words; values shown only as previews |
+| Required variables present | `[ -n "$DATABASE_URL" ] \|\| exit 1`, per name | `evnx validate` | Placeholders, weak secrets and missing names, measured against the template |
+| Block a commit with a secret | a hand-written `.git/hooks/pre-commit` that greps for `.env` | `evnx scan hook install` | Scans what is staged, not the file names: a key pasted into `config.ts` is caught too |
+
+<CodeTabs defaultTab="With evnx">
+  <Tab label="Without evnx">
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit — catches a file NAMED .env, nothing else
+if git diff --cached --name-only | grep -qx '\.env'; then
+  echo ".env should not be committed"; exit 1
+fi
+```
+  </Tab>
+  <Tab label="With evnx">
+```bash
+evnx scan hook install        # runs `evnx scan --staged` before every commit
+evnx scan hook status
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+## Run, convert and back up
+
+| Job | Shell | evnx | What evnx adds |
+|---|---|---|---|
+| Run with `.env` loaded | `set -a; . ./.env; set +a; npm start` | `evnx run -- npm start` | The file is read as data. `source` runs it as shell code, so a `$(…)` in a value runs too |
+| Same, one line | `export $(cat .env \| xargs) && ./deploy.sh` | `evnx run -- ./deploy.sh` | Values with spaces or `#` survive; your shell's own environment is left alone |
+| JSON for a tool | a `jq -R` pipeline | `evnx convert --to json` | 14 targets; `evnx convert --to kubernetes --name app` writes a `0600` Secret manifest |
+| Encrypted copy | `gpg -c .env` | `evnx backup .env --output .env.backup.enc` | `evnx restore` checks the file before writing, and writes `0600` |
+
+<Callout type="tip" title="Where the shell is just as good">
+`kubectl create secret generic app --from-env-file=.env` is fine if you only target
+Kubernetes. `evnx convert` earns its place when the same `.env` goes to several places.
+</Callout>
+
+---
+
+## Share with your team and CI
+
+| Job | Shell | evnx | What evnx adds |
+|---|---|---|---|
+| Give a teammate the file | paste it into a chat, or `scp` it | `evnx cloud push` then their `evnx cloud pull` | Encrypted on your machine; the server never sees the values |
+| Secrets for one deploy | `evnx cloud pull && ./deploy.sh && rm .env` | `evnx cloud run --vault my-api/production -- ./deploy.sh` | Nothing written to disk, so there is no `rm` that might not run |
+
+---
+
+## Shell that should stay shell
+
+Some shell in these guides is there on purpose:
+
+- **Byte-exact fixtures.** The round-trip tests build a `.env` with `printf`, because they
+  need trailing spaces and exact bytes that a tool would tidy up.
+- **"Without evnx" examples.** A guide that shows what goes wrong without evnx has to show
+  the shell version.
+- **Deleting a file.** evnx has no `rm`. `trap 'rm -f .env' EXIT` is still the right way to
+  clean up a pulled file, though `evnx cloud run` avoids writing it at all.
+- **Resolving a merge conflict** in `.env.example` is an editor's job.
+
+## See also
+
+- [evnx set](/guides/commands/set) and [evnx get](/guides/commands/get)
+- [evnx init](/guides/commands/init) and [evnx add](/guides/commands/add)
+- [evnx doctor](/guides/commands/doctor)
+- [evnx run](/guides/commands/run)
+- [Quick start](/guides/getting-started/quick-start)

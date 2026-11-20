@@ -3,12 +3,12 @@ title: "Quick Start"
 section: getting-started
 order: 2
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-20"
 excerpt: "Five minutes to your first evnx workflow — check, scan, template, validate and convert a real .env file."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["getting-started", "scan", "validate", "convert"]
-commands: ["convert", "diff", "doctor", "init", "scan", "sync", "validate"]
+commands: ["add custom", "convert", "diff", "doctor", "init", "scan", "set", "sync", "validate"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
@@ -17,7 +17,7 @@ draft: false
 
 By the end of this guide you'll have run a health check, scanned for secrets, made a
 `.env.example`, caught validation problems, and converted your `.env` to a Kubernetes
-Secret — all in under five minutes. Every output below is from evnx 0.13.0.
+Secret — all in under five minutes. Every output below is from evnx 0.15.0.
 
 <Prerequisites>
   <Prerequisite href="/guides/getting-started/installation">Install evnx first</Prerequisite>
@@ -25,9 +25,10 @@ Secret — all in under five minutes. Every output below is from evnx 0.13.0.
 
 ---
 
-## Step 1 — Create a sample .env
+## Step 1 — A .env made by hand
 
-If you don't have a project handy, create a test file:
+Most `.env` files start the same way: someone types one. Do that here, with
+deliberately bad values, and the rest of the guide shows what evnx finds in it:
 
 ```bash
 mkdir evnx-demo && cd evnx-demo
@@ -58,11 +59,46 @@ EOF
 This `.env` contains intentionally bad values to demonstrate what evnx catches. Never use these patterns in a real project.
 </Callout>
 
+### The same start, with evnx
+
+For a real project, let evnx write the files. In a new, empty folder:
+
+```bash
+mkdir evnx-new && cd evnx-new
+evnx init --yes
+evnx add custom APP_NAME=my-app APP_ENV=development DEBUG=true DATABASE_URL STRIPE_SECRET_KEY JWT_SECRET --yes
+```
+
+```text
+✓ Created .env.example (no variables yet)
+✓ Created .env from .env.example
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+  ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
+…
+  ✓ added 6 variable(s) to [vars] in .evnx.toml
+✓ Added 6 custom variables to .env
+```
+
+That one start does what the hand-made file leaves undone: `.env` is mode `0600`,
+`.gitignore` covers every `.env*` file but the templates, and `.env.example` lists each
+name with a placeholder. A name given without a value, such as `STRIPE_SECRET_KEY`,
+gets a placeholder in both files. Fill secrets in without typing them on the command
+line, where they would stay in your shell history:
+
+```bash
+evnx set STRIPE_SECRET_KEY    # asks for the value, and does not echo it
+evnx validate --fix           # generates JWT_SECRET, the app's own secret
+```
+
+`evnx doctor` in this folder passes the checks the next step fails. This guide carries
+on in `evnx-demo`, the hand-made folder, because that is the one with something to find.
+
 ---
 
 ## Step 2 — Run a health check
 
-Start with `doctor`, which checks the setup around the file:
+Back in `evnx-demo`, start with `doctor`, which checks the setup around the file. The
+first and last findings below are the two that `evnx init` avoids:
 
 ```bash
 evnx doctor
@@ -84,16 +120,24 @@ evnx doctor
   ·  Check for Docker configuration files
      No Docker configuration detected
 
-  ✓  Check that AI coding agents cannot read .env
+  ·  AI coding agents and .env
+     No agent configuration found in this project, so nothing was checked. An agent set up outside the project can read .env.
 
   !  Check file permissions for sensitive files
      .env: permissions 664 (recommended: 600)
+
+  ✓  Check env files and templates for empty evnx sections
 
   1 error  ·  2 warnings  ·  1 check passed
 
   →  2 issues evnx doctor --fix can repair:
      ·  Validate .env file existence, security, and syntax
      ·  Check file permissions for sensitive files
+
+  Not examined here:
+    values and required names    evnx validate
+    template drift               evnx sync --check
+    secrets in the project       evnx scan
 ```
 
 It exits `1` because of the error. Let it repair what it can:
@@ -103,7 +147,7 @@ evnx doctor --fix
 ```
 
 ```text
-✓ Fixed: .gitignore: added .env*, !.env.example, !.env.sample, !.env.template
+✓ Fixed: .gitignore: added .env*, !.env*.example, !.env*.sample, !.env*.template
   ✓  Validate .env file existence, security, and syntax
   …
 ✓ Fixed: .env mode 664 → 600
@@ -112,8 +156,8 @@ evnx doctor --fix
   1 warning  ·  3 checks passed
 ```
 
-`--fix` writes the same four lines `evnx init` does — `.env*` plus `!.env.example`,
-`!.env.sample` and `!.env.template` — rather than a bare `.env`, which would leave
+`--fix` writes the same four lines `evnx init` does — `.env*` plus `!.env*.example`,
+`!.env*.sample` and `!.env*.template` — rather than a bare `.env`, which would leave
 `.env.production` committable. It also tightens a readable `.env` to `0600`. It will
 not stage or commit anything. The remaining warning, no `.env.example`, is step 4.
 
@@ -128,20 +172,21 @@ evnx scan
 ```text
   evnx scan  Checking for exposed secrets
 
+  · not a git repository: git-ignore rules do not apply, every file is reported
   scanning ./.env, ./.gitignore
 
   ✗  Credentials in a connection string          high
-     ./.env:7 (DATABASE_URL)  post…5432
+     ./.env:7 (DATABASE_URL)  <43 chars>
      !  a password in a postgres:// URL, not a placeholder
 
   ✗  Sensitive config key: STRIPE_SECRET_KEY     high
-     ./.env:14 (STRIPE_SECRET_KEY)  sk_l…here
+     ./.env:14 (STRIPE_SECRET_KEY)  <28 chars>
      ·  flagged by variable name — the value was not checked
 
   2 findings  ·  2 high
 ```
 
-Values are shown only as a short preview, never whole. Two things worth noticing:
+No part of a value is printed, only its length. Two things worth noticing:
 
 - **The AWS keys are not reported.** `AKIAIOSFODNN7EXAMPLE` and its secret are the
   example keys from AWS's own documentation, and evnx recognises them as stand-ins.
@@ -190,6 +235,11 @@ evnx sync
 · .env.example not found, creating from .env
 · no terminal: creating .env.example with placeholder values
 ✓ Created .env.example
+
+Next steps:
+  1. Review .env.example to ensure the placeholders are appropriate
+  2. Check it holds no real value: evnx scan .env.example
+  3. Commit .env.example to Git (never commit .env)
 ```
 
 ```text
@@ -198,7 +248,7 @@ evnx sync
 
 APP_NAME=YOUR_VALUE_HERE
 APP_ENV=YOUR_VALUE_HERE
-DEBUG=true
+DEBUG=false
 DATABASE_URL=postgres://user:password@localhost:5432/dbname
 AWS_ACCESS_KEY_ID=YOUR_KEY_HERE
 AWS_SECRET_ACCESS_KEY=YOUR_KEY_HERE
@@ -207,7 +257,7 @@ SENDGRID_API_KEY=YOUR_KEY_HERE
 JWT_SECRET=YOUR_KEY_HERE
 ```
 
-Values become placeholders. On a terminal you get a menu with placeholders as the
+Every value becomes a placeholder, even `DEBUG`. On a terminal you get a menu with placeholders as the
 first choice; with no terminal, as above, placeholders are used. Review the file, then
 commit `.env.example` — it tells teammates what variables are needed without exposing
 values.
@@ -315,10 +365,25 @@ evnx convert --to terraform   # Terraform variables file
 
 ## Step 7 — Catch drift
 
-Add two variables to `.env`, the way a feature branch does, and ask what changed:
+Add two variables to `.env`, the way a feature branch does. `evnx set` changes one
+variable in place, and adds the name only if it is not there yet; `echo … >> .env`
+would add a second line instead, and dotenv uses the last one:
 
 ```bash
-printf 'REDIS_URL=redis://localhost:6379\nNEW_FEATURE_FLAG=true\n' >> .env
+evnx set REDIS_URL=redis://localhost:6379
+evnx set NEW_FEATURE_FLAG=true
+```
+
+```text
+✓ ./.env: REDIS_URL  added: redis://localhost:6379
+  backup ./.env.bak   undo: evnx undo .env
+✓ ./.env: NEW_FEATURE_FLAG  added: true
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+`set` writes `.env` only, so the template is now behind. Ask what changed:
+
+```bash
 evnx diff
 ```
 
@@ -333,20 +398,34 @@ Extra in ./.env (not in ./.env.example):
   values not compared against a template (--values to compare them)
 ```
 
-It exits `1` while the two files disagree, so it works as a check in CI. Running
-`evnx sync` again adds the new names to `.env.example`.
+It exits `1` while the two files disagree, so it works as a check in CI. Bring the
+template up to date:
+
+```bash
+evnx sync --yes
+```
+
+```text
+· Force mode: using placeholder values and skipping prompts
+✓ Added 2 variables to .env.example
+```
+
+`evnx diff` now says `✓ ./.env and ./.env.example have the same keys` and exits `0`.
+For a variable the whole team needs, `evnx add custom NAME` writes both files at once,
+so there is nothing to catch up.
 
 ---
 
 ## What you just did
 
 In five minutes you:
+- Saw what `evnx init` and `evnx add` set up that a hand-made `.env` misses
 - Ran a health check and let it fix `.gitignore` and the file's permissions
-- Found a database password and a Stripe key, shown only as previews
+- Found a database password and a Stripe key, without printing either
 - Generated a safe `.env.example`
 - Caught five validation problems (placeholders and weak secrets)
 - Converted to Kubernetes format
-- Caught two variables missing from the template
+- Changed `.env` with `evnx set`, and caught the two names the template lacked
 
 This is the core evnx workflow. Everything else builds on these primitives.
 
@@ -357,3 +436,4 @@ This is the core evnx workflow. Everything else builds on these primitives.
 - **[evnx scan deep dive](/guides/commands/scan)** — output formats, SARIF for GitHub, custom patterns
 - **[Prevent secret leaks](/guides/use-cases/prevent-secret-leaks)** — set up the pre-commit hook properly
 - **[GitHub Actions integration](/guides/integrations/github-actions)** — run evnx in CI/CD
+- **[From shell to evnx](/guides/reference/shell-to-evnx)** — the evnx command for each `cat`, `sed`, `cp` and `source` line you use on `.env` files

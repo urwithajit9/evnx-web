@@ -3,12 +3,12 @@ section: "getting-started"
 order: 5
 title: "Diff Basics — Compare Environment Files"
 publishedAt: "2026-03-11"
-updatedAt: "2026-10-25"
+updatedAt: "2026-11-20"
 excerpt: "Learn how to use evnx diff to find the keys your .env is missing from the team template, compare two environments, and gate CI on the result."
 difficulty: "beginner"
 timeToComplete: "5 minutes"
 tags: ["diff", "tutorial", "beginner", "env", "comparison"]
-commands: ["diff", "sync"]
+commands: ["diff", "set", "sync"]
 evnxVersion: "0.10.18"
 prerequisites:
   - getting-started/installation
@@ -89,7 +89,13 @@ It exits `1`, because both count by default.
 ## 2. Fix the missing key
 
 ```bash
-echo 'REDIS_URL=redis://localhost:6379' >> .env
+evnx set REDIS_URL=redis://localhost:6379
+```
+
+`evnx set` adds the line, or changes it if the name is already there, and keeps a
+backup (`undo: evnx undo .env`). Then check again:
+
+```bash
 evnx diff
 ```
 

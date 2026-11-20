@@ -1,0 +1,103 @@
+---
+title: "Six shell habits for .env files, and the evnx command for each"
+publishedAt: "2026-11-20"
+excerpt: "cp .env.example .env, echo >> .env, chmod 600, a grep for secrets, a hand-written pre-commit hook, export $(cat .env | xargs). Each works, and each leaves one job undone. Here is the evnx line for each, and the full list."
+author: "ajit"
+category: "tutorial"
+tags: ["shell", "init", "set", "doctor", "scan", "run", "evnx"]
+featured: false
+draft: false
+relatedSlugs:
+  - "change-one-variable-evnx-set-and-get"
+  - "evnx-0-15-0-one-vocabulary-for-every-command"
+---
+
+Every project with a `.env` file has a few shell lines around it. They are in the README,
+in a setup script, in your fingers. They work. Each of them also does one job and quietly
+skips the one next to it.
+
+These are the six we see most, and what evnx does instead. The full list, with about
+thirty pairs, is in the reference: **[From shell to evnx](/guides/reference/shell-to-evnx)**.
+
+## 1. `cp .env.example .env`
+
+The copy gets whatever mode your umask gives it, often `0644`: readable by every user
+on the machine. Nothing checks `.gitignore`.
+
+```bash
+evnx init --yes
+```
+
+Beside an existing template, this makes `.env` from it, mode `0600`, and makes sure
+`.gitignore` covers `.env*`. Run it again and it says the project is already set up.
+
+## 2. `echo 'PORT=8080' >> .env`
+
+If `PORT` was already in the file, there are now two. dotenv uses the last one, so the
+line you added wins, and the line you can see near the top is no longer the value in use.
+
+```bash
+evnx set PORT=8080
+```
+
+It changes the line in place, keeping its comment, quoting and position, and adds the
+name only if it is missing. For a secret, leave the value off and evnx asks for it with
+no echo, so it never reaches your shell history. [Change one variable without opening the
+file](/blog/change-one-variable-evnx-set-and-get) has the details.
+
+## 3. `echo '.env' >> .gitignore` and `chmod 600 .env`
+
+A bare `.env` line leaves `.env.production` and `.env.local` committable. `chmod` fixes
+the one file you named.
+
+```bash
+evnx doctor --fix
+```
+
+It writes `.env*` with `!.env*.example`, `!.env*.sample` and `!.env*.template`, and tightens
+every env file it finds that others can read. Without `--fix`, `evnx doctor` reports the
+same things and changes nothing.
+
+## 4. `grep -iE 'sk_live|password|secret' .env.example`
+
+A word list finds the word "secret" and misses a password inside a database URL.
+
+```bash
+evnx scan .env.example
+```
+
+It recognises key formats and credentials in connection strings, and shows a value only
+as a short preview.
+
+## 5. A hand-written pre-commit hook
+
+The usual one checks whether a file named `.env` is staged. A key pasted into
+`src/config.ts` passes.
+
+```bash
+evnx scan hook install
+```
+
+The hook runs `evnx scan --staged`, which reads what the commit will record, whatever
+the file is called.
+
+## 6. `export $(cat .env | xargs) && ./deploy.sh`
+
+A value with a space or a `#` breaks, and every variable stays in your shell after the
+deploy. `set -a; . ./.env` is worse: it runs the file as shell code.
+
+```bash
+evnx run -- ./deploy.sh
+```
+
+The file is read as data and the values go to the child process only. With a vault,
+`evnx cloud run --vault my-api/production -- ./deploy.sh` does the same without
+writing a file at all.
+
+## When the shell is the right tool
+
+Not every line needs replacing. Filling in ten values is quicker in your editor.
+`kubectl create secret generic --from-env-file=.env` is fine if Kubernetes is your only
+target. Deleting a file is still `rm`. The reference marks these cases too.
+
+**→ [From shell to evnx: the full list](/guides/reference/shell-to-evnx)**

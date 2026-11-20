@@ -3,12 +3,12 @@ section: "integrations"
 order: 3
 title: "CI/CD Integration for Sync Validation"
 publishedAt: "2026-03-06"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-20"
 excerpt: "Check .env.example in GitHub Actions, GitLab CI and pre-commit hooks with evnx sync --check: the one-way form for automation, the spec comparison when CI has no .env, and the JSON report."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["sync", "ci-cd", "github-actions", "gitlab", "automation", "validation"]
-commands: ["doctor", "spec", "spec init", "sync"]
+commands: ["doctor", "scan", "scan hook install", "spec", "spec init", "sync"]
 evnxVersion: "0.15.0"
 prerequisites:
   - commands/sync
@@ -259,14 +259,13 @@ Without the framework, the same check in `.git/hooks/pre-commit`:
 #!/bin/bash
 # .git/hooks/pre-commit
 
-if git diff --cached --name-only | grep -qx "\.env"; then
-  echo "🚫 .env should not be committed!"
-  echo "Remove it from staging:  git reset .env"
-  exit 1
-fi
+# Secrets in anything staged, whatever the file is called (not only a file named .env)
+evnx scan --staged || exit 1
 
 evnx sync --check --direction forward --skip-without-env || exit 1
 ```
+
+When the scan is all you want, `evnx scan hook install` writes that hook for you.
 
 Errors stay visible: a hook that hides stderr also hides *why* it stopped the commit.
 
