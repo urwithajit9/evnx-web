@@ -18,11 +18,6 @@ draft: false
 
 `evnx migrate --to gcp-secret-manager --project my-gcp-project` prints a short `gcloud` script: one line per variable, each piping its value to `gcloud` on stdin. The script creates each secret, or adds a new version when the secret already exists, so you can run it again after a value changes.
 
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/reference/concepts-migrate-intro">Understand the migration pipeline</Prerequisite>
-</Prerequisites>
-
 ---
 
 ## What you need

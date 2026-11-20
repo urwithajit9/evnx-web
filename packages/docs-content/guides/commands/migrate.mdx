@@ -12,6 +12,7 @@ commands: ["cloud run", "convert", "migrate", "platform push", "scan", "validate
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
+  - getting-started/sync-basic
 draft: false
 ---
 
@@ -33,11 +34,6 @@ This is a deliberate design, not a gap — see
 reported `✓ N uploaded` for every destination, which made it easy to believe the
 transfer had happened. It now says what it did.
 </Callout>
-
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/getting-started/sync-basic">Understand .env basics</Prerequisite>
-</Prerequisites>
 
 <Callout type="info">
 **Building from source.** `migrate` is behind a Cargo feature, but the prebuilt

@@ -12,6 +12,7 @@ commands: ["auth", "auth devices disavow", "auth devices list", "auth download-d
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
+  - reference/concepts-security-model
 draft: false
 ---
 
@@ -20,11 +21,6 @@ draft: false
 There is a second front door — the dashboard at **[app.evnx.dev](https://app.evnx.dev)** — and it is the *same account*. Register here and sign in there, or the reverse; the browser runs the identical SRP-6a exchange and the identical encryption, compiled from this CLI's crypto crate to WebAssembly. Nothing is CLI-only and nothing is dashboard-only except where this page says so.
 
 The thing worth understanding before you run any of it: **your master password never leaves this machine.** Not hashed, not salted, not encrypted-in-transit-then-decrypted. Never sent.
-
-<Prerequisites>
-  <Prerequisite href="/guides/getting-started/installation">Install evnx</Prerequisite>
-  <Prerequisite href="/guides/reference/concepts-security-model">Understand the evnx security model</Prerequisite>
-</Prerequisites>
 
 ---
 
