@@ -3,7 +3,7 @@ title: "API Tokens in CI/CD"
 section: integrations
 order: 4
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-20"
 excerpt: "Pull encrypted secrets into a pipeline with a scoped API token — and understand exactly what a runner can and cannot do with it."
 difficulty: intermediate
 timeToComplete: "12 minutes"
@@ -409,6 +409,10 @@ codes. The full table, and what the `403` reasons say, are in
 trap 'rm -f .env' EXIT
 evnx cloud pull --vault "$EVNX_VAULT_ID" --env .env --yes
 ```
+
+When the step only runs a command, write no file at all: `evnx cloud run --vault
+"$EVNX_VAULT_ID" -- ./deploy.sh` hands the values to that one process, so there is
+nothing to delete.
 
 **Use `-q` in jobs.** **v0.10.18+** every cloud command prints nothing on success under
 `-q`, while warnings and errors still reach the log. A step that read a `✓ pulled …`
