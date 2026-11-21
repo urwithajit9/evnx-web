@@ -3,12 +3,12 @@ title: "Quick Start"
 section: getting-started
 order: 2
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-20"
+updatedAt: "2026-11-21"
 excerpt: "Five minutes to your first evnx workflow — check, scan, template, validate and convert a real .env file."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["getting-started", "scan", "validate", "convert"]
-commands: ["add", "add custom", "convert", "diff", "doctor", "init", "scan", "set", "sync", "validate"]
+commands: ["add", "add custom", "convert", "diff", "doctor", "init", "scan", "scan hook install", "scan rules add", "set", "sync", "validate"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
@@ -21,10 +21,105 @@ Secret — all in under five minutes. Every output below is from evnx 0.15.0.
 
 ---
 
-## Step 1 — A .env made by hand
+## Step 1 — Get a .env
 
-Most `.env` files start the same way: someone types one. Do that here, with
-deliberately bad values, and the rest of the guide shows what evnx finds in it:
+A project gets its `.env` one of two ways: you start it, or you clone a project that
+already has a `.env.example`. Find yours below. Each path shows the usual steps first,
+then the same start with evnx.
+
+```mermaid
+flowchart TB
+    start([Your project]) --> q{Is there a .env.example?}
+    q -- "No: a new project" --> A["Path A, by hand:<br/>create .env, type the values,<br/>add .env to .gitignore,<br/>write .env.example,<br/>repeat for every new variable"]
+    q -- "Yes: you cloned it" --> B["Path B, by hand:<br/>cp .env.example .env,<br/>replace the placeholders,<br/>check .gitignore"]
+    A -. with evnx .-> A2["evnx init --yes<br/>evnx add custom NAME …"]
+    B -. with evnx .-> B2["evnx init --yes<br/>evnx validate --fix<br/>evnx set NAME"]
+```
+
+### Path A — a new project, no template yet
+
+**The usual way:**
+
+1. Create `.env` in an editor, or with `touch` or `cat`.
+2. Type or paste each `NAME=value`.
+3. Add `.env` to `.gitignore`.
+4. Write `.env.example` by hand, with the values removed.
+5. Do steps 2 and 4 again for every variable you add while you build.
+
+What slips: `.env` gets your umask's mode, often `0644`, readable by every user on the
+machine. A bare `.env` line in `.gitignore` leaves `.env.production` and `.env.local`
+committable. And step 5 is the one that gets skipped, so the template stops matching.
+
+**With evnx:**
+
+```bash
+mkdir evnx-new && cd evnx-new
+evnx init --yes
+evnx add custom APP_NAME=my-app APP_ENV=development DEBUG=true DATABASE_URL STRIPE_SECRET_KEY JWT_SECRET --yes
+```
+
+```text
+✓ Created .env.example (no variables yet)
+✓ Created .env from .env.example
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+  ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
+…
+  ✓ added 6 variable(s) to [vars] in .evnx.toml
+✓ Added 6 custom variables to .env
+```
+
+`.env` is mode `0600`, `.gitignore` covers every `.env*` file but the templates, and
+`.env.example` lists each name with a placeholder. A name given without a value, such as
+`STRIPE_SECRET_KEY`, gets a placeholder in both files. Fill secrets in without typing them
+on the command line, where they would stay in your shell history:
+
+```bash
+evnx set STRIPE_SECRET_KEY    # asks for the value, and does not echo it
+evnx validate --fix           # generates JWT_SECRET, the app's own secret
+```
+
+Step 5 becomes one command: `evnx add custom NAME` adds a later variable to `.env` and
+`.env.example` together.
+
+### Path B — you cloned a project with a .env.example
+
+**The usual way:**
+
+1. Copy the template: `cp .env.example .env`, or save a copy from your editor.
+2. Replace each placeholder in `.env` with a real value.
+3. Check that `.gitignore` covers `.env`, and add it if not.
+
+What slips: the copy is readable by others, and nothing tells you which placeholders you
+missed until the app fails.
+
+**With evnx:**
+
+```bash
+evnx init --yes               # .env from the template: mode 0600, .gitignore checked
+evnx validate --fix           # generates the app's own secrets, lists what you must fill in
+evnx set STRIPE_SECRET_KEY    # paste each value you were given; nothing is echoed
+```
+
+From a project whose template lists seven names:
+
+```text
+· .env.example is the project's template: kept as it is
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+✓ Created .env from .env.example
+  ✓ 7 names from .env.example → .evnx.toml (3 secret, 3 with a format)
+…
+✓ Saved fixes to ./.env — original kept at ./.env.bak
+  undo: evnx undo .env
+
+Fixed (2):
+  • SECRET_KEY: generated (64 chars), written to ./.env (was "")
+  • DB_PASSWORD: generated (64 chars), written to ./.env (was "")
+```
+
+### Try it: a .env made by hand
+
+The rest of this guide uses a `.env` made the usual way, with deliberately bad values,
+so you can see what evnx finds in one:
 
 ```bash
 mkdir evnx-demo && cd evnx-demo
@@ -55,46 +150,19 @@ EOF
 This `.env` contains intentionally bad values to demonstrate what evnx catches. Never use these patterns in a real project.
 </Callout>
 
-### The same start, with evnx
-
-For a real project, let evnx write the files. In a new, empty folder:
-
-```bash
-mkdir evnx-new && cd evnx-new
-evnx init --yes
-evnx add custom APP_NAME=my-app APP_ENV=development DEBUG=true DATABASE_URL STRIPE_SECRET_KEY JWT_SECRET --yes
-```
-
-```text
-✓ Created .env.example (no variables yet)
-✓ Created .env from .env.example
-✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
-  ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
-…
-  ✓ added 6 variable(s) to [vars] in .evnx.toml
-✓ Added 6 custom variables to .env
-```
-
-That one start does what the hand-made file leaves undone: `.env` is mode `0600`,
-`.gitignore` covers every `.env*` file but the templates, and `.env.example` lists each
-name with a placeholder. A name given without a value, such as `STRIPE_SECRET_KEY`,
-gets a placeholder in both files. Fill secrets in without typing them on the command
-line, where they would stay in your shell history:
-
-```bash
-evnx set STRIPE_SECRET_KEY    # asks for the value, and does not echo it
-evnx validate --fix           # generates JWT_SECRET, the app's own secret
-```
-
-`evnx doctor` in this folder passes the checks the next step fails. This guide carries
-on in `evnx-demo`, the hand-made folder, because that is the one with something to find.
-
----
-
 ## Step 2 — Run a health check
 
-Back in `evnx-demo`, start with `doctor`, which checks the setup around the file. The
-first and last findings below are the two that `evnx init` avoids:
+By hand, checking a setup means a list like this, before every commit:
+
+- Is every `.env*` file in `.gitignore`, not only `.env`?
+- Is `.env` readable by you only?
+- Does `.env.example` exist, and is it tracked by git?
+- Does `.env` parse?
+- Do Docker files and AI coding agents stay away from `.env`?
+
+Nobody runs that list on every commit, and one missed commit is enough. In `evnx-demo`,
+`evnx doctor` runs all of it in one go. The first and last findings below are the two
+that `evnx init` avoids:
 
 ```bash
 evnx doctor
@@ -157,9 +225,48 @@ evnx doctor --fix
 `.env.production` committable. It also tightens a readable `.env` to `0600`. It will
 not stage or commit anything. The remaining warning, no `.env.example`, is step 4.
 
+### Run it on every commit
+
+`doctor` is most useful when nobody has to remember it. evnx ships hooks for
+[pre-commit](https://pre-commit.com) and [prek](https://prek.j178.dev), which
+read the same `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/urwithajit9/evnx
+    rev: v0.15.0
+    hooks:
+      - id: evnx-doctor           # .gitignore, permissions, .env syntax
+      - id: evnx-scan-installed   # secrets in what is staged (step 3)
+```
+
+A commit then fails on a doctor error, such as an env file git would commit; warnings
+do not block it. In a fresh clone with no `.env` yet, the doctor hook is skipped. The
+other hooks, and a setup without the framework, are in
+[Prevent secret leaks](/guides/use-cases/prevent-secret-leaks#layer-4--pre-commit-hook).
+
 ---
 
 ## Step 3 — Scan for secrets
+
+**The usual way** is a general-purpose secret scanner, such as
+[gitleaks](https://github.com/gitleaks/gitleaks), run by pre-commit or prek:
+
+```yaml
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2                # `pre-commit autoupdate` moves it to the latest
+    hooks:
+      - id: gitleaks
+```
+
+That works, and a scanner like it is the right tool across a whole codebase. `evnx scan`
+does the same job and is built around env files: it knows which names hold secrets,
+tells placeholders and documentation examples from real values, and finds a password
+inside a connection string. It runs from the same config (`evnx-scan-installed`, above)
+or from `evnx scan hook install`. Already use gitleaks? `evnx scan rules add gitleaks`
+brings its rules into evnx; see
+[Scan rules and packs](/guides/reference/scan-rules-and-packs).
 
 ```bash
 evnx scan
@@ -219,7 +326,19 @@ evnx scan --format json | jq '.findings[].variable'
 ## Step 4 — Create .env.example
 
 A `.env.example` is the committed list of the variables your project needs, with
-placeholder values. `sync` makes one from your `.env`:
+placeholder values.
+
+**The usual ways**, and where each goes wrong:
+
+| How | The problem |
+|---|---|
+| `cp .env .env.example`, then delete each value | Miss one value, and a real secret is committed in the one file everyone shares |
+| `sed 's/=.*/=/' .env > .env.example` | Every value becomes empty, so nobody can tell a URL from a flag. A quoted multi-line value, such as a private key, comes through almost whole: `sed` works line by line, and only the first line starts with `NAME=` |
+| Write it by hand | It is right on the day. Then a variable is added to `.env` and not to the template, and the next teammate's setup breaks |
+
+`evnx sync` makes the template from your `.env`. It reads the file as `.env`, so a
+multi-line value is one value, and it replaces every value with a placeholder that says
+what goes there:
 
 ```bash
 evnx sync
@@ -257,6 +376,9 @@ Every value becomes a placeholder, even `DEBUG`. On a terminal you get a menu wi
 first choice; with no terminal, as above, placeholders are used. Review the file, then
 commit `.env.example` — it tells teammates what variables are needed without exposing
 values.
+
+To keep it in step, the `evnx-sync` hook fails a commit when `.env` has a name the
+template lacks, and `evnx sync --check` does the same in CI (step 7).
 
 <Callout type="info" title="--placeholder and --force are gone">
 Older guides said `sync --placeholder` or `sync --force`. Both were removed in
