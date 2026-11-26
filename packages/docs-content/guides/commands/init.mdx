@@ -247,12 +247,19 @@ next steps name that file:
 ```console
 $ evnx init --env-name staging --yes
 · .env.example is the project's template: kept as it is
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
 ✓ Created .env.staging from .env.example
-  ✓ created .evnx.toml with 1 variable(s) in [vars]
+  ✓ 1 name from .env.example → .evnx.toml (1 secret, 0 with a format)
+
 Next steps:
-  1. Edit .env.staging and replace placeholder values
+  1. Fill in the placeholder values in .env.staging: evnx set --fill --env .env.staging
   2. Commit .env.example and .evnx.toml; never commit .env.staging
+  …
 ```
+
+**v0.16.0**: the first step names [`evnx set --fill`](/guides/commands/set#filling-in-placeholders),
+which asks for each placeholder value in turn (with `--dir DIR` when `init` wrote into another
+folder). It used to read "Edit .env and replace placeholder values".
 
 `[defaults] env_name` in `.evnx.toml` steers `init` the same way, as it already steered
 `validate`, `sync` and `diff`.

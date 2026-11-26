@@ -1564,7 +1564,7 @@ exclude = ["apps/web/fixtures/**"]
 `evnx scan` run inside `apps/web` skips `apps/web/fixtures/`:
 
 ```text
-  config    ../../.evnx.toml (scan.exclude=1 patterns)
+  config    ../../.evnx.toml (scan.exclude=1 pattern)
   scanning ./.env
   ✓  No secrets detected
 ```
@@ -1576,7 +1576,7 @@ matches anywhere, as before. **Flags** (`--exclude`) are relative to where you r
 committed, so evnx prints which are in force:
 
 ```text
-  config    .evnx.toml (scan.severity=high, scan.confidence=medium, scan.exclude=1 patterns)
+  config    .evnx.toml (scan.severity=high, scan.confidence=medium, scan.exclude=1 pattern)
 ```
 
 Rule files and the baseline are not `[scan]` keys: they live in `.evnx/rules/` and
