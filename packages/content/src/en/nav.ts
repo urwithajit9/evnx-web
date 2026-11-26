@@ -68,6 +68,7 @@ export const footer: {
     {
       title: "Documentation",
       items: [
+        { label: "Start here", docsSlug: "getting-started/start-here" },
         { label: "Quick start", docsSlug: "getting-started/quick-start" },
         { label: "Commands", docsSlug: "commands" },
         { label: "Cloud architecture", docsSlug: "reference/cloud-architecture" },
