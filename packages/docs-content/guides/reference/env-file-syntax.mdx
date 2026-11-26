@@ -3,7 +3,7 @@ section: "reference"
 order: 1
 title: ".env Syntax Reference"
 publishedAt: "2026-09-29"
-updatedAt: "2026-11-08"
+updatedAt: "2026-11-26"
 excerpt: "Exactly what evnx accepts in a .env file: the four quoting forms, which escapes resolve where, multiline values, variable expansion, and what does not work."
 difficulty: "intermediate"
 timeToComplete: "15 minutes"
@@ -164,6 +164,33 @@ PRICE="costs $5"     # → costs $5
 ```bash
 A=hello $NOPE        # → hello $NOPE   (left as written)
 A=hello ${NOPE}      # → Error: Undefined variable: ${NOPE} is not defined
+```
+
+### An unset `$name` stays as written
+
+`PASS=ab$cd` with no `cd` in the file: evnx reads `ab$cd`, Docker Compose reads `ab`. evnx
+keeps the text because a password that contains `$` should never be cut short without a
+word. For a file both tools read, say which you mean:
+
+| Write | evnx reads | Compose reads |
+|---|---|---|
+| `PASS=ab$cd` | `ab$cd` | `ab` |
+| `PASS=ab${cd:-}` | `ab` (the value of `cd`, or nothing) | `ab` |
+| `PASS='ab$cd'` | `ab$cd` (single quotes, no expansion) | `ab$cd` |
+| `PASS=ab${cd}` | an error that names the line | `ab` |
+
+Checked with evnx 0.16.0:
+
+```text
+$ evnx get PASS --env .env.u1 --reveal      # PASS=ab$cd
+ab$cd
+$ evnx get PASS --env .env.u2 --reveal      # PASS=ab${cd:-}
+ab
+$ evnx get PASS --env .env.u3 --reveal      # PASS='ab$cd'
+ab$cd
+$ evnx get PASS --env .env.u4 --reveal      # PASS=ab${cd}
+Error: PASS cannot be read from ./.env.u4: Line 1: Undefined variable: ${cd} is not defined
+  `evnx validate` lists every problem.
 ```
 
 <Callout type="tip" title="A secret containing a dollar sign — single-quote it">
@@ -346,6 +373,22 @@ that parser.
 ---
 
 ## What does not work
+
+### A name with no `=`
+
+A line with only a name, such as `TEST_VAR` in a template, is a parse error: every line is
+`KEY=value`. **v0.16.0**: the error says how to write it. In `spec init`, and the commands
+that read a file the same way, it adds the line to write:
+
+```text
+$ evnx spec init
+Error: Failed to parse .env.example: Invalid format at line 2: missing '=' separator
+  To list a name with no value, write it as `TEST_VAR=`
+```
+
+The name is repeated only when it is a valid key that does not look like a credential, so a
+value pasted alone on a line is never printed. `TEST_VAR=` is a name with an empty value,
+which a template is for.
 
 ### Triple-quoted heredocs
 
