@@ -3,13 +3,13 @@ title: "Validate your environment: A practical guide"
 section: guides
 order: 12
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-20"
+updatedAt: "2026-11-26"
 excerpt: "Learn how, when, and why to use evnx validate to catch configuration issues before they reach production."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["validate", "tutorial", "best-practices", "ci-cd", "evnx"]
 commands: ["init", "validate"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
   - commands/validate
@@ -86,8 +86,9 @@ $ evnx validate
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Fill in the placeholder values: evnx set --fill
+  3. Run with --fix to auto-correct common issues
+  4. Use --ignore issue_type to suppress specific warnings
 Validation failed: 2 errors
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
@@ -100,7 +101,7 @@ Exit code `1`. `✗` is an error and fails the run; `!` is a warning and does no
 $ evnx validate --fix --dry-run
 ...
 Would fix (2):
-  • SECRET_KEY: "changeme" → (a new random secret)
+  • SECRET_KEY: would generate (64 chars) (was "changeme")
   • DEBUG: "True" → true
 
   Dry run — nothing was written: ./.env is unchanged and no backup was made
@@ -111,9 +112,12 @@ $ evnx validate --fix
   evnx validate  Check environment configuration
 
 ✓ Saved fixes to ./.env — original kept at ./.env.bak
+  undo: evnx undo .env
+! ./.env is readable by other users (mode 644); evnx keeps the mode you set
+     →  chmod 600 ./.env   (or evnx doctor --fix, for every env file)
 
 Fixed (2):
-  • SECRET_KEY: "changeme" → <64 hex chars>
+  • SECRET_KEY: generated (64 chars), written to ./.env (was "changeme")
   • DEBUG: "True" → true
 
   ✗  API_KEY looks like a placeholder
@@ -123,13 +127,14 @@ Fixed (2):
 
 Next steps:
   1. Review and fix the errors above
-  2. Use --ignore issue_type to suppress specific warnings
+  2. Fill in the placeholder values: evnx set --fill
+  3. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
-(`...` marks report lines left out; `<64 hex chars>` stands for the generated secret,
-which evnx prints in full.)
+(`...` marks report lines left out. The generated secret is written to `.env` and not
+printed; `<64 hex chars>` below stands for it.)
 
 `SECRET_KEY` is the app's own signing key, so evnx can generate one. `API_KEY` comes from
 a provider, so evnx leaves it for you, and the run keeps exiting `1` until you paste the
@@ -166,6 +171,7 @@ evnx init --yes
 evnx validate --fix
 
 # 3. Fill in the values it lists, then check again:
+evnx set --fill
 evnx validate
 ```
 
@@ -212,7 +218,8 @@ Fixed (2):
 
 Next steps:
   1. Review and fix the errors above
-  2. Use --ignore issue_type to suppress specific warnings
+  2. Fill in the placeholder values: evnx set --fill
+  3. Use --ignore issue_type to suppress specific warnings
 Validation failed: 1 error
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
