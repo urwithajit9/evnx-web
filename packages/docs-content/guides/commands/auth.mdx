@@ -3,7 +3,7 @@ title: "evnx auth"
 section: commands
 order: 7
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-26"
 excerpt: "Create an evnx cloud account, sign in with SRP-6a, mint CI tokens, enable two-factor authentication, and manage sessions and devices — without your password ever leaving the machine."
 difficulty: intermediate
 timeToComplete: "10 minutes"
@@ -257,6 +257,20 @@ pipeline needs `EVNX_TOKEN`, `EVNX_MASTER_PASSWORD` and `EVNX_KEY_BUNDLE`, and
 [API Tokens in CI/CD](/guides/integrations/ci-cd-cloud-tokens#the-recommended-setup-three-secrets)
 shows them together. `--no-key-bundle` leaves it out.
 
+**v0.16.0** — the CI example under the token names one password variable. It said "with
+EVNX_MASTER_PASSWORD and EVNX_KEY_BUNDLE" and then piped `$EVNX_PASSWORD` (the backup
+passphrase variable) into `--password-stdin`. It now reads, for a token scoped to one vault:
+
+```text
+  Use it in CI, with EVNX_MASTER_PASSWORD and EVNX_KEY_BUNDLE (or EVNX_KEY_BUNDLE_FILE) set as CI secrets:
+    export EVNX_TOKEN=evnx_tok_…
+    evnx cloud pull --vault <vault id>
+    (the id, not the name — a scoped token may not list vaults)
+```
+
+`evnx cloud pull` reads `EVNX_MASTER_PASSWORD` itself. (These lines are from the evnx 0.16.0
+source; the page did not create a token against a server.)
+
 **v0.15.0** — `--format pretty|json` (or `--json`) picks the output. `json` prints one document
 with `name`, `token`, `scope`, `vault`, `expires_at` and `key_bundle` and nothing else, for a
 script to pass to a secret store. `pretty` was called `text`; `--format text` now exits `2`.
@@ -299,7 +313,8 @@ Two limits are enforced centrally on the server, not by each endpoint:
 `revoke` asks before it acts; pass `-y` in a script. With no terminal and no `-y` it stops
 before sending anything and names the flag (**v0.10.18+**; older versions failed with
 `IO error: not a terminal`). The same holds for `auth sessions revoke`,
-`sessions revoke-others` and `rotate-master-password`.
+`sessions revoke-others`, `devices disavow` and `rotate-master-password`. **v0.16.0**:
+answering **no** to any of them exits `4`; until 0.15 it printed "Cancelled" and exited `0`.
 
 ### When a token stops working
 
@@ -362,7 +377,8 @@ evnx auth sessions revoke-others
 ```
 
 **v0.15.0+** — `sessions list` (and `devices list`) take `--format json` or `--json`: one document with
-the usual `run` header, names and metadata only.
+the usual `run` header, names and metadata only. **v0.16.0**: their columns line up again; the
+time columns were narrower than a time such as `2026-11-23 03:05 UTC`.
 
 Revocation is immediate, not eventual. It kills the refresh token **and** blocklists the session, so the 15-minute access token dies at once rather than lingering until it expires. `revoke-others` is what you want after losing a laptop — it clears every session except the one you are typing in.
 
@@ -510,8 +526,11 @@ personal account apart on one machine.
 |---|---|---|
 | `config.toml` | `server = "..."` and other preferences | you, by hand |
 | `credentials.json` | your email and the session's access and refresh tokens | only the CLI, mode `0600`, in a folder kept at `0700` (Linux and macOS) |
+| `high-water.json` | the highest version of each vault this machine has seen: a vault id and a number, no name, key, value or hash. It powers the "latest went down" warning (**v0.14.0+**) | only the CLI |
+| `rules/` | your personal scan rules, added to every `evnx scan` on this machine and never committed (`evnx scan rules add --personal`) | you, or `evnx scan rules` |
+| `rotation-<time>.json` | after `auth rotate-master-password`: the wraps as they were before the change, ciphertext that opens only with the old password. Keep it until a pull works with the new password, then delete it | only the CLI |
 
-Neither holds your master password or any key that opens a vault; those are
+None of them holds your master password or any key that opens a vault; those are
 never written to disk.
 
 <Callout type="info" title="Why a file and not the system keyring">
