@@ -192,7 +192,7 @@ The range is handed to `git log`, so it comes from the command line and, in the 
 own input. A string that looks like an option could change what `git log` does, so evnx refuses
 anything that starts with `-`, except `--not` and `--remotes`, which the hook needs:
 
-```console
+```text
 $ evnx scan --history 'HEAD --output=x'
 Error: --history: "HEAD --output=x" is not a revision range
 
@@ -357,7 +357,7 @@ error: failed to push some refs to '../origin.git'
 
 And a new branch, scanned against everything the remote has:
 
-```console
+```text
 $ git push origin feature
 
   evnx scan  Checking history: 876f399e6175d2c571bd5e090e01cdbd651ff22a --not --remotes
