@@ -1,0 +1,579 @@
+---
+title: "Import config into .env"
+section: "use-cases"
+order: 7
+publishedAt: "2026-11-26"
+updatedAt: "2026-11-26"
+excerpt: "Move settings from JSON, YAML, a Kubernetes Secret, docker-compose, a GitHub Actions workflow, .properties, INI, CSV or a web.config into .env with evnx add import. Dry run first, then write."
+difficulty: beginner
+timeToComplete: "10 minutes"
+tags: ["add", "import", "migration", "yaml", "json", "kubernetes"]
+commands: ["add import", "init"]
+evnxVersion: "0.16.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+Many projects keep their settings in a config file: `config.json`, `settings.yaml`, an
+`application.properties`, a `web.config`, or the `environment:` of a compose file. To
+move them into `.env`, the usual way is to open the file, retype each key in
+`UPPER_SNAKE` form, paste the value, then write the same names into `.env.example` with
+the values taken out. It is slow, and a typo in a name only shows up at run time.
+
+`evnx add import <FILE>` does it in one step. It reads the file, turns each key into a
+variable name, writes the values to `.env`, and adds placeholders to `.env.example` and
+the names to `.evnx.toml`. Every output below is from a real run of evnx 0.16.0, with
+made-up values such as `dev-only-pass`.
+
+<Callout type="tip" title="Always dry-run first">
+`--dry-run` prints the mapping from each source key to its variable name, and never a
+value. It writes nothing and needs no terminal. Read it, then run again with `--yes`.
+</Callout>
+
+---
+
+## Supported formats
+
+The format follows the file's extension, or `--from` when it does not say:
+
+| `--from` | Reads |
+|---|---|
+| `env` | `NAME=value` lines, as a `.env` |
+| `properties` | Java `.properties` |
+| `ini` | INI sections: `[db] host` becomes `DB_HOST` |
+| `json` | JSON: flat, nested, or a Kubernetes Secret |
+| `yaml` | YAML: flat, nested, a Kubernetes Secret, compose or GitHub Actions |
+| `csv` | Two columns: name, value |
+| `web-config` | A `web.config`: the `<add key value>` entries of `<appSettings>` |
+
+Names are made `UPPER_SNAKE`: `db.host` and `db-host` both become `DB_HOST`. Nested
+JSON and YAML keys are joined with `__` (two underscores), so `database.host` becomes
+`DATABASE__HOST`.
+
+---
+
+## JSON
+
+```json
+{
+  "app": { "name": "billing", "port": 8080 },
+  "database": { "host": "db.internal", "port": 5432, "password": "dev-only-pass" },
+  "features": { "beta": true }
+}
+```
+
+```bash
+evnx add import config.json --dry-run
+```
+
+```text
+  source key         →  NAME                →  status
+  app.name           →  APP__NAME           →  new
+  app.port           →  APP__PORT           →  new
+  database.host      →  DATABASE__HOST      →  new
+  database.port      →  DATABASE__PORT      →  new
+  database.password  →  DATABASE__PASSWORD  →  new
+  features.beta      →  FEATURES__BETA      →  new
+Dry run: nothing was written.
+  .env.example: would add 6 variables: APP__NAME, APP__PORT, DATABASE__HOST, DATABASE__PASSWORD, DATABASE__PORT, FEATURES__BETA
+  .env: would add 6 variables: APP__NAME, APP__PORT, DATABASE__HOST, DATABASE__PASSWORD, DATABASE__PORT, FEATURES__BETA
+```
+
+Then write it:
+
+```bash
+evnx add import config.json --yes
+```
+
+```text
+  config    .evnx.toml
+  ✓ added 6 variable(s) to [vars] in .evnx.toml
+✓ Added 6 variables to .env
+```
+
+```text
+# .env
+…
+# ── Imported from config.json ──
+APP__NAME=billing
+APP__PORT=8080
+DATABASE__HOST=db.internal
+DATABASE__PORT=5432
+DATABASE__PASSWORD=dev-only-pass
+FEATURES__BETA=true
+```
+
+```text
+# .env.example
+…
+# ── Imported from config.json ──
+APP__NAME=YOUR_VALUE_HERE
+APP__PORT=8000
+DATABASE__HOST=localhost
+DATABASE__PORT=8000
+DATABASE__PASSWORD=YOUR_PASSWORD_HERE
+FEATURES__BETA=YOUR_VALUE_HERE
+```
+
+`.env.example` gets placeholders, never the values. Run the same import again and the
+names `.env` already has are kept:
+
+```text
+· Nothing to add: 6 variables already in .env
+```
+
+---
+
+## Narrow the import
+
+`--section` imports one top-level key, and its name is not part of the variable names:
+
+```bash
+evnx add import config.json --section database --dry-run
+```
+
+```text
+  source key  →  NAME      →  status
+  host      →  HOST      →  new
+  port      →  PORT      →  new
+  password  →  PASSWORD  →  new
+```
+
+`--only` and `--exclude` take globs on the variable names, comma-separated or repeated:
+
+```bash
+evnx add import config.json --only 'DATABASE__*' --exclude '*PASSWORD' --dry-run
+```
+
+```text
+  source key     →  NAME            →  status
+  database.host  →  DATABASE__HOST  →  new
+  database.port  →  DATABASE__PORT  →  new
+  (4 left out by --only / --exclude)
+```
+
+---
+
+## YAML, flat and nested
+
+```yaml
+log_level: info
+cache-ttl: 300
+version: 1.10
+redis:
+  host: localhost
+  port: 6379
+```
+
+```bash
+evnx add import settings.yaml --dry-run
+```
+
+```text
+  source key  →  NAME         →  status
+  log_level   →  LOG_LEVEL    →  new
+  cache-ttl   →  CACHE_TTL    →  new
+  version     →  VERSION      →  new
+  redis.host  →  REDIS__HOST  →  new
+  redis.port  →  REDIS__PORT  →  new
+```
+
+After `--yes`, a YAML number is written as the file has it: `VERSION=1.10`, not `1.1`.
+
+```text
+# ── Imported from settings.yaml ──
+LOG_LEVEL=info
+CACHE_TTL=300
+VERSION=1.10
+REDIS__HOST=localhost
+REDIS__PORT=6379
+```
+
+---
+
+## A Kubernetes Secret
+
+A Secret's `data` values are base64. evnx decodes them; `stringData` is read as it is:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  DB_PASSWORD: ZGV2LW9ubHktcGFzcw==
+  DATABASE_URL: cG9zdGdyZXM6Ly9hcHA6ZGV2LW9ubHktcGFzc0BkYjo1NDMyL2FwcA==
+stringData:
+  LOG_LEVEL: debug
+```
+
+```bash
+evnx add import secret.yaml --dry-run
+```
+
+```text
+  source key            →  NAME          →  status
+  data.DB_PASSWORD      →  DB_PASSWORD   →  new
+  data.DATABASE_URL     →  DATABASE_URL  →  new
+  stringData.LOG_LEVEL  →  LOG_LEVEL     →  new
+```
+
+After `evnx add import secret.yaml --yes`, `.env` has the decoded values:
+
+```text
+# ── Imported from secret.yaml ──
+DB_PASSWORD=dev-only-pass
+DATABASE_URL=postgres://app:dev-only-pass@db:5432/app
+LOG_LEVEL=debug
+```
+
+A value that decodes to binary is refused. To go the other way, from `.env` to a
+Secret, see [evnx convert](/guides/commands/convert).
+
+---
+
+## docker-compose `environment:`
+
+Both the mapping and the list form of `environment:` are read:
+
+```yaml
+services:
+  web:
+    image: example/web
+    environment:
+      DJANGO_DEBUG: "false"
+      ALLOWED_HOSTS: "localhost,web"
+      DATABASE_URL: postgres://app:dev-only-pass@db:5432/app
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=dev-only-pass
+```
+
+```bash
+evnx add import compose.yaml --dry-run
+```
+
+```text
+  source key                                 →  NAME               →  status
+  services.web.environment.DJANGO_DEBUG      →  DJANGO_DEBUG       →  new
+  services.web.environment.ALLOWED_HOSTS     →  ALLOWED_HOSTS      →  new
+  services.web.environment.DATABASE_URL      →  DATABASE_URL       →  new
+  services.db.environment.POSTGRES_USER      →  POSTGRES_USER      →  new
+  services.db.environment.POSTGRES_PASSWORD  →  POSTGRES_PASSWORD  →  new
+```
+
+`--section` names one service:
+
+```bash
+evnx add import compose.yaml --section web --dry-run
+```
+
+```text
+  source key                              →  NAME           →  status
+  services.web.environment.DJANGO_DEBUG   →  DJANGO_DEBUG   →  new
+  services.web.environment.ALLOWED_HOSTS  →  ALLOWED_HOSTS  →  new
+  services.web.environment.DATABASE_URL   →  DATABASE_URL   →  new
+```
+
+---
+
+## GitHub Actions `env:`
+
+The workflow's own `env:` and each job's `env:` are read. A `${{ … }}` expression is
+not a value, so it is refused, and the whole import with it:
+
+```yaml
+name: ci
+on: push
+env:
+  NODE_ENV: test
+  API_URL: http://localhost:4000
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+    steps:
+      - run: npm test
+```
+
+```bash
+evnx add import .github/workflows/ci.yml --dry-run
+```
+
+```text
+  source key                       →  NAME               →  status
+  env.NODE_ENV                     →  NODE_ENV           →  new
+  env.API_URL                      →  API_URL            →  new
+  jobs.test.env.DATABASE_URL       →  DATABASE_URL       →  new
+  jobs.test.env.STRIPE_SECRET_KEY  →  STRIPE_SECRET_KEY  →  refused: is a workflow expression, not a value
+Error: nothing was imported:
+  jobs.test.env.STRIPE_SECRET_KEY is a workflow expression, not a value
+
+Narrow the import with --only, --exclude or --section, or rename the keys in the file.
+```
+
+Leave it out, and set that value with `evnx set STRIPE_SECRET_KEY` afterwards:
+
+```bash
+evnx add import .github/workflows/ci.yml --exclude STRIPE_SECRET_KEY --dry-run
+```
+
+```text
+  source key                  →  NAME          →  status
+  env.NODE_ENV                →  NODE_ENV      →  new
+  env.API_URL                 →  API_URL       →  new
+  jobs.test.env.DATABASE_URL  →  DATABASE_URL  →  new
+  (1 left out by --only / --exclude)
+```
+
+`--section test` reads only that job's `env:`.
+
+---
+
+## .properties, INI and CSV
+
+A Java `.properties` file:
+
+```properties
+# Spring settings
+server.port=8080
+spring.datasource.url=jdbc:postgresql://localhost:5432/app
+spring.datasource.username=app
+spring.datasource.password=dev-only-pass
+```
+
+```bash
+evnx add import application.properties --dry-run
+```
+
+```text
+  source key                  →  NAME                        →  status
+  server.port                 →  SERVER_PORT                 →  new
+  spring.datasource.url       →  SPRING_DATASOURCE_URL       →  new
+  spring.datasource.username  →  SPRING_DATASOURCE_USERNAME  →  new
+  spring.datasource.password  →  SPRING_DATASOURCE_PASSWORD  →  new
+```
+
+An INI file. The section name becomes a prefix with one underscore:
+
+```ini
+[database]
+host = localhost
+port = 5432
+
+[mail]
+smtp-host = smtp.example.com
+smtp-password = dev-only-pass
+```
+
+```bash
+evnx add import settings.ini --dry-run
+```
+
+```text
+  source key          →  NAME                →  status
+  database.host       →  DATABASE_HOST       →  new
+  database.port       →  DATABASE_PORT       →  new
+  mail.smtp-host      →  MAIL_SMTP_HOST      →  new
+  mail.smtp-password  →  MAIL_SMTP_PASSWORD  →  new
+```
+
+With `--section mail` the prefix is dropped:
+
+```text
+  source key          →  NAME           →  status
+  mail.smtp-host      →  SMTP_HOST      →  new
+  mail.smtp-password  →  SMTP_PASSWORD  →  new
+```
+
+A CSV file has two columns, name and value, with a header row:
+
+```text
+name,value
+FEATURE_FLAGS,"beta,dark-mode"
+SUPPORT_EMAIL,help@example.com
+```
+
+```bash
+evnx add import vars.csv --dry-run
+```
+
+```text
+  source key     →  NAME           →  status
+  FEATURE_FLAGS  →  FEATURE_FLAGS  →  new
+  SUPPORT_EMAIL  →  SUPPORT_EMAIL  →  new
+```
+
+Standard input needs `--from`:
+
+```bash
+printf 'db.host=localhost\ndb.port=5432\n' | evnx add import - --from properties --dry-run
+```
+
+```text
+  source key  →  NAME     →  status
+  db.host  →  DB_HOST  →  new
+  db.port  →  DB_PORT  →  new
+```
+
+---
+
+## web.config
+
+The `<add key value>` entries of `<configuration><appSettings>` are read, in order:
+`<clear/>` and `<remove key>` are applied, and the last `<add>` of a key counts.
+Entities such as `&amp;` are decoded. `<connectionStrings>` is not read.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <appSettings>
+    <add key="Environment" value="Development" />
+    <add key="Smtp:Host" value="smtp.example.com" />
+    <add key="Smtp:Password" value="dev-only-pass" />
+    <add key="Legacy.Flag" value="on" />
+    <remove key="Legacy.Flag" />
+    <add key="ApiBase" value="https://api.example.com/?a=1&amp;b=2" />
+  </appSettings>
+  <connectionStrings>
+    <add name="Main" connectionString="Server=db;Password=dev-only-pass" />
+  </connectionStrings>
+</configuration>
+```
+
+```bash
+evnx add import web.config --dry-run
+```
+
+```text
+  source key                 →  NAME           →  status
+  appSettings.Environment    →  ENVIRONMENT    →  new
+  appSettings.Smtp:Host      →  SMTP_HOST      →  new
+  appSettings.Smtp:Password  →  SMTP_PASSWORD  →  new
+  appSettings.ApiBase        →  APIBASE        →  new
+```
+
+`Legacy.Flag` was removed, and the connection string is left alone. After `--yes`:
+
+```text
+# ── Imported from web.config ──
+ENVIRONMENT=Development
+SMTP_HOST=smtp.example.com
+SMTP_PASSWORD=dev-only-pass
+APIBASE=https://api.example.com/?a=1&b=2
+```
+
+A file named `.config` or `.xml` is read as a `web.config`; otherwise pass
+`--from web-config`.
+
+---
+
+## What is refused
+
+An import that cannot be made safely writes nothing and exits `2`. The dry run shows
+which key is the problem.
+
+**Two keys that make one name.** `DB_HOST` and `db-host` both become `DB_HOST`:
+
+```json
+{ "db": { "host": "a" }, "DB_HOST": "b", "db-host": "c" }
+```
+
+```text
+  source key  →  NAME      →  status
+  db.host  →  DB__HOST  →  new
+  DB_HOST  →  DB_HOST   →  refused: db-host also makes this name
+  db-host  →  DB_HOST   →  refused: DB_HOST also makes this name
+Error: nothing was imported:
+  DB_HOST is made by DB_HOST and db-host
+
+Narrow the import with --only, --exclude or --section, or rename the keys in the file.
+```
+
+**A list.** A variable holds one value:
+
+```yaml
+name: shop
+hosts:
+  - a.example.com
+  - b.example.com
+```
+
+```text
+  source key  →  NAME   →  status
+  name   →  NAME   →  new
+  hosts  →  HOSTS  →  refused: is a list: a variable holds one value
+Error: nothing was imported:
+  hosts is a list: a variable holds one value
+```
+
+`--exclude HOSTS` imports the rest. A `null`, a binary value and a name that cannot be
+made valid are refused the same way.
+
+---
+
+## A tracked source file
+
+If the file you import is committed, its secrets are already in the repository.
+evnx imports it and warns:
+
+```bash
+evnx add import appsettings.json --yes
+```
+
+```text
+  config    .evnx.toml
+! ./appsettings.json is tracked by git and holds 1 secret-looking value: they are already in the repository. Untrack it (`git rm --cached ./appsettings.json`) and rotate them.
+  ✓ added 2 variable(s) to [vars] in .evnx.toml
+✓ Added 2 variables to .env
+```
+
+Moving the values into `.env` does not take them out of git history. Rotate them where
+they are issued, untrack the file, and check what history holds with
+[Scan your git history and block pushes](/guides/use-cases/scan-history-and-block-pushes).
+
+---
+
+## In scripts
+
+`--json` (with `--dry-run` or `--yes`) prints one JSON document with the mapping and
+the names added, and never a value:
+
+```bash
+evnx add import appsettings.json --dry-run --json
+```
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.16.0", "schema_version": 1, … },
+  "added": ["CONNECTIONSTRINGS__MAIN", "STRIPE__SECRETKEY"],
+  "conflicts": [],
+  …
+  "mapping": [
+    { "name": "CONNECTIONSTRINGS__MAIN", "source": "ConnectionStrings.Main", "status": "new" },
+    { "name": "STRIPE__SECRETKEY", "source": "Stripe.SecretKey", "status": "new" }
+  ],
+  "skipped": [],
+  "template": ".env.example",
+  "written": false
+}
+```
+
+`--env-name staging` writes to `.env.staging` instead of `.env`, and `--no-template`
+writes only the env file.
+
+---
+
+## Related
+
+- **[evnx add](/guides/commands/add)**: every `add` subcommand and flag
+- **[Start here: pick your path](/guides/getting-started/start-here)**: what to do with
+  a project that has only a `.env` or config files
+- **[Convert basics](/guides/getting-started/convert-basic)**: the other direction,
+  from `.env` to JSON, YAML, a Kubernetes Secret and more
