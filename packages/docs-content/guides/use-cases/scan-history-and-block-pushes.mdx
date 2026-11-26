@@ -104,7 +104,7 @@ Paths after it limit the scan to files under them. Outside a git repository it e
 `2`:
 
 ```text
-Error: --history needs a git repository, and /tmp/claude-0/web-b/norepo is not in one
+Error: --history needs a git repository, and /home/you/notes is not in one
 
 No verdict: evnx did not scan anything. This is not a clean result.
 ```
@@ -294,7 +294,7 @@ evnx scan hook install --pre-push
 ```
 
 ```text
-✓ /tmp/claude-0/web-b/pp/app/.git/hooks/pre-push runs `evnx scan --history` on the commits of every push
+✓ /home/you/app/.git/hooks/pre-push runs `evnx scan --history` on the commits of every push
 ```
 
 The hook scans what each pushed ref adds beyond the remote, not the files on disk, so
@@ -326,7 +326,7 @@ Next steps:
 evnx scan: push blocked, secrets are in the commits being pushed (see above).
   Rotate the key, then rewrite the commits. To push anyway, with a reason that is logged:
   EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
-error: failed to push some refs to '/tmp/claude-0/web-b/pp/origin.git'
+error: failed to push some refs to '/home/you/origin.git'
 ```
 
 The push is also blocked when the scan cannot run. These commits were never pushed,
@@ -371,13 +371,13 @@ evnx scan hook status --pre-push
 ```
 
 ```text
-installed: /tmp/claude-0/web-b/pp/app/.git/hooks/pre-push
+installed: /home/you/app/.git/hooks/pre-push
 ```
 
 `evnx scan hook uninstall --pre-push` removes evnx's block and nothing else:
 
 ```text
-✓ removed the evnx block from /tmp/claude-0/web-b/pp/app/.git/hooks/pre-push
+✓ removed the evnx block from /home/you/app/.git/hooks/pre-push
 ```
 
 `.git/hooks/` is not committed, so each developer installs the hook once per clone.
@@ -407,7 +407,7 @@ pre-commit install --hook-type pre-push    # or: prek install --hook-type pre-pu
 `evnx scan hook status --pre-push` reads the file and says when that step is missing:
 
 ```text
-not installed: /tmp/claude-0/web-b/pc/.git/hooks/pre-push
+not installed: /home/you/app/.git/hooks/pre-push
 .pre-commit-config.yaml runs evnx-scan-push (rev v0.16.0), but no manager has installed the git hook: run `pre-commit install --hook-type pre-push` (or `prek install --hook-type pre-push`)
 ```
 
