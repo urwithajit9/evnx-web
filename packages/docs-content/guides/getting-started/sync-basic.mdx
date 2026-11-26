@@ -3,7 +3,7 @@ section: "getting-started"
 order: 5
 title: "Sync Basics — Keep .env Files in Sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-20"
+updatedAt: "2026-11-26"
 excerpt: "Learn how to use evnx sync to keep your .env and .env.example files synchronized. Perfect for beginners."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
@@ -153,7 +153,8 @@ Press Enter:
 
 Next steps:
   1. Review .env.example to ensure the placeholders are appropriate
-  2. Commit .env.example to Git (never commit .env)
+  2. Check it holds no real value: evnx scan .env.example
+  3. Commit .env.example to Git (never commit .env)
 ```
 
 The template keeps your variable names and replaces every value:
