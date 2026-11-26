@@ -1,0 +1,418 @@
+---
+title: "evnx 0.16.0: Scan Your History, Find Secrets in Encoded Values, Offboard in One Command"
+publishedAt: "2026-11-26"
+excerpt: "evnx 0.16.0 scans git history and blocks pushes that carry a secret, decodes base64, hex and percent-encoded values once, drops made-up GitHub tokens by their checksum, imports many variables from one config file, and removes a person from every vault in one command. It has breaking changes for scripts and CI: here is what they are and what to do."
+author: "ajit"
+category: "release"
+tags: ["release", "cli", "breaking", "scan", "git", "vault", "ci", "evnx"]
+featured: true
+draft: true
+relatedSlugs:
+  - "evnx-0-15-0-one-vocabulary-for-every-command"
+  - "scanning-history-like-github-does"
+  - "secrets-hiding-in-base64"
+---
+
+evnx 0.16.0 is about three things:
+
+- **Scanning what git remembers, not only what is on disk.** `scan --history` reads the files
+  every commit added, once each, and a new pre-push hook scans the commits you are about to push.
+- **Fewer wrong answers from the scanner.** Secrets inside base64, hex and percent-encoded values
+  are found; made-up GitHub tokens are not; and the confidence shown takes the line around a value
+  into account.
+- **Getting values in and people out.** `set --from-file`, `set --fill` and `add import` fill an env
+  file from what you already have, and `vault revoke --all-vaults` removes someone from every vault
+  you share, with a list of what to rotate.
+
+<Callout type="warning" title="A minor release with breaking changes">
+A "no" at a confirmation prompt now exits `4`, scan finds things it did not find before, and scan
+JSON is schema 3. Read [Breaking changes](#breaking-changes) before you update CI. The complete
+list, with what each script must change, is in
+[Upgrading to 0.16.0](/guides/reference/upgrading-to-0-16-0).
+</Callout>
+
+---
+
+## Highlights
+
+- **[`scan --history [RANGE]`](/guides/commands/scan)** scans the files git history added or
+  changed: `origin/main..HEAD`, `v0.15.0..`, everything reachable from `HEAD`, or `all` for every ref.
+  A secret that was committed and later deleted is still found.
+- **A bare `scan --history` builds on the last clean scan** of this clone, kept in
+  `.git/evnx/history.json`, and scans all history again only when the rules, the settings or the
+  baseline change.
+- **`scan hook install --pre-push`** blocks a push whose commits carry a secret. A bypass needs a
+  reason, and the reason is logged.
+- **Secrets inside encoded values.** A base64, hex or percent-encoded value of 16 to 4096
+  characters is decoded once and checked against the key-format rules.
+- **Made-up GitHub tokens are dropped.** A classic `ghp_` token carries a checksum; a value that
+  fails it was never issued by GitHub.
+- **`set NAME --from-file`** reads one value (a certificate, a key, a service-account JSON) from a
+  file or standard input. **`set --fill`** asks for every empty or placeholder value in `.env`.
+- **`add import FILE`** adds many variables from a `.properties`, INI, JSON, YAML, CSV or
+  `web.config` file.
+- **`vault revoke --all-vaults --user EMAIL`** removes someone from every vault where you can see
+  them, re-keys each one, and ends with a "rotate at the source" checklist of names.
+- **`config show`** prints every effective setting and where it came from.
+- **`cloud delete-version --latest`** and **`cloud watch --on-change -- COMMAND`**.
+- **The SBOM is attested per archive**, and YAML is read by a pure-Rust parser: the unsafe C port
+  is no longer in the build.
+
+---
+
+## Scan history, and block the push
+
+`scan` has always read the files on disk. A key that was committed last month and deleted last
+week is not on disk any more, and it is still in every clone. `--history` reads git instead:
+
+```console
+$ evnx scan --history
+
+  evnx scan  Checking history: HEAD
+
+  scanning README.md, config.env, config.env
+
+  ✗  Credentials in a connection string          high
+     config.env@077d1e9:1 (DATABASE_URL)  <48 chars>
+     !  a password in a postgres:// URL, not a placeholder
+
+  1 finding  ·  1 high
+…
+```
+
+The repository behind that run had three commits: one added `config.env` with a password in a URL,
+the next replaced it with `${DATABASE_URL}`. A plain `evnx scan` of the same folder reports
+nothing, because the file on disk is clean. The finding names the commit that first had the value,
+`config.env@077d1e9:1`.
+
+Each distinct file version is read once, however many commits carry it, and a second run reads
+only the commits made since the last clean one. The pre-push hook runs the same scan over what a
+push adds:
+
+```bash
+evnx scan hook install --pre-push
+```
+
+A push with a secret in it stops, and says how to go on if you must:
+
+```text
+…
+evnx scan: push blocked, secrets are in the commits being pushed (see above).
+  Rotate the key, then rewrite the commits. To push anyway, with a reason that is logged:
+  EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
+```
+
+How the blobs are read, what the state file holds and how the hook picks its ranges are in the
+companion post, *Scanning history like GitHub does*.
+{/* Link /blog/scanning-history-like-github-does here when that post is published. */}
+
+## A better scanner
+
+**Encoded values.** A Kubernetes Secret holds its values in base64, and so do many CI variables. A
+value that decodes to text is now checked against the format rules: known key prefixes,
+private-key headers and connection strings. The finding says so:
+
+```text
+…
+  ✗  Credentials in a connection string          high
+     app.env:1 (DB_B64)  <48 chars>
+     !  a password in a postgres:// URL, not a placeholder
+     ·  found inside a base64-encoded value, decoded once
+…
+```
+
+Decoded text is not judged by names or entropy. Why, and where the limits are, is in the companion
+post, *Secrets hiding in base64*.
+{/* Link /blog/secrets-hiding-in-base64 here when that post is published. */}
+
+**Made-up GitHub tokens.** A value that starts `ghp_`, `gho_`, `ghu_` or `ghr_` and has 36
+characters after it ends in a six-character checksum. A value whose checksum does not match is
+dropped like a placeholder, whatever the variable is called; one that matches is reported with high
+confidence. `ghs_` tokens and other lengths are not judged.
+
+**Confidence hints.** A finding on a line with an `Authorization` or `Bearer` header, an HTTP client
+call or a connection string is shown one level higher. One in a `test`, `tests`, `mock`, `spec` or
+`fixtures` folder is shown one level lower:
+
+```text
+…
+  ✗  Sensitive config key: API_SECRET            high, medium confidence
+     tests/fixture.env:1 (API_SECRET)  <19 chars>
+     ·  flagged by variable name — the value was not checked
+…
+```
+
+Nothing is dropped by a hint, and the exit code, the `--confidence` floor and the counts use the
+level before it. JSON lists the hints in `context` (`["test-path"]` here) and the earlier level in
+`confidence_before_context`.
+
+**Close reasons.** An allowed or baselined finding now carries the reason it was closed, and the
+summary counts them:
+
+```text
+…
+  ✓  No new secrets
+
+  1 file scanned
+  ·  1 allowed inline (1 used-in-tests) — not counted; -v lists them
+…
+```
+
+In JSON that is `reason_code` on the finding and `summary.by_reason`; SARIF lists such findings as
+suppressed results, with the reason as the justification.
+
+**More GitLab tokens.** New rules for feed (`glft-`), incoming email (`glimt-`), agent for
+Kubernetes (`glagent-`), workspace (`glwt-`), SCIM (`glsoat-`) and feature flags client (`glffct-`)
+tokens and OAuth application secrets (`gloas-`). The runner rule also finds `glrtr-`, and the
+personal access token rule the routable form.
+
+**Quieter in the right places.** Lockfiles (`package-lock.json`, `Cargo.lock`, `go.sum` and nine
+more) get the key-format rules only, so a package called `@radix-ui/react-password-toggle-field` is no
+longer a "sensitive key". evnx's own files in `.evnx/` (rule packs, the baseline, the backups
+index) are not scanned. And the history-rewrite advice (revoke, `git filter-repo`, force push) is
+given only for a real key match in a file a commit holds; a staged-only file gets "Unstage it"
+instead.
+
+## Getting values in
+
+`set --from-file` takes a value that does not fit on a command line:
+
+```console
+$ evnx set TLS_CA --from-file ca.pem --dry-run
+! ./ca.pem is inside this repository and git does not ignore it: the next `git add .` commits the value. Add it to .gitignore, or keep it outside the repository.
+Dry run: nothing was written.
+  ./.env: TLS_CA  added (value hidden; 71 bytes, 4 lines)
+```
+
+It is written double-quoted with `\n` escapes, so `evnx get TLS_CA` and every dotenv reader get the
+same four lines back. The first line of output is the warning for a source file that git would
+commit: keep the certificate outside the repository, or ignore it.
+
+`set --fill` walks the names in `.env` that are empty or hold a placeholder, in file order, and asks
+for each one. A secret-looking name is typed with no echo. Nothing is written until the last
+answer:
+
+```console
+$ evnx set --fill --dry-run
+Dry run: nothing was written.
+  ./.env: would ask for 2 values:
+    DATABASE_URL  (typed)
+    STRIPE_SECRET_KEY  (typed with no echo)
+```
+
+`init` and `validate` now name `evnx set --fill` as the next step when placeholders are left.
+
+`add import` reads many variables from a file you already have. Names become `UPPER_SNAKE`, nested
+keys are joined with `__`, and a dry run shows the mapping, never a value:
+
+```console
+$ evnx add import web.config --dry-run
+  source key                            →  NAME                      →  status
+  appSettings.Smtp.Host                 →  SMTP_HOST                 →  new
+  appSettings.FeatureFlags:NewCheckout  →  FEATUREFLAGS_NEWCHECKOUT  →  new
+  appSettings.ApiBaseUrl                →  APIBASEURL                →  new
+Dry run: nothing was written.
+  .env.example: would add 3 variables: APIBASEURL, FEATUREFLAGS_NEWCHECKOUT, SMTP_HOST
+  .env: would be created with 3 variables (with .gitignore first): APIBASEURL, FEATUREFLAGS_NEWCHECKOUT, SMTP_HOST
+…
+```
+
+For a `web.config` it reads `<appSettings>`, applies `<clear/>` and `<remove>` in order, and leaves
+`<connectionStrings>` alone. A YAML number is written as the file has it: `version: 1.10` becomes
+`APP__VERSION=1.10`, not `1.1`. See [`add`](/guides/commands/add) and [`set`](/guides/commands/set).
+
+## Taking access back
+
+When someone leaves, the question is "every vault they were in". It is now one command:
+
+```bash
+evnx vault revoke --all-vaults --user former.colleague@example.com --dry-run
+```
+
+It lists the vaults first, with the ones it has to skip and why (your role, theirs, or a member
+without a post-quantum key yet), asks once, reads the master password once, then revokes and
+re-keys each vault in turn. It stops at the first failure and says what was done. It exits `1`
+when a vault was skipped, because the person still has access there.
+
+Revoking cannot recall what the person could already read. So `vault revoke` now ends with a
+"rotate at the source" checklist: the names of the credentials in the vault, grouped by who issued
+them, with the page where each is replaced when evnx knows one (`STRIPE_SECRET_KEY` under Stripe).
+Names only, never values. These commands need a signed-in account, so there is no run here; the
+behaviour is from `evnx vault revoke --help` and the changelog. The guide is
+[Sharing a vault, and taking it back](/guides/use-cases/sharing-a-vault-with-a-teammate).
+
+## Smaller things
+
+- **`config show`** prints each setting with its source, a line of `.evnx.toml`, an environment
+  variable or a default. Credentials show only as `set (hidden)` or `not set`:
+
+  ```text
+    KEY                        VALUE                 SOURCE
+    …
+    scan.confidence            medium                .evnx.toml:2
+    scan.exclude               fixtures/**           .evnx.toml:3
+    …
+    token                      set (hidden)          env EVNX_TOKEN
+    …
+  ```
+
+- **`cloud delete-version --latest`** (admin) removes the latest version of a vault. The prompt
+  names the version that takes over and asks for the full vault name; `--yes` skips it in CI.
+- **`cloud watch --on-change -- COMMAND`** runs a command once for each change, directly and not
+  through a shell, with `EVNX_WATCH_VAULT` and `EVNX_WATCH_VERSION` set.
+- **An old evnx is told so.** A server that answers HTTP 426 Upgrade Required gets a message that
+  names the running version, the minimum when the server gives one, and `evnx update`; the exit
+  code is `11`.
+- `doctor` says "git would commit it" for an env file git does not ignore, suggests
+  `evnx init --yes` for a missing `.env`, and no longer asks for `git add` outside a repository.
+- `validate` no longer compares `.env.bak-*` backups as if they were environments.
+- `parse --show-values` implies `--values`. A template line with only a name says to write it as
+  `NAME=`.
+- `migrate -o FILE` says where the commands went and how to run them.
+
+**Under the hood**
+
+- YAML is read by `yaml-rust2` instead of the deprecated `serde_yaml`, so the unsafe C port
+  `unsafe-libyaml` is gone and parsing is pure Rust.
+- Every built-in scan rule declares keywords: one pass finds which rules a piece of text can match,
+  instead of running every expression everywhere. Findings do not change.
+- `url` is 2.5.9, for the RustSec advisory RUSTSEC-2026-0592; `indicatif` 0.18 drops the
+  unmaintained `number_prefix`.
+
+---
+
+## Breaking changes
+
+### A "no" exits 4
+
+`vault delete`, `vault leave`, `vault revoke`, `vault rekey`, `org seats`, `org remove`,
+`org delete`, `org leave`, `cloud push` (both its questions), `cloud delete-version`,
+`auth rotate-master-password`, `auth token revoke`, `auth sessions revoke`,
+`auth sessions revoke-others` and `auth devices disavow` printed "Cancelled" and exited `0` when you
+answered no. They now exit `4`, as `set`, `remove` and `platform` already did.
+
+**What to do:** a script that treated a "no" as success should accept `4`, or pass `--yes`.
+
+### Scan finds more, and drops some
+
+- **Encoded values are decoded.** A secret inside a base64, hex or percent-encoded value is now a
+  finding.
+- **More GitLab tokens** are found (the list is above).
+- **A classic GitHub token that fails its checksum is not a finding.** CI that gated on made-up
+  `ghp_` values in test files now passes.
+
+**What to do:** if CI that passed on 0.15.0 now fails, look at the new findings. Accept what is
+not a secret with `evnx:allow <rule-id> reason=…` on the line, or run
+`evnx scan --update-baseline` once and commit the baseline.
+
+### The confidence shown can move one level
+
+A finding near an `Authorization` header or a connection string is shown one level higher; one in a
+test folder one level lower. The exit code, `--confidence` and the summary counts use the level
+before the hint.
+
+**What to do:** nothing for the exit code. A script that reads `confidence` from JSON and wants the
+unadjusted level should read `confidence_before_context` when it is present.
+
+### Scan JSON is schema 3
+
+Findings gain `file`, `line` and, in YAML, JSON, TOML and notebooks, `key_path`. Allowed and
+baselined findings carry `reason_code`, and `summary.by_reason` counts them. A finding may carry
+`encoded`, `context`, `confidence_before_context`, and under `--history` `commit`, `blob`,
+`commit_time` and `git: "history"`. Each new field is left out when it does not apply; the `run`
+header is unchanged.
+
+**What to do:** a consumer that checks `schema_version == 2` should accept `3`. Use `file` and
+`line` instead of splitting `location`.
+
+### The YAML reader changed
+
+The rules are the same (YAML 1.2: `yes` and `no` are text, anchors are resolved, every `---`
+document is read). Only edge files differ: a tab right after `key:` is now a syntax error, a key
+that is a list or a mapping is refused, and a numeric or `~` key is named as written (`1.10`, `~`).
+
+**What to do:** nothing for ordinary YAML. A file that now fails to parse is scanned as text, and
+`add import` refuses it with a line and a column.
+
+---
+
+## Upgrade
+
+1. **Update** with the channel you used before, or:
+
+   ```bash
+   curl -fsSL https://evnx.dev/install.sh | bash
+   ```
+
+   `evnx update` prints the right command for your copy. In CI, pin `EVNX_VERSION=0.16.0` and move
+   the pin once the pipeline passes.
+
+2. **Check the exit codes your scripts test** for the cloud, vault, org and auth commands listed
+   above: a "no" is `4` now.
+3. **Run `evnx scan` once** and triage what is new: encoded values and the new GitLab rules.
+4. **Accept `schema_version: 3`** in anything that reads scan JSON.
+5. **Move pre-commit pins** to `rev: v0.16.0`. The `evnx-scan-push` hook now scans the commits being
+   pushed, not the files on disk.
+
+The full list is in [Upgrading to 0.16.0](/guides/reference/upgrading-to-0-16-0).
+
+---
+
+## Install
+
+```bash
+# Linux / macOS
+curl -fsSL https://evnx.dev/install.sh | bash
+
+# Homebrew (macOS, Linux)
+brew install urwithajit9/evnx/evnx
+
+# npm
+npm install -g @evnx/cli            # global
+npm install --save-dev @evnx/cli    # per project, then: npx evnx
+npx @evnx/cli --version             # no install
+
+# Python
+pipx install evnx
+
+# Cargo (compile from source)
+cargo install evnx --all-features
+```
+
+```powershell
+# Windows
+scoop bucket add evnx https://github.com/urwithajit9/scoop-evnx
+scoop install evnx
+
+winget install urwithajit9.evnx
+```
+
+`cargo install evnx` without `--all-features` builds a binary without `auth`, `vault` and `cloud`.
+Every other channel ships them.
+
+## Verify your download
+
+Every archive has a checksum and a signed build provenance attestation:
+
+```bash
+sha256sum -c evnx-*.tar.gz.sha256
+
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \
+  --signer-workflow urwithajit9/evnx/.github/workflows/release.yml \
+  --source-ref refs/tags/v0.16.0
+```
+
+New in 0.16.0, the SBOM is also attached to each archive as a signed CycloneDX attestation, so you
+can check the bill of materials for the exact file you downloaded:
+
+```bash
+gh attestation verify evnx-x86_64-unknown-linux-musl.tar.gz -R urwithajit9/evnx \
+  --predicate-type https://cyclonedx.org/bom
+```
+
+The longer walk-through is [How to verify an evnx download](/blog/how-to-verify-an-evnx-download),
+and what the SBOM is for is in [SBOM: what it is, why it matters, and how evnx ships one](/blog/sbom-what-it-is-and-how-evnx-ships-one).
+
+The full list of changes, with the reason for each, is in the
+[CHANGELOG](https://github.com/urwithajit9/evnx/blob/main/CHANGELOG.md). The release notes for each
+version are on the [changelog page](/changelog).
