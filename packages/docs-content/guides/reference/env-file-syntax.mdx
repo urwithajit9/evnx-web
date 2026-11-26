@@ -177,7 +177,7 @@ word. For a file both tools read, say which you mean:
 | `PASS=ab$cd` | `ab$cd` | `ab` |
 | `PASS=ab${cd:-}` | `ab` (the value of `cd`, or nothing) | `ab` |
 | `PASS='ab$cd'` | `ab$cd` (single quotes, no expansion) | `ab$cd` |
-| `PASS=ab${cd}` | an error that names the line | `ab` |
+| `PASS=ab${cd}` | an error that names the line | (not covered here) |
 
 Checked with evnx 0.16.0:
 
