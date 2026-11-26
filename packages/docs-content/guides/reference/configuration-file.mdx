@@ -3,7 +3,7 @@ title: ".evnx.toml Configuration"
 section: reference
 order: 1
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-26"
 excerpt: "Complete reference for .evnx.toml — the optional project-level policy file. Seven sections, how they combine with flags, and why a config that weakens scanning announces itself."
 difficulty: intermediate
 timeToComplete: "10 minutes"
@@ -449,14 +449,23 @@ A run that loads a config says so, on **stderr**:
 
 ```bash
 $ evnx scan .
-  config    .evnx.toml (scan.severity=high, scan.exclude=1 patterns)
+  config    .evnx.toml (scan.severity=high, scan.exclude=1 pattern)
 ```
 
 Run from a subdirectory, the path shows where the policy came from:
 
 ```bash
-$ cd packages/api && evnx validate
-  config    ../../.evnx.toml (scan.severity=high)
+$ cd packages/api && evnx scan
+  config    ../../.evnx.toml (scan.severity=high, scan.exclude=1 pattern)
+```
+
+**v0.16.0**: the `[scan]` settings are named only on `scan`'s line. Every other command
+prints the path alone, with any `vars.secret=false` note, and counts read "1 pattern",
+"1 built-in detector", "1 variable":
+
+```bash
+$ evnx validate
+  config    .evnx.toml
 ```
 
 **This is not decoration.** `[scan] severity` and `[scan] exclude` can *weaken* what the
@@ -472,6 +481,35 @@ settings that loosen a security default are listed in the parentheses; a config 
 The banner and all warnings go to stderr, never stdout, so
 `evnx convert --to json > out.json` stays machine-readable. `--quiet` suppresses both.
 </Callout>
+
+---
+
+## Every setting in force: `evnx config show`
+
+**v0.16.0.** [`evnx config show`](/guides/commands/config) prints every setting with the
+value in force and where it came from: the built-in `default`, a line of `.evnx.toml`, your
+user `config.toml`, an environment variable, a global flag or a scan policy. Unknown keys
+are listed as warnings; credentials show only as `set (hidden)` or `not set`.
+
+```text
+$ evnx config show
+  config    .evnx.toml
+  Files read
+    project   .evnx.toml
+    user      none
+    policy    none
+
+  KEY                        VALUE                          SOURCE
+  defaults.env_name          staging                        .evnx.toml:2
+  defaults.example           unset                          default
+  scan.severity              high                           .evnx.toml:5
+  scan.confidence            low                            default
+  scan.exclude               fixtures/**                    .evnx.toml:6
+  …
+```
+
+`--json` gives the same as `files`, `settings` (`key`, `value`, `source`) and `warnings`,
+for a script that needs to know which file set a value.
 
 ---
 
