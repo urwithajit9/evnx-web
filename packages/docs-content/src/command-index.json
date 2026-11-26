@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "evnx_version": "0.15.0",
+  "evnx_version": "0.16.0",
   "features": [
     "backup",
     "cloud",
@@ -38,6 +38,10 @@
         {
           "path": "add custom",
           "about": "Add your own variables: as arguments, or one prompt at a time"
+        },
+        {
+          "path": "add import",
+          "about": "Add many variables from one file: .env, .properties, INI, JSON, YAML, CSV or web.config"
         }
       ]
     },
@@ -112,7 +116,7 @@
         },
         {
           "path": "scan hook",
-          "about": "A git `pre-commit` hook that runs `evnx scan --staged`"
+          "about": "A git `pre-commit` hook that runs `evnx scan --staged`, or a `pre-push` hook that scans the commits being pushed"
         },
         {
           "path": "scan hook install",
@@ -527,6 +531,19 @@
       "subcommands": []
     },
     {
+      "name": "config",
+      "about": "Show every effective setting and where it came from",
+      "aliases": [],
+      "guide": null,
+      "guide_draft": false,
+      "subcommands": [
+        {
+          "path": "config show",
+          "about": "Print each setting with the value in force and its source"
+        }
+      ]
+    },
+    {
       "name": "undo",
       "about": "Put a file back as it was before evnx last changed it",
       "aliases": [],
@@ -577,7 +594,12 @@
       "subcommands": []
     }
   ],
-  "undocumented": [],
-  "unshown_subcommands": [],
+  "undocumented": [
+    "config"
+  ],
+  "unshown_subcommands": [
+    "add import",
+    "config show"
+  ],
   "orphan_guides": []
 }
