@@ -8,7 +8,8 @@ difficulty: beginner
 timeToComplete: "4 minutes"
 tags: ["set", "get", "env", "secrets", "ci-cd", "evnx"]
 commands: ["add", "doctor", "get", "history", "remove", "set", "undo"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
+updatedAt: "2026-11-26"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -16,7 +17,9 @@ draft: false
 
 `evnx set` changes one variable in an env file and leaves everything else as it was. The
 line keeps its position, the comment after it, an `export` prefix and its quoting. A name
-that is not in the file is added at the end. **v0.15.0+**.
+that is not in the file is added at the end. **v0.15.0+**. **v0.16.0** adds
+`--from-file` for a value in a file (a certificate, a key) and `--fill` to fill in every
+empty or placeholder value in one go.
 
 It is the small tool for the small job. You do not have to open the file, find the line and
 hope your editor keeps the rest, and a script does not have to `sed` a secret into place.
@@ -57,6 +60,8 @@ the write itself.
 
 ```bash
 evnx set [OPTIONS] <NAME[=VALUE]>
+evnx set [OPTIONS] <NAME> --from-file <PATH|->
+evnx set --fill [--only <GLOB>]
 ```
 
 ```bash
@@ -65,12 +70,20 @@ evnx set API_TOKEN                        # typed with no echo, or read from std
 printf %s "$TOKEN" | evnx set API_TOKEN   # from a pipe, nothing in shell history
 evnx set LOG_LEVEL=info --if-missing      # only when the name is not there yet
 evnx set PORT=8080 --dry-run              # show the change, write nothing
+evnx set TLS_KEY --from-file key.pem      # a certificate or key from a file; never printed
+evnx set --fill                           # ask for every empty or placeholder value
+evnx set --fill --dry-run                 # list the names it would ask for; no terminal needed
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `<NAME[=VALUE]>` | required | The variable, as `NAME` or `NAME=VALUE` |
+| `<NAME[=VALUE]>` | required, except with `--fill` | The variable, as `NAME` or `NAME=VALUE` |
 | `--if-missing` | off | Do nothing when the name is already in the file |
+| `--from-file <PATH\|->` | none | **v0.16.0** — read the one value from a file, or from stdin with `-`. See [A value from a file](#a-value-from-a-file) |
+| `--base64` | off | **v0.16.0** — with `--from-file`: store the file's bytes as base64 text (binary files) |
+| `--keep-trailing-newline` | off | **v0.16.0** — with `--from-file`: keep the file's final line break |
+| `--fill` | off | **v0.16.0** — ask for every name whose value is empty or a placeholder. See [Filling in placeholders](#filling-in-placeholders) |
+| `--only <GLOB>` | all names | **v0.16.0** — with `--fill`: only names matching these globs (comma-separated or repeated) |
 | `-n`, `--dry-run` | off | Show what would change and write nothing. Needs no terminal |
 | `-y`, `--yes` | off | Do not ask before replacing a value |
 | `--env <FILE>` | `.env` | The env file |
@@ -93,6 +106,7 @@ usage error, exit `2`.
 | `NAME=VALUE` | Uses it. If the name looks secret, it warns that your shell history now has it |
 | `NAME`, value piped on stdin | Reads one value from stdin. Nothing reaches shell history |
 | `NAME`, at a terminal | Asks. A name that looks secret (`API_TOKEN`, `DB_PASSWORD`) is asked for with **no echo** |
+| `NAME --from-file PATH` (or `-`) | **v0.16.0** — reads the value from the file or stdin; see [A value from a file](#a-value-from-a-file) |
 | `NAME`, no terminal and nothing on stdin | Exit `4` |
 
 ```bash
@@ -113,6 +127,111 @@ time:
   type it when asked, or pipe it in: printf %s "$VALUE" | evnx set NAME
 ✓ ./.env: DB_PASSWORD  added (value hidden)
 ```
+
+---
+
+## A value from a file
+
+**v0.16.0.** `--from-file PATH` reads one value from a file, and `--from-file -` from
+standard input: a certificate, a private key, a service-account JSON. Several lines are
+fine. The value is written on one line, double-quoted with `\n` escapes, so
+[`evnx get`](/guides/commands/get) and every dotenv reader get it back exactly. The value is
+never printed; the result gives its size:
+
+```text
+$ evnx set TLS_CERT --from-file cert.pem --dry-run
+Dry run: nothing was written.
+  ./.env: TLS_CERT  added (value hidden; 561 bytes, 10 lines)
+
+$ evnx set TLS_CERT --from-file cert.pem
+✓ ./.env: TLS_CERT  added (value hidden; 561 bytes, 10 lines)
+  backup ./.env.bak   undo: evnx undo .env
+
+$ evnx get TLS_CERT | head -2
+-----BEGIN CERTIFICATE-----
+MIIBczCCARmgAwIBAgIUXS0EHFTwz6fRcw6ikKVJI42VT5gwCgYIKoZIzj0EAwIw
+```
+
+- At most 64 KiB of text. One final line break is dropped; `--keep-trailing-newline` keeps it.
+- A binary file needs `--base64`; without it the command stops and says so (exit `2`):
+
+  ```text
+  Error: ./blob.bin is not UTF-8 text. For a binary file add --base64: the value is stored as base64 text, and decoded by whatever reads it.
+  ```
+
+- It takes exactly one `NAME` and no `NAME=value`:
+
+  ```text
+  Error: --from-file and NAME=value both give the value. Use one: evnx set NAME --from-file PATH
+  ```
+
+- A source file inside a git repository that git does not ignore gets a warning, because the
+  next `git add .` commits it:
+
+  ```text
+  ! ./key.pem is inside this repository and git does not ignore it: the next `git add .` commits the value. Add it to .gitignore, or keep it outside the repository.
+  ```
+
+[`evnx add custom NAME --from-file`](/guides/commands/add) does the same when you add a
+variable.
+
+---
+
+## Filling in placeholders
+
+**v0.16.0.** `evnx set --fill` asks, in file order, for every name in `.env` whose value is
+empty or a placeholder (`YOUR_KEY_HERE`, `changeme`: the rule
+[`validate`](/guides/commands/validate) uses). A secret-looking name is typed with no echo,
+and Enter skips one. `--only <glob>` narrows the names.
+
+`--dry-run` lists the names and needs no terminal:
+
+```text
+$ evnx set --fill --dry-run
+Dry run: nothing was written.
+  ./.env: would ask for 3 values:
+    DATABASE_URL  (typed)
+    STRIPE_SECRET_KEY  (typed with no echo)
+    LOG_LEVEL  (typed)
+  1 name in the template, not in the file: SENTRY_DSN   (evnx sync --direction reverse adds them)
+```
+
+A run, skipping `LOG_LEVEL` with Enter:
+
+```text
+$ evnx set --fill
+./.env: 3 values to fill in. Enter skips one; Ctrl-C writes nothing.
+Value for DATABASE_URL (1 of 3), Enter to skip: postgres://localhost/app
+Value for STRIPE_SECRET_KEY (2 of 3), Enter to skip: [hidden]
+Value for LOG_LEVEL (3 of 3), Enter to skip:
+✓ ./.env: filled DATABASE_URL, STRIPE_SECRET_KEY (values hidden)
+  backup ./.env.bak   undo: evnx undo .env
+  skipped: LOG_LEVEL
+  1 name in the template, not in the file: SENTRY_DSN   (evnx sync --direction reverse adds them)
+
+  evnx validate  Check environment configuration
+  …
+```
+
+- Nothing is written until the last answer, in one atomic write with one `.bak`. Ctrl-C
+  before that writes nothing.
+- When a template exists, `validate`'s summary follows (trimmed above).
+- A name only in the template is not added; the run lists those, and
+  `evnx sync --direction reverse` adds them.
+- It needs a terminal. With none, or under `--yes` or `--json`, it exits `4` and names the
+  commands that work without one:
+
+  ```text
+  Error: --fill asks for 3 values in ./.env, and there is no terminal to ask on.
+
+    See which:         evnx set --fill --dry-run
+    One at a time:     evnx set DATABASE_URL=VALUE   (or pipe it: printf %s "$V" | evnx set DATABASE_URL)
+
+  evnx stopped before making changes (exit 4). Run one of the commands above.
+  ```
+
+- `--fill --dry-run --json` carries `filled`, `skipped`, `remaining`, `would_ask` and
+  `missing`: names only, never a value.
 
 ---
 
@@ -144,6 +263,8 @@ Error: there is no terminal to confirm with.
 
 Add --yes (-y) to go ahead without being asked:
   evnx set PORT --yes
+
+No verdict: a question needed an answer and there is no terminal to ask on. This is not a clean result.
 ```
 
 A script that replaces values passes `--yes`. Adding a name that is not there does not ask.
@@ -157,7 +278,7 @@ name and what happened. A value is never in it:
 
 ```json
 {
-  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "run": { "tool": "evnx", "version": "0.16.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
   "dry_run": false,
   "file": "./.env",
   "name": "PORT",
@@ -188,7 +309,7 @@ name and what happened. A value is never in it:
 - **The file's own mode is kept.** `set` does not change it. If the file is readable by
   other users, evnx says so and names `evnx doctor --fix`.
 - **Other environments.** `evnx set PORT=8080 --env-name staging` edits `.env.staging`.
-- **One variable only.** To remove one, see [`evnx remove`](/guides/commands/remove); to add
+- **One variable at a time, or `--fill`.** To remove one, see [`evnx remove`](/guides/commands/remove); to add
   several with templates, see [`evnx add`](/guides/commands/add).
 
 ## See also
