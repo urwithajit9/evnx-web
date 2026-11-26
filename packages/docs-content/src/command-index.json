@@ -534,7 +534,7 @@
       "name": "config",
       "about": "Show every effective setting and where it came from",
       "aliases": [],
-      "guide": null,
+      "guide": "/guides/commands/config",
       "guide_draft": false,
       "subcommands": [
         {
@@ -594,12 +594,7 @@
       "subcommands": []
     }
   ],
-  "undocumented": [
-    "config"
-  ],
-  "unshown_subcommands": [
-    "add import",
-    "config show"
-  ],
+  "undocumented": [],
+  "unshown_subcommands": [],
   "orphan_guides": []
 }

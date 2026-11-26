@@ -1,0 +1,214 @@
+---
+title: "evnx config"
+section: commands
+order: 27
+publishedAt: "2026-11-26"
+excerpt: "Print every setting evnx uses here, with the value in force and where it came from: the built-in default, a line of .evnx.toml, your config.toml, an environment variable, a flag or a scan policy. Credentials show only as set or not set."
+difficulty: beginner
+timeToComplete: "3 minutes"
+tags: ["config", "evnx-toml", "settings", "debugging", "evnx"]
+commands: ["config show", "scan"]
+evnxVersion: "0.16.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+`evnx config show` prints every setting evnx would use in this folder, one row each: the
+key, the value in force and its source. The source is the built-in `default`, a line of
+`.evnx.toml`, your user `config.toml`, an environment variable, a global flag or a scan
+policy file. It answers "why does evnx do that here?" without reading three files.
+**v0.16.0+**.
+
+It only reads. Settings that belong to one run, such as `scan --severity`, are flags of
+that command and are not listed.
+
+## Quick example
+
+A project with this `.evnx.toml`, and a user `config.toml` that names a server:
+
+```toml
+# .evnx.toml
+[defaults]
+env_name = "staging"
+
+[scan]
+severity = "high"
+exclude = ["fixtures/**"]
+severty = "low"
+```
+
+```text
+$ evnx config show
+  config    .evnx.toml
+! .evnx.toml: unknown key `scan.severty` (ignored) — did you mean `severity`?
+  Files read
+    project   .evnx.toml
+    user      /home/you/.config/evnx/config.toml
+    policy    none
+
+  KEY                        VALUE                          SOURCE
+  defaults.env_name          staging                        .evnx.toml:2
+  defaults.example           unset                          default
+  scan.severity              high                           .evnx.toml:5
+  scan.confidence            low                            default
+  scan.exclude               fixtures/**                    .evnx.toml:6
+  scan.ignore_placeholders   false                          default
+  scan.disable               []                             default
+  scan.builtins              true                           default
+  scan.extensions            unset                          default
+  scan.max_file_size         1MB                            default
+  scan.patterns              0                              default
+  validate.strict            false                          default
+  validate.validate_formats  true                           default
+  validate.ignore            []                             default
+  validate.fail_on           error                          default
+  sync.naming_policy         warn                           default
+  diff.ignore_keys           []                             default
+  backup.keep                3                              default
+  cloud.vault                unset                          default
+  cloud.file                 unset                          default
+  vars                       0                              default
+  verbose                    false                          default
+  quiet                      false                          default
+  color                      off                            flag --no-color
+  output_json                false                          default
+  policy                     unset                          default
+  config_dir                 /home/you/.config/evnx         env EVNX_CONFIG_DIR
+  server                     https://api.example.test       /home/you/.config/evnx/config.toml:1
+  cloud.min_version          unset                          default
+  token                      not set                        default
+  password                   not set                        default
+  master_password            not set                        default
+  master_password_file       not set                        default
+  key_bundle                 not set                        default
+  key_bundle_file            not set                        default
+
+  Warnings
+    .evnx.toml: unknown key `scan.severty` (ignored) — did you mean `severity`?
+```
+
+(Run with `--no-color` and `EVNX_CONFIG_DIR` set, which is why `color` and `config_dir`
+name a flag and a variable; paths shortened.) The misspelt `severty` changes nothing, and
+the run says so. `evnx scan --strict` would stop on it.
+
+---
+
+## Command signature
+
+```bash
+evnx config show [OPTIONS]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--format <FORMAT>` | `pretty` | `pretty` or `json` |
+| `--json` | off | The same as `--format json` |
+| `-q`, `--quiet` | off | Print nothing on success; warnings and errors still print |
+| `-v`, `--verbose` | off | Verbose output |
+| `--no-color` | off | Plain output |
+
+The global flags (`--no-color`, `-q`, `-v`) are settings too, so they show up in the table
+with the source `flag …`.
+
+---
+
+## Where a value can come from
+
+| Source | Shown as |
+|---|---|
+| The built-in default | `default` |
+| The project's `.evnx.toml`, searched from this folder upward | `.evnx.toml:LINE` |
+| Your user `config.toml` in the config folder (see [where that is](/guides/commands/auth#where-credentials-live)) | its path and line |
+| An environment variable | `env NAME`, for example `env EVNX_TOKEN` |
+| A global flag | `flag --no-color` |
+| A scan policy (`EVNX_POLICY`; see [A policy the repository cannot lower](/guides/commands/scan#a-policy-the-repository-cannot-lower)) | `policy FILE` |
+
+With a policy in force, its keys get rows of their own:
+
+```text
+$ EVNX_POLICY=../policy.toml evnx config show
+  Files read
+    project   .evnx.toml
+    user      /home/you/.config/evnx/config.toml
+    policy    ../policy.toml
+  …
+  policy                     ../policy.toml                 env EVNX_POLICY
+  policy.required_rules      AWS Access Key                 policy ../policy.toml
+  policy.max_severity_floor  medium                         policy ../policy.toml
+  policy.allow_disable       true                           policy ../policy.toml
+  …
+```
+
+---
+
+## Credentials are never printed
+
+`token`, `password`, `master_password`, `master_password_file`, `key_bundle` and
+`key_bundle_file` show only `set (hidden)` or `not set`:
+
+```text
+$ EVNX_TOKEN=… evnx config show
+  …
+  token                      set (hidden)                   env EVNX_TOKEN
+```
+
+A server URL that does not validate is refused without being quoted, and the run exits
+`2`:
+
+```text
+$ EVNX_SERVER='http://evil.example.com/x' evnx config show
+Error: the server setting from env EVNX_SERVER is not a valid server URL (the value is not shown)
+No verdict: evnx stopped at the error above. This is not a clean result.
+```
+
+---
+
+## JSON
+
+`--json` prints one document with the usual `run` header, the `files` read, the `settings`
+and any `warnings` for unknown keys:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.16.0", "schema_version": 1, "ruleset": null, "features": ["backup", "cloud", "migrate", "net"] },
+  "files": [
+    { "role": "project", "path": ".evnx.toml" },
+    { "role": "user", "path": "/home/you/.config/evnx/config.toml" },
+    { "role": "policy", "path": null }
+  ],
+  "settings": [
+    { "key": "scan.severity", "value": "high", "source": ".evnx.toml:5" },
+    { "key": "server", "value": "https://api.example.test", "source": "/home/you/.config/evnx/config.toml:1" },
+    { "key": "token", "value": "set (hidden)", "source": "env EVNX_TOKEN" }
+  ],
+  "warnings": [
+    ".evnx.toml: unknown key `scan.severty` (ignored) — did you mean `severity`?"
+  ]
+}
+```
+
+(Trimmed to three settings; paths shortened.)
+
+```bash
+# Which file set the scan severity?
+evnx config show --json | jq -r '.settings[] | select(.key == "scan.severity") | .source'
+```
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Printed. Unknown keys are warnings and do not change it |
+| `2` | Could not run: a `.evnx.toml` that does not parse, a server URL that does not validate, a usage error |
+| `141` | Output closed early (broken pipe) |
+
+---
+
+## See also
+
+- [Configuration file](/guides/reference/configuration-file) - every key of `.evnx.toml`
+- [evnx scan](/guides/commands/scan#a-policy-the-repository-cannot-lower) - scan policies and `--strict`
+- [evnx auth](/guides/commands/auth#where-credentials-live) - the config folder and what is in it

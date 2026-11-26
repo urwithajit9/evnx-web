@@ -1,0 +1,322 @@
+---
+title: "Upgrading to 0.16.0"
+section: reference
+order: 1
+publishedAt: "2026-11-26"
+excerpt: "Everything in evnx 0.16.0 that can change what a script or a CI gate sees: a no at a prompt exits 4, scan JSON schema 3, more findings from GitLab rules and decoded values, made-up ghp_ tokens dropped, confidence hints, lockfiles, new next steps, the YAML reader and doctor's wording. With what to do for each."
+difficulty: intermediate
+timeToComplete: "8 minutes"
+tags: ["upgrade", "breaking", "scan", "ci", "exit-codes", "evnx"]
+commands: ["add import", "cloud", "cloud delete-version", "cloud watch", "config show", "doctor", "init", "scan", "scan hook install", "scan rules add", "set", "sync", "vault revoke"]
+evnxVersion: "0.16.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+evnx 0.16.0 is a minor release with breaking changes. No flag was renamed or removed this
+time. What can break a script is narrower:
+
+- **A "no" at a confirmation prompt exits `4`** on the cloud, vault, org and auth commands
+  that still exited `0`.
+- **`evnx scan` reports differently**: new findings (GitLab tokens, secrets inside encoded
+  values), fewer false ones (made-up GitHub tokens, names in lockfiles, evnx's own rule
+  packs), a confidence that can move one level, new next steps, and JSON `schema_version` 3.
+- **The YAML reader was replaced.** The rules are the same; a few edge files read
+  differently.
+- **`doctor` words one finding differently**, which matters to a script that matches its
+  text.
+
+If you only use evnx from a terminal, nothing here needs action. If a CI gate runs
+`evnx scan`, run it once on a branch with 0.16.0 before you move the pin, and work through
+[A scan gate](#a-scan-gate) below.
+
+<Callout type="warning" title="Pin the old version until the gate passes">
+A job that installs `latest` picks up 0.16.0 on the day it is released, and a scan that
+passed on 0.15.0 can fail on new findings. Pin the version while you check, for example
+`npm install -g @evnx/cli@0.15.0`, and move the pin once it passes.
+</Callout>
+
+---
+
+## A "no" at a prompt exits 4
+
+These commands printed "Cancelled" and exited `0` when you answered no:
+
+| Area | Commands |
+|---|---|
+| `vault` | `delete`, `leave`, `revoke`, `rekey` |
+| `org` | `seats`, `remove`, `delete`, `leave` |
+| `cloud` | `push` (the shrink question and the production-file question), `delete-version` |
+| `auth` | `rotate-master-password`, `token revoke`, `sessions revoke`, `sessions revoke-others`, `devices disavow` |
+
+They now exit `4` after the same message, like `set`, `remove` and `platform`, and as they
+already did when a confirmation was needed with no terminal.
+
+**What to do:** a script that treated a "no" as success should accept `4`, or pass `--yes`
+when it means yes.
+
+---
+
+## A scan gate
+
+Every item in this section can change the findings, the counts or the exit code of
+`evnx scan`. The usual fix is the same: run the scan on a branch, then either fix what it
+finds or accept what is not a secret with an `evnx:allow <rule> reason=…` comment or
+`evnx scan --update-baseline --reason …`. See
+[A baseline for findings you already have](/guides/commands/scan#a-baseline-for-findings-you-already-have).
+
+### More GitLab tokens are found
+
+New rules for feed tokens (`glft-`), incoming email tokens (`glimt-`), agent for Kubernetes
+tokens (`glagent-`), workspace tokens (`glwt-`, GitLab 18.2 and later), SCIM tokens
+(`glsoat-`), feature flags client tokens (`glffct-`) and OAuth application secrets
+(`gloas-`). The runner rule also finds `glrtr-` tokens, and the personal access token rule
+the routable form that ends in `.` and nine characters. There are now 70 built-in rules.
+
+**What to do:** CI that passed may now fail. Rotate a real token; baseline or allow what is
+not a secret.
+
+### Secrets inside encoded values are found
+
+A value of 16 to 4096 characters that is base64, hex or percent-encoded text is decoded
+once, and the text is checked against the format rules (known prefixes, private-key
+headers, connection strings), not against names or entropy. Binary results such as images
+and hashes are dropped. Such a finding says so:
+
+```text
+  ✗  Credentials in a connection string          high
+     ./encoded.env:1 (BLOB)  <51 chars>
+     !  a password in a postgres:// URL, not a placeholder
+     ·  found inside a base64-encoded value, decoded once
+```
+
+and carries `"encoded": "base64"` (or `hex`, `url`) in JSON.
+
+**What to do:** CI that passed may now fail. Baseline what is not a secret.
+
+### Made-up GitHub tokens are no longer findings
+
+A value that starts `ghp_`, `gho_`, `ghu_` or `ghr_` and has 36 characters after it carries
+a checksum in its last six. A value whose checksum does not match was never issued by
+GitHub, so it is dropped like a placeholder, whatever the variable is called. A value that
+matches is reported with high confidence. `ghs_` tokens and other lengths are not judged.
+
+**What to do:** nothing. CI that failed on made-up `ghp_` values in test files now passes,
+and real tokens are unaffected. Baseline entries and `evnx:allow` comments for such values
+are no longer needed; a test that relied on a random `ghp_` value to prove the scan works
+needs a checksum-valid one, or another rule.
+
+### The confidence shown can move one level
+
+A finding on a line with an `Authorization` or `Bearer` header, an HTTP client call or a
+connection string is shown one level higher; one in a file under a `test`, `tests`, `mock`,
+`spec` or `fixtures` folder one level lower (name, entropy and medium findings only).
+
+```text
+  ✗  Sensitive config key: API_TOKEN             high, medium confidence
+     ./tests/conftest.py:1 (API_TOKEN)  <32 chars>
+```
+
+Nothing is dropped. The exit code, the `--confidence` floor and the summary counts use the
+level before the hint. Pretty, JSON and SARIF output show the moved level.
+
+**What to do:** a script that reads `confidence` from JSON or SARIF to decide something
+should read `confidence_before_context` when it is there, or use `--confidence` and the
+exit code, which do not move. See [Context hints](/guides/commands/scan#context-hints).
+
+### Lockfiles get the key-format rules only
+
+In `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
+`Cargo.lock`, `poetry.lock`, `uv.lock`, `Pipfile.lock`, `composer.lock`, `Gemfile.lock` and
+`go.sum`, in any folder, a key is no longer judged by its name nor a value by its entropy.
+A package such as `@radix-ui/react-password-toggle-field` was reported as a high
+"Sensitive config key". Every format rule still runs.
+
+**What to do:** nothing, or remove the baseline entries and `[scan] exclude` lines you
+added for lockfiles. `--update-baseline` rewrites the baseline without them.
+
+### evnx's own files in `.evnx/` are not scanned
+
+A rule pack added with `evnx scan rules add` holds example keys, so a scan of the project
+reported them and exited `1`. A walk, `--staged` and `--history` now leave out the rule files
+in `.evnx/rules/`, `.evnx/rules.lock`, `.evnx/baseline.json`, `.evnx/backups.json` and
+`.evnx/platform/vercel.json`, and say so once:
+
+```text
+  · evnx's own files in .evnx/ are not scanned (name one to scan it)
+```
+
+Packs are still checked against their sha256 in `rules.lock`.
+
+**What to do:** nothing; an exclude you added for `.evnx/rules` can go.
+
+### Different next steps
+
+`scan` now advises a history rewrite (revoke, `git filter-repo`, force push) only for a
+finding in a file that a commit holds, or outside a repository, that a format rule matched
+by its value with high confidence. A committed finding flagged by a variable name, by
+entropy or with lower confidence gets
+
+```text
+  Check ./config/settings.yml and ./tests/conftest.py: it is committed, but only a variable name, an entropy guess or a lower-confidence match flagged it, so it may not be a secret
+```
+
+and a file that is staged but in no commit gets
+
+```text
+  Unstage ./staged.toml: git restore --staged staged.toml (git rm --cached staged.toml before the first commit). No commit holds them, so there is no history to rewrite
+```
+
+The `scanning` line lists the files git ignores apart:
+`scanning ./.gitignore, ./config/settings.yml … · git-ignored (summarised only): ./.env`.
+
+**What to do:** a script that parsed the next steps or the `scanning` line must read the new
+text, or better, read `--format json`.
+
+### Scan JSON is `schema_version` 3
+
+The `run` header is unchanged. In the document:
+
+| New field | Where | Meaning |
+|---|---|---|
+| `file`, `line` | every finding | The file, and the line as a number or `null`, beside `location` |
+| `key_path` | YAML, JSON, TOML and notebook findings | `app.db.password` |
+| `encoded` | a finding in a decoded value | `base64`, `hex` or `url` |
+| `context`, `confidence_before_context` | a finding whose confidence moved | The hints, and the level before them |
+| `commit`, `blob`, `commit_time` | under `--history` | Where the file version came from; `git` is `"history"` |
+| `reason_code` | allowed and baseline findings | `used-in-tests`, `false-positive` or `fix-later`; `summary.by_reason` counts them |
+| `effective_config.rules_digest` | the document | A hash of the rule set in force |
+
+Each new field is left out when it does not apply. The SARIF output now lists allowed and
+baseline findings as suppressed results, with the reason as the justification.
+
+**What to do:** a consumer that checks `schema_version == 2` must accept `3`. One that split
+`location` to get the file and line can read `file` and `line`. GitHub code scanning shows
+allowed and baseline findings as suppressed rather than leaving them out.
+
+### The baseline records the rule set
+
+The baseline gains `rules_digest`, a hash of the rule set it was written under. It stays
+`schema_version` 1, and an older evnx ignores the field. A bare `scan --history` uses it to
+tell when it must scan all history again.
+
+---
+
+## The YAML reader
+
+evnx reads YAML (scan of `.yml` and `.yaml`, `init`'s compose detection, `add import`) with
+`yaml-rust2` instead of the deprecated `serde_yaml`. The rules are the same: YAML 1.2, so
+`yes`, `no`, `on` and `off` are text and are scanned; `true`, `false`, `null` and numbers
+are not; anchors are resolved; the merge key `<<` is not applied; every `---` document is
+read; a key given twice makes scan read the file as text.
+
+What differs, for edge files only:
+
+- **A tab right after `key:`** before a plain value is a syntax error, so scan reads that file
+  as text and `add import` refuses it:
+
+  ```text
+  $ evnx add import t2.yaml --dry-run
+  Error: not valid YAML (line 1, column 11): a syntax error
+  ```
+
+- **A key that is a list or a mapping** is refused the same way.
+- **An integer too large for 128 bits** no longer sends the file to the text scan.
+- **A numeric or `~` key** is named as written in a finding's location (`1.10`, `~`, not
+  `1.1`, `null`):
+
+  ```text
+     num.yaml:2 (versions.1.10)  AKIA…JA
+  ```
+
+A YAML error names a line, a column and a fixed reason, never a value.
+
+**What to do:** replace the tab with spaces. A baseline entry for a finding under a numeric
+or `~` key may need `--update-baseline` once, because its location changed.
+
+---
+
+## `doctor`'s wording
+
+For an env file git does not ignore, `doctor` says "git would commit it" instead of "NOT in
+.gitignore". The answer is git's own, so a global excludes file or `.git/info/exclude`
+counts:
+
+```text
+     .env.production is not ignored: git would commit it (security risk)
+```
+
+The same text is in `doctor --format json` `details`.
+
+Also changed:
+
+- Outside a git repository the template check reports, as information,
+  `Not a git repository: whether .env.example is tracked was not checked`, instead of
+  "run: git add .env.example".
+- A missing `.env` beside a template suggests `evnx init --yes` (or
+  `evnx init --yes --dir DIR`) instead of `evnx sync --direction reverse`.
+- When a backup such as `.env.bak-20261120` is not ignored, `doctor --fix` adds `.env*.bak*`
+  to evnx's block in `.gitignore` and makes the copies owner-only.
+
+**What to do:** a script that matched `NOT in .gitignore` in the output or in `details` must
+match `is not ignored: git would commit it`, or better, read each check's `severity` and
+`name` from `--format json`. See [`evnx doctor`](/guides/commands/doctor).
+
+---
+
+## Smaller changes a script may notice
+
+- **Refusals that name the next command** end with "evnx stopped before making changes
+  (exit 2). Run one of the commands above." instead of "No verdict: evnx stopped at the
+  error above. This is not a clean result.": `scan hook install` where pre-commit or prek
+  manages the hook, `spec init` when `.evnx.toml` already has `[vars]`, `parse --values` on a
+  terminal, and `migrate --to github` with names GitHub reserves. The exit code (`2`), the
+  message and JSON output are unchanged.
+- **The `config` line names `[scan]` settings only for `scan`.** Other commands print
+  `config .evnx.toml` (with any `vars.secret=false` note). Counts read "1 pattern",
+  "1 built-in detector", "1 variable".
+- **`parse --show-values` implies `--values`.** On its own it was a usage error.
+- **`validate` leaves backups out** of the comparison between env files, of `remove --all`
+  and of the environments `--env-name` lists, and names them once instead. A warning such as
+  "B is in .env but not in .env.bak-20261120" is gone.
+- **`validate` and `init` name `evnx set --fill`** for placeholder values in their next steps.
+- **A template line with only a name** (`TEST_VAR`) is still a parse error, and the error now
+  adds "To list a name with no value, write it as `TEST_VAR=`".
+- **The `evnx-scan-push` pre-commit hook** scans the commits being pushed
+  (`evnx scan --history`) instead of the files on disk with SARIF output.
+- **`migrate -o FILE`** prints "Commands written to FILE: review them, then run
+  `sh FILE`" instead of an empty "Run these commands:" heading.
+- **A server that refuses an old evnx** (HTTP 426) is explained, and the command exits `11`.
+  See [`evnx cloud`](/guides/commands/cloud#a-server-that-refuses-an-old-evnx--v0160).
+
+---
+
+## What is new
+
+- [`evnx scan --history`](/guides/commands/scan#scanning-git-history) scans what git history
+  added or changed; a bare `--history` reruns only the commits since the last clean scan.
+  `evnx scan hook install --pre-push` blocks a push with secrets in it, with a logged bypass.
+  `scan hook status` reads `.pre-commit-config.yaml`.
+- [`evnx add import`](/guides/commands/add#many-variables-from-one-file-add-import) adds many
+  variables from a `.env`, `.properties`, INI, JSON, YAML, CSV or `web.config` file.
+- [`evnx set --fill`](/guides/commands/set#filling-in-placeholders) asks for every empty or
+  placeholder value; `set` and `add custom` take `--from-file` for a certificate or key.
+- [`evnx config show`](/guides/commands/config) prints every effective setting and where it
+  came from.
+- [`evnx vault revoke --all-vaults`](/guides/commands/vault#every-vault-at-once---all-vaults--v0160)
+  removes someone from every vault you can see, and `revoke` ends with a checklist of what to
+  rotate at the source.
+- [`evnx cloud delete-version --latest`](/guides/commands/cloud#deleting-the-latest-version---latest--v0160)
+  and `evnx cloud watch --on-change -- <COMMAND>`.
+- The SBOM is attached to each release archive as a signed CycloneDX attestation:
+  `gh attestation verify <archive> -R urwithajit9/evnx --predicate-type https://cyclonedx.org/bom`.
+
+---
+
+## See also
+
+- [Upgrading to 0.15.0](/guides/reference/upgrading-to-0-15-0): the release that renamed flags
+- [Managing your evnx install](/guides/reference/managing-your-evnx-install): pin a version, upgrade, roll back
+- [How evnx scan works](/guides/reference/how-evnx-scan-works)
+- [Exit codes in 0.15.0](/guides/reference/upgrading-to-0-15-0#exit-codes-and---yes): the one table every command shares
