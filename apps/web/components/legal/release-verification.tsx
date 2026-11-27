@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CodeFrame } from "@evnx/mdx/code-frame";
 
 /**
@@ -89,12 +90,12 @@ export function ReleaseVerification() {
         </p>
         <p className="text-sm text-text-muted leading-relaxed mt-2">
           What an SBOM is and how evnx builds and signs one:{" "}
-          <a
+          <Link
             className="text-brand-400 hover:text-brand-300"
             href="/blog/sbom-what-it-is-and-how-evnx-ships-one"
           >
             SBOM: what it is and how evnx ships one
-          </a>
+          </Link>
           .
         </p>
       </div>
