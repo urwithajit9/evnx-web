@@ -1,48 +1,36 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { originStory } from "@evnx/content";
-import type { TimelineEntry } from "@evnx/content";
-import { SectionHeading } from "./section-shell";
 
-const DOT: Record<TimelineEntry["level"], string> = {
-  neutral: "bg-border-default",
-  warn: "bg-warning",
-  bad: "bg-danger",
-  good: "bg-success",
-};
-
+/**
+ * The origin story as a two-line band (D-V32, 2026-11-27): the opening line
+ * and the lesson, linking to the post that tells the whole night. It was a
+ * full incident log beside a resolution card, about one laptop screen.
+ *
+ * The incident log's figures stay in @evnx/content (`originStory.entries`),
+ * with their warning that they are the author's own and must stay exact.
+ */
 export function OriginStory() {
   return (
-    <>
-      <SectionHeading eyebrow={originStory.eyebrow} heading={originStory.heading} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-        <div className="rounded-xl border border-border-muted bg-terminal-bg overflow-hidden">
-          <div className="px-4 py-2.5 bg-bg-overlay border-b border-border-subtle">
-            <span className="font-mono text-xs text-text-muted">incident log</span>
-          </div>
-          <ol className="p-5 font-mono text-xs space-y-3">
-            {originStory.entries.map((e) => (
-              <li key={e.time} className="flex gap-3">
-                <span className="text-text-muted flex-shrink-0 tabular-nums">{e.time}</span>
-                <span
-                  className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${DOT[e.level]}`}
-                  aria-hidden
-                />
-                <span className="flex-1">
-                  <span className="block text-terminal-text">{e.text}</span>
-                  {e.detail && <span className="block text-text-muted mt-0.5">{e.detail}</span>}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        <div className="p-6 rounded-xl border-l-2 border-brand-500 bg-bg-surface">
-          <h3 className="font-serif text-xl font-bold mb-3 leading-snug">
-            {originStory.resolution.heading}
-          </h3>
-          <p className="text-text-secondary leading-relaxed">{originStory.resolution.body}</p>
-        </div>
-      </div>
-    </>
+    <figure className="max-w-3xl border-l-2 border-brand-500 pl-6">
+      <p className="font-mono text-xs text-text-muted uppercase tracking-widest mb-3">
+        {originStory.eyebrow}
+      </p>
+      <blockquote>
+        <p className="font-serif text-2xl md:text-3xl font-bold leading-snug mb-3">
+          {originStory.heading}
+        </p>
+        <p className="text-lg text-text-secondary leading-relaxed">{originStory.resolution.heading}</p>
+      </blockquote>
+      <figcaption className="mt-5">
+        <Link
+          href="/blog/why-i-built-evnx"
+          className="inline-flex items-center gap-1 text-brand-400 hover:underline underline-offset-4"
+        >
+          Read the story: an AWS key, three regions and a call from the lead
+          <ArrowRight className="w-4 h-4" aria-hidden />
+        </Link>
+      </figcaption>
+    </figure>
   );
 }
