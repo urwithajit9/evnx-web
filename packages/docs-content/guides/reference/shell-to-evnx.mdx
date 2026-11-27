@@ -3,13 +3,13 @@ section: "reference"
 order: 19
 title: "From shell to evnx: the commands that replace cat, sed, cp and source"
 publishedAt: "2026-11-20"
-updatedAt: "2026-11-20"
+updatedAt: "2026-11-27"
 excerpt: "The shell lines people use on .env files, each next to the evnx command that does the same job, and what evnx adds: file modes, .gitignore, hidden input, the template kept in step."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["reference", "shell", "set", "get", "init", "doctor", "run", "cheat-sheet"]
 commands: ["add service", "cloud pull", "cloud push", "cloud run", "convert", "diff", "doctor", "get", "init", "remove", "restore", "run", "scan", "scan hook install", "scan hook status", "set", "sync", "validate"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -34,6 +34,7 @@ the evnx version adds. Where the shell is just as good, it says that too.
 | Variables for a service | `cat >> .env.example << 'EOF'`<br/>`REDIS_URL=…` then the same for `.env` | `evnx add service redis --yes` | Both files, under one heading, with no name added twice |
 | Your own variables | `echo 'API_URL=…' >> .env`<br/>`echo 'API_URL=' >> .env.example` | `evnx add custom API_URL=https://api.example.com --yes` | The value goes into `.env` only; the template gets a placeholder |
 | A stack | copy a README's list by hand | `evnx init --with nextjs,postgresql,stripe --yes` | 56 components; `evnx init --list-components` shows them |
+| Settings in a config file | retype each key as `NAME=value` | `evnx add import config.json` | JSON, YAML, `.properties`, INI, CSV and `web.config`; `--dry-run` shows each key's new name first. See [Import config into .env](/guides/use-cases/import-config-into-env) |
 
 <CodeTabs defaultTab="With evnx">
   <Tab label="Without evnx">
@@ -62,6 +63,8 @@ evnx validate --fix           # fills the app's own secrets, lists what you must
 | Add a value | `echo 'PORT=8080' >> .env` | `evnx set PORT=8080` | No second `PORT=` line if one exists (dotenv uses the last, so a duplicate silently wins) |
 | Only if not set | `grep -q '^LOG_LEVEL=' .env \|\| echo 'LOG_LEVEL=info' >> .env` | `evnx set LOG_LEVEL=info --if-missing` | One command, exit `0` either way |
 | A secret | `read -rs T; echo "API_TOKEN=$T" >> .env` | `evnx set API_TOKEN` | Asked with no echo at a terminal; from a pipe in a script. Never in history or `ps` |
+| Fill in every placeholder | open `.env` and look for `YOUR_KEY_HERE` | `evnx set --fill` | Asks for each empty or placeholder value in file order, a secret with no echo; Enter skips one, and it writes once at the end. `--dry-run` lists the names |
+| A key or certificate | `echo "TLS_KEY=\"$(cat key.pem)\"" >> .env` | `evnx set TLS_KEY --from-file key.pem` | Several lines become one quoted value, and the value is never printed |
 | Read one value | `grep '^PORT=' .env \| cut -d= -f2-` | `evnx get PORT` | Handles quotes and `export`. A secret prints only with `--reveal` |
 | Is it set? | `grep -q '^DATABASE_URL=' .env` | `evnx get --exists DATABASE_URL` | Exit `0` or `1`, nothing printed |
 | Remove a name everywhere | `sed -i '/^OLD_KEY=/d' .env .env.example` | `evnx remove OLD_KEY --all` | Also every `.env.*` file and the `.evnx.toml` contract; a backup is kept |
@@ -76,8 +79,9 @@ More on why `sed -i` and `echo >>` go wrong: [Change one variable without openin
 file](/blog/change-one-variable-evnx-set-and-get).
 
 <Callout type="info" title="An editor is still fine">
-For filling in ten values at once, open `.env` in your editor. `evnx set` is for one
-change, in a script, or for a secret you do not want on screen.
+For filling in ten values at once, `evnx set --fill` asks for each in turn, or open
+`.env` in your editor. `evnx set NAME` is for one change, in a script, or for a secret
+you do not want on screen.
 </Callout>
 
 ---

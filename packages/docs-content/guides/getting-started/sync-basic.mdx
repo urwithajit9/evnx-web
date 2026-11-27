@@ -220,7 +220,8 @@ evnx set STRIPE_SECRET_KEY    # asks for the key, and does not echo it
 ```
 
 A secret typed after `=` would stay in your shell history, so leave it off and let
-`set` ask. For many values at once, open `.env` in your editor instead.
+`set` ask. For many values at once, `evnx set --fill` (**v0.16.0+**) asks for each empty
+or placeholder value in turn, or open `.env` in your editor.
 
 **Step 4: validate again**
 

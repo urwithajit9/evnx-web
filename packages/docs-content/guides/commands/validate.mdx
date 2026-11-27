@@ -429,7 +429,7 @@ evnx validate --fix --dry-run
 
 Would fix (3):
   • PORT: (new) → 8080
-  • SECRET_KEY: "changeme" → (a new random secret)
+  • SECRET_KEY: would generate (64 chars) (was "changeme")
   • DEBUG: "False" → false
 
 Would need your input (1):
@@ -442,14 +442,15 @@ Would need your input (1):
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Fill in the placeholder values: evnx set --fill
+  3. Run with --fix to auto-correct common issues
+  4. Use --ignore issue_type to suppress specific warnings
 Validation failed: 3 errors
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
 The report and the exit code are those of the file as it stands. A secret `--fix` would
-generate is shown as `(a new random secret)`, because the real run makes a new one.
+generate is shown as `would generate (64 chars)`, because the real run makes a new one.
 
 ### The real run
 
@@ -1009,7 +1010,7 @@ $ evnx validate --fix --format json | jq '{fixed, needs_input, summary}'
 | Field | Meaning |
 |-------|---------|
 | `status` | `failed` when there is an error, otherwise `passed`. ⚠️ It does not follow `--fail-on` or `--exit-zero`: a run that exits `1` on warnings still says `passed`. Read the exit code |
-| `dry_run` | **v0.10.8+** — `true` under `--fix --dry-run`. `fixed` and `needs_input` then hold what *would* change, and a generated secret reads `(a new random secret)` |
+| `dry_run` | **v0.10.8+** — `true` under `--fix --dry-run`. `fixed` and `needs_input` then hold what *would* change, and a generated secret has only its length, `new_length` |
 | `required_present` / `required_total` | Declared variables that are present, out of all declared. **v0.10.8+**: before, it was `min(variables in .env, variables in the template)`, so a file of extras alone read as complete |
 | `issues[]` | One entry per finding. `variable` is `""` for a file-level finding (`env_not_ignored`, `env_tracked`). `suggestion` can be `null` |
 | `fixed[]` | Repairs made. `old_value` is `null` for an added variable. `old_value_withheld` is `true` when a real secret was replaced, and `old_value` is then `null`; the old value is in the backup |

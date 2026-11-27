@@ -191,7 +191,8 @@ evnx set STRIPE_SECRET_KEY        # paste each value when asked; nothing is echo
 evnx set STRIPE_WEBHOOK_SECRET
 ```
 
-One `set` per name that validate listed. Opening `.env` in an editor works too.
+One `set` per name that validate listed, or `evnx set --fill` (**v0.16.0+**), which asks for
+each empty or placeholder value in turn. Opening `.env` in an editor works too.
 
 **Step 5: Bob validates again**
 

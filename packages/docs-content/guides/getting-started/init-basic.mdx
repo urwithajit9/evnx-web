@@ -22,7 +22,7 @@ In this tutorial, you'll learn how to use `evnx init` to:
 - Get the `.gitignore` rules that keep `.env` out of git
 - Set up your project in under 2 minutes
 
-Every terminal block on this page is real output from evnx 0.10.1 (colours removed).
+Every terminal block on this page is real output (colours removed). The `evnx init` runs and their next steps are from evnx 0.16.0; the other blocks are from 0.10.1.
 </Callout>
 
 ---
@@ -264,8 +264,9 @@ evnx set DATABASE_URL       # asks for the value, and does not echo it
 evnx set NEXTAUTH_SECRET    # or let `evnx validate --fix` generate it
 ```
 
-Each `set` changes one line in place and keeps a backup. For many values at once,
-open `.env` in your editor instead.
+Each `set` changes one line in place and keeps a backup. For every placeholder at once,
+`evnx set --fill` (**v0.16.0+**) asks for each one in turn, the step `init` named; an
+editor works too.
 
 **Step 7: Validate your setup**
 
