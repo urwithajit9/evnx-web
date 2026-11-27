@@ -3,7 +3,7 @@ title: "Scan your git history and block pushes"
 section: "use-cases"
 order: 8
 publishedAt: "2026-11-26"
-updatedAt: "2026-11-26"
+updatedAt: "2026-11-27"
 excerpt: "Find secrets that were committed and later removed with evnx scan --history, rerun it cheaply on each clone, and stop a push that carries a key with a pre-push hook."
 difficulty: intermediate
 timeToComplete: "15 minutes"
@@ -206,19 +206,21 @@ printf 'deploy:\n  bootstrap: %s\n' \
 
 ```text
   ✗  AWS Access Key                              critical
-     values.yaml@3296a3b:2  AKIA…48
+     values.yaml@dbb0e4c:2 (deploy.bootstrap)  AKIA…99
      !  matches a live key format, not a placeholder
      ·  found inside a base64-encoded value, decoded once
      →  revoke at https://console.aws.amazon.com/iam
 ```
 
-In JSON the finding carries `encoded`, and under `--history` the commit:
+The location names the key that holds the blob, `deploy.bootstrap`. In JSON the finding
+carries it as `key_path`, with `encoded`, and under `--history` the commit:
 
 ```json
 {
   "file": "values.yaml",
   "line": 2,
-  "commit": "3296a3beb30a17d40dc2db822ff8048d5f3a1840",
+  "key_path": "deploy.bootstrap",
+  "commit": "dbb0e4c37ca8d7818dc6183c85b08e59afcde11e",
   "git": "history",
   "encoded": "base64",
   "confidence": "high"
@@ -278,10 +280,14 @@ The next steps depend on where the key is:
   after telling everyone who has a clone. These steps are given only for a value that
   a format rule matched with high confidence. A finding flagged by its name or by
   entropy gets "Check <file>" and how to accept it instead, as above.
+- **In local commits only** (the pre-push hook, for commits no remote has yet): take
+  the key out and rewrite those commits with `git commit --amend` or `git rebase -i`,
+  then push as usual. No force push is needed.
+  [Block a push that carries a key](#block-a-push-that-carries-a-key) shows that output.
 - **Only staged** (a pre-commit hook blocked the commit, or there are no commits yet):
   unstage it and move the value into `.env`. There is no history to rewrite.
-  [Quick Start, step 3](/guides/getting-started/quick-start#step-3--scan-for-secrets)
-  shows that output.
+  [Staged scans and the pre-commit hook](/guides/commands/scan#staged-scans-and-the-pre-commit-hook)
+  covers it.
 
 ---
 
@@ -306,12 +312,12 @@ git push origin main
 ```
 
 ```text
-  evnx scan  Checking history: 007a8e437b08c0089e6755e6223d66d0ed2d402a..de0605ca3100cf98f566ae6d8ebd0508fa4fd024
+  evnx scan  Checking history: 358e1a331fb8e6556f84735f9ad8df31f0899998..6cdf668b2ae33601c74c91510b45f373f5c7b936
 
   scanning deploy.cfg, README.md
 
   ✗  AWS Access Key                              critical
-     deploy.cfg@81fa259:1  AKIA…76
+     deploy.cfg@3603c50:1  AKIA…E2
      !  matches a live key format, not a placeholder
      →  revoke at https://console.aws.amazon.com/iam
 
@@ -319,19 +325,20 @@ git push origin main
 
 
 Next steps:
-  1. Revoke or rotate the keys above — assume they are compromised
-  2. Remove them from history: git filter-repo --path deploy.cfg --invert-paths
-  3. Force push, after coordinating with everyone who has a clone
+  1. Take the keys out of deploy.cfg, then rewrite the local commits that hold them: git rebase -i 3603c50^, marking each commit that has them as edit
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
   Docs: https://docs.evnx.dev/cli/commands/scan
 evnx scan: push blocked, secrets are in the commits being pushed (see above).
-  Rotate the key, then rewrite the commits. To push anyway, with a reason that is logged:
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
   EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
 error: failed to push some refs to '/home/you/origin.git'
 ```
 
-The push is also blocked when the scan cannot run. These commits were never pushed,
-so you can rewrite them locally (`git rebase -i`, or `git reset` and commit again)
-before you push.
+No remote has these commits, so the next steps rewrite them locally, with no
+`git filter-repo` and no force push. When the key is in the last commit, the first step
+is `git commit --amend` instead of `git rebase -i <sha>^`. The push is also blocked
+when the scan cannot run.
 
 ### Push anyway, with a reason
 

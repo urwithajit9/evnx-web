@@ -639,7 +639,7 @@ mean:
 | `severity` | How bad if real. `summary.severity` counts by severity |
 | `confidence` | How sure, after any [context hint](#context-hints). `high_confidence`, `medium_confidence`, `low_confidence` and `summary.high/medium/low` count confidence before the hint |
 | `file`, `line` | **New in 3.** The file, and the line as a number (`null` when it is not known), so a script need not split `location` |
-| `key_path` | **New in 3.** In a YAML, JSON, TOML or notebook file, the path to the key (`app.db.password`) |
+| `key_path` | **New in 3.** In a YAML, JSON, TOML or notebook file, the path to the key (`app.db.password`), also for a secret found inside an encoded value; the pretty output shows it as `config.yaml:3 (app.aws.encoded_key)` |
 | `encoded` | **New in 3.** `base64`, `hex` or `url` when the secret was found in a decoded value |
 | `context`, `confidence_before_context` | **New in 3.** The hints that moved the confidence, and the level before them |
 | `commit`, `blob`, `commit_time` | **New in 3.** Under `--history`, where the file version came from; `git` is then `"history"` |
@@ -959,22 +959,33 @@ $ evnx scan hook install --pre-push
 
 $ git push origin main
 
-  evnx scan  Checking history: 3967e9773c9636bd290d224a2b31d790408bc89d..b5721d74b878c2d0818a57b6a8fa455d7cb039f7
+  evnx scan  Checking history: 9a13fc5be6a6bc3a9146b55e020ba3ec91213247..d1b189ddd337ade243492242414ce1bba7743fdc
 
   scanning deploy2.py
 
   ✗  AWS Access Key                              critical
-     deploy2.py@b5721d7:1  AKIA…I4
+     deploy2.py@d1b189d:1  AKIA…0E
      !  matches a live key format, not a placeholder
      →  revoke at https://console.aws.amazon.com/iam
 
   1 finding  ·  1 critical
+
+
+Next steps:
+  1. Take the keys out of deploy2.py, then rewrite the local commits that hold them: git commit --amend
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
   …
 evnx scan: push blocked, secrets are in the commits being pushed (see above).
-  Rotate the key, then rewrite the commits. To push anyway, with a reason that is logged:
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
   EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
 error: failed to push some refs to '../remote.git'
 ```
+
+The commits being pushed are only local, so the steps rewrite them where they are: with
+`git commit --amend` when the key is in the last commit, or
+`git rebase -i <sha>^, marking each commit that has them as edit` when it is in an older
+one. No force push or `git filter-repo` is needed.
 
 To push anyway, give a reason. It is required, and it is logged with the time, the git
 user and the commits to `.git/evnx/bypass.log`:
@@ -984,10 +995,10 @@ $ EVNX_SCAN_BYPASS="test fixture, rotated" git push origin main
 evnx scan: push not scanned, bypassed with a reason: test fixture, rotated
   logged to .git/evnx/bypass.log
 To ../remote.git
-   3967e97..b5721d7  main -> main
+   9a13fc5..d1b189d  main -> main
 
 $ cat .git/evnx/bypass.log
-2026-11-26T18:56:16Z	a@b.c	3967e9773c9636bd290d224a2b31d790408bc89d..b5721d74b878c2d0818a57b6a8fa455d7cb039f7	test fixture, rotated
+2026-11-27T13:16:45Z	a@b.c	9a13fc5be6a6bc3a9146b55e020ba3ec91213247..d1b189ddd337ade243492242414ce1bba7743fdc	test fixture, rotated
 ```
 
 `evnx scan hook uninstall --pre-push` removes it and `evnx scan hook status --pre-push`
