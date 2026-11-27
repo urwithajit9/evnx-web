@@ -93,12 +93,18 @@ push adds:
 evnx scan hook install --pre-push
 ```
 
-A push with a secret in it stops, and says how to go on if you must:
+A push with a secret in it stops. When no remote has those commits yet, the steps fix them
+where they are, with no force push:
 
 ```text
 …
+Next steps:
+  1. Take the keys out of prod.env, then rewrite the local commits that hold them: git commit --amend
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
+…
 evnx scan: push blocked, secrets are in the commits being pushed (see above).
-  Rotate the key, then rewrite the commits. To push anyway, with a reason that is logged:
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
   EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
 ```
 
@@ -171,7 +177,8 @@ more) get the key-format rules only, so a package called `@radix-ui/react-passwo
 longer a "sensitive key". evnx's own files in `.evnx/` (rule packs, the baseline, the backups
 index) are not scanned. And the history-rewrite advice (revoke, `git filter-repo`, force push) is
 given only for a real key match in a file a commit holds; a staged-only file gets "Unstage it"
-instead.
+instead, commits that no remote has yet get `git commit --amend` or `git rebase -i`, and
+outside a git repository a finding flagged only by its name is no longer called committed.
 
 ## Getting values in
 
@@ -263,8 +270,11 @@ behaviour is from `evnx vault revoke --help` and the changelog. The guide is
 - **An old evnx is told so.** A server that answers HTTP 426 Upgrade Required gets a message that
   names the running version, the minimum when the server gives one, and `evnx update`; the exit
   code is `11`.
-- `doctor` says "git would commit it" for an env file git does not ignore, suggests
-  `evnx init --yes` for a missing `.env`, and no longer asks for `git add` outside a repository.
+- `doctor` says "git would commit it" for an env file git does not ignore and suggests
+  `evnx init --yes` for a missing `.env`. Outside a git repository it no longer reports an env
+  file as an error or asks for `git add`: it notes that it could not check.
+- `init` adopting a named env file with no template suggests `evnx sync`, and `spec init` writes
+  `# only in .env` only for a name the template lacks.
 - `validate` no longer compares `.env.bak-*` backups as if they were environments.
 - `parse --show-values` implies `--values`. A template line with only a name says to write it as
   `NAME=`.

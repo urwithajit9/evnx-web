@@ -339,21 +339,34 @@ Here is a push with a secret in it:
 ```console
 $ git push origin main
 
-  evnx scan  Checking history: 6dc5015153c34a40a0d3e360fc97804cb8e53a05..0184e9a30eaea0fa7ab69e62948315d59c15cef1
+  evnx scan  Checking history: 820f7ee68dda7e8b7dd1caac53de77273525c20c..405777e213c34c75ec196f865fa0856d60f29798
 
   scanning prod.env
 
   ✗  Credentials in a connection string          high
-     prod.env@0184e9a:1 (DATABASE_URL)  <48 chars>
+     prod.env@405777e:1 (DATABASE_URL)  <48 chars>
      !  a password in a postgres:// URL, not a placeholder
 
   1 finding  ·  1 high
+
+
+Next steps:
+  1. Take the keys out of prod.env, then rewrite the local commits that hold them: git commit --amend
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
 …
 evnx scan: push blocked, secrets are in the commits being pushed (see above).
-  Rotate the key, then rewrite the commits. To push anyway, with a reason that is logged:
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
   EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
 error: failed to push some refs to '../origin.git'
 ```
+
+The next steps know where the commits are. Before it advises anything, the scan asks git
+whether a remote already has the file with that key. Here none does: the commit is only on
+this laptop, so the fix is `git commit --amend` (or `git rebase -i <sha>^` when the key is in
+an older commit), and a normal push afterwards. There is nothing to force push, and
+`git filter-repo` is not needed. History a remote already has, or a repository with no remote,
+gets the rewrite steps instead.
 
 And a new branch, scanned against everything the remote has:
 
@@ -427,7 +440,8 @@ the hook comes from there, and when its `rev` is older than the evnx you run.
 `--history` tells you a key was committed and where. It does not rewrite history for you, and
 rewriting is never the first step: the key has been readable by everyone with a clone since that
 commit, so rotate it at the source first. Then `git filter-repo`, a force push, and a word with
-everyone who has a clone.
+everyone who has a clone. The exception is the pre-push case above: commits no remote has yet
+were never shared, so amending them before the push is enough.
 
 The full reference for the flags is on the [`scan` command page](/guides/commands/scan), and how
 the scanner judges a value is in [How evnx scan works](/guides/reference/how-evnx-scan-works).
