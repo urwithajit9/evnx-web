@@ -48,8 +48,10 @@ export const landingSections: SectionSpec[] = [
   { id: "hero", enabled: true, surface: "base" },
   { id: "road", enabled: true, surface: "surface", anchor: "commands" },
   { id: "problem", enabled: true, surface: "base", anchor: "problem" },
-  { id: "leak-anatomy", enabled: true, surface: "void" },
-  { id: "audit", enabled: true, surface: "base" },
+  // D-V29 (2026-11-27): the leak is a two-row strip inside "problem" now.
+  { id: "leak-anatomy", enabled: false, surface: "void" },
+  // D-V29: the hero terminal already shows a real scan.
+  { id: "audit", enabled: false, surface: "base" },
   // D-V30 (2026-11-27): the pillars repeat the road; /features covers each in depth.
   { id: "commands", enabled: false, surface: "surface", anchor: "features" },
   // D-V30: the stories moved to /features.
