@@ -61,14 +61,16 @@ export const landingSections: SectionSpec[] = [
   // D-V31 (2026-11-27): merged into "cloud", every held row and limit kept.
   { id: "trust", enabled: false, surface: "void", anchor: "trust" },
   { id: "origin-story", enabled: true, surface: "base" },
-  { id: "talks", enabled: true, surface: "surface" },
+  // D-V34 (2026-11-27): talks are a slim row inside the ending (and the hero proof).
+  { id: "talks", enabled: false, surface: "surface" },
   // ⚠️ `enabled` here is the PAGE ORDER decision, not the editorial one. The
   // component itself refuses to render unless TESTIMONIALS_ENABLED is on AND
   // approved rows exist — see components/sections/testimonials.tsx. Leaving
   // this true means the section slots into the right place the moment there is
   // something to put in it, rather than needing two edits later.
   { id: "testimonials", enabled: true, surface: "void" },
-  { id: "docs", enabled: true, surface: "base", anchor: "docs" },
+  // D-V34: the docs cards are three buttons in the ending.
+  { id: "docs", enabled: false, surface: "base", anchor: "docs" },
   { id: "cta", enabled: true, surface: "void" },
 ];
 

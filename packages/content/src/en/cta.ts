@@ -5,7 +5,14 @@ export const cta = {
   lede: "No account, no signup, no telemetry. Point it at a project you already have.",
   /** Primary is the install command itself — the lowest-commitment action. */
   primaryLabel: "Copy the install command",
-  secondaryLabel: "Read the quick start",
-  secondaryDocsSlug: "getting-started/quick-start",
+  /**
+   * D-V34 (2026-11-27): the docs cards section folded into the ending, as
+   * three doors. The first is the quick start, which was the old secondary link.
+   */
+  docLinks: [
+    { label: "Quick start", docsSlug: "getting-started/quick-start" },
+    { label: "Every command", docsSlug: "commands" },
+    { label: "Cloud sync", docsSlug: "getting-started/cloud-sync-quickstart" },
+  ],
   terminal: ["evnx scan", "evnx doctor"],
 } as const;
