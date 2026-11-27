@@ -1,0 +1,330 @@
+---
+title: "Three Ways People Use evnx: Solo, Team, CI"
+publishedAt: "2026-11-26"
+excerpt: "evnx has about thirty commands, and most people need five of them. Which five depends on who you are: a developer on your own project, a lead who onboards and offboards people, or the engineer who owns the pipeline. This is the short path for each, with evnx 0.16.0."
+author: "ajit"
+category: "tutorial"
+tags: ["getting-started", "workflow", "team", "ci", "scan", "vault", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "why-i-built-evnx"
+  - "exit-codes-as-an-api"
+  - "change-one-variable-evnx-set-and-get"
+---
+
+`evnx --help` lists about thirty commands. That is a lot to take in, and you do not need most of
+them. Which ones you do need depends less on your stack than on your role.
+
+This post walks through three: **the solo developer**, who wants a working `.env` and no leaked
+keys; **the team lead**, who wants new people set up in minutes and departed people locked out;
+and **the CI or DevOps engineer**, who wants every check to give a clear yes or no. Each section is
+the short path, with real output from evnx 0.16.0 in throwaway folders and fake values. The cloud
+commands need a signed-in account, so for those the post shows the commands and says what they do,
+from their `--help`, without output.
+
+If you are not sure where your project starts (a new one, a clone with a `.env.example`, or one
+with only a `.env`), [Start here: pick your path](/guides/getting-started/start-here) has that
+decision, and [Quick Start](/guides/getting-started/quick-start) the first five minutes.
+
+## The solo developer
+
+You have a project, a `.env` that grew by copy and paste, and a vague worry about what is in your
+git history. Four things cover it: a template, a way to change one value, a check before each commit,
+and a check before each push.
+
+**Start from the template.** If the project has a `.env.example`, `init --yes` keeps it as it is,
+writes `.env` from it, and adds the `.gitignore` lines. Here the template is three lines:
+`DATABASE_URL=`, `STRIPE_SECRET_KEY=YOUR_KEY_HERE` and `PORT=3000`.
+
+```console
+$ evnx init --yes
+
+  evnx init  Set up environment variables for your project
+
+· .env.example is the project's template: kept as it is
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+✓ Created .env from .env.example
+  ✓ 3 names from .env.example → .evnx.toml (1 secret, 1 with a format)
+
+Next steps:
+  1. Fill in the placeholder values in .env: evnx set --fill
+  2. Commit .env.example and .evnx.toml; never commit .env
+  3. .evnx.toml is the contract 'evnx validate' checks: safe to delete ('evnx init --no-contract' skips it)
+  4. Run 'evnx validate' to check configuration
+  5. Use 'evnx add' to add more variables later
+```
+
+**Fill in what is missing.** `set --fill` asks for each empty or placeholder value, in file order.
+A name that looks like a secret is typed with no echo. Nothing is written until the last answer,
+and Ctrl-C before that writes nothing:
+
+```text
+$ evnx set --fill
+  config    .evnx.toml
+./.env: 2 values to fill in. Enter skips one; Ctrl-C writes nothing.
+Value for DATABASE_URL (1 of 2), Enter to skip: postgres://localhost:5432/app_dev
+Value for STRIPE_SECRET_KEY (2 of 2), Enter to skip: [hidden]
+  .gitignore: added *.bak, .evnx/backups.json (a backup holds the same secrets as the file)
+✓ ./.env: filled DATABASE_URL, STRIPE_SECRET_KEY (values hidden)
+  backup ./.env.bak   undo: evnx undo .env
+
+
+  evnx validate  Check environment configuration
+
+  Files parsed ✓
+  ✗  STRIPE_SECRET_KEY is too weak or predictable
+     ./.env
+     →  Rotate STRIPE_SECRET_KEY where it is issued, then replace it here
+
+  1 error
+…
+```
+
+It ends with `validate`'s summary. In this run the Stripe value typed in was a short fake, and
+`validate` said so: the check is on what you typed, not only on whether something was typed.
+
+After that, one value at a time is `set` and `get`. `set` keeps comments, order and quoting, keeps
+a backup, and asks before it replaces a value (`--yes` in a script):
+
+```console
+$ evnx set PORT=4000 --yes
+  config    .evnx.toml
+✓ ./.env: PORT  3000 → 4000
+  backup ./.env.bak   undo: evnx undo .env
+```
+
+A value that does not fit on a command line, such as a certificate or a service-account JSON, comes
+from a file with `evnx set TLS_CA --from-file ca.pem`. `evnx get PORT` prints a value for a script;
+`evnx get STRIPE_SECRET_KEY` refuses, because the name looks like a secret, and tells you about
+`--reveal` and `--exists`.
+
+**Check every commit.** The pre-commit hook scans what you staged:
+
+```bash
+evnx scan hook install
+```
+
+```console
+$ git commit -m "db"
+  config    .evnx.toml
+
+  evnx scan  Checking what is staged for commit
+
+  scanning db.js
+
+  ✗  Credentials in a connection string          high
+     db.js:1  <48 chars>
+     !  a password in a postgres:// URL, not a placeholder
+
+  1 finding  ·  1 high
+
+
+Next steps:
+  1. Unstage db.js: git restore --staged db.js (git rm --cached db.js before the first commit). No commit holds it, so there is no history to rewrite
+  2. Before you stage db.js again, move the values into .env (or another file git ignores), read at run time
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
+…
+evnx scan: commit blocked, secrets are staged (see above).
+  To commit anyway: git commit --no-verify. To turn the hook off: git config hooks.evnx-scan false
+```
+
+The advice fits the case: nothing was committed, so there is nothing to rewrite.
+
+**Check every push, and your past.** Run `evnx scan --history` once to look at everything git
+remembers, including keys you deleted long ago. Then install the pre-push hook, which scans only
+the commits a push adds:
+
+```bash
+evnx scan --history
+evnx scan hook install --pre-push
+```
+
+If you already use pre-commit or prek, evnx will not edit a hook they manage; it prints the lines
+for `.pre-commit-config.yaml` instead. The [`scan` command page](/guides/commands/scan) has both.
+
+## The team lead
+
+Your problem is not one `.env`, it is everyone's. People join and need a working setup on day one.
+People change a variable and forget to tell anyone. People leave, and you need to know they can no
+longer read the production keys.
+
+**Make the template the source of truth.** Commit `.env.example` (names, safe defaults,
+placeholders) and the `.evnx.toml` that `init` wrote. Never commit `.env`. The contract in
+`.evnx.toml` is what `evnx validate` checks.
+
+**Onboarding is two commands.** A new teammate clones the repository. If they have an old `.env`,
+`sync --direction reverse` adds the names it lacks from the template:
+
+```console
+$ evnx sync --direction reverse --yes
+
+  evnx sync  .env ↔ .env.example  (reverse)
+
+
+┌─ Missing Variables ──────────────────────────────────────────────────────────┐
+│ Found 2 variables missing from .env:                                         │
+│   • STRIPE_SECRET_KEY                                                        │
+│   • REDIS_URL                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+· Force mode: adding the template's values (placeholders where it has none), skipping prompts
+✓ Added 2 variables to .env
+```
+
+With no `.env` at all, `evnx init --yes` writes one from the template. Either way, `set --fill`
+then asks only for what is still a placeholder:
+
+```console
+$ evnx set --fill --dry-run
+Dry run: nothing was written.
+  ./.env: would ask for 1 value:
+    STRIPE_SECRET_KEY  (typed with no echo)
+```
+
+`REDIS_URL` has a real default in the template, so it is not asked for.
+
+**Catch drift before it is merged.** When someone adds a variable to their `.env` and not to the
+template, the next person's setup breaks. `sync --check --direction forward` exits `1` when the
+template is missing a name `.env` has, which is how a hook or CI asks the question:
+
+```console
+$ evnx sync --check --direction forward
+
+  evnx sync  .env ↔ .env.example  (forward)
+
+✓ .env.example is up to date
+```
+
+**Share the real values through a vault, not a chat message.** An evnx vault is encrypted on your
+machine; the server holds ciphertext. You share it with a teammate's account, and the vault key is
+re-wrapped to their public keys before it leaves your machine:
+
+```bash
+evnx vault share my-api/development --with new.colleague@example.com
+evnx cloud pull --vault my-api/development      # on their machine
+```
+
+`vault share` gives `viewer` by default; pass `--role developer` if they need to push. The full
+two-account walkthrough is [Sharing a vault, and taking it back](/guides/use-cases/sharing-a-vault-with-a-teammate).
+
+**Offboarding is one command.** When someone leaves, you do not want to remember which vaults they
+were in. From 0.16.0:
+
+```bash
+evnx vault revoke --all-vaults --user former.colleague@example.com --dry-run
+evnx vault revoke --all-vaults --user former.colleague@example.com
+```
+
+The dry run reads and sends nothing. The real run lists every vault where you can see that person,
+and the ones it must skip with the reason (your role does not allow it, they are an owner or an
+admin like you, or someone who stays has no post-quantum key yet). It asks once, reads your master
+password once, then revokes and re-keys each vault in turn. It exits `1` if it had to skip a vault,
+because the person still has access there.
+
+Revoking stops them reading anything pushed from now on. It cannot recall what they already read.
+So the command ends with a checklist: the names of the credentials in those vaults, grouped by who
+issued them, with the page where each one is rotated when evnx knows it (`STRIPE_SECRET_KEY` under
+Stripe, `AWS_SECRET_ACCESS_KEY` under AWS). Only names, never values. That list is your afternoon.
+
+## The CI and DevOps engineer
+
+You do not care what evnx prints. You care what it exits with, what its JSON looks like, and that
+it never stops to ask a question nobody is there to answer.
+
+**Branch on the exit code.** Every command uses one table, printed at the end of every `--help`:
+
+| Code | Meaning |
+|---|---|
+| `0` | Ran, nothing to report |
+| `1` | Ran, and found something: findings, problems, a difference, not in sync |
+| `2` | Could not run: usage, config, I/O, or refused before any change |
+| `4` | Declined: answered no, or a confirmation was needed with no terminal and no `--yes` |
+| `10`–`15` | Cloud: not signed in, forbidden, plan limit, unreachable, conflict, server error |
+
+`2` is never a finding and `1` is never a failure to run. In 0.16.0 a "no" at a prompt exits `4`
+everywhere, including the vault, org and auth commands that used to exit `0`. In CI there is no
+terminal, so a command that would ask exits `4` and names `--yes`. Why the table matters is in
+[Exit codes as an API](/blog/exit-codes-as-an-api).
+
+**Read JSON, not text.** `--format json` (or `--json`) gives one document, and it always starts
+with a `run` header that says which evnx and which schema produced it:
+
+```console
+$ evnx validate --format json
+```
+
+```json
+{
+  "run": {
+    "tool": "evnx",
+    "version": "0.16.0",
+    "schema_version": 1,
+    "ruleset": null,
+    "features": [
+      "backup",
+      "cloud",
+      "migrate",
+      "net"
+    ]
+  },
+  "status": "failed",
+  …
+```
+
+Check `run.schema_version` before you read the rest. Scan JSON is `schema_version` 3 in 0.16.0:
+findings have `file` and `line` as fields, so a script does not have to split `location`.
+
+**Scan in CI.** `--format github` turns findings into annotations on the pull request:
+
+```text
+::error file=app.env,line=1,title=Secret detected (high)::DB_B64 matches Credentials in a connection string. Rotate this credential at its source
+```
+
+That one is from 0.16.0's new decoding: the secret was inside a base64 value. For a pull request,
+scan what the branch adds as well as the files:
+
+```bash
+evnx scan --format github
+evnx scan --history origin/main..HEAD
+```
+
+The first catches what is on disk now. The second catches a key that was committed on the branch and
+deleted in a later commit, which the first cannot see. `--exit-only` prints nothing at all, for a
+step that only branches on the code. The [GitHub Actions guide](/guides/integrations/github-actions)
+has the workflow, with SARIF upload.
+
+**Deploy with the vault, not a file.** `cloud run` puts a vault's variables into a command's
+environment without writing a file. In CI it needs three secrets: an API token, a key bundle and
+the master password.
+
+```bash
+evnx auth token create ci-deploy --scope read --vault my-api/production
+```
+
+That runs once, on your machine. It prints the token and a CI key bundle, once each; store them as
+`EVNX_TOKEN` and `EVNX_KEY_BUNDLE`, with `EVNX_MASTER_PASSWORD`. The token is read-only, limited to
+one vault, and expires in 90 days unless you say otherwise. In the pipeline:
+
+```bash
+evnx cloud run --vault "$EVNX_VAULT_ID" -- ./deploy.sh
+```
+
+Once the command has started, evnx exits with the command's own code, so the step fails when the
+deploy fails. The details, including why the token is scoped to a vault id and not a name, are in
+[CI/CD with cloud tokens](/guides/integrations/ci-cd-cloud-tokens).
+
+**React to a change.** On a long-running host, `cloud watch --on-change -- COMMAND` runs a command
+once for each new version of a vault, with `EVNX_WATCH_VAULT` and `EVNX_WATCH_VERSION` set and no
+other `EVNX_*` variable. It cannot pull by itself: the command decides what to do, such as restart a
+service that then runs under `cloud run`.
+
+**Pin the version.** Set `EVNX_VERSION=0.16.0` for the install script in CI, and move the pin
+when the pipeline passes on the new one. A server that refuses an evnx as too old now says so
+and exits `11`, instead of failing with a vague error.
+
+## The same tool, three short paths
+
+None of this needs every command. The solo path is `init`, `set`, `scan` and two hooks. The team
+path adds `sync`, a shared vault and `vault revoke`. The CI path is exit codes, JSON and
+`cloud run`. Start with yours, and the rest is there when you need it.

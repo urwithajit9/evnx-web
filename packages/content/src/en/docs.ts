@@ -20,7 +20,7 @@ export const docs: SectionHeading & { cards: DocsCard[] } = {
   cards: [
     {
       title: "Getting started",
-      body: "Five minutes from install to your first check, scan and validate on a real .env.",
+      body: "Two ways in: a new project, or a clone with a .env.example. The manual steps first, then evnx.",
       docsSlug: "getting-started/quick-start",
     },
     {

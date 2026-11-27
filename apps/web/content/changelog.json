@@ -1,7 +1,210 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `pnpm changelog:sync` to refresh from the CLI's CHANGELOG.md.",
-  "latest": "0.15.0",
+  "latest": "0.16.0",
   "releases": [
+    {
+      "version": "0.16.0",
+      "date": "2026-11-27",
+      "summary": "A minor release: `scan` finds more (inside encoded values, more GitLab tokens), reports less noise (checksum stand-ins, lockfiles), and its JSON is `schema_version` 3; a \"no\" at a confirmation prompt exits 4. Read \"Breaking\" before upgrading scripts and CI.",
+      "highlights": [
+        {
+          "type": "breaking",
+          "text": "A \"no\" at a confirmation prompt now exits 4."
+        },
+        {
+          "type": "breaking",
+          "text": "Classic GitHub tokens that fail their checksum are no longer findings."
+        },
+        {
+          "type": "breaking",
+          "text": "More GitLab tokens are found."
+        },
+        {
+          "type": "breaking",
+          "text": "Secrets inside encoded values are found."
+        },
+        {
+          "type": "breaking",
+          "text": "The confidence shown can move one level."
+        },
+        {
+          "type": "breaking",
+          "text": "Scan JSON is `schema_version` 3."
+        },
+        {
+          "type": "breaking",
+          "text": "YAML reader replaced."
+        },
+        {
+          "type": "feature",
+          "text": "The SBOM is attached to each release archive"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add custom NAME --from-file <path|->` and `evnx set NAME --from-file <path|->`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx set --fill`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add import <FILE|->`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx add import` reads a `web.config`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud delete-version --latest`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx cloud watch --on-change -- <COMMAND>...`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx config show`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan --history [RANGE]`"
+        },
+        {
+          "type": "feature",
+          "text": "A bare `scan --history` builds on the last clean scan."
+        },
+        {
+          "type": "feature",
+          "text": "`evnx scan hook install --pre-push`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx vault revoke --all-vaults --user <email>`"
+        },
+        {
+          "type": "feature",
+          "text": "`evnx vault revoke` ends with a \"rotate at the source\" checklist."
+        },
+        {
+          "type": "feature",
+          "text": "A server that refuses an old evnx is explained."
+        },
+        {
+          "type": "improvement",
+          "text": "Every built-in scan rule declares keywords."
+        },
+        {
+          "type": "improvement",
+          "text": "`scan`'s `scanning …` line names git-ignored files apart."
+        },
+        {
+          "type": "improvement",
+          "text": "`scan` advises a history rewrite only for a real key match."
+        },
+        {
+          "type": "improvement",
+          "text": "Lockfiles get the key-format rules only."
+        },
+        {
+          "type": "improvement",
+          "text": "`doctor` says \"git would commit it\" for an env file git does not ignore"
+        },
+        {
+          "type": "improvement",
+          "text": "Refusals that name the next command end with \"evnx stopped before making changes (exit 2). Run one of the commands above.\""
+        },
+        {
+          "type": "improvement",
+          "text": "`scan hook status` reads `.pre-commit-config.yaml`."
+        },
+        {
+          "type": "improvement",
+          "text": "`validate` and `init` name `evnx set --fill` for placeholder values."
+        },
+        {
+          "type": "improvement",
+          "text": "`doctor` suggests `evnx init --yes` for a missing `.env` beside a template"
+        },
+        {
+          "type": "improvement",
+          "text": "`parse --show-values` implies `--values`."
+        },
+        {
+          "type": "improvement",
+          "text": "The `config` line names `[scan]` settings only for `scan`."
+        },
+        {
+          "type": "improvement",
+          "text": "A template line with only a name says how to write it."
+        },
+        {
+          "type": "fix",
+          "text": "`add custom NAME=value` now writes the value to `.env` when the template lists NAME with another value"
+        },
+        {
+          "type": "fix",
+          "text": "`scan` no longer reads evnx's own files."
+        },
+        {
+          "type": "fix",
+          "text": "`validate` no longer compares backups as environments."
+        },
+        {
+          "type": "fix",
+          "text": "`scan` no longer tells you to rewrite history for a file that is only staged."
+        },
+        {
+          "type": "fix",
+          "text": "`doctor` outside a git repository no longer says \"run: git add .env.example\"."
+        },
+        {
+          "type": "fix",
+          "text": "`auth token create` names one password variable in its CI example."
+        },
+        {
+          "type": "fix",
+          "text": "`auth sessions list` and `auth devices list` line up again."
+        },
+        {
+          "type": "fix",
+          "text": "`migrate -o FILE` says where the commands went and how to run them."
+        },
+        {
+          "type": "fix",
+          "text": "A `platform push` conflict names the commands for the same target."
+        },
+        {
+          "type": "fix",
+          "text": "`cloud run --min-version` names a command when it refuses."
+        },
+        {
+          "type": "fix",
+          "text": "`validate` on a terminal ends its progress line."
+        },
+        {
+          "type": "fix",
+          "text": "`remove`'s hint for a missing `.env` keeps the names."
+        },
+        {
+          "type": "fix",
+          "text": "Outside a git repository, `scan` and `doctor` no longer talk about commits."
+        },
+        {
+          "type": "fix",
+          "text": "`init` adopting an env file with no template names the command that creates one."
+        },
+        {
+          "type": "fix",
+          "text": "`spec init` no longer writes \"# only in .env\" for names the template has."
+        }
+      ],
+      "type": "minor",
+      "links": {
+        "github": "https://github.com/urwithajit9/evnx/compare/v0.15.0...v0.16.0"
+      }
+    },
     {
       "version": "0.15.0",
       "date": "2026-11-19",

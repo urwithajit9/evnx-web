@@ -3,13 +3,13 @@ section: "use-cases"
 order: 3
 title: "Sharing a Vault, and Taking It Back"
 publishedAt: "2026-09-29"
-updatedAt: "2026-11-17"
-excerpt: "The full two-account walkthrough: share an encrypted vault, have the other person pull it, then revoke and confirm the old key no longer works."
+updatedAt: "2026-11-26"
+excerpt: "The full two-account walkthrough: share an encrypted vault, have the other person pull it, then revoke and confirm the old key no longer works. Offboard someone from every vault in one command."
 difficulty: "intermediate"
 timeToComplete: "20 minutes"
 tags: ["cloud", "vault", "sharing", "team", "revocation", "workflow"]
 commands: ["auth register", "cloud link", "cloud pull", "cloud push", "vault create", "vault leave", "vault list", "vault members", "vault rekey", "vault revoke", "vault role", "vault share"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/cloud-sync-quickstart
   - commands/vault
@@ -270,6 +270,29 @@ evnx vault revoke my-app/production --user teammate@example.com
   rotate those secrets at their source.
 ```
 
+Since 0.16.0 the output goes on with a checklist of what to rotate: the names of
+the credentials in the vault, grouped by who issued them. Only names are printed,
+never a value. This part is from evnx's own tests, run against the 0.16.0 binary with
+a mock server, for a vault named `app/production`:
+
+```
+  Rotate at the source
+  They could read these credentials, and revoking cannot recall them.
+  Replace each one where it was issued:
+    AWS  https://console.aws.amazon.com/iam
+      AWS_SECRET_ACCESS_KEY
+    Stripe  https://dashboard.stripe.com/apikeys
+      STRIPE_SECRET_KEY
+    Provider not known  (where it was issued)
+      DATABASE_URL
+  Also readable, not credentials by name: PORT
+  app/production: names read from its 2 version(s). A version deleted earlier may have held more.
+```
+
+The names come from every version in the vault, read while it is re-keyed, so no
+second password is asked. A version deleted earlier is not covered, and the last
+line says so.
+
 Read that output. Removing someone's row would be quick and would achieve nothing:
 they may have kept the unwrapped vault key, and it would still open every blob —
 **including versions pushed after their removal.** So `revoke` generates a fresh
@@ -320,6 +343,176 @@ Still works. Your own copy was re-wrapped in the same transaction, so a successf
 rotation is one where the removed member is out **and** everyone who stayed is
 unaffected. Checking only the first half would not distinguish a correct rotation
 from a broken vault.
+
+---
+
+## Offboard a teammate from every vault
+
+When someone leaves the team, they are usually in more than one vault. Revoking them
+one vault at a time means finding every vault they are in, typing the master password
+each time, and hoping none was missed. `--all-vaults` does it in one command:
+
+```bash
+evnx vault revoke --all-vaults --user bob@example.com --dry-run
+```
+
+It lists every vault where you can see them, and the ones it must skip, with the
+reason, before it asks anything. Then it asks once, reads the master password once,
+and revokes and re-keys each vault in turn.
+
+<Callout type="info" title="Where this output comes from">
+No account was signed in for this page. The outputs in this section are from evnx's
+own tests (`tests/cloud_revoke_all.rs`), run against the 0.16.0 binary with a mock
+server. The account in them is `me@example.com`; `bob@example.com` is leaving.
+</Callout>
+
+### Look first with --dry-run
+
+`--dry-run` reads only and sends no change:
+
+```
+  bob@example.com is a member of 2 vault(s) you can see.
+  Will remove them from these vaults, re-keying each one:
+    app/production  (viewer, 2 version(s), 2 member(s) stay)
+  Skipped, so they keep access there:
+    web/development  you are a developer; removing a member needs admin or owner
+  Dry run: nothing was changed.
+```
+
+A vault is skipped, and named, when:
+
+- your role does not allow it: `you are a developer; removing a member needs admin or owner`;
+- they own it: `they own it, and the owner cannot be removed`;
+- they have your role or a higher one: `they are an admin as you are; only the owner can remove them`;
+- someone who stays has no post-quantum key yet, so the new vault key cannot be wrapped
+  for them: they need to sign in once.
+
+### Revoke everywhere
+
+```bash
+evnx vault revoke --all-vaults --user bob@example.com
+```
+
+```
+  bob@example.com is a member of 3 vault(s) you can see.
+  Will remove them from these vaults, re-keying each one:
+    app/production  (developer, 2 version(s), 2 member(s) stay)
+    api/staging  (viewer, 1 version(s), 2 member(s) stay)
+  Skipped, so they keep access there:
+    web/development  you are a developer; removing a member needs admin or owner
+
+  This stops them reading anything pushed from now on. It cannot
+  recall copies of what they could already read — rotate those
+  secrets at their source.
+```
+
+After one "yes" and the master password:
+
+```
+  app/production
+  Re-encrypting 2 version(s)…
+  Re-wrapping for 2 member(s)…
+  ✓ removed bob@example.com from app/production and rotated the vault key (2 version(s) re-encrypted)
+
+  api/staging
+  Re-encrypting 1 version(s)…
+  Re-wrapping for 2 member(s)…
+  ✓ removed bob@example.com from api/staging and rotated the vault key (1 version(s) re-encrypted)
+
+  Summary for bob@example.com:
+    revoked        app/production, api/staging
+    skipped        web/development  (they keep access there)
+  They may still hold copies of what they could already read —
+  rotate those secrets at their source.
+
+  Rotate at the source
+  They could read these credentials, and revoking cannot recall them.
+  Replace each one where it was issued:
+    AWS  https://console.aws.amazon.com/iam
+      AWS_SECRET_ACCESS_KEY  (app/production, api/staging)
+    Stripe  https://dashboard.stripe.com/apikeys
+      STRIPE_SECRET_KEY  (app/production, api/staging)
+    Provider not known  (where it was issued)
+      DATABASE_URL  (app/production, api/staging)
+  Also readable, not credentials by name: PORT
+  app/production: names read from its 2 version(s). A version deleted earlier may have held more.
+  api/staging: names read from its 1 version(s). A version deleted earlier may have held more.
+```
+
+The checklist covers every vault that was revoked, and says which vault each name came
+from. Work through it: revoking stops them reading anything new, and only the provider
+can make an old value worthless. For `web/development`, ask its owner or an admin
+there to run the same command.
+
+### When a vault fails
+
+It stops at the first failure and says what was done, what failed and what was not
+attempted. Here the server answered HTTP 500 for the first vault:
+
+```
+  Summary for bob@example.com:
+    failed         app/production  (the error is below; check it with `evnx vault members <vault>`)
+    not attempted  api/staging  (stopped at the failure; run the command again)
+```
+
+```
+Error: https://evnx.example.com reported an internal error (HTTP 500). Nothing was changed.
+```
+
+A re-key is applied in one transaction per vault, so a failed vault is left as it
+was. Run the command again: the vaults already done no longer list them.
+
+### Exit codes
+
+| Exit | When |
+|---|---|
+| `0` | revoked in every vault listed, or they are in no vault you can see |
+| `1` | done, but a vault was skipped: they still have access there |
+| `2` | refused before any change, such as your own address (use `evnx vault leave`) |
+| `4` | you answered no, or there was no terminal to ask on and no `--yes` |
+| `10`–`15` | the failure's own code, as for one vault (`15` for the HTTP 500 above) |
+
+In a script, `--yes --password-stdin` skips the question and reads the password from
+standard input. Without `--yes` and with no terminal it exits `4` and prints the
+command with `--yes` added. `--no-rekey` removes them without rotating the keys; the
+checklist then uses the names the server recorded at each push, and says they were
+not checked against the contents.
+
+### In JSON
+
+`--json` prints the vaults, each one's result and the checklist, by name only:
+
+```json
+{
+  "run": { "tool": "evnx", "version": "0.16.0", "schema_version": 1, … },
+  "user": "bob@example.com",
+  "dry_run": false,
+  "rekey": true,
+  "vaults": [
+    { "vault": "app", "environment": "production", "result": "revoked", "versions_reencrypted": 2 },
+    { "vault": "api", "environment": "staging", "result": "revoked", "versions_reencrypted": 1 },
+    { "vault": "web", "environment": "development", "result": "skipped",
+      "reason": "you are a developer; removing a member needs admin or owner" }
+  ],
+  "rotate": [
+    { "name": "AWS_SECRET_ACCESS_KEY", "provider": "AWS", "url": "https://console.aws.amazon.com/iam",
+      "vaults": ["app/production", "api/staging"] },
+    { "name": "STRIPE_SECRET_KEY", "provider": "Stripe", "url": "https://dashboard.stripe.com/apikeys",
+      "vaults": ["app/production", "api/staging"] },
+    { "name": "DATABASE_URL", "provider": null, "url": null,
+      "vaults": ["app/production", "api/staging"] }
+  ],
+  "other_names": ["PORT"],
+  "rotate_notes": [
+    "app/production: names read from its 2 version(s). A version deleted earlier may have held more.",
+    "api/staging: names read from its 1 version(s). A version deleted earlier may have held more."
+  ]
+}
+```
+
+A `result` is `revoked`, `would_revoke` (a dry run), `skipped`, `failed` or
+`not_attempted`. In a dry run `rotate` is empty, because nothing was opened.
+`vault revoke <vault>` takes `--dry-run` and `--json` too.
 
 ---
 

@@ -3,13 +3,13 @@ title: "Scan rules: the core, your own, and packs"
 section: reference
 order: 17
 publishedAt: "2026-11-01"
-updatedAt: "2026-11-17"
-excerpt: "How evnx scan builds its rule set: 63 built-in rules, rule files of your own shared through the repository, and optional packs from the evnx-rules catalogue (gitleaks, betterleaks) pinned by sha256 and never fetched during a scan. The rule file format, importing gitleaks and Betterleaks files, and testing rules."
+updatedAt: "2026-11-26"
+excerpt: "How evnx scan builds its rule set: 70 built-in rules, rule files of your own shared through the repository, and optional packs from the evnx-rules catalogue (gitleaks, betterleaks) pinned by sha256 and never fetched during a scan. The rule file format, importing gitleaks and Betterleaks files, and testing rules."
 difficulty: intermediate
 timeToComplete: "15 minutes"
 tags: ["scan", "secrets", "rules", "gitleaks", "betterleaks", "ci-cd", "evnx"]
 commands: ["scan", "scan rules add", "scan rules remove", "scan rules test", "scan rules update"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - commands/scan
 draft: false
@@ -32,7 +32,7 @@ redefine a rule from a layer below it.
 
 ```mermaid
 flowchart TB
-    C["① Core: compiled into evnx<br/>63 rules, always on"]
+    C["① Core: compiled into evnx<br/>70 rules, always on"]
     P["② Project: .evnx/rules/*.toml<br/>committed, so teammates and CI share it"]
     H["③ Personal: ~/.config/evnx/rules/*.toml<br/>your machine only, named in the scan header"]
     F["--rules FILE<br/>one run only"]
@@ -72,7 +72,8 @@ Details that matter:
 - A rule file written for evnx is plain TOML data. Nothing in it is code.
 
 `evnx scan -v` prints the counts and the rules in force
-(`63 built-in rules, 221 custom patterns`).
+(`70 built-in rules, 221 custom patterns`; 63 before 0.16.0, which added seven GitLab
+token rules).
 
 ---
 
@@ -287,6 +288,33 @@ No verdict: evnx did not scan anything. This is not a clean result.
 A catalogue download must also match the sha256 the catalogue's index lists, or nothing is
 written. Hand-written rule files have no lock entry and are not checked.
 
+### Packs are rules, not files to scan
+
+**v0.16.0.** A pack holds example keys: each rule's `positive` values must match it. A scan
+of the project used to read them from `.evnx/rules/` and exit `1`. Now a walk, `--staged`
+and `--history` leave out the rule files in `.evnx/rules/`, `.evnx/rules.lock` and evnx's
+other own files (`.evnx/baseline.json`, `.evnx/backups.json`, `.evnx/platform/vercel.json`),
+and say so once:
+
+```text
+$ evnx scan rules add ../acme.toml
+✓ added acme: 1 rule(s) in .evnx/rules/acme.toml, recorded in .evnx/rules.lock
+· Commit .evnx/rules/ and .evnx/rules.lock so the team and CI use it too.
+
+$ evnx scan
+  evnx scan  Checking for exposed secrets
+
+  · evnx's own files in .evnx/ are not scanned (name one to scan it)
+  scanning ./a.txt
+
+  ✓  No secrets detected
+```
+
+A pack is trusted by its sha256 in `rules.lock`, which every scan still checks, not by
+scanning it. Other files under `.evnx/` are scanned, and a file you name is read:
+`evnx scan .evnx/rules/acme.toml` reports its example keys. `--include-ignored` does not
+change this.
+
 ### Updating and removing
 
 ```text
@@ -326,6 +354,7 @@ air-gapped CI job, behaves exactly as on your laptop.
 | Touch the network during a scan | Only `add` and `update` download |
 | Run code from a pack | A pack is TOML data; the regex engine runs in linear time; packs are capped at 2 MiB and 5,000 rules |
 | Use a pack that changed | `rules.lock` pins each pack's sha256 |
+| Report a pack's own example keys | Packs are not scanned as files (**v0.16.0**); the sha256 is the trust |
 | Let a pack hide a finding | Packs only add rules. Switching one off stays in `.evnx.toml`, which evnx announces |
 | Store a secret in a baseline | Fingerprints, rule ids and paths only |
 

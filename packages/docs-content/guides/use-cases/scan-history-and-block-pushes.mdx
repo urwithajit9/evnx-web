@@ -1,0 +1,459 @@
+---
+title: "Scan your git history and block pushes"
+section: "use-cases"
+order: 8
+publishedAt: "2026-11-26"
+updatedAt: "2026-11-27"
+excerpt: "Find secrets that were committed and later removed with evnx scan --history, rerun it cheaply on each clone, and stop a push that carries a key with a pre-push hook."
+difficulty: intermediate
+timeToComplete: "15 minutes"
+tags: ["scan", "git", "history", "pre-push", "pre-commit", "security"]
+commands: ["scan", "scan hook install", "scan hook status", "scan hook uninstall"]
+evnxVersion: "0.16.0"
+prerequisites:
+  - getting-started/installation
+  - use-cases/prevent-secret-leaks
+draft: false
+---
+
+Deleting a file does not delete it from git. A key committed last month and removed
+the next day is still in every clone, and anyone with the repository can read it
+with `git log -p`. A scan of the files on disk does not see it.
+
+`evnx scan --history` scans what git history holds instead. A pre-push hook runs the
+same scan on the commits you are about to push, so a key that got past the commit
+stops before it reaches the remote. Every output below is from a real run of evnx
+0.16.0 in a throwaway repository. Keys are built at run time, so no real-looking key
+is written into this page.
+
+---
+
+## Find a key that was removed
+
+This repository had a key committed and then removed in the next commit:
+
+```bash
+git init && echo "# app" > README.md && git add -A && git commit -m "Initial commit"
+printf '[default]\naws_access_key_id = AKIA%s\n' \
+  "$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n' | tr a-f A-F)" > deploy.cfg
+git add deploy.cfg && git commit -m "Add deploy config"
+git rm deploy.cfg && git commit -m "Remove deploy config"
+```
+
+A scan of the folder finds nothing, because the file is gone:
+
+```bash
+evnx scan
+```
+
+```text
+  evnx scan  Checking for exposed secrets
+
+  scanning ./README.md
+
+  ✓  No secrets detected
+
+  1 file scanned
+```
+
+The history scan finds it:
+
+```bash
+evnx scan --history
+```
+
+```text
+  evnx scan  Checking history: HEAD
+
+  scanning README.md, deploy.cfg
+
+  ✗  AWS Access Key                              critical
+     deploy.cfg@b49c134:2  AKIA…93
+     !  matches a live key format, not a placeholder
+     →  revoke at https://console.aws.amazon.com/iam
+
+  1 finding  ·  1 critical
+
+
+Next steps:
+  1. Revoke or rotate the keys above — assume they are compromised
+  2. Remove them from history: git filter-repo --path deploy.cfg --invert-paths
+  3. Force push, after coordinating with everyone who has a clone
+```
+
+`deploy.cfg@b49c134:2` is the file, the oldest commit that has this version of it, and
+the line. Each distinct file version is read once, whole, so a name rule sees its key
+even when the commit changed another line.
+
+Rotate the key first: once it was pushed, rewriting history does not take it out of
+other clones, forks or caches.
+
+### Which commits
+
+`--history` takes any git revision range:
+
+| You write | It scans |
+|---|---|
+| `--history` | everything reachable from `HEAD` |
+| `--history all` | every ref: all branches and tags |
+| `--history origin/main..HEAD` | the commits on your branch that `origin/main` lacks |
+| `--history v0.15.0..` | everything since a tag |
+| `--history HEAD~1..HEAD` | the last commit |
+
+Paths after it limit the scan to files under them. Outside a git repository it exits
+`2`:
+
+```text
+Error: --history needs a git repository, and /home/you/notes is not in one
+
+No verdict: evnx did not scan anything. This is not a clean result.
+```
+
+---
+
+## Rerun it cheaply
+
+A bare `--history` builds on the last clean history scan of this clone. The first run
+reads all of history and, when it is clean, records where it stopped in
+`.git/evnx/history.json`:
+
+```json
+{
+  "schema_version": 1,
+  "rules_digest": "2cb54a5e9ad62258c3e19606c701b220794f25f19881686ec0e8a912cc98a30c",
+  "settings": "11eb26ba2c9030b5b1768bb54fb98faf785427cd6c70d0e2556bbba306c11bba",
+  "last_commit": "b58e7f076969d9239e321ae8dda119423a676d27",
+  "scanned_at": "2026-11-26"
+}
+```
+
+It lives in `.git/`, so it is never committed. After one more commit, the next run
+reads only that commit:
+
+```bash
+evnx scan --history
+```
+
+```text
+  · scanning the commits since b58e7f0 (--full scans all history)
+
+  evnx scan  Checking history: b58e7f076969d9239e321ae8dda119423a676d27..HEAD
+
+  scanning f4.txt
+
+  ✓  No secrets detected
+
+  1 file scanned
+```
+
+`--full` reads all of history again:
+
+```bash
+evnx scan --history --full
+```
+
+```text
+  evnx scan  Checking history: HEAD
+
+  scanning f1.txt, f2.txt, f3.txt and 1 other file
+
+  ✓  No secrets detected
+
+  4 files scanned
+```
+
+The record is kept only while it still means something. When the rules, the scan
+settings or the baseline change, the next bare `--history` reads everything again
+and says why. Here an `exclude` was added to `.evnx.toml`:
+
+```text
+  config    .evnx.toml (scan.exclude=1 pattern)
+  · scan settings or the baseline changed since the last history scan: scanning all history
+
+  evnx scan  Checking history: HEAD
+  …
+```
+
+The rules are compared by a hash of the whole rule set, the rules digest. It is in the
+record above, in the JSON output, and in a baseline written by
+`evnx scan --update-baseline`:
+
+```bash
+evnx scan --history --format json | jq '.effective_config.rules_digest'
+```
+
+```text
+"2cb54a5e9ad62258c3e19606c701b220794f25f19881686ec0e8a912cc98a30c"
+```
+
+Adding a rule pack, or upgrading to an evnx with changed rules, changes the digest, so
+the old commits are read again with the new rules.
+
+---
+
+## What a finding tells you
+
+### A secret inside an encoded value
+
+A value of 16 to 4096 characters that is base64, hex or percent-encoded text is
+decoded once and checked against the format rules. This `values.yaml` holds a
+base64 blob with a key inside:
+
+```bash
+printf 'deploy:\n  bootstrap: %s\n' \
+  "$(printf 'aws_access_key_id=AKIA%s\n' "$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n' | tr a-f A-F)" | base64 -w0)" > values.yaml
+```
+
+```text
+  ✗  AWS Access Key                              critical
+     values.yaml@dbb0e4c:2 (deploy.bootstrap)  AKIA…99
+     !  matches a live key format, not a placeholder
+     ·  found inside a base64-encoded value, decoded once
+     →  revoke at https://console.aws.amazon.com/iam
+```
+
+The location names the key that holds the blob, `deploy.bootstrap`. In JSON the finding
+carries it as `key_path`, with `encoded`, and under `--history` the commit:
+
+```json
+{
+  "file": "values.yaml",
+  "line": 2,
+  "key_path": "deploy.bootstrap",
+  "commit": "dbb0e4c37ca8d7818dc6183c85b08e59afcde11e",
+  "git": "history",
+  "encoded": "base64",
+  "confidence": "high"
+}
+```
+
+### A finding in a test folder
+
+A finding in a file under a `test`, `tests`, `mock`, `spec` or `fixtures` folder is
+shown one level lower in confidence, and the next steps say where it is:
+
+```bash
+evnx scan --history HEAD~1..HEAD
+```
+
+```text
+  evnx scan  Checking history: HEAD~1..HEAD
+
+  scanning tests/fixtures/settings.py
+
+  ✗  Sensitive config key: API_TOKEN             high, medium confidence
+     tests/fixtures/settings.py@826517a:1 (API_TOKEN)  <25 chars>
+     ·  flagged by variable name — the value was not checked
+
+  1 finding  ·  1 high
+
+
+Next steps:
+  1. Check tests/fixtures/settings.py: it is committed, but only a variable name, an entropy guess or a lower-confidence match flagged it, so it may not be a secret
+  2. tests/fixtures/settings.py is in a test folder, where sample values are usual
+  3. Not a secret: mark its line evnx:allow <rule-id> reason=used-in-tests (or false-positive), or accept it with evnx scan --update-baseline
+  4. If one is a real secret, revoke or rotate it: it is in git history
+```
+
+Nothing is dropped. The exit code and the `--confidence` floor use the level before
+the hint; JSON has both:
+
+```json
+{
+  "file": "tests/fixtures/settings.py",
+  "line": 1,
+  "confidence": "medium",
+  "confidence_before_context": "high",
+  "context": ["test-path"]
+}
+```
+
+A line with an `Authorization` or `Bearer` header, an HTTP client call or a connection
+string moves the other way, one level higher.
+
+### Committed or only staged
+
+The next steps depend on where the key is:
+
+- **In a commit** (a history scan, or a staged change to a file a commit already has):
+  rotate the key, remove the file from history with `git filter-repo`, and force push
+  after telling everyone who has a clone. These steps are given only for a value that
+  a format rule matched with high confidence. A finding flagged by its name or by
+  entropy gets "Check `<file>`" and how to accept it instead, as above.
+- **In local commits only** (the pre-push hook, for commits no remote has yet): take
+  the key out and rewrite those commits with `git commit --amend` or `git rebase -i`,
+  then push as usual. No force push is needed.
+  [Block a push that carries a key](#block-a-push-that-carries-a-key) shows that output.
+- **Only staged** (a pre-commit hook blocked the commit, or there are no commits yet):
+  unstage it and move the value into `.env`. There is no history to rewrite.
+  [Staged scans and the pre-commit hook](/guides/commands/scan#staged-scans-and-the-pre-commit-hook)
+  covers it.
+
+---
+
+## Block a push that carries a key
+
+### evnx's own pre-push hook
+
+```bash
+evnx scan hook install --pre-push
+```
+
+```text
+✓ /home/you/app/.git/hooks/pre-push runs `evnx scan --history` on the commits of every push
+```
+
+The hook scans what each pushed ref adds beyond the remote, not the files on disk, so
+the git-ignored `.env` on your machine never blocks a push. Two commits, one with a
+key, then a push:
+
+```bash
+git push origin main
+```
+
+```text
+  evnx scan  Checking history: 358e1a331fb8e6556f84735f9ad8df31f0899998..6cdf668b2ae33601c74c91510b45f373f5c7b936
+
+  scanning deploy.cfg, README.md
+
+  ✗  AWS Access Key                              critical
+     deploy.cfg@3603c50:1  AKIA…E2
+     !  matches a live key format, not a placeholder
+     →  revoke at https://console.aws.amazon.com/iam
+
+  1 finding  ·  1 critical
+
+
+Next steps:
+  1. Take the keys out of deploy.cfg, then rewrite the local commits that hold them: git rebase -i 3603c50^, marking each commit that has them as edit
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
+  Docs: https://docs.evnx.dev/cli/commands/scan
+evnx scan: push blocked, secrets are in the commits being pushed (see above).
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
+  EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
+error: failed to push some refs to '/home/you/origin.git'
+```
+
+No remote has these commits, so the next steps rewrite them locally, with no
+`git filter-repo` and no force push. When the key is in the last commit, the first step
+is `git commit --amend` instead of `git rebase -i <sha>^`. The push is also blocked
+when the scan cannot run.
+
+### Push anyway, with a reason
+
+Sometimes the finding is not a secret: a sample key in a test fixture that was never
+issued. `EVNX_SCAN_BYPASS` pushes without the scan. The reason is required:
+
+```bash
+EVNX_SCAN_BYPASS="test fixture, key was never issued" git push origin main
+```
+
+```text
+evnx scan: push not scanned, bypassed with a reason: test fixture, key was never issued
+  logged to .git/evnx/bypass.log
+```
+
+Each bypass is one line in `.git/evnx/bypass.log`, with the time, your git email, the
+commits and the reason:
+
+```text
+2026-11-26T19:04:04Z	dev@example.com	007a8e437b08c0089e6755e6223d66d0ed2d402a..de0605ca3100cf98f566ae6d8ebd0508fa4fd024	test fixture, key was never issued
+```
+
+An empty reason does not count:
+
+```text
+evnx scan: EVNX_SCAN_BYPASS needs a reason, so this push is blocked.
+  EVNX_SCAN_BYPASS="why this is safe" git push
+```
+
+For a finding that is not a secret and will stay, an `evnx:allow` comment on its line
+or `evnx scan --update-baseline` is better than a bypass on every push.
+
+### Status and removal
+
+```bash
+evnx scan hook status --pre-push
+```
+
+```text
+installed: /home/you/app/.git/hooks/pre-push
+```
+
+`evnx scan hook uninstall --pre-push` removes evnx's block and nothing else:
+
+```text
+✓ removed the evnx block from /home/you/app/.git/hooks/pre-push
+```
+
+`.git/hooks/` is not committed, so each developer installs the hook once per clone.
+
+---
+
+## Through pre-commit or prek
+
+If your team uses pre-commit or prek, add the `evnx-scan-push` hook to
+`.pre-commit-config.yaml` instead. prek reads the same file:
+
+```yaml
+repos:
+  - repo: https://github.com/urwithajit9/evnx
+    rev: v0.16.0
+    hooks:
+      - id: evnx-scan-installed   # pre-commit: the staged files
+      - id: evnx-scan-push        # pre-push: the commits being pushed
+```
+
+A pre-push hook needs its own install:
+
+```bash
+pre-commit install --hook-type pre-push    # or: prek install --hook-type pre-push
+```
+
+`evnx scan hook status --pre-push` reads the file and says when that step is missing:
+
+```text
+not installed: /home/you/app/.git/hooks/pre-push
+.pre-commit-config.yaml runs evnx-scan-push (rev v0.16.0), but no manager has installed the git hook: run `pre-commit install --hook-type pre-push` (or `prek install --hook-type pre-push`)
+```
+
+The `evnx-scan-push` hook scans from `PRE_COMMIT_FROM_REF` to `PRE_COMMIT_TO_REF`, the
+two ends of the push that pre-commit passes; for a new branch it scans what no remote
+has. `EVNX_SCAN_BYPASS` is for evnx's own hook. Under pre-commit, skip the hook with
+`SKIP=evnx-scan-push git push`.
+
+<Callout type="warning" title="One hook manager">
+Use evnx's own hook or a manager, not both. Where pre-commit or prek already owns
+`.git/hooks/pre-push`, `evnx scan hook install --pre-push` refuses and prints the
+`.pre-commit-config.yaml` lines to add. Installing pre-commit and prek in one clone
+makes the second one keep the first one's hook as `.legacy` and run both.
+</Callout>
+
+---
+
+## In CI
+
+A server-side check catches what a skipped hook lets through. Scan the commits of a
+pull request against its base branch:
+
+```bash
+evnx scan --history origin/main..HEAD
+```
+
+It exits `1` on a finding and `2` when it cannot run, so it works as a CI gate. The
+job needs the history of both ends: a shallow checkout has only the last commit, so
+fetch the full history first (in GitHub Actions, `fetch-depth: 0` on
+`actions/checkout`). [GitHub Actions](/guides/integrations/github-actions) shows how to
+run evnx in a workflow.
+
+---
+
+## Related
+
+- **[Prevent secret leaks](/guides/use-cases/prevent-secret-leaks)**: the layers,
+  from `.gitignore` to a CI gate
+- **[evnx scan](/guides/commands/scan)**: every flag, output formats and the JSON
+  schema
+- **[How evnx scan works](/guides/reference/how-evnx-scan-works)**: rules, confidence
+  and what is skipped

@@ -3,13 +3,13 @@ title: "Quick Start"
 section: getting-started
 order: 2
 publishedAt: "2024-03-15"
-updatedAt: "2026-11-21"
+updatedAt: "2026-11-27"
 excerpt: "Five minutes to your first evnx workflow — check, scan, template, validate and convert a real .env file."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["getting-started", "scan", "validate", "convert"]
 commands: ["add", "add custom", "convert", "diff", "doctor", "init", "scan", "scan hook install", "scan rules add", "set", "sync", "validate"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -17,7 +17,7 @@ draft: false
 
 By the end of this guide you'll have run a health check, scanned for secrets, made a
 `.env.example`, caught validation problems, and converted your `.env` to a Kubernetes
-Secret — all in under five minutes. Every output below is from evnx 0.15.0.
+Secret — all in under five minutes. Every output below is from evnx 0.16.0.
 
 ---
 
@@ -32,9 +32,13 @@ flowchart TB
     start([Your project]) --> q{Is there a .env.example?}
     q -- "No: a new project" --> A["Path A, by hand:<br/>create .env, type the values,<br/>add .env to .gitignore,<br/>write .env.example,<br/>repeat for every new variable"]
     q -- "Yes: you cloned it" --> B["Path B, by hand:<br/>cp .env.example .env,<br/>replace the placeholders,<br/>check .gitignore"]
+    q -- "Only a .env, or config files" --> C["See Start here:<br/>pick your path"]
     A -. with evnx .-> A2["evnx init --yes<br/>evnx add custom NAME …"]
-    B -. with evnx .-> B2["evnx init --yes<br/>evnx validate --fix<br/>evnx set NAME"]
+    B -. with evnx .-> B2["evnx init --yes<br/>evnx validate --fix<br/>evnx set --fill"]
 ```
+
+A project with a `.env` but no `.env.example`, or with its settings in JSON, YAML or a
+`web.config`, is covered in [Start here: pick your path](/guides/getting-started/start-here).
 
 ### Path A — a new project, no template yet
 
@@ -97,16 +101,19 @@ missed until the app fails.
 ```bash
 evnx init --yes               # .env from the template: mode 0600, .gitignore checked
 evnx validate --fix           # generates the app's own secrets, lists what you must fill in
-evnx set STRIPE_SECRET_KEY    # paste each value you were given; nothing is echoed
+evnx set --fill               # asks for each value still missing; nothing is echoed
 ```
 
-From a project whose template lists seven names:
+From a project whose template lists seven names, three of them empty:
 
 ```text
 · .env.example is the project's template: kept as it is
 ✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
 ✓ Created .env from .env.example
   ✓ 7 names from .env.example → .evnx.toml (3 secret, 3 with a format)
+
+Next steps:
+  1. Fill in the placeholder values in .env: evnx set --fill
 …
 ✓ Saved fixes to ./.env — original kept at ./.env.bak
   undo: evnx undo .env
@@ -114,15 +121,39 @@ From a project whose template lists seven names:
 Fixed (2):
   • SECRET_KEY: generated (64 chars), written to ./.env (was "")
   • DB_PASSWORD: generated (64 chars), written to ./.env (was "")
+
+  ✗  STRIPE_SECRET_KEY looks like a placeholder
+…
 ```
+
+`validate --fix` generated the two secrets the app makes itself. The Stripe key comes
+from Stripe, so `set --fill` asks for it. Enter skips a value, and Ctrl-C writes
+nothing. When it is done it runs `validate` again:
+
+```text
+./.env: 1 value to fill in. Enter skips one; Ctrl-C writes nothing.
+Value for STRIPE_SECRET_KEY (1 of 1), Enter to skip: [hidden]
+✓ ./.env: filled STRIPE_SECRET_KEY (values hidden)
+  backup ./.env.bak   undo: evnx undo .env
+
+
+  evnx validate  Check environment configuration
+
+  Files parsed ✓
+! .env.bak is a plaintext backup of .env, left out of the comparison between env files: delete it or keep it git-ignored
+✓ All required variables present
+✓ All checks passed
+```
+
+To set one value, `evnx set STRIPE_SECRET_KEY` asks for it the same way.
 
 ### Try it: a .env made by hand
 
 The rest of this guide uses a `.env` made the usual way, with deliberately bad values,
-so you can see what evnx finds in one:
+in a new git repository, so you can see what evnx finds in one:
 
 ```bash
-mkdir evnx-demo && cd evnx-demo
+mkdir evnx-demo && cd evnx-demo && git init
 
 cat > .env << 'EOF'
 # App config
@@ -173,7 +204,7 @@ evnx doctor
 
 
   ✗  Validate .env file existence, security, and syntax
-     .env is NOT in .gitignore (security risk)
+     .env is not ignored: git would commit it (security risk)
 
   !  Check .env.example exists and is Git-tracked
      .env.example not found - consider creating a template
@@ -204,7 +235,9 @@ evnx doctor
     secrets in the project       evnx scan
 ```
 
-It exits `1` because of the error. Let it repair what it can:
+It exits `1` because of the error. Outside a git repository the same check is only a
+note, `Not a git repository: whether git would commit .env was not checked`, and does not
+fail. Let it repair what it can:
 
 ```bash
 evnx doctor --fix
@@ -234,7 +267,7 @@ read the same `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.15.0
+    rev: v0.16.0
     hooks:
       - id: evnx-doctor           # .gitignore, permissions, .env syntax
       - id: evnx-scan-installed   # secrets in what is staged (step 3)
@@ -268,6 +301,10 @@ or from `evnx scan hook install`. Already use gitleaks? `evnx scan rules add git
 brings its rules into evnx; see
 [Scan rules and packs](/guides/reference/scan-rules-and-packs).
 
+In `evnx-demo`, after `doctor --fix`, git ignores `.env`. A folder walk counts what git
+would commit, and a filled-in `.env` that git ignores is where secrets belong, so its
+findings are summarised in one line and do not fail the scan:
+
 ```bash
 evnx scan
 ```
@@ -275,25 +312,48 @@ evnx scan
 ```text
   evnx scan  Checking for exposed secrets
 
-  · not a git repository: git-ignore rules do not apply, every file is reported
-  scanning ./.env, ./.gitignore
+  scanning ./.gitignore · git-ignored (summarised only): ./.env
+
+  ✓  No secrets in files git would commit
+
+  2 files scanned
+  ·  git ignores ./.env — 2 findings there are not counted, because it is not committed (--include-ignored lists them)
+```
+
+Name the file to see them in full:
+
+```bash
+evnx scan .env
+```
+
+```text
+  evnx scan  Checking for exposed secrets
+
+  scanning .env
 
   ✗  Credentials in a connection string          high
-     ./.env:7 (DATABASE_URL)  <43 chars>
+     .env:7 (DATABASE_URL)  <43 chars>
      !  a password in a postgres:// URL, not a placeholder
 
   ✗  Sensitive config key: STRIPE_SECRET_KEY     high
-     ./.env:14 (STRIPE_SECRET_KEY)  <28 chars>
+     .env:14 (STRIPE_SECRET_KEY)  <28 chars>
      ·  flagged by variable name — the value was not checked
 
   2 findings  ·  2 high
+
+
+Next steps:
+  1. git ignores .env and does not track it, so nothing was committed
+  2. Rotate a key only if the file was shared another way — a copy, an archive, a container image
 ```
 
-No part of a value is printed, only its length. Two things worth noticing:
+No part of a value is printed, only its length. The next steps follow from git: the
+file was never committed, so there is no history to rewrite. Two more things worth
+noticing:
 
-- **The AWS keys are not reported.** `AKIAIOSFODNN7EXAMPLE` and its secret are the
-  example keys from AWS's own documentation, and evnx recognises them as stand-ins.
-  A real key in the same place would be the first finding.
+- **The AWS keys are not reported.** The two AWS values are the example keys from AWS's
+  own documentation, and evnx recognises them as stand-ins. A real key in the same
+  place would be the first finding.
 - **The Stripe key is flagged by its name**, `STRIPE_SECRET_KEY`. Its value is not a
   real key shape, so evnx says it did not check it.
 
@@ -303,17 +363,10 @@ when it could not run at all (a bad path, flag or config). `--exit-zero` turns t
 `1` into a `0` for an advisory step; a scan that could not run still exits `2`.
 </Callout>
 
-<Callout type="info" title="In a git repository">
-A folder walk counts what git would commit. A filled-in `.env` that `.gitignore`
-covers is where secrets belong, so its findings are summarised in one line and do
-not fail the scan. `--include-ignored` counts them, and naming the file
-(`evnx scan .env`) always reports it in full.
-</Callout>
-
 Use JSON output for programmatic use:
 
 ```bash
-evnx scan --format json | jq '.findings[].variable'
+evnx scan .env --format json | jq '.findings[].variable'
 ```
 
 ```text
@@ -419,6 +472,12 @@ evnx validate
      →  Rotate JWT_SECRET where it is issued, then replace it here. `--fix` will not: it cannot tell a real credential from an unfilled placeholder. Pass --fix --rotate-weak-secrets if nothing else holds this value
 
   5 errors
+
+Next steps:
+  1. Review and fix the errors above
+  2. Fill in the placeholder values: evnx set --fill
+  3. Use --ignore issue_type to suppress specific warnings
+Validation failed: 5 errors
 ```
 
 It exits `1`. Without a `.env.example` it would exit `2` and say how to make one, which
@@ -446,9 +505,12 @@ evnx convert --to kubernetes --name my-app-secrets --output secret.yaml
 ```text
 ✓ Converted successfully
 Output written to: secret.yaml
+! 'secret.yaml' may contain secrets and is not in .gitignore
 ```
 
-`secret.yaml` is readable by you only (`0600`), because it holds every value:
+`secret.yaml` is readable by you only (`0600`), because it holds every value. The
+warning is there because git would commit it: add it to `.gitignore`, or write it
+outside the repository.
 
 ```yaml
 apiVersion: v1
@@ -493,6 +555,7 @@ evnx set NEW_FEATURE_FLAG=true
 ```
 
 ```text
+  .gitignore: added *.bak, .evnx/backups.json (a backup holds the same secrets as the file)
 ✓ ./.env: REDIS_URL  added: redis://localhost:6379
   backup ./.env.bak   undo: evnx undo .env
 ✓ ./.env: NEW_FEATURE_FLAG  added: true
@@ -553,5 +616,6 @@ This is the core evnx workflow. Everything else builds on these primitives.
 
 - **[evnx scan deep dive](/guides/commands/scan)** — output formats, SARIF for GitHub, custom patterns
 - **[Prevent secret leaks](/guides/use-cases/prevent-secret-leaks)** — set up the pre-commit hook properly
+- **[Scan your git history and block pushes](/guides/use-cases/scan-history-and-block-pushes)** — `scan --history` and the pre-push hook
 - **[GitHub Actions integration](/guides/integrations/github-actions)** — run evnx in CI/CD
 - **[From shell to evnx](/guides/reference/shell-to-evnx)** — the evnx command for each `cat`, `sed`, `cp` and `source` line you use on `.env` files

@@ -3,19 +3,43 @@ title: "evnx scan"
 section: commands
 order: 5
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-17"
-excerpt: "Scan a project for secrets: 63 built-in provider rules, names checked in .env, YAML, JSON and TOML, severity separate from confidence, allow markers, a baseline for existing findings, and a pre-commit hook. JSON, SARIF and GitHub annotation output."
+updatedAt: "2026-11-26"
+excerpt: "Scan a project or its git history for secrets: 70 built-in provider rules, names checked in .env, YAML, JSON and TOML, values decoded from base64 and hex, severity separate from confidence, allow markers, a baseline for existing findings, and pre-commit and pre-push hooks. JSON, SARIF and GitHub annotation output."
 difficulty: beginner
 timeToComplete: "15 minutes"
 tags: ["scan", "secrets", "ci-cd", "sarif", "github-actions", "baseline", "pre-commit", "evnx"]
-commands: ["backup", "init", "scan", "scan hook", "scan hook install", "scan rules", "scan rules list", "scan rules new", "scan rules test", "validate"]
-evnxVersion: "0.15.0"
+commands: ["backup", "init", "scan", "scan hook", "scan hook install", "scan hook status", "scan hook uninstall", "scan rules", "scan rules add", "scan rules list", "scan rules new", "scan rules test", "validate"]
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
 draft: false
 ---
 
-`evnx scan` finds values that look like real secrets — provider keys, tokens, private keys, passwords in connection strings — before they leave your machine. A folder scan reads every file, not only `.env`, and in a git repository it counts what git would commit. It is built for pre-commit hooks and CI, and it never touches the network. Every output on this page is from evnx 0.14.0.
+`evnx scan` finds values that look like real secrets — provider keys, tokens, private keys, passwords in connection strings — before they leave your machine. A folder scan reads every file, not only `.env`, and in a git repository it counts what git would commit. It is built for pre-commit hooks, pre-push hooks and CI, and it never touches the network. Outputs on this page are from evnx 0.14.0 to 0.16.0; every section that changed in 0.16.0 was re-run on 0.16.0.
+
+---
+
+## Upgrading from 0.15
+
+<Callout type="info" title="What changed in 0.16.0">
+Run `evnx scan` once on a branch before you rely on it in CI. A project can see **new
+findings** (GitLab tokens, secrets inside encoded values) and **fewer false ones**
+(made-up `ghp_` tokens, names in lockfiles, evnx's own rule packs).
+
+| What changed | What to do |
+|---|---|
+| **Seven more GitLab token rules** (`glft-`, `glimt-`, `glagent-`, `glwt-`, `glsoat-`, `glffct-`, `gloas-`); the runner rule finds `glrtr-` and the personal access token rule the routable form | Accept what is not a secret with `evnx:allow` or `--update-baseline` |
+| **A base64, hex or percent-encoded value is decoded once** and checked against the format rules | Baseline what is not a secret. See [Secrets inside encoded values](#secrets-inside-encoded-values) |
+| **A classic `ghp_`, `gho_`, `ghu_` or `ghr_` token whose checksum does not match is dropped**; one that matches is high confidence | CI that failed on made-up tokens in test files now passes. See [Stand-ins](#stand-ins-are-never-findings) |
+| **The confidence shown can move one level** for an `Authorization` header or connection string (up) or a test folder (down) | Nothing is dropped; the exit code and `--confidence` use the level before the hint. See [Context hints](#context-hints) |
+| **Lockfiles get the key-format rules only** | A package name such as `react-password-toggle-field` is no longer a "Sensitive config key" |
+| **`--format json` is `schema_version: 3`**, with `file`, `line` and `key_path` beside `location` | See [JSON](#json) |
+| **History is rewritten only for a real key match in a commit.** A weaker committed finding gets "Check `<file>`"; a staged-only file gets "Unstage `<file>`" | A script that read the next steps must read the new lines. See [Pretty](#pretty-default) |
+| **evnx's own files in `.evnx/` are not scanned** (rule packs, `rules.lock`, the baseline) | A pack's example keys no longer fail the scan |
+| **New: `--history`** and a **pre-push hook**; `hook status` reads `.pre-commit-config.yaml` | See [Scanning git history](#scanning-git-history) |
+
+The full list, for every command, is in [Upgrading to 0.16.0](/guides/reference/upgrading-to-0-16-0).
+</Callout>
 
 ---
 
@@ -65,7 +89,7 @@ you rely on it in CI.
 ```bash
 evnx scan [OPTIONS] [PATH]...
 evnx scan rules <list|new|test|add|update|remove>
-evnx scan hook <install|uninstall|status>
+evnx scan hook <install|uninstall|status> [--pre-push]
 ```
 
 A folder literally named `rules` or `hook` is scanned as `evnx scan ./rules`.
@@ -80,6 +104,12 @@ A folder literally named `rules` or `hook` is scanned as `evnx scan ./rules`.
 | `--severity` | `critical\|high\|medium\|low` | `low` | **v0.13.0+** — lowest **severity** (how bad if real) worth reporting. Filters the findings, the counts and the exit code together. Until 0.12 this filtered on confidence |
 | `--confidence` | `high\|medium\|low` | `low` | **v0.13.0+** — lowest **confidence** (how sure evnx is) worth reporting. Must pass together with `--severity` |
 | `--staged` | `bool` | `false` | **v0.13.0+** — scan what the next commit records, read from the git index. See [Staged scans and the pre-commit hook](#staged-scans-and-the-pre-commit-hook) |
+| `--history [RANGE]` | revision range | — | **v0.16.0** — scan the files git history added or changed, not the files on disk. See [Scanning git history](#scanning-git-history) |
+| `--full` | `bool` | `false` | **v0.16.0** — with a bare `--history`, scan all of history again instead of the commits since the last clean scan |
+| `--reason` | `used-in-tests\|false-positive\|fix-later` | — | Why the findings `--update-baseline` adds are accepted |
+| `--include-dir` | name | — | Walk a folder the scan skips by default (`vendor`, `.venv`). Repeatable |
+| `--follow-symlinks` | `bool` | `false` | Read a symlinked file whose target is inside the scanned folder |
+| `--no-config` | `bool` | `false` | Ignore the repository's `.evnx.toml` and use the built-in defaults |
 | `--baseline` | file | `.evnx/baseline.json` if it exists | **v0.13.0+** — findings accepted earlier; matching ones are `known` and do not fail the run |
 | `--update-baseline` | `bool` | `false` | **v0.13.0+** — write this run's findings to the baseline and exit 0 |
 | `--rules` | file | — | **v0.13.0+** — a rule file for this run, on top of `.evnx/rules/` and your personal rules. Repeatable |
@@ -111,7 +141,7 @@ Redirect instead of `--output`: `evnx scan --format sarif > results.sarif`.
 
 ### Built-in rules
 
-evnx ships **63 rules** (**v0.13.0+**; 13 in 0.12). A rule is in the core only when the
+evnx ships **70 rules** (63 in 0.13.0 to 0.15.0, 13 in 0.12). A rule is in the core only when the
 provider documents a fixed prefix, or a fixed length and character set. Each has a stable
 `id` (`aws-access-key`), a `provider`, a `category` and a test that must match and a near
 miss that must not. Providers whose keys have no documented shape (Postmark, Cloudflare,
@@ -120,7 +150,7 @@ your own rule for them.
 
 | Category | Rules | Examples |
 |---|---:|---|
-| `source-ci` | 12 | GitHub, GitLab, npm, PyPI, Docker Hub, Azure DevOps, Bitbucket |
+| `source-ci` | 19 | GitHub, GitLab (12 token kinds), npm, PyPI, Docker Hub, Azure DevOps, Bitbucket |
 | `cloud` | 8 | AWS, Azure storage and SAS, DigitalOcean, Heroku, Fly.io, Google API key |
 | `messaging-email` | 7 | Twilio, SendGrid, Mailgun, Slack, Discord, Telegram |
 | `ai` | 7 | OpenAI, Anthropic, Hugging Face, Groq, xAI, Replicate, Perplexity |
@@ -151,9 +181,77 @@ it. The `github-token` rule keeps the classic branch and has a second for this f
 reported once, as `github-token`, not also as `jwt` or `high-entropy-string`, and a trailing
 `.`, `,` or `)` is not part of the match.
 
-**Stand-ins are never findings** (**v0.10.14+**). AWS's documented example keys
-(`AKIAIOSFODNN7EXAMPLE`) and placeholder-shaped values are recognised and skipped, and a
-name-only match on a value that is an address (a URL, a host) is dropped.
+**GitLab tokens** (**v0.16.0**). Besides personal access, runner, deploy, pipeline trigger
+and CI/CD job tokens, evnx finds feed tokens (`glft-`), incoming email tokens (`glimt-`),
+agent for Kubernetes tokens (`glagent-`), workspace tokens (`glwt-`, GitLab 18.2 and later),
+SCIM tokens (`glsoat-`), feature flags client tokens (`glffct-`) and OAuth application
+secrets (`gloas-`). The runner rule also finds `glrtr-` tokens, and the personal access
+token rule the routable form that ends in `.` and nine characters.
+
+### Stand-ins are never findings
+
+**v0.10.14+.** AWS's documented example keys (`AKIAIOSFODNN7EXAMPLE`) and
+placeholder-shaped values are recognised and skipped, and a name-only match on a value that
+is an address (a URL, a host) is dropped.
+
+**v0.16.0** — a classic GitHub token (`ghp_`, `gho_`, `ghu_` or `ghr_` and 36 characters)
+carries a checksum in its last six characters. A value whose checksum does not match was
+never issued by GitHub, so it is dropped like a placeholder, whatever the variable is
+called. A value that matches is reported with high confidence. `ghs_` tokens and other
+lengths are not judged. A random `ghp_` value made up for a test file is therefore not a
+finding:
+
+```text
+$ evnx scan
+  evnx scan  Checking for exposed secrets
+
+  · not a git repository: git-ignore rules do not apply, every file is reported
+  scanning ./.env, ./package-lock.json
+
+  !  GitLab Feed Token                           medium, medium confidence
+     ./.env:2 (GL_FEED)  <25 chars>
+     →  revoke at https://docs.gitlab.com/user/profile/personal_access_tokens/#feed-token
+
+  ✗  GitLab Runner Authentication Token          high
+     ./.env:3 (GL_RUNNER)  <26 chars>
+     !  matches a live key format, not a placeholder
+     →  revoke at https://docs.gitlab.com/ci/runners/runners_scope/
+
+  2 findings  ·  1 high  ·  1 medium
+```
+
+(Line 1 of that `.env` is `GITHUB_TOKEN=ghp_` and 36 random characters: no finding.)
+
+### Secrets inside encoded values
+
+**v0.16.0.** A value of 16 to 4096 characters that is base64, hex or percent-encoded text
+is decoded once, and the text is checked against the format rules: known prefixes,
+private-key headers, connection strings. It is not checked against names or entropy, and a
+binary result such as an image or a hash is dropped. Such a finding says so, and carries
+`"encoded": "base64"` (or `hex`, `url`) in JSON:
+
+```text
+  ✗  Credentials in a connection string          high
+     ./encoded.env:1 (BLOB)  <51 chars>
+     !  a password in a postgres:// URL, not a placeholder
+     ·  found inside a base64-encoded value, decoded once
+```
+
+### Lockfiles
+
+**v0.16.0.** `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`,
+`bun.lock`, `Cargo.lock`, `poetry.lock`, `uv.lock`, `Pipfile.lock`, `composer.lock`,
+`Gemfile.lock` and `go.sum`, in any folder, get the key-format rules only. A key is not
+judged by its name nor a value by its entropy, so a package such as
+`@radix-ui/react-password-toggle-field` is not a "Sensitive config key". Every format rule
+still runs, so a password in a `resolved` registry URL or a real key is still found. `-v`
+says so, and JSON `files[]` carries the same note:
+
+```text
+$ evnx scan -v
+  …
+⋯ ./package-lock.json: lockfile: only key-format rules, no name or entropy checks
+```
 
 <Callout type="info" title="Why test keys with a generated value">
 Because AWS's example key is skipped, a hook test that uses it passes and proves nothing.
@@ -359,6 +457,31 @@ $ evnx scan --severity high --confidence high -q
 
 (The `Sensitive config key: API_TOKEN` and `Sensitive config key: password` findings in the same folder are gone: a name match is medium confidence.)
 
+### Context hints
+
+**v0.16.0.** The confidence shown can move one level from where the line sits:
+
+- **Up** for a value on a line with an `Authorization` or `Bearer` header, an HTTP client
+  call or a connection string.
+- **Down** for a file under a `test`, `tests`, `mock`, `spec` or `fixtures` folder (name,
+  entropy and medium findings only).
+
+Nothing is dropped. The exit code, the `--confidence` floor and the summary counts use the
+level before the hint. Pretty, JSON and SARIF output show the moved level; JSON lists the
+hints in `context` and the earlier level in `confidence_before_context`:
+
+```text
+  ✗  Sensitive config key: API_TOKEN             high, medium confidence
+     ./tests/conftest.py:1 (API_TOKEN)  <32 chars>
+     ·  flagged by variable name — the value was not checked
+```
+
+```json
+{ "rule_id": "sensitive-config-key", "context": ["test-path"], "confidence_before_context": "high", "confidence": "medium", "file": "./tests/conftest.py", "line": 1 }
+```
+
+(Trimmed to the fields that matter here.)
+
 ---
 
 ## Output formats
@@ -372,35 +495,70 @@ evnx scan
 ```text
   evnx scan  Checking for exposed secrets
 
-  scanning ./.env, ./.gitignore, ./clerk.env and 2 other files
+  scanning ./.gitignore, ./config/settings.yml, ./deploy.py and 3 other files · git-ignored (summarised only): ./.env
+
+  ✗  Sensitive config key: password              high
+     ./config/settings.yml:3 (app.db.password)  <24 chars>
+     ·  flagged by variable name — the value was not checked
 
   ✗  AWS Access Key                              critical
-     ./.env:1 (AWS_ACCESS_KEY_ID)  AKIA…5WZC
+     ./deploy.py:1  AKIA…TU
      !  matches a live key format, not a placeholder
      →  revoke at https://console.aws.amazon.com/iam
 
   ✗  Credentials in a connection string          high
-     ./.env:4 (DATABASE_URL)  post…5432
-     !  a password in a postgresql:// URL, not a placeholder
+     ./encoded.env:1 (BLOB)  <51 chars>
+     !  a password in a postgres:// URL, not a placeholder
+     ·  found inside a base64-encoded value, decoded once
+
+  ✗  GitLab Personal Access Token                high
+     ./staged.toml:1 (token)  glpat-…YH
+     !  matches a live key format, not a placeholder
+     →  revoke at https://gitlab.com/-/user_settings/personal_access_tokens
 
   ✗  Sensitive config key: API_TOKEN             high, medium confidence
-     ./.env:5 (API_TOKEN)  ab…34
+     ./tests/conftest.py:1 (API_TOKEN)  <32 chars>
      ·  flagged by variable name — the value was not checked
 
-  8 findings  ·  3 critical  ·  4 high  ·  1 medium
+  5 findings  ·  1 critical  ·  4 high
+  ·  git ignores ./.env — 2 findings there are not counted, because it is not committed (--include-ignored lists them)
+
+
+Next steps:
+  1. Revoke or rotate the keys in ./deploy.py — assume they are compromised
+  2. Remove them from history: git filter-repo --path deploy.py --invert-paths
+  3. Force push, after coordinating with everyone who has a clone
+  4. Check ./config/settings.yml and ./tests/conftest.py: it is committed, but only a variable name, an entropy guess or a lower-confidence match flagged it, so it may not be a secret
+  5. ./tests/conftest.py is in a test folder, where sample values are usual
+  6. Not a secret: mark its line evnx:allow <rule-id> reason=used-in-tests (or false-positive), or accept it with evnx scan --update-baseline
+  7. If one is a real secret, revoke or rotate it: it is in git history
+  8. Unstage ./encoded.env and ./staged.toml: git restore --staged encoded.env staged.toml (git rm --cached encoded.env staged.toml before the first commit). No commit holds them, so there is no history to rewrite
+  9. Keep ./encoded.env out of commits: values belong there, so leave it git-ignored
+  10. Before you stage ./staged.toml again, move the values into .env (or another file git ignores), read at run time
+  11. If a key was shared another way (copied, sent, pushed from another clone), rotate it
 ```
 
-(Three of the eight findings shown.) The level beside a name is the **severity**; when
-confidence is not `high` it follows. A value is only ever shown as a short preview
-(`AKIA…5WZC`; under 8 characters it is `<n chars>`). Findings are sorted by file and line,
-and one credential is one finding. The "Next steps" follow git: for a file git ignores and
-does not track, they say nothing was committed instead of telling you to rewrite history.
+The `scanning` line names the files that are counted first; after `·`, the ones git
+ignores, which the walk read and only summarised (**v0.16.0**). Each list ends "and N other
+files" when it is long. The level beside a name is the **severity**; when confidence is not
+`high` it follows. A value is only ever shown as a short preview (`AKIA…5WZC`; under 8
+characters it is `<n chars>`). Findings are sorted by file and line, and one credential is
+one finding.
+
+The "Next steps" follow git and what matched (**v0.16.0**):
+
+| The finding is | Next steps |
+|---|---|
+| In a file a commit holds (or outside a repository), matched by its value by a format rule with high confidence | Revoke, `git filter-repo`, force push. Only these files are named in the rewrite steps |
+| In a committed file, but flagged by a variable name, by entropy or with lower confidence | "Check `<file>`", with how to accept it if it is not a secret, and a note when it is in a test folder |
+| In a file that is staged but in no commit (a hook blocked the commit, or there are no commits yet) | "Unstage `<file>`: git restore --staged …" (`git rm --cached` before the first commit), then move the values into `.env`; rotate only if the key was shared another way |
+| In a file git ignores and does not track | Nothing was committed |
 
 ### JSON
 
-**v0.15.0+** — the document starts with a `run` header (`tool`, `version`, `schema_version`, `ruleset`
-= the rule-set id, `features`); the keys below it are unchanged. `scan rules list --json` (a top-level
-array) and `--format sarif` have no `run` header.
+**v0.16.0** — `schema_version: 3`. The document starts with a `run` header (`tool`,
+`version`, `schema_version`, `ruleset` = the rule-set id, `features`). `scan rules list
+--json` (a top-level array) and `--format sarif` have no `run` header.
 
 ```bash
 evnx scan --format json
@@ -408,61 +566,94 @@ evnx scan --format json
 
 ```json
 {
-  "run": { "tool": "evnx", "version": "0.15.0", "schema_version": 2, "ruleset": "builtin@0.15.0", "features": ["backup", "cloud", "migrate", "net"] },
-  "schema_version": 2,
-  "files_scanned": 5,
+  "run": { "tool": "evnx", "version": "0.16.0", "schema_version": 3, "ruleset": "builtin@0.16.0", "features": ["backup", "cloud", "migrate", "net"] },
+  "schema_version": 3,
+  "files_scanned": 7,
   "files": [
     { "path": "./.env", "read_as": "dotenv" },
-    { "path": "./config.yml", "read_as": "structured" }
+    { "path": "./config/settings.yml", "read_as": "structured" }
   ],
   "unreadable": [],
   "skipped": [],
-  "secrets_found": 8,
+  "secrets_found": 5,
   "findings": [
     {
-      "rule_id": "aws-access-key",
+      "rule_id": "sensitive-config-key",
       "status": "new",
-      "fingerprint": "00a61dedd9c3822a221de0a2f30cb7c44aec5d384c1e520d0b7fe508427f94fa",
-      "pattern": "AWS Access Key",
+      "fingerprint": "777e6342b6541ead18495acd2fb89b130f51afbb3ffbf8970da34e02c841aeee",
+      "pattern": "Sensitive config key: password",
       "confidence": "high",
-      "severity": "critical",
-      "value_preview": "AKIA…5WZC",
-      "location": "./.env:1 (AWS_ACCESS_KEY_ID)",
-      "variable": "AWS_ACCESS_KEY_ID",
-      "action_url": "https://console.aws.amazon.com/iam",
+      "severity": "high",
+      "value_preview": "<24 chars>",
+      "location": "./config/settings.yml:3 (app.db.password)",
+      "file": "./config/settings.yml",
+      "line": 3,
+      "key_path": "app.db.password",
+      "variable": "app.db.password",
+      "action_url": null,
+      "matched_by": "name",
+      "git": "tracked"
+    },
+    {
+      "rule_id": "connection-string-credentials",
+      "status": "new",
+      "fingerprint": "3fcbf5b7c4ae73c9a2375794843dc401bff20302a80cab6690b3c22293eaddc1",
+      "encoded": "base64",
+      "pattern": "Credentials in a connection string",
+      "confidence": "high",
+      "severity": "high",
+      "value_preview": "<51 chars>",
+      "location": "./encoded.env:1 (BLOB)",
+      "file": "./encoded.env",
+      "line": 1,
+      "variable": "BLOB",
+      "action_url": null,
       "matched_by": "value",
       "git": "tracked"
     }
   ],
-  "high_confidence": 6,
-  "medium_confidence": 2,
+  "high_confidence": 5,
+  "medium_confidence": 0,
   "low_confidence": 0,
+  "effective_config": { "severity_floor": "low", "confidence_floor": "low", "baseline": null, "rules_digest": "2cb54a5e9ad62258c3e19606c701b220794f25f19881686ec0e8a912cc98a30c" },
   "summary": {
-    "total": 8,
-    "high": 6,
-    "medium": 2,
+    "total": 5,
+    "high": 5,
+    "medium": 0,
     "low": 0,
-    "severity": { "critical": 3, "high": 4, "medium": 1, "low": 0 },
-    "files_scanned": 5,
+    "severity": { "critical": 1, "high": 4, "medium": 0, "low": 0 },
+    "files_scanned": 7,
     "files_unreadable": 0,
-    "files_skipped": 0
+    "files_skipped": 0,
+    "ignored_by_git": 2
   }
 }
 ```
 
-(Trimmed to one file entry and one finding.) What `schema_version: 2` means:
+(Trimmed to two file entries, two findings and part of `effective_config`.) What the fields
+mean:
 
 | Field | Meaning |
 |---|---|
 | `rule_id` | The stable rule id, the same one in `scan rules list`, SARIF `ruleId`, baselines and allow markers |
-| `severity` | How bad if real. **New in 2.** `summary.severity` counts by severity |
-| `confidence` | How sure. Unchanged, as are `high_confidence`, `medium_confidence`, `low_confidence` and `summary.high/medium/low` (those count confidence) |
+| `severity` | How bad if real. `summary.severity` counts by severity |
+| `confidence` | How sure, after any [context hint](#context-hints). `high_confidence`, `medium_confidence`, `low_confidence` and `summary.high/medium/low` count confidence before the hint |
+| `file`, `line` | **New in 3.** The file, and the line as a number (`null` when it is not known), so a script need not split `location` |
+| `key_path` | **New in 3.** In a YAML, JSON, TOML or notebook file, the path to the key (`app.db.password`), also for a secret found inside an encoded value; the pretty output shows it as `config.yaml:3 (app.aws.encoded_key)` |
+| `encoded` | **New in 3.** `base64`, `hex` or `url` when the secret was found in a decoded value |
+| `context`, `confidence_before_context` | **New in 3.** The hints that moved the confidence, and the level before them |
+| `commit`, `blob`, `commit_time` | **New in 3.** Under `--history`, where the file version came from; `git` is then `"history"` |
+| `reason_code` | **New in 3.** On an allowed or baseline finding: `used-in-tests`, `false-positive` or `fix-later`. `summary.by_reason` counts them |
+| `effective_config.rules_digest` | **New in 3.** A hash of the rule set in force |
 | `status` | `new`, `known` (in the baseline) or `allowed` (inline marker) |
 | `fingerprint` | The baseline's identity for the finding. No value goes into it |
 | `matched_by` | `value` or `name`, so CI can tell a key match from a name heuristic |
 | `allowed`, `known` | The findings that do not count. Each array is present only when it has entries. `findings` and `summary.total` are exactly what fails the run |
-| `git` | `tracked`, or `staged` under `--staged`. In a repository the document also carries `ignored_by_git` |
-| `files[].read_as` | `dotenv`, `structured` or `text` |
+| `git` | `tracked`, `staged` under `--staged`, or `history` under `--history`. In a repository the document also carries `ignored_by_git` |
+| `files[].read_as` | `dotenv`, `structured` or `text`. A lockfile also gets a `note` |
+
+Each new field is left out when it does not apply. The SARIF output lists allowed and
+baseline findings as suppressed results, with the reason as the justification.
 
 Useful with `jq`:
 
@@ -610,8 +801,9 @@ intentional". The recommended order for a repository that already has findings i
 index and not from disk. A secret staged and then edited out on disk is still found; an
 unstaged one is not. Paths limit it to staged files under them, and staged files are
 scanned whatever `.gitignore` says. Nothing staged exits 0 (`nothing staged, nothing
-scanned`); outside a repository it exits 2. Findings carry `"git": "staged"`, and the next
-steps say `git restore --staged`, never `git filter-repo`.
+scanned`); outside a repository it exits 2. Findings carry `"git": "staged"`. For a file no
+commit holds, the next steps say `git restore --staged`, not `git filter-repo`; a staged
+change to a file that is already in a commit keeps the history steps (**v0.16.0**).
 
 `evnx scan hook` manages a git `pre-commit` hook that runs it:
 
@@ -641,15 +833,213 @@ evnx scan: commit blocked, secrets are staged (see above).
 | Command | Does |
 |---|---|
 | `scan hook install` | Adds a managed block to the repository's `pre-commit` hook (`core.hooksPath` is honoured). Your own lines are kept; a reinstall replaces the block |
-| `scan hook status` | Says whether it is installed here and whether it is turned off |
+| `scan hook status` | Says whether it is installed here and whether it is turned off. **v0.16.0**: it also reads `.pre-commit-config.yaml` |
 | `scan hook uninstall` | Removes the block and nothing else |
+
+Each takes `--pre-push` for the [pre-push hook](#the-pre-push-hook) (**v0.16.0**).
 
 - The commit is blocked when secrets are staged, when the scan cannot run, and ⚠️ **when
   evnx is not on `PATH`** — an unchecked commit is not let through quietly.
 - A hook that pre-commit or prek generated is left alone; `install` prints the
-  `.pre-commit-config.yaml` snippet to add instead.
+  `.pre-commit-config.yaml` snippet to add instead and exits 2. See
+  [One hook manager](#one-hook-manager-pre-commit-and-prek).
 - `git config hooks.evnx-scan false` turns it off; `git commit --no-verify` skips it once.
   The baseline and allow markers apply here too.
+
+---
+
+## Scanning git history
+
+**v0.16.0.** `evnx scan --history` scans the files git history added or changed instead of
+the files on disk. A secret that was added and later removed is still found: rotate it,
+then rewrite history.
+
+| Command | Scans |
+|---|---|
+| `evnx scan --history` | Everything reachable from `HEAD` (after the first clean scan, only what is new: see below) |
+| `evnx scan --history origin/main..HEAD` | The commits on this branch that `origin/main` does not have |
+| `evnx scan --history v0.15.0..` | Everything since a tag |
+| `evnx scan --history all` | Every ref |
+| `evnx scan --history src/` | Only files under `src/` |
+
+Each distinct file version is read once, whole (so a name rule sees its key), and reported
+against the oldest commit that has it, as `path@abc1234:LINE`. Here `deploy.py` was
+committed with a key and deleted in the next commit:
+
+```text
+$ evnx scan --history
+
+  evnx scan  Checking history: HEAD
+
+  scanning .gitignore, config/settings.yml, deploy.py and 1 other file
+
+  ✗  Sensitive config key: password              high
+     config/settings.yml@ec11387:3 (app.db.password)  <24 chars>
+     ·  flagged by variable name — the value was not checked
+
+  ✗  AWS Access Key                              critical
+     deploy.py@ec11387:1  AKIA…TU
+     !  matches a live key format, not a placeholder
+     →  revoke at https://console.aws.amazon.com/iam
+
+  ✗  Sensitive config key: API_TOKEN             high, medium confidence
+     tests/conftest.py@ec11387:1 (API_TOKEN)  <32 chars>
+     ·  flagged by variable name — the value was not checked
+
+  3 findings  ·  1 critical  ·  2 high
+
+
+Next steps:
+  1. Revoke or rotate the keys in deploy.py — assume they are compromised
+  2. Remove them from history: git filter-repo --path deploy.py --invert-paths
+  3. Force push, after coordinating with everyone who has a clone
+  4. Check config/settings.yml and tests/conftest.py: it is committed, but only a variable name, an entropy guess or a lower-confidence match flagged it, so it may not be a secret
+  5. tests/conftest.py is in a test folder, where sample values are usual
+  6. Not a secret: mark its line evnx:allow <rule-id> reason=used-in-tests (or false-positive), or accept it with evnx scan --update-baseline
+  7. If one is a real secret, revoke or rotate it: it is in git history
+```
+
+The baseline and allow markers apply as for any scan. Under `--format json` a finding
+carries `commit`, `blob`, `commit_time` and `"git": "history"`. Outside a repository
+`--history` exits 2.
+
+### Reruns read only new commits
+
+A bare `--history` builds on the last **clean** history scan of this clone. It is kept in
+`.git/evnx/history.json`, which is never committed. A rerun reads only the commits made
+since, unless the rules, the scan settings or the baseline changed; `--full` reads all
+history again:
+
+```text
+$ evnx scan --history --update-baseline --reason fix-later
+✓ wrote .evnx/baseline.json with 3 finding(s); they are reported as known from now on
+
+$ git add .evnx && git commit -qm baseline
+$ evnx scan --history
+  · scan settings or the baseline changed since the last history scan: scanning all history
+
+  evnx scan  Checking history: HEAD
+
+  · evnx's own files in .evnx/ are not scanned (name one to scan it)
+  scanning .gitignore, config/settings.yml, deploy.py and 1 other file
+
+  ✓  No new secrets
+
+  4 files scanned
+  ·  3 known (baseline) (3 fix-later) — not counted; -v lists them
+  ·  baseline .evnx/baseline.json accepts 3 findings
+
+$ git commit -qm notes      # one more commit
+$ evnx scan --history
+  · scanning the commits since df10201 (--full scans all history)
+
+  evnx scan  Checking history: df1020143190175a9dcc7576bd02531539feeee3..HEAD
+
+  scanning notes.txt
+
+  ✓  No secrets detected
+
+  1 file scanned
+  ·  baseline .evnx/baseline.json accepts 3 findings
+```
+
+(Paths shortened.) The baseline records a hash of the rule set it was written under
+(`rules_digest`), so a rule change is noticed. The baseline stays `schema_version` 1, and an
+older evnx ignores the field.
+
+### The pre-push hook
+
+`evnx scan hook install --pre-push` installs a git `pre-push` hook that scans the commits
+being pushed: what each ref adds beyond the remote. The push is blocked for secrets in
+them, when the scan cannot run, and when evnx is not on `PATH`:
+
+```text
+$ evnx scan hook install --pre-push
+✓ .git/hooks/pre-push runs `evnx scan --history` on the commits of every push
+
+$ git push origin main
+
+  evnx scan  Checking history: 9a13fc5be6a6bc3a9146b55e020ba3ec91213247..d1b189ddd337ade243492242414ce1bba7743fdc
+
+  scanning deploy2.py
+
+  ✗  AWS Access Key                              critical
+     deploy2.py@d1b189d:1  AKIA…0E
+     !  matches a live key format, not a placeholder
+     →  revoke at https://console.aws.amazon.com/iam
+
+  1 finding  ·  1 critical
+
+
+Next steps:
+  1. Take the keys out of deploy2.py, then rewrite the local commits that hold them: git commit --amend
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
+  …
+evnx scan: push blocked, secrets are in the commits being pushed (see above).
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
+  EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
+error: failed to push some refs to '../remote.git'
+```
+
+The commits being pushed are only local, so the steps rewrite them where they are: with
+`git commit --amend` when the key is in the last commit, or
+`git rebase -i <sha>^, marking each commit that has them as edit` when it is in an older
+one. No force push or `git filter-repo` is needed.
+
+To push anyway, give a reason. It is required, and it is logged with the time, the git
+user and the commits to `.git/evnx/bypass.log`:
+
+```text
+$ EVNX_SCAN_BYPASS="test fixture, rotated" git push origin main
+evnx scan: push not scanned, bypassed with a reason: test fixture, rotated
+  logged to .git/evnx/bypass.log
+To ../remote.git
+   9a13fc5..d1b189d  main -> main
+
+$ cat .git/evnx/bypass.log
+2026-11-27T13:16:45Z	a@b.c	9a13fc5be6a6bc3a9146b55e020ba3ec91213247..d1b189ddd337ade243492242414ce1bba7743fdc	test fixture, rotated
+```
+
+`evnx scan hook uninstall --pre-push` removes it and `evnx scan hook status --pre-push`
+reports it.
+
+### One hook manager: pre-commit and prek
+
+When pre-commit or prek manages a git hook, evnx does not install its own block beside it:
+two managers on one hook fight. **v0.16.0**: `scan hook status` reads
+`.pre-commit-config.yaml` and reports an evnx hook it runs (`evnx-scan`,
+`evnx-scan-installed`, or with `--pre-push` `evnx-scan-push`), with its `rev`. The file is
+only read:
+
+```text
+$ evnx scan hook status
+not installed: .git/hooks/pre-commit
+.pre-commit-config.yaml runs evnx-scan (rev v0.11.0), but no manager has installed the git hook: run `pre-commit install` (or `prek install`)
+rev v0.11.0 is older than this evnx (0.16.0): set rev: v0.16.0 in .pre-commit-config.yaml
+```
+
+Once `pre-commit install` (or `prek install`) has written the git hook:
+
+```text
+$ evnx scan hook status
+installed through pre-commit: .pre-commit-config.yaml runs evnx-scan (rev v0.11.0), from .git/hooks/pre-commit
+rev v0.11.0 is older than this evnx (0.16.0): set rev: v0.16.0 in .pre-commit-config.yaml
+
+$ evnx scan hook install
+Error: pre-commit manages .git/hooks/pre-commit; two managers on one hook fight. Add evnx to .pre-commit-config.yaml instead (prek reads the same file):
+
+- repo: https://github.com/urwithajit9/evnx
+  rev: v0.16.0
+  hooks:
+    - id: evnx-scan-installed
+
+then run `pre-commit install`.
+
+evnx stopped before making changes (exit 2). Run one of the commands above.
+```
+
+(Paths shortened.) `hook status` exits 0 in each case.
 
 ---
 
@@ -856,6 +1246,30 @@ positives, now fixed:
   with an `example` label is a placeholder host, as `localhost` and `example.com` already
   were; a real host with `user:password`, or a real password on an example host, is still one.
 
+**evnx's own files** (**v0.16.0**). A rule pack added with `evnx scan rules add` holds
+example keys. A walk, `--staged` and `--history` leave out the rule files in
+`.evnx/rules/`, `.evnx/rules.lock`, `.evnx/baseline.json`, `.evnx/backups.json` and
+`.evnx/platform/vercel.json`, and say so once. Other files under `.evnx/` are scanned, packs
+are still checked against their sha256 in `rules.lock`, and a file you name is read:
+
+```text
+$ evnx scan
+  evnx scan  Checking for exposed secrets
+
+  · evnx's own files in .evnx/ are not scanned (name one to scan it)
+  scanning ./app.txt
+
+  ✓  No secrets detected
+
+$ evnx scan .evnx/rules/acme-token.toml
+  …
+  ✗  Acme Token                                  high
+     .evnx/rules/acme-token.toml:18 (rules[0].positive[0])  <37 chars>
+     !  matches a live key format, not a placeholder
+```
+
+`--include-ignored` does not change this.
+
 A rule's `names` also beats a built-in rule in YAML and JSON now, as it does in `.env`. They
 stay case-sensitive regexes in every format: write `(?i)` or both spellings to cover
 `SECRET_KEY` and `secret_key`.
@@ -916,7 +1330,7 @@ do not fail the scan:
 ```text
   evnx scan  Checking for exposed secrets
 
-  scanning ./.env, ./.gitignore
+  scanning ./.gitignore · git-ignored (summarised only): ./.env
 
   ✓  No secrets in files git would commit
 
@@ -983,14 +1397,17 @@ setup through the repository:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/urwithajit9/evnx
-    rev: v0.13.0
+    rev: v0.16.0
     hooks:
       - id: evnx-scan-installed   # the evnx on PATH; no first-run build (v0.13.0+)
-      - id: evnx-scan-push        # a SARIF scan before each push
+      - id: evnx-scan-push        # scans the commits being pushed (v0.16.0)
 ```
 
 `evnx-scan` is the same hook but builds evnx on first use; `evnx-scan-installed`
-(`language: system`) uses the binary on `PATH`. Both run on the files being committed. To
+(`language: system`) uses the binary on `PATH`. Both run on the files being committed.
+**v0.16.0**: `evnx-scan-push` runs `evnx scan --history` from `PRE_COMMIT_FROM_REF` to
+`PRE_COMMIT_TO_REF`, the commits being pushed. Until 0.15 it scanned the files on disk with
+SARIF output. Install it with `pre-commit install --hook-type pre-push`. To
 block only on serious findings add `args: [--severity high]`. `scan` already exits `1` when
 it reports something, so no extra flag makes the hook fail.
 
@@ -1158,7 +1575,7 @@ exclude = ["apps/web/fixtures/**"]
 `evnx scan` run inside `apps/web` skips `apps/web/fixtures/`:
 
 ```text
-  config    ../../.evnx.toml (scan.exclude=1 patterns)
+  config    ../../.evnx.toml (scan.exclude=1 pattern)
   scanning ./.env
   ✓  No secrets detected
 ```
@@ -1170,7 +1587,7 @@ matches anywhere, as before. **Flags** (`--exclude`) are relative to where you r
 committed, so evnx prints which are in force:
 
 ```text
-  config    .evnx.toml (scan.severity=high, scan.confidence=medium, scan.exclude=1 patterns)
+  config    .evnx.toml (scan.severity=high, scan.confidence=medium, scan.exclude=1 pattern)
 ```
 
 Rule files and the baseline are not `[scan]` keys: they live in `.evnx/rules/` and
@@ -1185,7 +1602,7 @@ Rule files and the baseline are not `[scan]` keys: they live in `.evnx/rules/` a
 |------|---------|
 | `0` | Clean: nothing new at or above `--severity` and `--confidence` in files git would commit; or nothing staged; or `--update-baseline` wrote the baseline; or `--exit-zero` was set |
 | `1` | Findings reported, or a file that could not be read |
-| `2` | The scan could not be completed, so there is no verdict: a bad path or flag, a broken config, a policy that the config conflicts with or a missing policy file, `--strict` with an unknown key, a pattern that does not compile, an unknown `--category`, a pack that no longer matches `.evnx/rules.lock`, empty stdin, `--staged` outside a repository |
+| `2` | The scan could not be completed, so there is no verdict: a bad path or flag, a broken config, a policy that the config conflicts with or a missing policy file, `--strict` with an unknown key, a pattern that does not compile, an unknown `--category`, a pack that no longer matches `.evnx/rules.lock`, empty stdin, `--staged` or `--history` outside a repository |
 
 **`2` is not a louder `1`.** "I found nothing" and "I could not look" are different
 answers. Allowed and known findings do not count toward the exit code.

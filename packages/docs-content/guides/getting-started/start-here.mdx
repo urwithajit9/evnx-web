@@ -1,0 +1,323 @@
+---
+title: "Start here: pick your path"
+section: getting-started
+order: 1.5
+publishedAt: "2026-11-26"
+updatedAt: "2026-11-27"
+excerpt: "Three starting points: a new project, a project with a .env.example, or one with only a .env or config files. The usual way first, then evnx, and which guides fit your role."
+difficulty: beginner
+timeToComplete: "5 minutes"
+tags: ["getting-started", "init", "spec", "import"]
+commands: ["add custom", "add import", "doctor", "init", "scan", "set", "spec init", "sync", "validate"]
+evnxVersion: "0.16.0"
+prerequisites:
+  - getting-started/installation
+draft: false
+---
+
+What you do first depends on what the project already has. Find your state below.
+Each one shows the usual way first, then the same with evnx. Every output is from a
+real run of evnx 0.16.0.
+
+| Your project has | Go to |
+|---|---|
+| Nothing yet | [1. A new project](#1-a-new-project) |
+| A `.env.example` (you cloned it) | [2. A project with .env.example](#2-a-project-with-envexample) |
+| Only a `.env`, or settings in JSON, YAML, `.properties` or a `web.config` | [3. A project with only a .env or config files](#3-a-project-with-only-a-env-or-config-files) |
+
+---
+
+## Who are you?
+
+| You are | Start with | Then |
+|---|---|---|
+| A solo developer | [Quick Start, Path A](/guides/getting-started/quick-start) | [Init basics](/guides/getting-started/init-basic), [Add basics](/guides/getting-started/add-basic) |
+| A team member joining a project | [Quick Start, Path B](/guides/getting-started/quick-start) | [Team collaboration](/guides/use-cases/team-collaboration), [Cloud sync in 10 minutes](/guides/getting-started/cloud-sync-quickstart) |
+| A team lead | [Prevent secret leaks](/guides/use-cases/prevent-secret-leaks) | [Sharing a vault, and taking it back](/guides/use-cases/sharing-a-vault-with-a-teammate), [Scan your git history and block pushes](/guides/use-cases/scan-history-and-block-pushes) |
+| CI or DevOps | [GitHub Actions](/guides/integrations/github-actions) | [CI/CD tokens for the cloud](/guides/integrations/ci-cd-cloud-tokens), [Migrate to AWS Secrets Manager](/guides/use-cases/use-cases-aws) |
+| Working with an AI coding agent | [Using evnx with AI coding agents](/guides/use-cases/ai-coding-agents) | [Agent skills](/guides/integrations/agent-skills) |
+
+---
+
+## 1. A new project
+
+**The usual way:** create `.env` by hand, add it to `.gitignore`, write a
+`.env.example` with the values taken out, and keep the two in step every time you add
+a variable.
+
+**With evnx:** `evnx init --yes` writes `.env`, `.env.example`, the `.gitignore` lines
+and `.evnx.toml`. `evnx add custom NAME=value` adds a variable to all of them at once,
+and `evnx set --fill` asks for the values still missing.
+
+```bash
+evnx init --yes
+evnx add custom APP_NAME=my-app DATABASE_URL STRIPE_SECRET_KEY --yes
+evnx set --fill
+```
+
+[Quick Start, Path A](/guides/getting-started/quick-start) walks through it with the
+output of each step.
+
+---
+
+## 2. A project with .env.example
+
+**The usual way:** `cp .env.example .env`, replace the placeholders, and check that
+`.gitignore` covers `.env`.
+
+**With evnx:** `evnx init --yes` keeps the template as it is, writes `.env` from it and
+adds the `.gitignore` lines. `evnx set --fill` asks for each empty or placeholder
+value, with no echo for secrets.
+
+```bash
+evnx init --yes
+evnx set --fill
+evnx validate
+```
+
+[Quick Start, Path B](/guides/getting-started/quick-start) shows it on a fresh clone.
+
+---
+
+## 3. A project with only a .env or config files
+
+This is the most common state for an older project: a `.env` that was never given a
+template, or settings kept in a config file.
+
+### The usual way
+
+1. Check that `.gitignore` covers `.env`. If it did not, check whether `.env` was ever
+   committed: `git log --all -- .env`.
+2. Copy `.env` to `.env.example` and take out every value by hand.
+3. Write down somewhere which variables are required.
+4. For a config file, retype each key as a variable name in `.env`.
+
+Step 2 is where values leak: one missed line and a real password is in the template.
+
+### With evnx: a `.env` and nothing else
+
+Here is a project with a `.env`, a `.gitignore` that only lists `dist/`, and no
+template. `doctor` finds both problems:
+
+```bash
+evnx doctor
+```
+
+```text
+  evnx doctor  Diagnosing environment setup
+
+
+  ✗  Validate .env file existence, security, and syntax
+     .env is not ignored: git would commit it (security risk)
+
+  !  Check .env.example exists and is Git-tracked
+     .env.example not found - consider creating a template
+  …
+  !  Check file permissions for sensitive files
+     .env: permissions 644 (recommended: 600)
+
+  ✓  Check env files and templates for empty evnx sections
+
+  1 error  ·  2 warnings  ·  1 check passed
+
+  →  2 issues evnx doctor --fix can repair:
+     ·  Validate .env file existence, security, and syntax
+     ·  Check file permissions for sensitive files
+```
+
+`doctor --fix` adds the `.gitignore` lines and makes `.env` readable by you only:
+
+```bash
+evnx doctor --fix
+```
+
+```text
+✓ Fixed: .gitignore: added .env*, !.env*.example, !.env*.sample, !.env*.template
+  ✓  Validate .env file existence, security, and syntax
+  …
+✓ Fixed: .env mode 644 → 600
+  ✓  Check file permissions for sensitive files
+  …
+  1 warning  ·  3 checks passed
+```
+
+`sync` writes the template from `.env`, with placeholders in place of the values:
+
+```bash
+evnx sync --yes
+```
+
+```text
+  evnx sync  .env ↔ .env.example  (forward)
+
+· .env.example not found, creating from .env
+✓ Created .env.example
+
+Next steps:
+  1. Review .env.example to ensure the placeholders are appropriate
+  2. Check it holds no real value: evnx scan .env.example
+  3. Commit .env.example to Git (never commit .env)
+```
+
+```text
+# Generated from .env
+# Replace all placeholder values with real credentials
+
+APP_ENV=YOUR_VALUE_HERE
+PORT=8000
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+SESSION_SECRET=YOUR_KEY_HERE
+```
+
+`spec init` writes the contract: which variables are required, their format, and which
+are secret. Every field is a guess from your files, so read it before you commit it:
+
+```bash
+evnx spec init
+```
+
+```text
+  evnx spec  Generate the variable contract
+
+✓ wrote 4 variable(s) to .evnx.toml
+
+Next steps:
+  1. Read the generated entries — every field is a guess from your files
+  2. Mark optional variables with `required = false`
+  3. Commit .evnx.toml; it holds the contract
+```
+
+```toml
+[vars.APP_ENV]
+required = true
+
+[vars.PORT]
+required = false
+format = "port"
+
+[vars.DATABASE_URL]
+required = true
+format = "url"
+secret = true
+
+[vars.SESSION_SECRET]
+required = true
+secret = true
+```
+
+`evnx validate` now checks `.env` against it. Before you commit, check that `.env`
+was never committed in the past. `scan --history` reads every file version git
+history holds:
+
+```bash
+evnx scan --history
+```
+
+```text
+  evnx scan  Checking history: HEAD
+
+  scanning .gitignore
+
+  ✓  No secrets detected
+
+  1 file scanned
+```
+
+If it finds something, see
+[Scan your git history and block pushes](/guides/use-cases/scan-history-and-block-pushes).
+
+### With evnx: named env files and no `.env`
+
+Some projects have `.env.development` and `.env.production` and no plain `.env`.
+`init` asks which one the project reads by default:
+
+```bash
+evnx init --yes
+```
+
+```text
+Error: .env.development, .env.production are here, and none is the default yet.
+
+Choose the one this project reads by default:
+  evnx init --yes --env-name development
+
+evnx stopped before making changes (exit 2). Run one of the commands above.
+```
+
+```bash
+evnx init --yes --env-name development
+```
+
+```text
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+✓ adopted .env.development: .evnx.toml sets [defaults] env_name = "development"
+! .env.development has no template yet, so no [vars] were recorded. Create one from it:  evnx sync
+```
+
+It changes no env file. `.evnx.toml` now says that every command reads
+`.env.development` when no file is named. To write the template from it, run the sync
+it names:
+
+```bash
+evnx sync --yes
+```
+
+```text
+  files     .env.development ↔ .env.example  (env from [defaults] env_name; no .env.development.example, so the project template)
+
+  evnx sync  .env.development ↔ .env.example  (forward)
+
+! .env.development is readable by other users (mode 644)
+     →  chmod 600 .env.development   (or evnx doctor --fix, for every env file)
+· .env.example not found, creating from .env.development
+✓ Created .env.example
+```
+
+Then `evnx spec init` writes the contract from `.env.development` and the new template.
+
+### With evnx: settings in a config file
+
+`evnx add import` turns a JSON, YAML, `.properties`, INI, CSV or `web.config` file
+into variables. Set up the files first, then dry-run the import:
+
+```bash
+evnx init --yes
+evnx add import config.json --dry-run
+```
+
+```text
+  source key         →  NAME                →  status
+  database.host      →  DATABASE__HOST      →  new
+  database.password  →  DATABASE__PASSWORD  →  new
+  log_level          →  LOG_LEVEL           →  new
+Dry run: nothing was written.
+  .env.example: would add 3 variables: DATABASE__HOST, DATABASE__PASSWORD, LOG_LEVEL
+  .env: would add 3 variables: DATABASE__HOST, DATABASE__PASSWORD, LOG_LEVEL
+```
+
+```bash
+evnx add import config.json --yes
+```
+
+```text
+  ✓ added 3 variable(s) to [vars] in .evnx.toml
+✓ Added 3 variables to .env
+```
+
+The values go to `.env`, and `.env.example` gets placeholders.
+[Import config into .env](/guides/use-cases/import-config-into-env) covers every
+format, a Kubernetes Secret, compose and GitHub Actions files, and what is refused.
+
+---
+
+## After any path
+
+The same checks fit every state. [Quick Start, steps 2 to 5](/guides/getting-started/quick-start#step-2--run-a-health-check)
+shows them, and the pre-commit hooks that run them on every commit:
+
+```bash
+evnx doctor          # the setup around the files
+evnx validate        # values and required names
+evnx scan            # secrets in what git would commit
+evnx sync --check    # .env.example in step with .env
+```

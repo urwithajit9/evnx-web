@@ -352,6 +352,9 @@ stderr gets one line naming it, because the token is sent there:
 API  https://vercel.example.test:8443
 ```
 
+**v0.16.0**: the line is not printed for a loopback address (`127.0.0.1`, `::1`,
+`localhost`), where the token does not leave the machine.
+
 ### Changed on Vercel since your last pull
 
 `push` compares each variable it is about to change with `.evnx/platform/vercel.json`. If
@@ -360,8 +363,15 @@ Vercel changed it after your last `pull` or `push`, nothing is written and the e
 
 ```text
 Error: this variable changed on Vercel since the last pull or push: LOG_LEVEL.
-  Nothing was written. See what differs with `evnx platform diff --to vercel`, then `evnx platform pull --to vercel` to take Vercel's state, and push again.
+  Nothing was written. See what differs with `evnx platform diff --to vercel --target production`, then `evnx platform pull --to vercel --target production` to take Vercel's state, and push again.
 ```
+
+**v0.16.0**: both commands carry the push's `--target`, and its `--project`, `--team`,
+`--token-file`, `--git-branch` and `--env` when they were given, so they look at what the
+push changed. Without `--target` they read development, whatever the push used. The last
+line reads "No verdict: Vercel holds a newer value" (it said "the server holds a newer
+version"). The exit code is still `14`. (This message is from the evnx 0.16.0 source, for a
+`push --target production`; it was not run against Vercel for this page.)
 
 With no state file, `push` warns and goes ahead.
 

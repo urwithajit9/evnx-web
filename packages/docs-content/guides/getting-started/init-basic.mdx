@@ -3,13 +3,13 @@ section: "getting-started"
 order: 3
 title: "Init Basics — Start Your Project Right"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-20"
+updatedAt: "2026-11-26"
 excerpt: "Learn how to use evnx init to generate .env.example and .env files. Perfect for beginners setting up a new project."
 difficulty: "beginner"
 timeToComplete: "8 minutes"
 tags: ["init", "tutorial", "beginner", "setup", "env"]
 commands: ["init", "set", "sync", "validate"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -22,7 +22,7 @@ In this tutorial, you'll learn how to use `evnx init` to:
 - Get the `.gitignore` rules that keep `.env` out of git
 - Set up your project in under 2 minutes
 
-Every terminal block on this page is real output from evnx 0.10.1 (colours removed).
+Every terminal block on this page is real output (colours removed). The `evnx init` runs and their next steps are from evnx 0.16.0; the other blocks are from 0.10.1.
 </Callout>
 
 ---
@@ -61,16 +61,26 @@ Blank is pre-selected, so press Enter:
 ```
   Blank Template  Creating minimal .env files
 
-✓ Created .env from template
-✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example (no variables yet)
 · Tip: Run 'evnx add' to add variables interactively
+✓ Created .env from .env.example
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
   ✓ created .evnx.toml with an empty [vars]: evnx add records new variables there
+
+Next steps:
+  1. Add variables: evnx add custom NAME=value (or evnx add for a menu)
+  2. Commit .env.example and .evnx.toml; never commit .env
+  3. .evnx.toml is the contract 'evnx validate' checks: safe to delete ('evnx init --no-contract' skips it)
+  4. Run 'evnx validate' to check configuration
+  5. Use 'evnx add' to add more variables later
 ```
 
 Every mode also writes `.evnx.toml` (**v0.10.16+**), the project's variable contract, and
 ends with a "Next steps" list whose second line is the one to remember:
-`2. Commit .env.example and .evnx.toml; never commit .env`.
+`2. Commit .env.example and .evnx.toml; never commit .env`. When the new `.env` holds
+placeholders (a blueprint or a template), the first line is
+`1. Fill in the placeholder values in .env: evnx set --fill` (**v0.16.0+**), which asks
+for each one in turn.
 
 **Result** (`.env.example`):
 ```env
@@ -88,15 +98,20 @@ $ evnx init
 
 Preview:
 28 variables
-  • service ×18
   • framework ×4
+  • service ×18
   • infra ×6
   Categories: API, Application, Authentication, CI/CD, Cloud Storage, Database, Deployment Platform, Payments
 Generate .env files with these variables? yes
-✓ Created .env from template
-✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
 ✓ Created .env.example with 28 variables
-  ✓ created .evnx.toml with 28 variable(s) in [vars]
+✓ Created .env from .env.example
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+  ✓ 28 names from .env.example → .evnx.toml (10 secret, 6 with a format)
+
+Next steps:
+  1. Fill in the placeholder values in .env: evnx set --fill
+  2. Commit .env.example and .evnx.toml; never commit .env
+  …
 ```
 
 The same stack without prompts: `evnx init --blueprint t3_modern --yes`. A mistyped
@@ -139,14 +154,23 @@ Preview:
   • infra ×4
   Categories: API, Application, Authentication, Cloud Storage, Database, Deployment Platform
 Generate .env files with these variables? yes
-✓ Created .env from template
-✓ Created .gitignore with .env*, !.env.example, !.env.sample, !.env.template
-✓ Created .env.example with 22 variables
-  ✓ created .evnx.toml with 22 variable(s) in [vars]
+…
 ```
 
 The answers above are shown as they look once chosen. The same variables (only the
-timestamp line differs) come from `evnx init --with nextjs,postgresql,clerk,aws_s3,vercel --yes`.
+timestamp line differs) come from `evnx init --with nextjs,postgresql,clerk,aws_s3,vercel --yes`,
+which ends:
+
+```
+✓ Created .env.example with 22 variables from 5 components
+✓ Created .env from .env.example
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+  ✓ 22 names from .env.example → .evnx.toml (6 secret, 6 with a format)
+
+Next steps:
+  1. Fill in the placeholder values in .env: evnx set --fill
+  …
+```
 
 <Callout type="info" title="Schema-driven">
 All options come from `schema.json`, which is compiled into the binary. Adding a language, service or blueprint means editing that file and rebuilding evnx; see [init configuration](/guides/reference/init-configuration). Run `evnx init --list-components` to see what your installed version knows.
@@ -214,9 +238,9 @@ $ cat .gitignore
 # ── evnx generated ─────────────────────────────────────────
 # Written by evnx. These files may contain secrets — do not commit.
 .env*
-!.env.example
-!.env.sample
-!.env.template
+!.env*.example
+!.env*.sample
+!.env*.template
 ```
 
 `.env` starts with the same 28 placeholder values as the template. A few of them:
@@ -240,8 +264,9 @@ evnx set DATABASE_URL       # asks for the value, and does not echo it
 evnx set NEXTAUTH_SECRET    # or let `evnx validate --fix` generate it
 ```
 
-Each `set` changes one line in place and keeps a backup. For many values at once,
-open `.env` in your editor instead.
+Each `set` changes one line in place and keeps a backup. For every placeholder at once,
+`evnx set --fill` (**v0.16.0+**) asks for each one in turn, the step `init` named; an
+editor works too.
 
 **Step 7: Validate your setup**
 
@@ -316,12 +341,12 @@ existing `.env` up to date with the template, use `evnx sync --direction reverse
 If you manually manage `.gitignore`, make sure it contains the rules `evnx init` writes, in this order:
 ```gitignore
 .env*
-!.env.example
-!.env.sample
-!.env.template
+!.env*.example
+!.env*.sample
+!.env*.template
 ```
 
-`.env*` ignores every env file a project invents (`.env.production`, `.env.staging`, `.env.test` and so on), and the three negations keep the committed templates visible. The older `.env` / `.env.local` / `.env.*.local` set leaves `.env.production` committable. The negations must come **after** `.env*`: in `.gitignore` the last matching line wins. Check the result with `git check-ignore -v .env .env.production`.
+`.env*` ignores every env file a project invents (`.env.production`, `.env.staging`, `.env.test` and so on), and the three negations keep the committed templates visible, including per-environment ones such as `.env.production.example`. The older `.env` / `.env.local` / `.env.*.local` set leaves `.env.production` committable. The negations must come **after** `.env*`: in `.gitignore` the last matching line wins. Check the result with `git check-ignore -v .env .env.production`.
 
 ### Using Blank mode for complex projects
 

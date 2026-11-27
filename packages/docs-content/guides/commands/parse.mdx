@@ -3,13 +3,13 @@ title: "evnx parse"
 section: commands
 order: 20
 publishedAt: "2026-11-01"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-26"
 excerpt: "See exactly what evnx reads from a .env file, line by line: every key, whether its value is empty, a placeholder or a secret, and every problem in the file at once. Names only, unless you ask for values."
 difficulty: beginner
 timeToComplete: "5 minutes"
 tags: ["parse", "inspect", "keys", "json", "validate", "evnx"]
 commands: ["diff", "parse", "scan", "validate"]
-evnxVersion: "0.15.0"
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -62,7 +62,7 @@ evnx parse [OPTIONS]
 | `--env-name <NAME>` | — | Read `.env.<NAME>` instead |
 | `--format <FORMAT>` | `pretty` | `pretty` or `json` (`text` was renamed `pretty` in v0.15.0) |
 | `--values` | off | Print each value too, in plain text (see below) |
-| `--show-values` | off | Allow `--values` when stdout is a terminal. **v0.15.0** — was `-y`/`--yes`, which now exits 2 |
+| `--show-values` | off | Print the values, also to a terminal. **v0.16.0** — implies `--values`; on its own it was a usage error. **v0.15.0** — was `-y`/`--yes`, which now exits 2 |
 | `--json` | off | **v0.15.0** — the same as `--format json` |
 
 ---
@@ -116,7 +116,7 @@ evnx parse --env-name broken
 
 ```text
    1  A
-   3  B
+   3  B  expands
 ✗ Line 2: Invalid format: missing '=' separator
 ✗ Line 3: Undefined variable: ${NOPE} is not defined
 ✗ Line 4: Unterminated quoted string
@@ -187,9 +187,20 @@ the scrollback:
 
 ```text
 Error: --values prints every value in plain text, and stdout is a terminal, where it stays in the scrollback. Pipe it, or pass --show-values.
+
+evnx stopped before making changes (exit 2). Run one of the commands above.
 ```
 
-Pipe it somewhere, or pass `--show-values` when you mean it. A multi-line value stays on its row,
+Pipe it somewhere, or pass `--show-values` when you mean it. **v0.16.0**: `--show-values`
+implies `--values`, so it is enough on its own:
+
+```text
+$ evnx parse --show-values
+   1  PORT     8080
+   2  DEBUG    true
+```
+
+ A multi-line value stays on its row,
 with its newlines shown as `\n`.
 
 ---

@@ -3,12 +3,12 @@ section: "commands"
 order: 1
 title: "evnx init"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-27"
 excerpt: "Reference documentation for the evnx init command: modes, options, and project setup."
 difficulty: "beginner"
 timeToComplete: "3 minutes"
 tags: ["init", "reference", "cli", "setup"]
-commands: ["add", "add blueprint", "add service", "doctor", "init"]
+commands: ["add", "add blueprint", "add service", "doctor", "init", "set", "sync"]
 evnxVersion: "0.15.0"
 prerequisites:
   - getting-started/installation
@@ -247,15 +247,36 @@ next steps name that file:
 ```console
 $ evnx init --env-name staging --yes
 · .env.example is the project's template: kept as it is
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
 ✓ Created .env.staging from .env.example
-  ✓ created .evnx.toml with 1 variable(s) in [vars]
+  ✓ 1 name from .env.example → .evnx.toml (1 secret, 0 with a format)
+
 Next steps:
-  1. Edit .env.staging and replace placeholder values
+  1. Fill in the placeholder values in .env.staging: evnx set --fill --env .env.staging
   2. Commit .env.example and .evnx.toml; never commit .env.staging
+  …
 ```
+
+**v0.16.0**: the first step names [`evnx set --fill`](/guides/commands/set#filling-in-placeholders),
+which asks for each placeholder value in turn (with `--dir DIR` when `init` wrote into another
+folder). It used to read "Edit .env and replace placeholder values".
 
 `[defaults] env_name` in `.evnx.toml` steers `init` the same way, as it already steered
 `validate`, `sync` and `diff`.
+
+When the folder has named env files and no template, `--env-name` adopts one as the
+default and changes no env file:
+
+```console
+$ evnx init --yes --env-name development
+✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
+✓ adopted .env.development: .evnx.toml sets [defaults] env_name = "development"
+! .env.development has no template yet, so no [vars] were recorded. Create one from it:  evnx sync
+```
+
+**v0.16.0**: the hint names `evnx sync`, which writes `.env.example` from
+`.env.development`. It used to name `evnx sync --direction reverse`, which fills an env
+file from a template and so exited `2` here.
 
 In a monorepo, `init` at the root says when a subfolder already has a `.env`, because
 commands run at the root read the root's file, not that one:

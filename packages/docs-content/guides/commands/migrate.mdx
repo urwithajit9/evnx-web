@@ -3,7 +3,7 @@ section: "commands"
 order: 6
 title: "evnx migrate"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-26"
 excerpt: "Generate the commands that move your .env into a cloud secret manager. evnx writes them out; you run them. GitHub Actions is the one destination it uploads to directly."
 difficulty: "intermediate"
 timeToComplete: "10 minutes"
@@ -429,6 +429,41 @@ evnx migrate --to heroku --heroku-app my-app --print-only > upload.sh
 `--print-only` does not apply to `github`, which prints no commands, and
 cannot be combined with `--dry-run`.
 
+## Write the commands to a file: `-o`
+
+`-o FILE` (`--output`) writes the commands, with the real values, to a file of mode 0600,
+and keeps them off the screen. An existing file is refused without `--force`, and evnx
+offers to add the file to `.gitignore` (`--gitignore` does it without asking,
+`--no-gitignore` skips it). **v0.16.0**: the run says where the commands went and how to
+run them, for every destination that prints commands (AWS, GCP, Azure, Heroku, Vercel,
+Doppler, Infisical, Railway). It used to print a heading such as "Run these commands:" with
+nothing under it.
+
+```text
+$ evnx migrate --to gcp-secret-manager --project demo-app -o upload.sh --no-gitignore
+  evnx migrate  convert writes a file; migrate talks to a provider
+
+
+✓ Loaded 2 secrets from .env
+
+· GCP Secret Manager migration
+· Requires Google Cloud CLI (`gcloud`)
+  Install: https://cloud.google.com/sdk/docs/install
+
+Commands written to upload.sh: review them, then run `sh upload.sh`
+
+Summary:
+  ✓  2 command(s) generated
+     nothing has been uploaded — run the commands in the file
+
+Next steps:
+  1. Review upload.sh, then run it: `sh upload.sh` (`gcloud auth login` first).
+  2. Grant service accounts `secretmanager.secretAccessor` on each secret.
+  3. Update your app to call `secretmanager.googleapis.com`.
+```
+
+Nothing is uploaded until you run the file. Delete it afterwards: it holds the values.
+
 ---
 
 ## Your secrets are in the printed commands
@@ -442,8 +477,9 @@ values from a temporary file, so they do not show in `ps` or history; the others
 Mitigations, in order of preference:
 
 1. **Write the commands to a file instead of scrolling**, review it, run it, delete it:
-   `evnx migrate --to aws-secrets-manager --secret-name prod/app --print-only > up.sh` — review,
-   `sh up.sh`, `shred -u up.sh`.
+   `evnx migrate --to aws-secrets-manager --secret-name prod/app -o up.sh` — review,
+   `sh up.sh`, `shred -u up.sh`. `-o` writes the file with mode 0600; `--print-only > up.sh`
+   works too, with the mode your shell gives it.
 2. **Prefix the command with a space** if your shell is configured with
    `HISTCONTROL=ignorespace`, so it is not recorded.
 
@@ -479,6 +515,9 @@ commands on a machine you trust.
 | `--to` | `string` | — | Destination slug. Asked in a terminal; required without one |
 | `-n`, `--dry-run` | `bool` | `false` | Preview the variable set and where it would go, without printing the commands themselves |
 | `--print-only` | `bool` | `false` | Write only the commands to stdout; status and summary go to stderr |
+| `-o`, `--output` | `path` | — | Write the commands, with the real values, to this file (mode 0600). See [Write the commands to a file](#write-the-commands-to-a-file--o) |
+| `--force` | `bool` | `false` | With `--output`: replace the file when it exists |
+| `--gitignore`, `--no-gitignore` | `bool` | — | With `--output`: add the file to `.gitignore` without asking, or skip that check |
 | `--skip-existing` | `bool` | `false` | Leave secrets that already exist. **Only `github` can honour this** — the others never ask the platform what exists, and refuse the flag |
 | `--overwrite` | `bool` | `false` | Replace existing secrets without asking. Same caveat as above, except that **v0.15.0+** `vercel` accepts it and prints `--force` |
 | `--yes`, `-y` | `bool` | `false` | Upload without asking "Proceed with migration?" (`github`) |

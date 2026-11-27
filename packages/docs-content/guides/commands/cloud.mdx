@@ -3,12 +3,12 @@ title: "evnx cloud"
 section: commands
 order: 9
 publishedAt: "2026-09-16"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-26"
 excerpt: "Push and pull encrypted .env files across machines and CI. Encryption happens locally, version numbers are authenticated, and the server only ever holds ciphertext."
 difficulty: intermediate
 timeToComplete: "12 minutes"
 tags: ["cloud", "sync", "encryption", "ci-cd", "versioning", "evnx"]
-commands: ["auth", "auth key-bundle", "auth status", "auth token create", "cloud", "cloud audit", "cloud delete-version", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "org", "restore", "run", "spec init", "vault", "vault delete", "vault list", "vault share"]
+commands: ["auth", "auth key-bundle", "auth status", "auth token create", "cloud", "cloud audit", "cloud delete-version", "cloud diff", "cloud export", "cloud history", "cloud link", "cloud pull", "cloud push", "cloud run", "cloud status", "cloud unlink", "cloud watch", "convert", "diff", "org", "restore", "run", "spec init", "update", "vault", "vault delete", "vault list", "vault share"]
 evnxVersion: "0.15.0"
 prerequisites:
   - commands/auth
@@ -151,6 +151,8 @@ Error: there is no terminal to confirm with.
   evnx cloud push --vault my-api/production --yes
 ```
 
+Answering **no** exits `4` (**v0.16.0**; it printed "Cancelled" and exited `0`).
+
 Only that case asks. A file you named with `--env`, `--env-name` or `[cloud] file` never does, and
 neither does a derived `.env.production`. By id, a signed-in session looks the
 vault's environment up for the question. A vault-scoped API token cannot look it up,
@@ -165,7 +167,8 @@ least 4), `push` prints the names it would remove, never values, and asks (defau
 removes 6 of 8 keys: DB_URL, REDIS_URL, SMTP_HOST, SMTP_USER, STRIPE_KEY, SENTRY_DSN
 ```
 
-It lists the first 10 names. `--yes` goes ahead; without a terminal and without `--yes` it exits `4`.
+It lists the first 10 names. `--yes` goes ahead; without a terminal and without `--yes` it exits `4`,
+and **v0.16.0** so does answering no (it exited `0`).
 A deploy script that deliberately shrinks a vault needs `--yes`. This is the guard against pushing
 the wrong file over a good vault.
 
@@ -530,19 +533,50 @@ warning on stderr naming both numbers:
 
 ```text
 ! the server says my-api/production is at version 3, but this machine has already seen version 4.
-  A newer version may have been removed (an admin deleted the latest version), or the server may be serving older data than it did (a rollback or a restored backup). Check `evnx cloud history --vault my-api/production` before you rely on this.
+  A newer version may have been removed (an admin may have deleted it with `evnx cloud delete-version --latest`), or the server may be serving older data than it did (a rollback or a restored backup). Check `evnx cloud history --vault my-api/production` before you rely on this.
 ```
+
+(**v0.16.0** wording, from the evnx source.)
 
 It is a **hint** and never stops the command. It is per machine, so a new machine starts blank,
 and `vault delete` forgets the vault. The warning repeats until the server catches up.
 
-`evnx cloud delete-version` itself refuses to remove the latest version, because `pull` and
-`run` fetch it and a removal would silently change what every consumer receives:
+### Deleting the latest version: `--latest` — **v0.16.0**
+
+`evnx cloud delete-version N` refuses the latest version, because `pull` and `run` fetch it
+and a removal would silently change what every consumer receives. It points to `--latest`:
 
 ```text
 Error: version 4 is the latest version of my-api/production, and deleting it would change what `evnx cloud pull` and `evnx cloud run` return without anyone asking for that.
-  Push a newer version first, or delete the whole vault with `evnx vault delete`. Nothing has been changed.
+  To delete it anyway, say so: `evnx cloud delete-version --latest --vault my-api/production`.
+  Nothing has been changed.
 ```
+
+`evnx cloud delete-version --latest` (admin) deletes it. Before it asks, it shows the
+version and names the one that takes over, for example:
+
+```text
+  Delete version 4, the latest? Version 3 (4 key(s), pushed 2026-10-24) becomes the latest: `evnx cloud pull` and `evnx cloud run` return it from now on.
+```
+
+Then you type the vault's full name to confirm; `--yes` skips both, for CI. After the
+delete:
+
+```text
+  ✓ deleted version 4
+  version 3 is now the latest. Other machines that had seen version 4 will warn that the latest went down.
+```
+
+(These lines are from the evnx 0.16.0 source, filled in with the sample vault above; this
+page did not run them against a server.)
+
+- The version deleted is always the number just listed, so a push that lands in between is
+  never the one removed.
+- A vault with one version is refused: push a newer version first, or delete the whole
+  vault with `evnx vault delete`.
+- This machine stops warning about the version it deleted. Other machines still see the
+  "latest went down" warning above.
+- Answering no prints `Nothing was deleted.` and exits `4` (**v0.16.0**; it exited `0`).
 
 ---
 
@@ -666,6 +700,25 @@ The point is finding out a teammate changed a secret **before** your next deploy
 | `--interval <SECONDS>` | Seconds between polls. Default `15`, minimum `5` |
 | `--once` | Check once and exit. For scripts and tests |
 | `--include-mine` | **v0.10.18+** — report your own pushes too |
+| `--on-change -- <COMMAND>...` | **v0.16.0** — run a command once for each reported change. See below |
+
+### Running a command on a change: `--on-change` — **v0.16.0**
+
+```bash
+evnx cloud watch --vault my-api/production --on-change -- ./notify.sh
+evnx cloud watch --on-change -- sh -c 'echo "$EVNX_WATCH_VAULT v$EVNX_WATCH_VERSION" | mail -s changed me@example.com'
+```
+
+- The command runs directly, not through a shell, as with `evnx run`. For a pipeline, ask
+  for one: `-- sh -c 'a | b'`.
+- It gets `EVNX_WATCH_VAULT` (the vault's `name/environment`) and `EVNX_WATCH_VERSION`
+  (the new latest), and no other `EVNX_*` variable. Names and numbers only, never a value.
+- It runs to the end before the next poll, so changes that arrive meanwhile are one call
+  afterwards.
+- A failing command prints one warning, such as
+  `the --on-change command ./notify.sh exited 1 for v5; watching goes on.`, and watching goes on.
+- With `--once` it runs when the vault is past the latest version this machine has seen.
+- It cannot pull: `evnx cloud pull` inside the command asks for the master password.
 
 ### Your own pushes are skipped — **v0.10.18+**
 
@@ -881,11 +934,33 @@ reading the message. Before 0.13.0 these failures exited `1` or `2`.
 | `14` | conflict (someone else pushed first) or the account is locked |
 | `15` | the server failed, or is rate limiting you |
 
+Also `11`: **v0.16.0** — the server refuses this evnx as too old (HTTP 426, below).
+
 Other failures keep the command's usual code: bad arguments, local errors, a `404`, a
 rejected request body. `evnx cloud run` returns the command's own code once it has
 started. A script that tested for exactly `1` or `2` after a cloud command needs to
 accept these. For a retry loop built on them, see
 [API tokens in CI](/guides/integrations/ci-cd-cloud-tokens#retry-by-exit-code).
+
+### A server that refuses an old evnx — **v0.16.0**
+
+An evnx server can answer HTTP `426 Upgrade Required` when the CLI is older than it accepts
+(every request names the version in its `User-Agent`). evnx says which version is running,
+the minimum when the server gives one (`minimum_version` in the error body), and how to
+upgrade, and exits `11`:
+
+```text
+$ evnx cloud status --ping
+…
+Error: https://evnx.example.com no longer accepts evnx 0.16.0; it needs evnx 0.17.0 or later.
+  The server says: This version of evnx is no longer supported
+  Upgrade, then run the command again: `evnx update` prints the upgrade command for the way evnx was installed (or: curl -fsSL https://evnx.dev/install.sh | bash).
+
+No verdict: the server refused access. This is not a clean result.
+```
+
+ⓘ Output from a local test server that answers every request with a 426.
+[`evnx update`](/guides/commands/update) prints the right upgrade command.
 
 ### Why a request was refused
 

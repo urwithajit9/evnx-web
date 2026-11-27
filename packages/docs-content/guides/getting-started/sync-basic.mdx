@@ -3,7 +3,7 @@ section: "getting-started"
 order: 5
 title: "Sync Basics — Keep .env Files in Sync"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-20"
+updatedAt: "2026-11-26"
 excerpt: "Learn how to use evnx sync to keep your .env and .env.example files synchronized. Perfect for beginners."
 difficulty: "beginner"
 timeToComplete: "10 minutes"
@@ -153,7 +153,8 @@ Press Enter:
 
 Next steps:
   1. Review .env.example to ensure the placeholders are appropriate
-  2. Commit .env.example to Git (never commit .env)
+  2. Check it holds no real value: evnx scan .env.example
+  3. Commit .env.example to Git (never commit .env)
 ```
 
 The template keeps your variable names and replaces every value:
@@ -219,7 +220,8 @@ evnx set STRIPE_SECRET_KEY    # asks for the key, and does not echo it
 ```
 
 A secret typed after `=` would stay in your shell history, so leave it off and let
-`set` ask. For many values at once, open `.env` in your editor instead.
+`set` ask. For many values at once, `evnx set --fill` (**v0.16.0+**) asks for each empty
+or placeholder value in turn, or open `.env` in your editor.
 
 **Step 4: validate again**
 

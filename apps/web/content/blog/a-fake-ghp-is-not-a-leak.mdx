@@ -1,0 +1,283 @@
+---
+# HOLD: publish only after the owner's real-token check passes.
+title: "A Fake ghp_ Is Not a Leak: Checking GitHub Token Checksums"
+publishedAt: "2026-11-26"
+excerpt: "A classic GitHub token ends in a six-character checksum of the thirty characters before it. From 0.16.0, evnx scan computes it: a ghp_ value whose checksum fails was never issued by GitHub, so it is dropped like a placeholder, and one that passes is reported with high confidence. This is the algorithm, the runs, and what is left alone."
+author: "ajit"
+category: "deep-dive"
+tags: ["scan", "github", "tokens", "false-positives", "testing", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "severity-vs-confidence-evnx-scan"
+  - "adopting-evnx-scan-existing-findings"
+  - "when-two-providers-share-a-prefix"
+---
+
+{/*
+  HOLD: publish only after the owner's real-token check passes.
+
+  The checksum computation below (CRC-32 of the 30-character body, Base62, 6 characters) is the one
+  in common use; GitHub does not publish the exact computation. evnx's unit tests check the code
+  against values the same code generated. Before this post goes out, verify one real token (one you
+  control) with `evnx scan`, and un-ignore `a_real_github_token_passes` in
+  src/core/secretscan/checksum.rs. If the check fails, do not publish: every classic token would be
+  dropped as a stand-in. The section "Dropped, not lowered" says the computation was checked
+  against a real token; that sentence is only true once the check has passed.
+
+  Never put a checksum-valid ghp_ literal in this file. GitHub push protection blocks the push. The
+  examples are built by the script in the post.
+*/}
+
+Every test suite that talks to GitHub has a token in it somewhere. It is made up, of course: `ghp_`
+and a run of letters and digits that looks about right. And every secret scanner that knows the
+`ghp_` prefix reports it, at high confidence, because the shape matches.
+
+So the team adds it to a baseline, or writes an allow comment, or turns the rule down, and the next
+fixture somebody writes starts the cycle again. The finding is not wrong about the shape. It is
+wrong about the thing that matters: whether GitHub ever issued that value.
+
+For classic GitHub tokens there is a way to tell, without asking GitHub. evnx 0.16.0 uses it.
+
+## The last six characters
+
+A classic GitHub token is a prefix and 36 characters:
+
+| Prefix | Token |
+|---|---|
+| `ghp_` | personal access token |
+| `gho_` | OAuth access token |
+| `ghu_` | user-to-server token |
+| `ghr_` | refresh token |
+
+GitHub documents that the last six of those 36 characters are a 32-bit checksum. The first 30 are
+random. That gives a scanner something a regular expression cannot: a way to check that the value
+is internally consistent.
+
+The computation in common use, and the one evnx implements, is:
+
+1. Take the 30 characters after the prefix.
+2. Compute CRC-32 over them: the IEEE 802.3 polynomial, the same CRC as zlib and gzip.
+3. Write the 32-bit result in Base62, with the alphabet `0-9A-Za-z`.
+4. Left-pad with `0` to six characters.
+
+A 32-bit number always fits: 62⁶ is about 5.7 × 10¹⁰, larger than 2³² (about 4.3 × 10⁹). So six
+Base62 digits never truncate it.
+
+Here it is in Rust, as it is in evnx. CRC-32 is written out bit by bit, because it runs on 30 bytes
+once per candidate and a lookup table would only add code:
+
+```rust filename="src/core/secretscan/checksum.rs"
+const BASE62: &[u8; 62] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+        }
+    }
+    !crc
+}
+
+fn base62_6(mut n: u32) -> [u8; 6] {
+    let mut out = [BASE62[0]; 6];
+    for slot in out.iter_mut().rev() {
+        *slot = BASE62[(n % 62) as usize];
+        n /= 62;
+    }
+    out
+}
+
+pub fn checksum_for(body: &str) -> String {
+    String::from_utf8_lossy(&base62_6(crc32(body.as_bytes()))).into_owned()
+}
+```
+
+`verdict` then judges a whole value. It answers one of three things: the shape does not apply, the
+checksum matches, or the shape is right and the checksum does not match.
+
+```rust
+pub fn verdict(value: &str) -> Verdict {
+    let Some(rest) = ["ghp_", "gho_", "ghu_", "ghr_"]
+        .iter()
+        .find_map(|p| value.strip_prefix(p))
+    else {
+        return Verdict::NotApplicable;
+    };
+    if rest.len() != 36 || !rest.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Verdict::NotApplicable;
+    }
+    let (body, check) = rest.split_at(30);
+    if checksum_for(body) == check { Verdict::Valid } else { Verdict::Invalid }
+}
+```
+
+The unit test for the CRC uses the check value every CRC-32 implementation publishes:
+`crc32(b"123456789")` is `0xCBF43926`.
+
+## Trying it
+
+This post does not contain a token. A checksum-valid one would be a literal that GitHub's push
+protection blocks, and a page full of real-shaped tokens teaches people to ignore them. So the
+values are built by a short script, into a throwaway file:
+
+```python filename="ghtok.py"
+import zlib
+
+B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+def checksum(body):
+    n = zlib.crc32(body.encode())
+    out = ""
+    for _ in range(6):
+        out = B62[n % 62] + out
+        n //= 62
+    return out
+
+body = "aB3dE5gH7jK9mN1pQ3sT5vW7yZ9bC1"   # 30 characters, made up
+good = "ghp_" + body + checksum(body)      # passes the check
+bad  = "ghp_" + body + "000000"            # same shape, wrong checksum
+
+print(f"GITHUB_TOKEN={good}")
+print(f"TEST_GITHUB_TOKEN={bad}")
+print(f"GH_APP_TOKEN=ghs_{body}{checksum(body)}")
+```
+
+```bash
+python3 ghtok.py > tokens.env
+```
+
+Python's `zlib.crc32` is the same IEEE CRC-32, so this script and evnx agree on which value
+passes. The third line is a `ghs_` token built the same way, for later.
+
+evnx 0.15.0 reports all three:
+
+```console
+$ evnx scan tokens.env          # 0.15.0
+
+  evnx scan  Checking for exposed secrets
+
+  scanning tokens.env
+
+  ✗  GitHub Token                                high
+     tokens.env:1 (GITHUB_TOKEN)  ghp_…4f
+     !  matches a live key format, not a placeholder
+     →  revoke at https://github.com/settings/tokens
+
+  ✗  GitHub Token                                high
+     tokens.env:2 (TEST_GITHUB_TOKEN)  ghp_…00
+     !  matches a live key format, not a placeholder
+     →  revoke at https://github.com/settings/tokens
+
+  ✗  GitHub Token                                high
+     tokens.env:3 (GH_APP_TOKEN)  ghs_…4f
+     !  matches a live key format, not a placeholder
+     →  revoke at https://github.com/settings/tokens
+
+  3 findings  ·  3 high
+…
+```
+
+evnx 0.16.0 reports two:
+
+```console
+$ evnx scan tokens.env          # 0.16.0
+
+  evnx scan  Checking for exposed secrets
+
+  scanning tokens.env
+
+  ✗  GitHub Token                                high
+     tokens.env:1 (GITHUB_TOKEN)  ghp_…4f
+     !  matches a live key format, not a placeholder
+     →  revoke at https://github.com/settings/tokens
+
+  ✗  GitHub Token                                high
+     tokens.env:3 (GH_APP_TOKEN)  ghs_…4f
+     !  matches a live key format, not a placeholder
+     →  revoke at https://github.com/settings/tokens
+
+  2 findings  ·  2 high
+…
+```
+
+Line 2 is gone. Its last six characters are not the checksum of the thirty before them, so GitHub
+never issued it, and it cannot authenticate anything.
+
+## Dropped, not lowered
+
+There were two ways to treat a value that fails the check. One is to keep reporting it with lower
+confidence. The other is to treat it like `YOUR_KEY_HERE` or `sk_live_xxxxxxxx`: a stand-in, not a
+secret, and not reported at all.
+
+evnx drops it. "Low confidence" means "this might be a secret". A value that fails the checksum is
+not that: it is certain that it is not a token GitHub issued. Reporting it at any level would bring
+back the baseline entries this change is meant to remove.
+
+It is dropped **whatever the variable is called**. `TEST_GITHUB_TOKEN` is a secret-looking name, and
+for other values the name check would report it. Here the checksum is better evidence than the
+name, so the name check is skipped for this value too. The same test runs in the format rules, in
+the name check and in the heuristic fallback, so no other path brings it back.
+
+The chance that a made-up six-character checksum passes by accident is one in 62⁶, about one in
+57 billion. The chance that a real token fails is zero, as long as evnx computes the checksum the
+way GitHub does. That is the one assumption in all of this, and it is the reason the computation
+was checked against a real token before this post went out.
+
+The other direction matters as much. A value that **passes** the checksum is certainly the real
+shape, so it is reported with high confidence whatever rule matched it. If you had turned a rule
+down because of fixture noise, a token that passes now comes back at full strength.
+
+## What is not judged
+
+The check only applies where there is a checksum to check. Everything else is left exactly as it
+was:
+
+- **`ghs_` tokens.** Installation tokens, including the long stateless form, have no published
+  checksum, so line 3 above is still reported.
+- **Other lengths.** A `ghp_` value with 35 or 37 characters after the prefix is not judged. It is
+  not the classic shape, so the checksum says nothing about it.
+- **Fine-grained tokens** (`github_pat_…`) have their own rule and are not checked this way.
+
+The 35-character case, in a test file:
+
+```bash
+python3 - > test_client.py <<'EOF'
+body = "aB3dE5gH7jK9mN1pQ3sT5vW7yZ9bC1"
+print(f'FIXTURE = "ghp_{body}000000"')
+print(f'SHORT = "ghp_{body}00000"')
+EOF
+```
+
+```console
+$ evnx scan test_client.py
+
+  evnx scan  Checking for exposed secrets
+
+  scanning test_client.py
+
+  !  High-entropy string (possible secret)       medium, low confidence
+     test_client.py:2  <39 chars>
+
+  1 finding  ·  1 medium
+```
+
+`FIXTURE` on line 1 fails the checksum and is dropped. `SHORT` on line 2 has 35 characters after the
+prefix. The GitHub token rule does not match that shape and the checksum does not judge it, so all
+that is left is the entropy check, at low confidence, as for any random-looking string.
+
+## For your fixtures
+
+If your tests need a value that looks like a classic GitHub token, make it fail the checksum on
+purpose. Ending it in `000000` is the simplest way: the odds that `000000` is the right checksum
+for your thirty characters are the one in 57 billion above. evnx then leaves it alone.
+
+If CI on 0.15.0 had baselined made-up `ghp_` values, those entries now match nothing.
+`evnx scan --update-baseline` writes a baseline without them.
+
+And if a scan on 0.16.0 still reports a `ghp_` value at high confidence, take it seriously: its
+checksum passes, which a made-up value almost never does. Revoke it at
+[github.com/settings/tokens](https://github.com/settings/tokens) first, then find out how it got
+there.

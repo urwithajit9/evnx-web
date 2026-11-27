@@ -338,6 +338,9 @@ assigned, it needs `--force` as well.
 
 `-q` works for every `org` command (**v0.10.18+**): nothing on success, while
 tables, warnings and errors still print. Refusals the CLI makes itself exit 2.
+**v0.16.0**: answering **no** at the prompt of `org seats`, `org remove`, `org delete` or
+`org leave` exits `4`; until 0.15 it printed "Cancelled" and exited `0`. A script that
+treated a "no" as success should accept `4` or pass `--yes`.
 
 **v0.13.0+** — A request the server refuses exits `10`–`15`: `10` not signed in, `11`
 forbidden (an `org` action your role does not allow), `12` plan limit reached, `13`

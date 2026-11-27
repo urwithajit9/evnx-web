@@ -106,6 +106,31 @@ Dry run: nothing was written.
 
 After `--all`, `validate`, `spec check`, `sync --check` and `diff` all agree.
 
+**v0.16.0**: `--all` leaves backups alone: `.env.bak`, `.env.bak-*`, `.env.bak.<n>` and any
+file recorded in `.evnx/backups.json` are not environment files, so a name is never removed
+from a backup.
+
+### No `.env`, but another environment
+
+When there is no `.env` but there is another environment file, `remove` says how to use
+it. **v0.16.0**: the hint keeps the names you gave (it used to suggest
+`evnx remove --env-name prod`, without them):
+
+```console
+$ evnx remove A B
+Error: ./.env not found.
+
+  Found: .env.prod
+  Use it once:    evnx remove A B --env-name prod
+  Use it always:  add to .evnx.toml →  [defaults]
+                                    env_name = "prod"
+  Nothing was removed.
+
+No verdict: evnx stopped at the error above. This is not a clean result.
+```
+
+Exit `2`.
+
 ### Remove, with a backup
 
 ```console

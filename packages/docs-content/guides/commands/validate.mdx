@@ -3,13 +3,13 @@ title: "evnx validate"
 section: commands
 order: 4
 publishedAt: "2026-03-09"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-26"
 excerpt: "Reference for evnx validate: check .env against .env.example and the [vars] contract, catch missing, placeholder, weak and misformatted values, and fix what can be fixed."
 difficulty: beginner
 timeToComplete: "10 minutes"
 tags: ["validate", "env", "ci-cd", "configuration", "evnx"]
-commands: ["add custom", "convert", "doctor", "parse", "platform", "remove", "run", "scan", "spec init", "validate"]
-evnxVersion: "0.15.0"
+commands: ["add custom", "convert", "doctor", "parse", "platform", "remove", "run", "scan", "set", "spec init", "validate"]
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
 draft: false
@@ -102,13 +102,17 @@ $ evnx validate
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Fill in the placeholder values: evnx set --fill
+  3. Run with --fix to auto-correct common issues
+  4. Use --ignore issue_type to suppress specific warnings
 Validation failed: 3 errors
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
-Exit code `1`. `✗` is an error, `!` a warning. The header, the `Validation failed`
+Exit code `1`. **v0.16.0**: when there is a placeholder, the next steps name
+[`evnx set --fill`](/guides/commands/set#filling-in-placeholders), which asks for each
+empty or placeholder value in turn (with `--env FILE` for a file other than `.env`:
+`evnx set --fill --env .env.local`). `✗` is an error, `!` a warning. The header, the `Validation failed`
 line and the docs link go to stderr; the findings and next steps to stdout.
 
 `STRIPE_KEY` gets the "if it is optional" hint because its template value is empty —
@@ -271,7 +275,7 @@ and others lack. Until now only `sync --check` and `diff` showed it.
 - It is a **warning**, so the exit code does not change unless you pass `--fail-on warning`.
   Silence it with `--ignore partial_presence` or `[validate] ignore` in `.evnx.toml`.
 - It needs **two environment files** (`.env` and each `.env.<NAME>`). The template and
-  `.bak` copies do not count, so a project with one environment file sees no new finding,
+  backups do not count (see [Backups are not environments](#backups-are-not-environments)), so a project with one environment file sees no new finding,
   and `--env -` and `--input-format json` are never compared.
 - With a contract, a file is expected to lack a name declared `required = false` or limited
   by `environments`. A name `missing_variable` already reports for the checked file is not
@@ -281,6 +285,28 @@ and others lack. Until now only `sync --check` and `diff` showed it.
 **For CI:** a project whose environment files differ on purpose gets new warnings in
 `validate` (`summary.warnings`, and the evnx-action `validate-findings` count if it counts
 warnings). Add the type to the ignore list to keep the old count.
+
+### Backups are not environments
+
+**v0.16.0.** A dated copy such as `.env.bak-20261120` used to be read as an environment
+file, so `validate` warned "B is in .env but not in .env.bak-20261120" and suggested
+`evnx remove B --all`, which would have edited the backup. Backups (`.env.bak`,
+`.env.bak-*`, `.env.bak.<n>`, and any file recorded in `.evnx/backups.json`) are now left
+out of that comparison, of `remove --all`, and of the environments `--env-name` lists.
+`validate` names them once instead, as plaintext backups of the file it checks, unless git
+ignores every one:
+
+```console
+$ evnx validate
+
+  evnx validate  Check environment configuration
+
+! .env.bak-20261120 is a plaintext backup of .env, left out of the comparison between env files: delete it or keep it git-ignored
+✓ All required variables present
+✓ All checks passed
+```
+
+The line is a note, not a finding: the exit code is `0` here.
 
 ### Order and names
 
@@ -403,7 +429,7 @@ evnx validate --fix --dry-run
 
 Would fix (3):
   • PORT: (new) → 8080
-  • SECRET_KEY: "changeme" → (a new random secret)
+  • SECRET_KEY: would generate (64 chars) (was "changeme")
   • DEBUG: "False" → false
 
 Would need your input (1):
@@ -416,14 +442,15 @@ Would need your input (1):
 
 Next steps:
   1. Review and fix the errors above
-  2. Run with --fix to auto-correct common issues
-  3. Use --ignore issue_type to suppress specific warnings
+  2. Fill in the placeholder values: evnx set --fill
+  3. Run with --fix to auto-correct common issues
+  4. Use --ignore issue_type to suppress specific warnings
 Validation failed: 3 errors
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
 The report and the exit code are those of the file as it stands. A secret `--fix` would
-generate is shown as `(a new random secret)`, because the real run makes a new one.
+generate is shown as `would generate (64 chars)`, because the real run makes a new one.
 
 ### The real run
 
@@ -435,10 +462,11 @@ evnx validate --fix
   evnx validate  Check environment configuration
 
 ✓ Saved fixes to ./.env — original kept at ./.env.bak
+  undo: evnx undo .env
 
 Fixed (3):
   • PORT: (new) → 8080
-  • SECRET_KEY: "changeme" → <64 hex chars>
+  • SECRET_KEY: generated (64 chars), written to ./.env (was "changeme")
   • DEBUG: "False" → false
 
 Needs your input (1):
@@ -449,14 +477,15 @@ Needs your input (1):
   3 fixed  ·  1 needs your input
 
 Next steps:
-  1. Fill in the values listed under "Needs your input" — evnx cannot invent them
+  1. Fill in the values listed under "Needs your input" — evnx cannot invent them: evnx set --fill
   2. Run evnx validate again
 Validation failed: 1 needs your input
   Docs: https://docs.evnx.dev/cli/commands/validate
 ```
 
-Exit code `1`. `<64 hex chars>` stands for the generated value, which evnx prints in
-full. Compare with the backup to see the changed lines:
+Exit code `1`. The generated secret is not printed, only its length; the "Needs your
+input" step ends with `evnx set --fill` (**v0.16.0**). Compare with the backup to see the
+changed lines:
 
 ```console
 $ diff .env.bak .env
@@ -469,6 +498,8 @@ $ diff .env.bak .env
 > PORT=8080
 > STRIPE_KEY=CHANGE_ME_SECURE_32_CHARS_MIN
 ```
+
+(`<64 hex chars>` stands for the generated value.)
 
 The next `evnx validate` reports `STRIPE_KEY looks like a placeholder` until you paste
 the real key in. `--fix` writes `.env` atomically and keeps its mode. If others can read
@@ -979,7 +1010,7 @@ $ evnx validate --fix --format json | jq '{fixed, needs_input, summary}'
 | Field | Meaning |
 |-------|---------|
 | `status` | `failed` when there is an error, otherwise `passed`. ⚠️ It does not follow `--fail-on` or `--exit-zero`: a run that exits `1` on warnings still says `passed`. Read the exit code |
-| `dry_run` | **v0.10.8+** — `true` under `--fix --dry-run`. `fixed` and `needs_input` then hold what *would* change, and a generated secret reads `(a new random secret)` |
+| `dry_run` | **v0.10.8+** — `true` under `--fix --dry-run`. `fixed` and `needs_input` then hold what *would* change, and a generated secret has only its length, `new_length` |
 | `required_present` / `required_total` | Declared variables that are present, out of all declared. **v0.10.8+**: before, it was `min(variables in .env, variables in the template)`, so a file of extras alone read as complete |
 | `issues[]` | One entry per finding. `variable` is `""` for a file-level finding (`env_not_ignored`, `env_tracked`). `suggestion` can be `null` |
 | `fixed[]` | Repairs made. `old_value` is `null` for an added variable. `old_value_withheld` is `true` when a real secret was replaced, and `old_value` is then `null`; the old value is in the backup |

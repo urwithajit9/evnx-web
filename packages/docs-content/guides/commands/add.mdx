@@ -3,13 +3,13 @@ section: "commands"
 order: 2
 title: "evnx add"
 publishedAt: "2026-03-05"
-updatedAt: "2026-11-17"
-excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, skipping what is already there."
+updatedAt: "2026-11-26"
+excerpt: "Reference for evnx add: add the variables of a service, framework, stack or your own to .env.example and .env, or import many from a JSON, YAML, INI, .properties, CSV or web.config file, skipping what is already there."
 difficulty: "intermediate"
 timeToComplete: "2 minutes"
 tags: ["add", "reference", "cli", "environment-variables"]
-commands: ["add", "add blueprint", "add custom", "add framework", "add service", "init", "spec init"]
-evnxVersion: "0.15.0"
+commands: ["add", "add blueprint", "add custom", "add framework", "add import", "add service", "init", "set", "spec init"]
+evnxVersion: "0.16.0"
 prerequisites:
   - getting-started/installation
   - commands/init
@@ -37,7 +37,8 @@ evnx add --list
 | `service` (alias `infra`) | any catalogue id: a service (`postgresql`), an infrastructure target (`vercel`) or a framework (`nextjs`) | that component's variables |
 | `framework` | a framework id; `--language` is optional | the framework's variables |
 | `blueprint` | one of the stack ids | the whole stack |
-| `custom` | `NAME=value` or `NAME` arguments, or nothing to be asked | your own variables |
+| `custom` | `NAME=value` or `NAME` arguments, or nothing to be asked; or one `NAME --from-file PATH` | your own variables |
+| `import` | a file, or `-` for stdin | **v0.16.0** — every variable in a `.env`, `.properties`, INI, JSON, YAML, CSV or `web.config` file. See [Many variables from one file](#many-variables-from-one-file-add-import) |
 
 Leave the id out in a terminal (`evnx add blueprint`) and `add` offers a list
 to pick from. `evnx add --list` prints every id.
@@ -55,6 +56,8 @@ to pick from. `evnx add --list` prints every id.
 | `--list` | List every id `add` takes |
 | `--language`, `-l` | `framework` only: check that the framework belongs to this language |
 | `--desc`, `--category`, `--required` | `custom` only: applied to every name given |
+| `--from-file <PATH\|->` | **v0.16.0** — `custom` only: read one value from a file or stdin (a certificate, a key, a service-account JSON). Exactly one `NAME`, no `NAME=value`. `--base64` for a binary file, `--keep-trailing-newline` to keep the last line break. See [`evnx set`](/guides/commands/set#a-value-from-a-file) |
+| `--from`, `--section`, `--only`, `--exclude`, `--example`, `--no-template` | **v0.16.0** — `import` only; see [below](#many-variables-from-one-file-add-import) |
 | `--optional` | `custom` only: declare the names optional (`required = false`) in `[vars]` of `.evnx.toml`, and mark them `(optional)` in the template. Without a contract it says how to make them optional |
 | `--verbose`, `-v` | Say which files were appended to |
 | `--quiet`, `-q` | Print only warnings, conflicts and errors |
@@ -68,7 +71,7 @@ to pick from. `evnx add --list` prints every id.
 |------|---------|
 | `0` | variables added, or nothing to do: they were already there, or it was a `--dry-run` |
 | `4` | **v0.13.0+** — you answered `n` to the final question (or pressed Esc there): nothing was written |
-| `2` | stopped: an unknown id or language, a bad argument, no terminal to ask (add `--yes`), or a write error (for example a read-only `.env`, or `--path` pointing at a folder that does not exist) |
+| `2` | stopped: an unknown id or language, a bad argument, no terminal to ask (add `--yes`), an `add import` that refused a name (nothing written), or a write error (for example a read-only `.env`, or `--dir` pointing at a folder that does not exist) |
 
 <Callout type="warning">
 ⚠️ **Changed in 0.13.0: a declined confirmation exits `4`, not `0`.** Saying no to
@@ -174,6 +177,152 @@ Value for STRIPE_WEBHOOK_SECRET (hidden; .env only; Enter for YOUR_KEY_HERE): [h
 
 The final question names every file the run writes, for example
 `Append these variables to .env.example and .env?`.
+
+**v0.16.0** — a value from a file. It is written double-quoted with `\n` escapes, and only
+its size is printed:
+
+```text
+$ evnx add custom GOOGLE_CREDENTIALS --from-file sa.json --yes
+  GOOGLE_CREDENTIALS: 55 bytes, 4 lines
+✓ Added 1 custom variable to .env
+```
+
+```env
+# ── Custom Variables ──
+GOOGLE_CREDENTIALS="{\n  \"type\": \"service_account\",\n  \"project_id\": \"demo\"\n}"
+```
+
+**v0.16.0** — `evnx add custom NAME=value` writes the value to `.env` when the template
+already lists `NAME` with another value, such as an empty `NAME=`. It used to report a
+template conflict and write nothing.
+
+### Many variables from one file: `add import`
+
+**v0.16.0.** `evnx add import <FILE|->` adds every variable in one file to `.env`, and
+placeholders to `.env.example`. It reads:
+
+| Format | `--from` | What becomes a variable |
+|---|---|---|
+| `.env` | `env` | `NAME=value` lines |
+| Java `.properties` | `properties` | Each key |
+| INI | `ini` | Each key; `[db] host` becomes `DB_HOST` |
+| JSON | `json` | Flat or nested keys, joined with `__`; a Kubernetes Secret |
+| YAML | `yaml` | Flat or nested keys, joined with `__`; a Kubernetes Secret (base64 `data` decoded), a docker-compose `environment:`, a GitHub Actions `env:` |
+| CSV | `csv` | Two columns: name, value |
+| `web.config` (`.config`, `.xml`) | `web-config` | The `<add key value>` entries of `<configuration><appSettings>` |
+
+The format follows the extension; `--from` names it, and stdin (`-`) always needs it.
+Names become UPPER_SNAKE (`db.host` and `db-host` both become `DB_HOST`). A YAML number is
+written as the file has it (`1.10`, not `1.1`). `--section` takes one INI section, top-level
+key, compose service or Actions job; `--only` and `--exclude` take globs.
+
+`--dry-run` prints where each name comes from, and never a value:
+
+```text
+$ evnx add import config.json --dry-run
+  source key   →  NAME          →  status
+  db.host      →  DB__HOST      →  new
+  db.port      →  DB__PORT      →  new
+  db.password  →  DB__PASSWORD  →  new
+  log-level    →  LOG_LEVEL     →  new
+  port         →  PORT          →  kept: already in the env file
+Dry run: nothing was written.
+  .env.example: would add 4 variables: DB__HOST, DB__PASSWORD, DB__PORT, LOG_LEVEL
+  already set to a different value in .env, would keep: PORT
+  .env: would add 4 variables: DB__HOST, DB__PASSWORD, DB__PORT, LOG_LEVEL
+```
+
+```console
+$ evnx add import config.json --yes
+! 1 variable already set to a different value in .env: the existing value was kept
+  • PORT (kept, not changed; edit .env to change it)
+✓ Added 4 variables to .env
+```
+
+```env
+# .env
+PORT=3000
+
+# ── Imported from config.json ──
+DB__HOST=localhost
+DB__PORT=5432
+DB__PASSWORD=s3cret-local
+LOG_LEVEL=info
+```
+
+```env
+# .env.example
+PORT=
+
+# ── Imported from config.json ──
+DB__HOST=localhost
+DB__PORT=8000
+DB__PASSWORD=YOUR_PASSWORD_HERE
+LOG_LEVEL=YOUR_VALUE_HERE
+```
+
+(The mode and `.gitignore` warnings of that run are left out.) A Kubernetes Secret's `data`
+is decoded, and `stringData` read as it is:
+
+```text
+$ evnx add import k8s-secret.yaml --dry-run
+  source key         →  NAME       →  status
+  data.API_TOKEN     →  API_TOKEN  →  new
+  stringData.REGION  →  REGION     →  new
+Dry run: nothing was written.
+  .env.example: would add 2 variables: API_TOKEN, REGION
+  .env: would add 2 variables: API_TOKEN, REGION
+```
+
+**A `web.config`.** The `<add key value>` entries of `<appSettings>` are read, with
+`<clear/>` and `<remove key>` applied in order and the last `<add>` of a key counting.
+Entities are decoded (`&amp;` is `&`), comments and CDATA are skipped, and
+`<connectionStrings>` is not read. A UTF-8 byte-order mark and UTF-16 files are accepted.
+An error names a line and a column, never a value. Here `FeatureFlag` is added and then
+removed:
+
+```xml
+<configuration>
+  <appSettings>
+    <add key="SmtpHost" value="mail.example.com" />
+    <add key="FeatureFlag" value="old" />
+    <remove key="FeatureFlag" />
+    <add key="Greeting" value="Fish &amp; chips" />
+  </appSettings>
+</configuration>
+```
+
+```text
+$ evnx add import web.config --dry-run
+  source key            →  NAME      →  status
+  appSettings.SmtpHost  →  SMTPHOST  →  new
+  appSettings.Greeting  →  GREETING  →  new
+Dry run: nothing was written.
+  .env.example: would add 2 variables: GREETING, SMTPHOST
+  .env: would add 2 variables: GREETING, SMTPHOST
+```
+
+**What is refused.** Two keys that make one name, an array, `null`, a binary value and a
+name that cannot be made valid are refused, and nothing is written (exit `2`):
+
+```text
+$ evnx add import app.properties --dry-run
+  source key  →  NAME     →  status
+  db.host  →  DB_HOST  →  refused: db-host also makes this name
+  db-host  →  DB_HOST  →  refused: db.host also makes this name
+Error: nothing was imported:
+  DB_HOST is made by db.host and db-host
+
+Narrow the import with --only, --exclude or --section, or rename the keys in the file.
+```
+
+Names `.env` already has are kept and reported, as above. `--json` (with `--yes` or
+`--dry-run`) gives the format, the `mapping` from each source key to its name and status,
+and the names added, skipped and kept, never a value. A source file that git tracks and
+that holds secrets gets a warning to untrack it and rotate them.
+
+`--env-name` writes another environment's file, `--example` names the template, and
+`--no-template` writes only the env file.
 
 ### A blueprint, into a project of its own folder
 

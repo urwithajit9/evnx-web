@@ -1,0 +1,447 @@
+---
+title: "Scanning History Like GitHub Does: Blobs, Not Commits"
+publishedAt: "2026-11-26"
+excerpt: "evnx 0.16.0 can scan every file version git remembers. It reads each distinct blob once through one git cat-file --batch, remembers the last clean scan in .git/evnx/history.json, scans again only what is new unless the rules changed, and runs as a pre-push hook with a bypass that needs a reason and writes it down."
+author: "ajit"
+category: "deep-dive"
+tags: ["scan", "git", "history", "hooks", "rust", "evnx"]
+featured: false
+draft: true
+relatedSlugs:
+  - "the-scan-that-never-finished"
+  - "git-hooks-pre-commit-prek-evnx"
+  - "adopting-evnx-scan-existing-findings"
+---
+
+Deleting a key from a file does not delete it from the repository. The commit that added it is
+still there, and so is every clone and fork made since. `evnx scan` used to read only the files on
+disk, so it could tell you about the key you were about to commit and not about the one you
+committed in March.
+
+evnx 0.16.0 adds `scan --history`. This post is about how it reads history without reading the
+same file a thousand times, how a second run knows what it can skip, and how the pre-push hook
+decides which commits a push adds.
+
+## A key that is gone from disk
+
+Here is a throwaway repository. The second commit adds a database URL with a password in it; the
+third replaces the value with a reference:
+
+```bash
+git init -q -b main
+echo "# app" > README.md && git add . && git commit -qm init
+printf 'DATABASE_URL=postgres://app:Wq8pZr4tLm2vXy7k@db.internal:5432/app\n' > config.env
+git add . && git commit -qm "add config"
+printf 'DATABASE_URL=${DATABASE_URL}\n' > config.env
+git commit -qam "use env var"
+```
+
+A normal scan looks at the files as they are now, and they are clean:
+
+```console
+$ evnx scan
+
+  evnx scan  Checking for exposed secrets
+
+  scanning ./README.md, ./config.env
+
+  ✓  No secrets detected
+
+  2 files scanned
+```
+
+The history scan finds the password, and names the commit that first had it:
+
+```console
+$ evnx scan --history
+
+  evnx scan  Checking history: HEAD
+
+  scanning README.md, config.env, config.env
+
+  ✗  Credentials in a connection string          high
+     config.env@077d1e9:1 (DATABASE_URL)  <48 chars>
+     !  a password in a postgres:// URL, not a placeholder
+
+  1 finding  ·  1 high
+
+
+Next steps:
+  1. Revoke or rotate the keys above — assume they are compromised
+  2. Remove them from history: git filter-repo --path config.env --invert-paths
+  3. Force push, after coordinating with everyone who has a clone
+```
+
+`config.env` is listed twice because history holds two versions of it. The location reads
+`path@commit:line`. The advice is different from a staged file's: the key has been in a commit, so
+rotate it first, and only then rewrite history.
+
+## Why not walk the commits
+
+The obvious way to scan history is to walk the commits and scan each one's diff. That has two
+problems.
+
+First, a diff is the wrong shape. Many rules need the key next to the value: `API_SECRET=…` is
+suspicious because of the name, and a hunk that changes only the value line of a YAML block may
+not show the key it sits under. So evnx scans whole files, as it does for `--staged`.
+
+Second, the same content appears in many commits. A file that has not changed for 500 commits is
+in all 500 trees. Git stores it once, as one **blob**, named by the hash of its content. Two files
+with the same bytes are the same blob, whatever they are called and wherever they are. So the
+unit of work is the blob, not the commit. GitHub's secret scanning treats history the same way,
+which is where the title of this post comes from.
+
+evnx asks git for every file a range added or changed, oldest commit first:
+
+```bash
+git log --raw -z --no-abbrev --no-renames -m --reverse \
+  --diff-filter=ACMT --format=%x01%H%x09%ct HEAD --
+```
+
+Each commit is a header (`\x01`, its full hash, a tab, its time) followed by one raw line per file:
+modes, the old and new blob ids, a status and the path. `--diff-filter=ACMT` keeps added, copied,
+modified and type-changed files. A deleted file adds no content, so it is not listed. Lines with a
+mode other than `100644` or `100755` are dropped too: `160000` is a submodule (a commit id, not a
+file) and `120000` is a symlink (a path, not content). `-m` lists merge commits against each
+parent, so a file a merge introduces is not missed.
+
+evnx keeps a set of blob ids it has seen. The first time an id appears, it is recorded with that
+commit and path; every later appearance is skipped. Because the log runs oldest first, each blob is
+reported against the **oldest** commit that has it, which is the one you need when you work out
+how long a key has been exposed.
+
+Here is what that does to a repository where a file with a secret is renamed, then copied, then
+left alone for twenty more commits:
+
+```bash
+printf 'DATABASE_URL=postgres://app:Wq8pZr4tLm2vXy7k@db.internal:5432/app\n' > old.env
+git add . && git commit -qm first
+git mv old.env renamed.env && git commit -qm rename
+cp renamed.env copy.env && git add . && git commit -qm copy
+for i in $(seq 1 20); do echo $i >> log.txt; git add .; git commit -qm "n$i"; done
+```
+
+```console
+$ evnx scan --history
+
+  evnx scan  Checking history: HEAD
+
+  scanning old.env, log.txt, log.txt and 18 other files
+
+  ✗  Credentials in a connection string          high
+     old.env@c4b9cff:1 (DATABASE_URL)  <48 chars>
+     !  a password in a postgres:// URL, not a placeholder
+
+  1 finding  ·  1 high
+…
+```
+
+Twenty-three commits, three paths that hold the secret, one finding. `old.env`, `renamed.env` and
+`copy.env` are the same blob, so it is read once and reported once, at `c4b9cff`, the commit
+called `first`. The other twenty files are the twenty versions of `log.txt`.
+
+## Reading the blobs
+
+Now evnx has a list of blob ids. Starting `git show` once per blob would be thousands of processes.
+`git cat-file --batch` reads object names on its standard input and answers each one on standard
+output with a header and the content:
+
+```text
+<sha> blob <size>
+<size bytes of content>
+```
+
+So one process serves the whole scan. The reader takes the header, reads exactly `size` bytes,
+then the newline after them. A blob over the size limit (1 MiB by default, `--max-file-size`) is
+read past and thrown away instead of kept in memory, and is listed as skipped.
+
+There is one trap here, and evnx has fallen into it before. `cat-file` starts answering while it
+is still reading. If evnx wrote every name before reading any answer, git would fill the 64 KiB
+output pipe, stop reading, and both processes would wait for each other forever. That is the bug
+in [The scan that never finished](/blog/the-scan-that-never-finished). So the names are written
+from a separate thread, and the main thread reads:
+
+```rust
+let mut stdin = child.stdin.take().expect("piped");
+let input: String = shas.iter().map(|sha| format!("{sha}\n")).collect();
+let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+let mut reader = BufReader::new(child.stdout.take().expect("piped"));
+```
+
+The blobs are handled in chunks, so a long history is never held in memory at once, and each
+chunk is scanned in parallel. A scan that runs longer than two seconds prints
+`scanning history: N of M files`, so it does not look stuck.
+
+For scale: a fresh clone of the evnx repository has 631 commits and about 9,000 file changes in
+them. Those come down to 6,313 distinct blobs, and the whole history scan took a little over four
+seconds on the machine I wrote this on. The evnx repository is full of test keys, so that run has
+plenty to report; it is a measure of speed, not a clean bill.
+
+## Ranges
+
+A bare `--history` reads everything reachable from `HEAD`. You can also give a range:
+
+```bash
+evnx scan --history origin/main..HEAD   # what this branch adds
+evnx scan --history v0.15.0..           # everything since a tag
+evnx scan --history all                 # every ref, not just HEAD
+evnx scan config/ --history             # only files under config/
+```
+
+The range is handed to `git log`, so it comes from the command line and, in the hook, from git's
+own input. A string that looks like an option could change what `git log` does, so evnx refuses
+anything that starts with `-`, except `--not` and `--remotes`, which the hook needs:
+
+```text
+$ evnx scan --history 'HEAD --output=x'
+Error: --history: "HEAD --output=x" is not a revision range
+
+No verdict: evnx did not run. This is not a clean result.
+```
+
+That exits `2`: the scan did not run, which is not the same answer as "clean".
+
+In JSON, a history finding carries where it came from, beside the usual fields:
+
+```json
+{
+  "rule_id": "connection-string-credentials",
+  "location": "old.env@c4b9cff:1 (DATABASE_URL)",
+  "file": "old.env",
+  "line": 1,
+  "variable": "DATABASE_URL",
+  "git": "history",
+  "commit": "c4b9cffb04b661eece18beda49287070527b78a2",
+  "blob": "d8b45ced204dead4fdc8d74cb063d51eda5732d9",
+  "commit_time": 1795719363
+}
+```
+
+## The second run
+
+History only grows at the end. If last week's scan of `HEAD` was clean and nothing about the rules
+has changed, this week only the new commits need reading. So a bare `--history` remembers its last
+clean scan in `.git/evnx/history.json`:
+
+```json
+{
+  "schema_version": 1,
+  "rules_digest": "2cb54a5e9ad62258c3e19606c701b220794f25f19881686ec0e8a912cc98a30c",
+  "settings": "11eb26ba2c9030b5b1768bb54fb98faf785427cd6c70d0e2556bbba306c11bba",
+  "last_commit": "ee5616a06b54fb4bd33200991f23dff72116c21d",
+  "scanned_at": "2026-11-26"
+}
+```
+
+The file lives in the git folder (evnx asks `git rev-parse --git-path evnx/history.json`, so
+worktrees work), which means it is never committed and a fresh clone starts with a full scan.
+
+On the next run evnx compares and picks one of three plans. Nothing new:
+
+```console
+$ evnx scan --history
+  · no commits since the last history scan (ee5616a); --full scans all history
+
+  evnx scan  Checking history: HEAD
+
+✓ no files in that range, nothing scanned
+```
+
+One new commit:
+
+```console
+$ evnx scan --history
+  · scanning the commits since ee5616a (--full scans all history)
+
+  evnx scan  Checking history: ee5616a06b54fb4bd33200991f23dff72116c21d..HEAD
+
+  scanning app.env
+
+  ✓  No secrets detected
+
+  1 file scanned
+```
+
+Or everything again, with the reason. The interesting reason is the rules:
+
+```console
+$ evnx scan --history
+  config    .evnx.toml
+  · rules changed since the last history scan: scanning all history
+
+  evnx scan  Checking history: HEAD
+
+  scanning notes.txt, notes.txt, notes.txt and 1 other file
+
+  ✓  No secrets detected
+
+  4 files scanned
+```
+
+That run followed adding one `[[scan.patterns]]` rule to `.evnx.toml`. A commit that was clean
+under the old rules may not be clean under the new one, so all of history is read again.
+
+`rules_digest` is a BLAKE3 hash of the evnx version, then every rule in the order it is tried
+(built-ins, `[[scan.patterns]]`, `--pattern`, project, personal and pack rule files), then the
+sorted list of disabled rules. Updating a rule pack, upgrading evnx or turning a rule off all change
+it. It is a hash, so the file holds no rule text. The same digest is now written into the baseline,
+so `evnx scan -v` can tell you that a baseline was written under a different rule set.
+
+`settings` is a second hash, of what else decides what a scan reports: the paths, the exclusions,
+the extensions, the size limit, the severity and confidence floors, and the fingerprints in the
+baseline. Lowering `--confidence` can reveal findings an earlier run did not count, so it forces a
+full scan too.
+
+The third check is that the remembered commit is still an ancestor of `HEAD`. After a rebase or an
+amend it is not, and the commits "since" it are not a meaningful range:
+
+```console
+$ git commit -q --amend -m "c4 reworded"
+$ evnx scan --history
+  · history changed since the last history scan (rewritten or rebased): scanning all history
+…
+```
+
+Two rules keep this from ever hiding a finding. **Only a clean scan is remembered.** If a scan
+that found a secret recorded its head, the next run would skip exactly the commits that hold it
+and report clean. And **only a bare `--history` is remembered**: a range, `all` or a path limit is
+scanned as asked and leaves the state alone. `--full` ignores the state and reads everything. If
+the state file cannot be written, evnx says so, and the next run is simply a full one.
+
+## The pre-push hook
+
+A history scan you remember to run is useful. One that runs on every push is better, because a
+commit on your laptop is still private and a pushed one is not.
+
+```console
+$ evnx scan hook install --pre-push
+✓ /home/you/app/.git/hooks/pre-push runs `evnx scan --history` on the commits of every push
+```
+
+Git gives a pre-push hook one line per ref being pushed on its standard input:
+
+```text
+<local ref> <local sha> <remote ref> <remote sha>
+```
+
+The hook turns each line into a range:
+
+- A deleted ref (the local sha is all zeros) adds nothing, so it is skipped.
+- A ref the remote already has, at a commit this clone knows, is `<remote sha>..<local sha>`:
+  exactly what the push adds.
+- A new branch, or a remote commit this clone does not have, is `<local sha> --not --remotes`:
+  everything no remote has yet. That is why `--not` and `--remotes` are allowed in a range.
+- Run by hand with nothing on standard input, it uses `@{u}..HEAD`, or `HEAD --not --remotes` when
+  the branch has no upstream.
+
+Here is a push with a secret in it:
+
+```console
+$ git push origin main
+
+  evnx scan  Checking history: 820f7ee68dda7e8b7dd1caac53de77273525c20c..405777e213c34c75ec196f865fa0856d60f29798
+
+  scanning prod.env
+
+  ✗  Credentials in a connection string          high
+     prod.env@405777e:1 (DATABASE_URL)  <48 chars>
+     !  a password in a postgres:// URL, not a placeholder
+
+  1 finding  ·  1 high
+
+
+Next steps:
+  1. Take the keys out of prod.env, then rewrite the local commits that hold them: git commit --amend
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+  3. If a key was shared another way (copied, sent, pushed from another clone), rotate it
+…
+evnx scan: push blocked, secrets are in the commits being pushed (see above).
+  Fix the commits as the next steps above say. To push anyway, with a reason that is logged:
+  EVNX_SCAN_BYPASS="why" git push. To turn the hook off: git config hooks.evnx-scan false
+error: failed to push some refs to '../origin.git'
+```
+
+The next steps know where the commits are. Before it advises anything, the scan asks git
+whether a remote already has the file with that key. Here none does: the commit is only on
+this laptop, so the fix is `git commit --amend` (or `git rebase -i <sha>^` when the key is in
+an older commit), and a normal push afterwards. There is nothing to force push, and
+`git filter-repo` is not needed. History a remote already has, or a repository with no remote,
+gets the rewrite steps instead.
+
+And a new branch, scanned against everything the remote has:
+
+```text
+$ git push origin feature
+
+  evnx scan  Checking history: 876f399e6175d2c571bd5e090e01cdbd651ff22a --not --remotes
+
+  scanning a.txt
+
+  ✓  No secrets detected
+
+  1 file scanned
+```
+
+The hook blocks in two more cases, on purpose: when `evnx` is not on `PATH`, and when the scan
+could not run (exit `2`). A hook that quietly passes when its tool is missing is how a check
+disappears without anyone noticing.
+
+### A bypass that leaves a note
+
+Sometimes the finding is a test fixture, or the key was rotated an hour ago and the push is the
+cleanup. `git push --no-verify` skips every hook and leaves no trace. evnx offers a bypass that
+does leave one:
+
+```console
+$ EVNX_SCAN_BYPASS="" git push origin main
+evnx scan: EVNX_SCAN_BYPASS needs a reason, so this push is blocked.
+  EVNX_SCAN_BYPASS="why this is safe" git push
+error: failed to push some refs to '../origin.git'
+
+$ EVNX_SCAN_BYPASS="test fixture, value rotated 2026-11-26" git push origin main
+evnx scan: push not scanned, bypassed with a reason: test fixture, value rotated 2026-11-26
+  logged to .git/evnx/bypass.log
+To ../origin.git
+   6dc5015..0184e9a  main -> main
+```
+
+```console
+$ cat .git/evnx/bypass.log
+2026-11-26T18:56:11Z	dev@example.com	6dc5015153c34a40a0d3e360fc97804cb8e53a05..0184e9a30eaea0fa7ab69e62948315d59c15cef1	test fixture, value rotated 2026-11-26
+```
+
+The time, your git email, the ranges and the reason, tab-separated. The hook script writes the line
+itself, so the bypass works and is logged even with no evnx installed. The reason is flattened to
+one line first, so a reason with a newline in it cannot forge a second entry. An empty reason, or
+one made only of spaces, blocks the push. The log is in the git folder, so it stays on your
+machine: it is a record for you and your reviewers, not a server-side control.
+
+### One manager per hook
+
+`hook install` writes a block between two marker lines and keeps whatever the hook file already
+had, so it lives next to your own checks; `hook uninstall --pre-push` removes only the block. If
+pre-commit or prek generated the hook file, evnx does not touch it, because two managers editing
+one hook file undo each other. It prints the lines to add to `.pre-commit-config.yaml` instead:
+
+```yaml
+- repo: https://github.com/urwithajit9/evnx
+  rev: v0.16.0
+  hooks:
+    - id: evnx-scan-push
+```
+
+then `pre-commit install --hook-type pre-push`. The `evnx-scan-push` hook now runs
+`evnx scan --history` from `PRE_COMMIT_FROM_REF` to `PRE_COMMIT_TO_REF`, the same range git gives
+evnx's own hook. `evnx scan hook status --pre-push` reads `.pre-commit-config.yaml` and says when
+the hook comes from there, and when its `rev` is older than the evnx you run.
+
+## What it does not do
+
+`--history` tells you a key was committed and where. It does not rewrite history for you, and
+rewriting is never the first step: the key has been readable by everyone with a clone since that
+commit, so rotate it at the source first. Then `git filter-repo`, a force push, and a word with
+everyone who has a clone. The exception is the pre-push case above: commits no remote has yet
+were never shared, so amending them before the push is enough.
+
+The full reference for the flags is on the [`scan` command page](/guides/commands/scan), and how
+the scanner judges a value is in [How evnx scan works](/guides/reference/how-evnx-scan-works).

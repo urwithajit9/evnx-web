@@ -3,7 +3,7 @@ title: "evnx spec"
 section: commands
 order: 12
 publishedAt: "2026-09-22"
-updatedAt: "2026-11-17"
+updatedAt: "2026-11-27"
 excerpt: "Declare what each variable is — required, a URL, a secret, production-only — in a contract .env.example cannot express. Generated from your project, then enforced by evnx validate."
 difficulty: intermediate
 timeToComplete: "8 minutes"
@@ -177,6 +177,10 @@ format = "bool"
 - **Entries follow `.env.example`'s order** (**v0.10.6+**; they were alphabetical).
 - **A name only in `.env`** follows them as `required = false`, marked
   `# only in .env` (**v0.10.6+**; it was dropped without a word).
+- **A template name with a default** (`PORT=8000` in `.env.example`) is written
+  `required = false` with no comment. **v0.16.0**: it was marked `# only in .env` too,
+  though the template has it; the comment now means only that the name is missing from
+  the template.
 - **A URL with a password is a secret** (**v0.10.6+**), as `DATABASE_URL` is here.
 - **A name that looks secret** (`*_SECRET_KEY`, `*_PWD`, …) is declared secret by the
   same rule `evnx validate` uses (**v0.10.6+**: `*_PWD` now is; `SENTRY_DSN`, `*_PRIVATE`
@@ -561,7 +565,7 @@ As a pre-commit hook:
 
 ```yaml
 - repo: https://github.com/urwithajit9/evnx
-  rev: v0.11.0
+  rev: v0.16.0
   hooks:
     - id: evnx-spec-check
 ```
