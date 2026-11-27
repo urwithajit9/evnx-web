@@ -5,7 +5,7 @@
     {
       "version": "0.16.0",
       "date": "2026-11-27",
-      "summary": null,
+      "summary": "A minor release: `scan` finds more (inside encoded values, more GitLab tokens), reports less noise (checksum stand-ins, lockfiles), and its JSON is `schema_version` 3; a \"no\" at a confirmation prompt exits 4. Read \"Breaking\" before upgrading scripts and CI.",
       "highlights": [
         {
           "type": "breaking",
@@ -186,6 +186,18 @@
         {
           "type": "fix",
           "text": "`remove`'s hint for a missing `.env` keeps the names."
+        },
+        {
+          "type": "fix",
+          "text": "Outside a git repository, `scan` and `doctor` no longer talk about commits."
+        },
+        {
+          "type": "fix",
+          "text": "`init` adopting an env file with no template names the command that creates one."
+        },
+        {
+          "type": "fix",
+          "text": "`spec init` no longer writes \"# only in .env\" for names the template has."
         }
       ],
       "type": "minor",

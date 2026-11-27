@@ -1,6 +1,6 @@
 {
   "_comment": "GENERATED — do not hand-edit. Run `node scripts/sync-config.mjs` to refresh from the registries. Committed so builds are deterministic and offline-safe.",
-  "cli": "0.15.0",
+  "cli": "0.16.0",
   "cryptoCrate": "0.2.1",
   "wasm": "0.2.1",
   "minSupportedCli": "0.4.0",
