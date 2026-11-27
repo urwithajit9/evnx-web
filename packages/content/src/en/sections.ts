@@ -58,7 +58,8 @@ export const landingSections: SectionSpec[] = [
   { id: "stories", enabled: false, surface: "base", anchor: "stories" },
   { id: "integrations", enabled: true, surface: "surface", anchor: "integrations" },
   { id: "cloud", enabled: true, surface: "base", anchor: "cloud" },
-  { id: "trust", enabled: true, surface: "void", anchor: "trust" },
+  // D-V31 (2026-11-27): merged into "cloud", every held row and limit kept.
+  { id: "trust", enabled: false, surface: "void", anchor: "trust" },
   { id: "origin-story", enabled: true, surface: "base" },
   { id: "talks", enabled: true, surface: "surface" },
   // ⚠️ `enabled` here is the PAGE ORDER decision, not the editorial one. The
