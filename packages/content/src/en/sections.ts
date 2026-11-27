@@ -50,8 +50,10 @@ export const landingSections: SectionSpec[] = [
   { id: "problem", enabled: true, surface: "base", anchor: "problem" },
   { id: "leak-anatomy", enabled: true, surface: "void" },
   { id: "audit", enabled: true, surface: "base" },
-  { id: "commands", enabled: true, surface: "surface", anchor: "features" },
-  { id: "stories", enabled: true, surface: "base", anchor: "stories" },
+  // D-V30 (2026-11-27): the pillars repeat the road; /features covers each in depth.
+  { id: "commands", enabled: false, surface: "surface", anchor: "features" },
+  // D-V30: the stories moved to /features.
+  { id: "stories", enabled: false, surface: "base", anchor: "stories" },
   { id: "integrations", enabled: true, surface: "surface", anchor: "integrations" },
   { id: "cloud", enabled: true, surface: "base", anchor: "cloud" },
   { id: "trust", enabled: true, surface: "void", anchor: "trust" },

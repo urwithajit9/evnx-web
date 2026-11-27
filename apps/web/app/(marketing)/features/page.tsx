@@ -7,6 +7,7 @@ import { COMMAND_INDEX } from "@evnx/docs-content";
 import { Spot } from "@/components/art/spots";
 import { buttonVariants } from "@/components/ui/button";
 import { CommandPill } from "@/components/ui/command-pill";
+import { Stories } from "@/components/sections/stories";
 
 export const metadata: Metadata = {
   title: "Features",
@@ -113,6 +114,11 @@ export default function FeaturesPage() {
           );
         })}
       </div>
+
+      {/* D-V30 (2026-11-27): moved here from the homepage. */}
+      <section id="stories" className="mt-24 scroll-mt-20">
+        <Stories />
+      </section>
 
       <section aria-labelledby="all-commands" className="mt-24">
         <p className="font-mono text-xs text-brand-500 uppercase tracking-widest mb-3">

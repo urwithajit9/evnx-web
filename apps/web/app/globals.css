@@ -169,6 +169,13 @@
   animation: road-active 8s ease-in-out infinite;
 }
 
+/* D-V33: no animation on phones, where the stops stack in one column. */
+@media (max-width: 767px) {
+  .road-stage {
+    animation: none;
+  }
+}
+
 /* Hold still while someone is reading or tabbing through the commands. */
 .road:hover .road-stage,
 .road:focus-within .road-stage {
