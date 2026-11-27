@@ -279,7 +279,7 @@ The next steps depend on where the key is:
   rotate the key, remove the file from history with `git filter-repo`, and force push
   after telling everyone who has a clone. These steps are given only for a value that
   a format rule matched with high confidence. A finding flagged by its name or by
-  entropy gets "Check <file>" and how to accept it instead, as above.
+  entropy gets "Check `<file>`" and how to accept it instead, as above.
 - **In local commits only** (the pre-push hook, for commits no remote has yet): take
   the key out and rewrite those commits with `git commit --amend` or `git rebase -i`,
   then push as usual. No force push is needed.

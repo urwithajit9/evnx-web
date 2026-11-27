@@ -34,7 +34,7 @@ findings** (GitLab tokens, secrets inside encoded values) and **fewer false ones
 | **The confidence shown can move one level** for an `Authorization` header or connection string (up) or a test folder (down) | Nothing is dropped; the exit code and `--confidence` use the level before the hint. See [Context hints](#context-hints) |
 | **Lockfiles get the key-format rules only** | A package name such as `react-password-toggle-field` is no longer a "Sensitive config key" |
 | **`--format json` is `schema_version: 3`**, with `file`, `line` and `key_path` beside `location` | See [JSON](#json) |
-| **History is rewritten only for a real key match in a commit.** A weaker committed finding gets "Check <file>"; a staged-only file gets "Unstage <file>" | A script that read the next steps must read the new lines. See [Pretty](#pretty-default) |
+| **History is rewritten only for a real key match in a commit.** A weaker committed finding gets "Check `<file>`"; a staged-only file gets "Unstage `<file>`" | A script that read the next steps must read the new lines. See [Pretty](#pretty-default) |
 | **evnx's own files in `.evnx/` are not scanned** (rule packs, `rules.lock`, the baseline) | A pack's example keys no longer fail the scan |
 | **New: `--history`** and a **pre-push hook**; `hook status` reads `.pre-commit-config.yaml` | See [Scanning git history](#scanning-git-history) |
 
@@ -550,8 +550,8 @@ The "Next steps" follow git and what matched (**v0.16.0**):
 | The finding is | Next steps |
 |---|---|
 | In a file a commit holds (or outside a repository), matched by its value by a format rule with high confidence | Revoke, `git filter-repo`, force push. Only these files are named in the rewrite steps |
-| In a committed file, but flagged by a variable name, by entropy or with lower confidence | "Check <file>", with how to accept it if it is not a secret, and a note when it is in a test folder |
-| In a file that is staged but in no commit (a hook blocked the commit, or there are no commits yet) | "Unstage <file>: git restore --staged …" (`git rm --cached` before the first commit), then move the values into `.env`; rotate only if the key was shared another way |
+| In a committed file, but flagged by a variable name, by entropy or with lower confidence | "Check `<file>`", with how to accept it if it is not a secret, and a note when it is in a test folder |
+| In a file that is staged but in no commit (a hook blocked the commit, or there are no commits yet) | "Unstage `<file>`: git restore --staged …" (`git rm --cached` before the first commit), then move the values into `.env`; rotate only if the key was shared another way |
 | In a file git ignores and does not track | Nothing was committed |
 
 ### JSON
