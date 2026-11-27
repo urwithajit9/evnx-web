@@ -3,7 +3,7 @@ title: "Start here: pick your path"
 section: getting-started
 order: 1.5
 publishedAt: "2026-11-26"
-updatedAt: "2026-11-26"
+updatedAt: "2026-11-27"
 excerpt: "Three starting points: a new project, a project with a .env.example, or one with only a .env or config files. The usual way first, then evnx, and which guides fit your role."
 difficulty: beginner
 timeToComplete: "5 minutes"
@@ -192,7 +192,6 @@ Next steps:
 required = true
 
 [vars.PORT]
-# only in .env
 required = false
 format = "port"
 
@@ -252,12 +251,12 @@ evnx init --yes --env-name development
 ```text
 ✓ Created .gitignore with .env*, !.env*.example, !.env*.sample, !.env*.template
 ✓ adopted .env.development: .evnx.toml sets [defaults] env_name = "development"
-! .env.development has no template yet, so no [vars] were recorded. Create one from it:  evnx sync --direction reverse
+! .env.development has no template yet, so no [vars] were recorded. Create one from it:  evnx sync
 ```
 
 It changes no env file. `.evnx.toml` now says that every command reads
-`.env.development` when no file is named. To write the template from it, run a forward
-sync:
+`.env.development` when no file is named. To write the template from it, run the sync
+it names:
 
 ```bash
 evnx sync --yes
@@ -274,11 +273,7 @@ evnx sync --yes
 ✓ Created .env.example
 ```
 
-<Callout type="info" title="The hint after adopting">
-In 0.16.0 the line after adopting names `evnx sync --direction reverse`. With no
-template yet, a reverse sync has nothing to read and exits `2`: use `evnx sync` as
-above, then `evnx spec init` for the contract.
-</Callout>
+Then `evnx spec init` writes the contract from `.env.development` and the new template.
 
 ### With evnx: settings in a config file
 
@@ -317,8 +312,8 @@ format, a Kubernetes Secret, compose and GitHub Actions files, and what is refus
 
 ## After any path
 
-The same checks fit every state. [Quick Start, steps 2 to 4](/guides/getting-started/quick-start#step-2--check-the-setup-on-every-commit)
-shows them and the pre-commit hooks that run them on every commit:
+The same checks fit every state. [Quick Start, steps 2 to 5](/guides/getting-started/quick-start#step-2--run-a-health-check)
+shows them, and the pre-commit hooks that run them on every commit:
 
 ```bash
 evnx doctor          # the setup around the files
