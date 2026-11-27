@@ -25,7 +25,7 @@ export function SectionShell({
   return (
     <section
       id={spec.anchor}
-      className={`section-padding border-b border-border-muted ${SURFACE[spec.surface]}`}
+      className={`${spec.compact ? "py-10 md:py-12" : "section-padding"} border-b border-border-muted ${SURFACE[spec.surface]}`}
     >
       <div className="container-base">{children}</div>
     </section>

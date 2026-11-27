@@ -2,16 +2,36 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Copy } from "lucide-react";
-import { CANONICAL_INSTALL_SCRIPT, docsUrl } from "@evnx/config";
+import { ArrowRight, Check, Copy } from "lucide-react";
+import { CANONICAL_INSTALL_SCRIPT, TALKS, docsUrl } from "@evnx/config";
 import { cta } from "@evnx/content";
 
+/**
+ * The one ending (D-V34, 2026-11-27): talks as a slim row when there are any,
+ * the install command, and three doors into the docs. It replaced three
+ * sections in a row: talks, six docs cards, and this call to action.
+ */
 export function Cta() {
   const [copied, setCopied] = useState(false);
   const command = `curl -fsSL ${CANONICAL_INSTALL_SCRIPT} | bash`;
 
   return (
     <div className="max-w-2xl mx-auto text-center">
+      {TALKS.length > 0 && (
+        <p className="mb-10 text-sm text-text-secondary">
+          <span className="font-mono text-xs text-text-muted uppercase tracking-widest mr-2">Talks</span>
+          {TALKS.slice(0, 2).map((t, i) => (
+            <span key={`${t.event}-${t.year}`}>
+              {i > 0 && <span aria-hidden> · </span>}
+              {t.title}, {t.event} {t.year}
+            </span>
+          ))}
+          <Link href="/talks" className="ml-2 text-brand-400 underline underline-offset-4">
+            All talks
+          </Link>
+        </p>
+      )}
+
       <h2 className="font-serif text-4xl md:text-5xl font-bold mb-4 leading-tight">
         {cta.heading}
       </h2>
@@ -44,12 +64,19 @@ export function Cta() {
         )}
       </button>
 
-      <Link
-        href={docsUrl(cta.secondaryDocsSlug)}
-        className="text-brand-400 hover:underline underline-offset-4"
-      >
-        {cta.secondaryLabel}
-      </Link>
+      <ul className="flex flex-wrap justify-center gap-3" aria-label="Start in the docs">
+        {cta.docLinks.map((d) => (
+          <li key={d.docsSlug}>
+            <Link
+              href={docsUrl(d.docsSlug)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border-muted px-4 py-2 text-sm text-text-primary hover:border-brand-500 transition-colors"
+            >
+              {d.label}
+              <ArrowRight className="w-3.5 h-3.5 text-brand-400" aria-hidden />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

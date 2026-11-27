@@ -29,9 +29,9 @@ export function Hero() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
       <div>
-        <div className="flex items-center gap-3 mb-8 flex-wrap">
+        <div className="flex items-center gap-3 mb-6 md:mb-8 flex-wrap">
           <span className="font-mono text-xs text-brand-400 border border-brand-500/30 bg-brand-500/10 rounded-full px-3 py-1">
             {/* Never typed. `versions.json`, refreshed from the registries. */}
             {EVNX_VERSION_TAG}
@@ -41,14 +41,14 @@ export function Hero() {
           </span>
         </div>
 
-        <h1 className="font-serif font-bold leading-[1.05] mb-6 text-5xl md:text-6xl xl:text-7xl">
+        <h1 className="font-serif font-bold leading-[1.05] mb-4 md:mb-6 text-5xl md:text-6xl xl:text-7xl">
           <span className="block text-text-primary">{hero.headline.line1}</span>
           <span className="block" style={{ color: "var(--brand-500)" }}>
             {hero.headline.line2}
           </span>
         </h1>
 
-        <p className="text-lg md:text-xl text-text-secondary mb-10 leading-relaxed max-w-xl">
+        <p className="text-lg md:text-xl text-text-secondary mb-6 md:mb-10 leading-relaxed max-w-xl">
           {hero.subhead}
         </p>
 
@@ -99,7 +99,7 @@ export function Hero() {
         {/* ⚠️ The cargo caveat is real and belongs beside the command, not in a
             footnote: `cargo install evnx` alone has no cloud commands. */}
         {channel.note && (
-          <p className="text-xs text-text-muted mb-8 leading-relaxed">{channel.note}</p>
+          <p className="text-xs text-text-muted mb-6 md:mb-8 leading-relaxed">{channel.note}</p>
         )}
 
         <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -134,7 +134,7 @@ export function Hero() {
 export function HeroProof() {
   const downloads = formatDownloads();
   return (
-    <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm text-text-secondary border-t border-border-muted pt-6 mt-14">
+    <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm text-text-secondary border-t border-border-muted pt-6 mt-8 md:mt-14">
       {hasDownloadCounts() && downloads && (
         <span>
           <b className="text-text-primary font-mono">{downloads}</b>{" "}

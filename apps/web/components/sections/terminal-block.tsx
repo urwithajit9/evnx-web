@@ -23,7 +23,7 @@ const LINE: Record<TerminalLine["type"], string> = {
 /** The `<pre>` of one transcript. No state, so it renders on either side. */
 export function TranscriptLines({ lines }: { lines: readonly TerminalLine[] }) {
   return (
-    <pre className="p-5 font-mono text-sm leading-relaxed">
+    <pre className="p-4 sm:p-5 font-mono text-xs sm:text-sm leading-relaxed">
       <code>
         {lines.map((line, i) => (
           <span key={i} className={`block ${LINE[line.type]}`}>
