@@ -106,6 +106,12 @@ Each of these is an **error**:
   line reads `<file> is not ignored: git would commit it (security risk)`, also in
   `doctor --format json` `details`. Until 0.15 it read `<file> is NOT in .gitignore
   (security risk)`; a script that matched that text must match the new one.
+
+  **v0.16.0**: outside a git repository there is nothing to ask, so this is not an error.
+  doctor reports, as information,
+  `Not a git repository: whether git would commit .env was not checked`, offers no fix and
+  does not fail the run, also with `--strict`. Before 0.16.0 it reported the file as not
+  ignored, offered to fix it and exited `1`. A `.gitignore` that covers the file is still read.
 - **Invalid syntax**, named by file and line. **v0.12.0+**: these are the parser's own
   messages, the ones `evnx validate` and `evnx parse` give, so the three commands agree
   on what a broken line is, and every problem in a file is listed. The line's text is no

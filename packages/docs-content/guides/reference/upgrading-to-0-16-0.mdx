@@ -168,6 +168,20 @@ and a file that is staged but in no commit gets
   Unstage ./staged.toml: git restore --staged staged.toml (git rm --cached staged.toml before the first commit). No commit holds them, so there is no history to rewrite
 ```
 
+Outside a git repository the same weak finding reads `Check ./.env: only a variable name, …`,
+without "it is committed", and the last step is "If one is a real secret, revoke or rotate
+it", without "it is in git history". A key in commits that no remote has yet, as the
+pre-push hook sees them, gets a local rewrite instead of `git filter-repo`:
+
+```text
+  1. Take the keys out of deploy2.py, then rewrite the local commits that hold them: git commit --amend
+  2. Then push as usual: no remote has these commits, so no force push or git filter-repo is needed
+```
+
+(`git rebase -i <sha>^, marking each commit that has them as edit` when the key is not in
+the last commit.) History a remote already has, and a repository with no remote, keep the
+rewrite steps.
+
 The `scanning` line lists the files git ignores apart:
 `scanning ./.gitignore, ./config/settings.yml … · git-ignored (summarised only): ./.env`.
 
@@ -181,7 +195,7 @@ The `run` header is unchanged. In the document:
 | New field | Where | Meaning |
 |---|---|---|
 | `file`, `line` | every finding | The file, and the line as a number or `null`, beside `location` |
-| `key_path` | YAML, JSON, TOML and notebook findings | `app.db.password` |
+| `key_path` | YAML, JSON, TOML and notebook findings, also one inside a decoded value | `app.db.password` |
 | `encoded` | a finding in a decoded value | `base64`, `hex` or `url` |
 | `context`, `confidence_before_context` | a finding whose confidence moved | The hints, and the level before them |
 | `commit`, `blob`, `commit_time` | under `--history` | Where the file version came from; `git` is `"history"` |
@@ -251,6 +265,12 @@ The same text is in `doctor --format json` `details`.
 
 Also changed:
 
+- **Outside a git repository** an env file is no longer an error. doctor reported
+  `.env is not ignored: git would commit it (security risk)`, offered to fix it and exited
+  `1`; it now reports, as information,
+  `Not a git repository: whether git would commit .env was not checked`, which does not
+  fail `--strict`. A `.gitignore` that covers the file is still read. Inside a repository
+  nothing changed.
 - Outside a git repository the template check reports, as information,
   `Not a git repository: whether .env.example is tracked was not checked`, instead of
   "run: git add .env.example".
